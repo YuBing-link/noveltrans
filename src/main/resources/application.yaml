@@ -1,0 +1,120 @@
+spring:
+  application:
+    name: novelTranslator
+  mvc:
+    async:
+      request-timeout: 300000
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:novel_translator}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB:0}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+  sql:
+    init:
+      schema-locations: classpath:schema.sql
+      mode: always
+  threads:
+    virtual:
+      enabled: true
+  mail:
+    # 邮件服务器配置
+    # 注意：使用QQ邮箱时，请按照以下步骤操作：
+    # 1. 登录QQ邮箱网页版
+    # 2. 进入"设置" -> "账户"
+    # 3. 开启"IMAP/SMTP服务"
+    # 4. 生成应用专用密码（而非使用QQ密码）
+    # 5. 将应用专用密码设置为环境变量 QQSTMP
+    host: smtp.qq.com
+    port: 465
+    username: ${MAIL_USERNAME:}  # 邮箱地址
+    password: ${MAIL_PASSWORD:}  # 邮箱 SMTP 授权码
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.ssl.enable: true
+      mail.smtp.ssl.required: true
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: false
+      mail.smtp.socketFactory.port: 465
+      mail.smtp.socketFactory.class: javax.net.ssl.SSLSocketFactory
+      mail.smtp.socketFactory.fallback: false
+  thymeleaf:
+    cache: false
+    encoding: UTF-8
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+
+server:
+  port: 8080
+  undertow:
+    threads:
+      worker: 20
+      io: 2
+    buffer-size: 1024
+    direct-buffers: true
+  servlet:
+    encoding:
+      force: true
+      charset: UTF-8
+      enabled: true
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # SQLite 不支持获取自动生成的键
+    use-generated-keys: false
+  global-config:
+    db-config:
+      id-type: assign_id  # 使用雪花算法生成 ID，避免 SQLite 自增主键问题
+
+translation:
+  openai:
+    api-key: "${TRANSLATION_OPENAI_API_KEY:}"  # 必须通过环境变量 TRANSLATION_OPENAI_API_KEY 配置
+    base-url: "https://api.openai.com"
+  python:
+    url: "${PYTHON_TRANSLATE_URL:http://llm-engine:8000/translate}"  # Python 翻译服务地址
+  limit:
+    free-daily-limit: 100        # 免费用户每日翻译次数
+    pro-daily-limit: 1000        # 专业用户每日翻译次数
+    free-concurrency-limit: 5    # 免费用户最大并发数
+    pro-concurrency-limit: 20    # 专业用户最大并发数
+    anonymous-concurrency-limit: 3  # 匿名用户最大并发数
+  verification:
+    code:
+      validity: 1
+      length: 6
+
+# JWT配置
+jwt:
+  secret: ${JWT_SECRET} # 必须通过环境变量配置，不提供默认值
+  expiration: ${JWT_EXPIRATION:2592000000} # 30天（毫秒）= 30 * 24 * 60 * 60 * 1000
+
+# MTranServer 配置
+mtran:
+  server:
+    host: ${MTRAN_HOST:localhost}
+    port: ${MTRAN_PORT:8989}
+
+email:
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
