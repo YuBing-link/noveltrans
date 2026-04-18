@@ -1,8 +1,12 @@
 package com.yumu.noveltranslator.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public class SseEmitterUtil {
+
+    private static final Logger log = LoggerFactory.getLogger(SseEmitterUtil.class);
 
     public static SseEmitter createSseEmitter(Long timeout) {
         SseEmitter emitter = new SseEmitter(timeout != null ? timeout : 60_000L);
@@ -18,7 +22,7 @@ public class SseEmitterUtil {
                       msg.contains("reset") ||
                       msg.contains("broken pipe") ||
                       msg.contains("client abort"))) {
-                    System.err.println("SSE emitter error: " + msg);
+                    log.warn("SSE emitter error: {}", msg);
                 }
             }
             emitter.complete();

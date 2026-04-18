@@ -11,7 +11,7 @@ public class ApiKeyResponse {
     private Long id;
     private String name;
     private String apiKey;        // 掩码格式，仅创建时返回完整 key
-    private Boolean isActive;
+    private Boolean active;
     private LocalDateTime lastUsedAt;
     private Long totalUsage;
     private LocalDateTime createdAt;

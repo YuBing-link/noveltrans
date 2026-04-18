@@ -685,6 +685,16 @@ class ApiClient {
   }
 
   /**
+   * 开始文档翻译
+   * POST /user/documents/{docId}/start
+   */
+  async startDocumentTranslation(docId) {
+    return this.request(`/documents/${docId}/start`, {
+      method: 'POST'
+    }, true, false);
+  }
+
+  /**
    * 下载文档
    * GET /user/documents/{docId}/download
    */

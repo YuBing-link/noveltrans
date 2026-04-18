@@ -142,8 +142,22 @@
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const result = await res.json();
-            if (result.success && result.data?.data?.length > 0) {
-                allHistoryItems = result.data.data;
+            // 后端返回 { success, data: { list: [...], page, pageSize, total }, message }
+            if (result.success && result.data) {
+                const items = result.data.list || result.data.data || result.data || [];
+                allHistoryItems = items.map(item => ({
+                    id: item.id,
+                    taskId: item.taskId,
+                    type: item.type,
+                    name: item.type === 'document' ? (item.documentName || '文档翻译') : (item.sourceTextPreview || '文本翻译'),
+                    sourceTextPreview: item.sourceTextPreview || '',
+                    targetTextPreview: item.targetTextPreview || '',
+                    sourceLang: item.sourceLang || 'auto',
+                    targetLang: item.targetLang || '',
+                    createTime: item.createTime,
+                    status: 'completed',
+                    fileSize: null
+                }));
             }
         } catch { /* ignore */ }
         renderHistory();

@@ -128,8 +128,11 @@
         if (!token) { window.location.href = 'index.html?modal=login'; return; }
         try {
             const result = await apiClient.getGlossaries();
-            if (result.success && result.data && result.data.length > 0) {
-                terms = result.data;
+            // apiClient 返回 { success, data: { success, data: [...], message } }
+            const termsData = result.success && result.data ? result.data : result;
+            const glossaries = termsData.data || termsData;
+            if (glossaries && glossaries.length > 0) {
+                terms = glossaries;
                 renderTerms(terms);
             } else {
                 terms = [];

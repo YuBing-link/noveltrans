@@ -121,7 +121,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (result.success) {
       currentTaskId = result.data?.taskId || result.data?.id;
+      const docId = result.data?.documentId;
       currentFile = file;
+      currentFile.documentId = docId;
 
       showNotification(`${file.name} 已上传，开始翻译...`, 'success');
 
@@ -129,8 +131,8 @@ document.addEventListener('DOMContentLoaded', function() {
       addFileToList(file);
 
       // 开始翻译
-      if (currentTaskId) {
-        startTranslation(file);
+      if (currentTaskId && docId) {
+        startTranslation(file, docId);
       }
     } else {
       const errorMessage = result.data?.message || result.error || '上传失败';
@@ -139,8 +141,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // 开始翻译
-  async function startTranslation(file) {
+  async function startTranslation(file, docId) {
     showNotification('正在翻译文档，请稍候...', 'info');
+
+    // 调用后端启动翻译
+    const startResult = await apiClient.startDocumentTranslation(docId);
+    if (!startResult.success) {
+      showNotification('启动翻译失败', 'error');
+      updateFileStatus(file, 'failed');
+      return;
+    }
 
     // 更新文件状态
     updateFileStatus(file, 'translating');
@@ -256,8 +266,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const deleteBtn = fileItem.querySelector('.btn-delete');
 
     translateBtn.addEventListener('click', () => {
-      if (currentTaskId) {
-        startTranslation(file);
+      if (currentTaskId && currentFile?.documentId) {
+        startTranslation(file, currentFile.documentId);
       } else {
         showNotification('请先上传文件', 'warning');
       }

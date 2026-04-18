@@ -45,7 +45,32 @@
       "Bash(docker-compose restart *)",
       "Bash(node *)",
       "Bash(mvn package *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(docker exec noveltranslator-mysql-1 *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(unzip -l /d/Server/apache-maven-3.9.10/mvn_repo/org/springframework/boot/spring-boot-test/3.2.0/spring-boot-test-3.2.0.jar)",
+      "Bash(grep -i \"\\\\.java$\")",
+      "Bash(grep -rn '\"[0-9]\\\\{2,\\\\}\"' D:/Git-Submission-Files/noveltrans/novelTranslator/src/main/java --include=\"*.java\")",
+      "Bash(awk 'length > 120' D:/Git-Submission-Files/noveltrans/novelTranslator/src/main/java/com/yumu/noveltranslator/service/TranslationService.java)",
+      "Bash(playwright-cli open *)",
+      "Bash(playwright-cli console *)",
+      "Bash(playwright-cli snapshot *)",
+      "Bash(docker-compose ps *)",
+      "Bash(docker-compose up *)",
+      "Bash(docker-compose logs *)",
+      "Bash(playwright-cli reload *)",
+      "Bash(playwright-cli click *)",
+      "Bash(playwright-cli goto *)",
+      "Bash(playwright-cli screenshot *)",
+      "Bash(playwright-cli fill *)",
+      "Bash(playwright-cli eval *)",
+      "Bash(playwright-cli upload *)",
+      "Bash(playwright-cli network *)",
+      "Bash(npx playwright-cli *)",
+      "Bash(python3 -c 'import sys,json; print\\(json.dumps\\(json.load\\(sys.stdin\\), indent=2, ensure_ascii=False\\)\\)')",
+      "Bash(docker restart noveltranslator-nginx-1 *)"
     ]
   }
 }

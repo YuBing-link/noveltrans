@@ -137,6 +137,9 @@ const TRANSLATE_API = {
   // 查询任务状态
   TASK: (taskId) => `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH}/task/${taskId}`,
 
+  // 开始文档翻译
+  START_TASK: (docId) => `${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${docId}/start`,
+
   // 取消任务
   CANCEL_TASK: (taskId) => `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH}/task/${taskId}`,
 

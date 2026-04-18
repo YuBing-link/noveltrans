@@ -20,7 +20,8 @@ public class ApiKey {
 
     private String name;
 
-    private Boolean isActive;
+    @TableField("is_active")
+    private Boolean active;
 
     private LocalDateTime lastUsedAt;
 

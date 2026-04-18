@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.controller.web;
 
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
@@ -6,12 +6,11 @@ import com.yumu.noveltranslator.entity.TranslationTask;
 import com.yumu.noveltranslator.service.DocumentService;
 import com.yumu.noveltranslator.service.TranslationTaskService;
 import com.yumu.noveltranslator.util.SecurityUtil;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,18 +22,16 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 文档管理控制器
+ * Web 文档管理接口
+ * 路径前缀: /user/documents
  */
 @RestController
 @RequestMapping("/user/documents")
-@PreAuthorize("isAuthenticated()")
-public class DocumentController {
+@RequiredArgsConstructor
+public class WebDocumentController {
 
-    @Autowired
-    private DocumentService documentService;
-
-    @Autowired
-    private TranslationTaskService translationTaskService;
+    private final DocumentService documentService;
+    private final TranslationTaskService translationTaskService;
 
     /**
      * 获取文档列表
@@ -53,7 +50,6 @@ public class DocumentController {
                 .map(documentService::toDocumentInfoResponse)
                 .toList();
 
-        // 计算分页
         int total = responseList.size();
         int fromIndex = (page - 1) * pageSize;
         int toIndex = Math.min(fromIndex + pageSize, total);
@@ -62,7 +58,7 @@ public class DocumentController {
         }
 
         PageResponse<DocumentInfoResponse> response = PageResponse.of(page, pageSize, (long) total, responseList);
-        return Result.ok(response, "200");
+        return Result.ok(response);
     }
 
     /**
@@ -75,10 +71,10 @@ public class DocumentController {
 
         Document doc = documentService.getDocumentById(docId, userId);
         if (doc == null) {
-            return Result.error("文档不存在", "404");
+            return Result.error("文档不存在");
         }
 
-        return Result.ok(documentService.toDocumentInfoResponse(doc), "200");
+        return Result.ok(documentService.toDocumentInfoResponse(doc));
     }
 
     /**
@@ -86,13 +82,13 @@ public class DocumentController {
      * DELETE /user/documents/{docId}
      */
     @DeleteMapping("/{docId}")
-    public Result deleteDocument(@PathVariable Long docId) {
+    public Result<Void> deleteDocument(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
         if (documentService.deleteDocument(docId, userId)) {
-            return Result.ok(null, "200");
+            return Result.ok(null);
         } else {
-            return Result.error("删除失败", "500");
+            return Result.error("删除失败");
         }
     }
 
@@ -101,18 +97,40 @@ public class DocumentController {
      * POST /user/documents/{docId}/retry
      */
     @PostMapping("/{docId}/retry")
-    public Result retryTranslation(@PathVariable Long docId) {
+    public Result<Void> retryTranslation(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
         if (documentService.retryTranslation(docId, userId)) {
-            return Result.ok(null, "200");
+            return Result.ok(null);
         } else {
-            return Result.error("重新翻译失败", "500");
+            return Result.error("重新翻译失败");
         }
     }
 
     /**
-     * 上传并翻译文档
+     * 开始翻译（上传后用户点击触发）
+     * POST /user/documents/{docId}/start
+     */
+    @PostMapping("/{docId}/start")
+    public Result<TaskStatusResponse> startTranslation(@PathVariable Long docId) {
+        Long userId = SecurityUtil.getRequiredUserId();
+
+        Document doc = documentService.getDocumentById(docId, userId);
+        if (doc == null) {
+            return Result.error("文档不存在");
+        }
+
+        TranslationTask task = translationTaskService.getTaskByDocumentId(docId);
+        if (task == null) {
+            return Result.error("翻译任务不存在");
+        }
+
+        translationTaskService.startDocumentTranslation(task, doc);
+        return Result.ok(translationTaskService.toTaskStatusResponse(task));
+    }
+
+    /**
+     * 上传文档（不自动翻译）
      * POST /user/documents/upload
      */
     @PostMapping("/upload")
@@ -125,30 +143,25 @@ public class DocumentController {
         Long userId = SecurityUtil.getRequiredUserId();
 
         try {
-            // 创建翻译请求
             DocumentTranslationRequest request = new DocumentTranslationRequest();
             request.setSourceLang(sourceLang);
             request.setTargetLang(targetLang);
             request.setMode(mode);
 
-            // 上传文档
             Document doc = documentService.uploadDocument(userId, file, request);
-
-            // 创建翻译任务
             TranslationTask task = translationTaskService.createDocumentTask(userId, doc);
 
-            // 返回响应
             DocumentTranslationResponse response = new DocumentTranslationResponse();
             response.setTaskId(task.getTaskId());
             response.setDocumentId(doc.getId());
             response.setDocumentName(doc.getName());
             response.setStatus(task.getStatus());
-            response.setMessage("文档上传成功，开始翻译");
+            response.setMessage("文档上传成功，请点击开始翻译");
 
-            return Result.ok(response, "200");
+            return Result.ok(response);
 
         } catch (IOException e) {
-            return Result.error("文件上传失败：" + e.getMessage(), "500");
+            return Result.error("文件上传失败：" + e.getMessage());
         }
     }
 
@@ -166,7 +179,6 @@ public class DocumentController {
         }
 
         try {
-            // 路径遍历防护：确保文件路径在 UPLOAD_DIR 白名单范围内
             Path UPLOAD_BASE = Paths.get("uploads/documents/").normalize().toAbsolutePath();
             Path targetPath = Paths.get(doc.getPath()).normalize().toAbsolutePath();
             if (!targetPath.startsWith(UPLOAD_BASE)) {

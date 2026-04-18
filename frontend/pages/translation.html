@@ -365,61 +365,164 @@
         if (!valid.includes(ext)) { showToast('error', '不支持的格式', `支持 ${valid.join('、')} 格式`); return; }
         if (file.size > 50 * 1048576) { showToast('error', '文件过大', '最大支持 50MB'); return; }
         if (!localStorage.getItem('authToken')) { showToast('warning', '需要登录', '请先登录后上传文件'); openModal('login'); return; }
-        addFileItem(file);
-        await uploadFile(file);
+        showPendingUpload(file);
     }
 
-    function addFileItem(file) {
+    // 全局存储待翻译文件，key 为 fileId
+    const pendingFiles = new Map();
+
+    function showPendingUpload(file) {
         const id = 'file-' + Date.now();
+        pendingFiles.set(id, file);
+
         const el = document.createElement('div');
         el.id = id;
-        el.className = 'flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-800/60 animate-fade-in';
+        el.className = 'p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-800/60 animate-fade-in';
         el.innerHTML = `
-            <div class="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950/50 flex items-center justify-center flex-shrink-0"><i data-lucide="file-text" class="w-5 h-5 text-primary-600"></i></div>
-            <div class="flex-1 min-w-0"><p class="text-sm font-medium truncate">${escapeHtml(file.name)}</p><p class="text-xs text-gray-500">${formatSize(file.size)}</p></div>
-            <div class="flex items-center gap-1"><span class="status-dot inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>上传中</span></div>
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950/50 flex items-center justify-center flex-shrink-0"><i data-lucide="file-text" class="w-5 h-5 text-primary-600"></i></div>
+                <div class="flex-1 min-w-0"><p class="text-sm font-medium truncate">${escapeHtml(file.name)}</p><p class="text-xs text-gray-500">${formatSize(file.size)}</p></div>
+                <button class="remove-file-btn p-1.5 rounded-lg text-gray-400 hover:text-red-500 transition-colors" title="移除"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="flex flex-wrap gap-3 mb-3">
+                <div class="flex-1 min-w-[140px]">
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">源语言</label>
+                    <select class="source-lang w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="auto">自动检测</option>
+                        <option value="en">英语</option>
+                        <option value="ja">日语</option>
+                        <option value="ko">韩语</option>
+                        <option value="fr">法语</option>
+                        <option value="de">德语</option>
+                        <option value="ru">俄语</option>
+                        <option value="es">西班牙语</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[140px]">
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">目标语言</label>
+                    <select class="target-lang w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="zh">中文</option>
+                        <option value="en">英语</option>
+                        <option value="ja">日语</option>
+                        <option value="ko">韩语</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[140px]">
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">翻译模式</label>
+                    <select class="translate-mode w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="fast">快速模式</option>
+                        <option value="expert">专家模式</option>
+                        <option value="team">团队模式</option>
+                    </select>
+                </div>
+            </div>
+            <button class="start-translate-btn w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
+                <i data-lucide="play" class="w-4 h-4"></i> 开始翻译
+            </button>
         `;
         uploadedFiles.insertBefore(el, uploadedFiles.firstChild);
         lucide.createIcons();
-        return el;
+
+        // 绑定移除按钮
+        el.querySelector('.remove-file-btn').addEventListener('click', () => {
+            pendingFiles.delete(id);
+            el.remove();
+        });
+
+        // 绑定开始翻译按钮
+        el.querySelector('.start-translate-btn').addEventListener('click', async function() {
+            const sourceLang = el.querySelector('.source-lang').value;
+            const targetLang = el.querySelector('.target-lang').value;
+            const mode = el.querySelector('.translate-mode').value;
+            pendingFiles.delete(id);
+            await uploadFileWithSettings(file, sourceLang, targetLang, mode, el);
+        });
     }
 
-    async function uploadFile(file) {
+    async function uploadFileWithSettings(file, sourceLang, targetLang, mode, fileEl) {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('sourceLang', document.getElementById('sourceLang')?.value || 'auto');
-        formData.append('targetLang', document.getElementById('targetLang')?.value || 'zh');
-        formData.append('mode', document.getElementById('translateMode')?.value || 'fast');
+        formData.append('sourceLang', sourceLang);
+        formData.append('targetLang', targetLang);
+        formData.append('mode', mode);
         const token = localStorage.getItem('authToken');
+
+        // 更新 UI 为上传中状态
+        fileEl.querySelector('.start-translate-btn')?.remove();
+        fileEl.querySelectorAll('select').forEach(s => s.disabled = true);
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400';
+        statusDiv.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> 上传中...';
+        fileEl.appendChild(statusDiv);
+
         try {
+            // 第一步：上传文件
             const res = await fetch(API.UPLOAD_DOCUMENT, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
             const result = await res.json();
-            if (res.ok && result.success) {
-                const taskId = result.data?.taskId;
-                showToast('success', '上传成功', `文件 "${file.name}" 已上传`);
-                const el = uploadedFiles.querySelector('[id^="file-"]');
-                if (el) { const dot = el.querySelector('.status-dot'); if (dot) { dot.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-primary-600'; dot.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"></span>翻译中'; } }
-                if (taskId) await pollTask(taskId, file);
-            } else { showToast('error', '上传失败', result.message || '上传失败'); const el = uploadedFiles.querySelector('[id^="file-"]'); if (el) el.remove(); }
-        } catch { showToast('error', '上传失败', '网络错误'); const el = uploadedFiles.querySelector('[id^="file-"]'); if (el) el.remove(); }
+            if (!res.ok || !result.success) {
+                showToast('error', '上传失败', result.message || '上传失败');
+                statusDiv.className = 'flex items-center gap-1.5 text-xs font-medium text-red-600';
+                statusDiv.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> 上传失败';
+                return;
+            }
+
+            const taskId = result.data?.taskId;
+            const docId = result.data?.documentId;
+            showToast('success', '上传成功', `文件 "${file.name}" 已上传`);
+            statusDiv.className = 'flex items-center gap-1.5 text-xs font-medium text-primary-600 dark:text-primary-400';
+            statusDiv.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"></span> 开始翻译...';
+
+            // 第二步：调用开始翻译端点（使用 documentId）
+            const startUrl = `${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${docId}/start`;
+            const startRes = await fetch(startUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+            const startResult = await startRes.json();
+
+            if (startRes.ok && startResult.success) {
+                statusDiv.className = 'flex items-center gap-1.5 text-xs font-medium text-primary-600 dark:text-primary-400';
+                statusDiv.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"></span> 翻译中...';
+                if (taskId) await pollTask(taskId, file, fileEl);
+            } else {
+                showToast('warning', '翻译未启动', startResult.message || '请重试');
+                statusDiv.className = 'flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400';
+                statusDiv.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> 待翻译';
+            }
+        } catch {
+            showToast('error', '上传失败', '网络错误');
+            statusDiv.className = 'flex items-center gap-1.5 text-xs font-medium text-red-600';
+            statusDiv.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> 上传失败';
+        }
     }
 
-    async function pollTask(taskId, file) {
+    async function pollTask(taskId, file, fileEl) {
         const token = localStorage.getItem('authToken');
         const url = `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH.replace('/translate', '')}/translate/task/${taskId}`;
+        const targetEl = fileEl || uploadedFiles.querySelector('[id^="file-"]');
         const check = async () => {
             try {
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
                 const result = await res.json();
                 if (res.ok && result.success) {
                     const status = result.data?.status;
-                    const el = uploadedFiles.querySelector('[id^="file-"]');
                     if (status === 'completed') {
-                        if (el) { const dot = el.querySelector('.status-dot'); if (dot) { dot.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400'; dot.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>已完成'; } }
+                        if (targetEl) {
+                            const existing = targetEl.querySelector('[class*="text-amber"], [class*="text-primary"], [class*="text-red"]');
+                            if (existing) existing.remove();
+                            const done = document.createElement('div');
+                            done.className = 'flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400';
+                            done.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 已完成';
+                            targetEl.appendChild(done);
+                        }
                         showToast('success', '翻译完成', `文件 "${file.name}" 翻译完成`);
                         await getResult(taskId, file);
                     } else if (status === 'failed') {
-                        if (el) { const dot = el.querySelector('.status-dot'); if (dot) { dot.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-red-600'; dot.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>失败'; } }
+                        if (targetEl) {
+                            const existing = targetEl.querySelector('[class*="text-amber"], [class*="text-primary"], [class*="text-red"]');
+                            if (existing) existing.remove();
+                            const fail = document.createElement('div');
+                            fail.className = 'flex items-center gap-1.5 text-xs font-medium text-red-600';
+                            fail.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> 翻译失败';
+                            targetEl.appendChild(fail);
+                        }
                         showToast('error', '翻译失败', result.data?.error || '翻译失败');
                     } else { setTimeout(check, 3000); }
                 } else { setTimeout(check, 3000); }
@@ -437,7 +540,15 @@
             if (res.ok && result.success) {
                 const src = result.data?.sourceContent || result.data?.originalText || '';
                 const tgt = result.data?.translatedText || result.data?.content || '';
-                showResult(file.name, src, tgt);
+                const filePath = result.data?.translatedFilePath;
+
+                if (filePath && !tgt) {
+                    // 文档翻译已完成，显示提示信息和下载链接
+                    const fileName = file?.name || '文档';
+                    showResult(fileName, src, `文档翻译已完成！\n翻译文件路径：${filePath}\n\n请到用户中心的文档列表下载翻译结果。`);
+                } else {
+                    showResult(file?.name || '文档', src, tgt);
+                }
             }
         } catch { /* ignore */ }
     }
@@ -479,8 +590,8 @@
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const result = await res.json();
-            if (result.success && result.data?.data?.length > 0) {
-                const docs = result.data.data;
+            if (result.success && result.data?.list?.length > 0) {
+                const docs = result.data.list;
                 docList.innerHTML = docs.map(doc => {
                     const statusMap = { pending: { text: '待处理', color: 'text-amber-500', dot: 'bg-amber-500' }, processing: { text: '处理中', color: 'text-blue-500', dot: 'bg-blue-500 animate-pulse' }, completed: { text: '已完成', color: 'text-emerald-500', dot: 'bg-emerald-500' }, failed: { text: '失败', color: 'text-red-500', dot: 'bg-red-500' } };
                     const s = statusMap[doc.status] || statusMap.pending;
@@ -501,11 +612,126 @@
         }
     }
 
+    // 页面加载时从后端恢复任务状态
+    async function restoreTasksFromBackend() {
+        if (!AuthManager.isAuthenticated()) return;
+        const token = localStorage.getItem('authToken');
+        try {
+            const res = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents?page=1&pageSize=5&status=all`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await res.json();
+            if (!result.success || !result.data?.list?.length) return;
+
+            const docs = result.data.list;
+            // 只显示未完成和最近完成的文档
+            const activeDocs = docs.filter(d => ['pending', 'processing', 'completed'].includes(d.status)).slice(0, 5);
+
+            // 清空上传区域后再恢复
+            uploadedFiles.innerHTML = '';
+
+            for (const doc of activeDocs) {
+                showRestoredDocument(doc);
+            }
+        } catch { /* ignore */ }
+    }
+
+    function showRestoredDocument(doc) {
+        const el = document.createElement('div');
+        el.className = 'p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-200/60 dark:border-gray-800/60 animate-fade-in';
+
+        const statusMap = {
+            pending: { text: '待翻译', color: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+            processing: { text: '翻译中', color: 'text-primary-600 dark:text-primary-400', dot: 'bg-primary-500 animate-pulse' },
+            completed: { text: '已完成', color: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
+            failed: { text: '失败', color: 'text-red-600 dark:text-red-400', dot: 'bg-red-500' }
+        };
+        const s = statusMap[doc.status] || statusMap.pending;
+
+        const isPending = doc.status === 'pending';
+        const isCompleted = doc.status === 'completed';
+        el.innerHTML = `
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950/50 flex items-center justify-center flex-shrink-0"><i data-lucide="file-text" class="w-5 h-5 text-primary-600"></i></div>
+                <div class="flex-1 min-w-0"><p class="text-sm font-medium truncate">${escapeHtml(doc.name)}</p><p class="text-xs text-gray-500">${formatSize(doc.fileSize)}</p></div>
+                ${isCompleted ? '<button class="view-result-btn py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i> 查看结果</button>' : ''}
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="status-indicator flex items-center gap-1.5 text-xs font-medium ${s.color}">
+                    <span class="w-1.5 h-1.5 rounded-full ${s.dot}"></span> ${s.text}
+                </span>
+                ${isPending ? '<button class="start-translate-btn ml-auto py-1.5 px-3 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"><i data-lucide="play" class="w-3 h-3"></i> 开始翻译</button>' : ''}
+            </div>
+        `;
+        uploadedFiles.insertBefore(el, uploadedFiles.firstChild);
+        lucide.createIcons();
+
+        // 绑定查看结果按钮
+        if (isCompleted) {
+            el.querySelector('.view-result-btn').addEventListener('click', async function() {
+                const token = localStorage.getItem('authToken');
+                const taskId = doc.taskId || 'task_' + doc.id;
+                const url = `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH.replace('/translate', '')}/translate/task/${taskId}/result`;
+                try {
+                    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                    const result = await res.json();
+                    if (res.ok && result.success) {
+                        const src = result.data?.sourceContent || result.data?.originalText || '';
+                        const tgt = result.data?.translatedText || result.data?.content || '';
+                        const filePath = result.data?.translatedFilePath;
+                        if (filePath && !tgt) {
+                            showResult(doc.name, src, `文档翻译已完成！\n翻译文件路径：${filePath}\n\n请到用户中心的文档列表下载翻译结果。`);
+                        } else {
+                            showResult(doc.name, src, tgt);
+                        }
+                    }
+                } catch { showToast('error', '加载失败', '网络错误'); }
+            });
+        }
+
+        // 绑定开始翻译按钮
+        if (isPending) {
+            el.querySelector('.start-translate-btn').addEventListener('click', async function() {
+                const token = localStorage.getItem('authToken');
+                const statusEl = el.querySelector('.status-indicator');
+                statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-primary-600 dark:text-primary-400';
+                statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"></span> 开始翻译...';
+                this.remove();
+
+                try {
+                    // 调用开始翻译端点（使用 documentId）
+                    const taskRes = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${doc.id}/start`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const taskResult = await taskRes.json();
+                    if (taskRes.ok && taskResult.success) {
+                        statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-primary-600 dark:text-primary-400';
+                        statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"></span> 翻译中...';
+                        // 轮询任务状态
+                        const startTaskId = doc.taskId || 'task_' + doc.id;
+                        await pollTask(startTaskId, { name: doc.name }, el);
+                    } else {
+                        statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-red-600';
+                        statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> 启动失败';
+                    }
+                } catch {
+                    statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-red-600';
+                    statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> 启动失败';
+                }
+            });
+        } else if (doc.status === 'processing') {
+            // 正在翻译中，轮询状态
+            const taskId = doc.taskId || 'task_' + doc.id;
+            pollTask(taskId, { name: doc.name }, el);
+        }
+    }
+
     // Init
-    document.addEventListener('DOMContentLoaded', () => { initIcons(); updateAuthUI(); loadDocumentList(); });
+    document.addEventListener('DOMContentLoaded', () => { initIcons(); updateAuthUI(); loadDocumentList(); restoreTasksFromBackend(); });
 
     // 监听登录事件后刷新文档列表
-    window.addEventListener('userLoggedIn', () => { loadDocumentList(); });
+    window.addEventListener('userLoggedIn', () => { loadDocumentList(); restoreTasksFromBackend(); });
     </script>
 </body>
 </html>

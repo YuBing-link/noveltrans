@@ -7,30 +7,30 @@ class ResultTest {
 
     @Test
     void okCreatesSuccessResult() {
-        Result<String> result = Result.ok("data", "200");
+        Result<String> result = Result.ok("data");
         assertTrue(result.isSuccess());
         assertEquals("data", result.getData());
-        assertEquals("200", result.getCode());
+        assertEquals("00000", result.getCode());
         assertNull(result.getMessage());
         assertNull(result.getToken());
     }
 
     @Test
     void okWithTokenCreatesSuccessResultWithToken() {
-        Result<String> result = Result.okWithToken("data", "token123", "200");
+        Result<String> result = Result.okWithToken("data", "token123");
         assertTrue(result.isSuccess());
         assertEquals("data", result.getData());
         assertEquals("token123", result.getToken());
-        assertEquals("200", result.getCode());
+        assertEquals("00000", result.getCode());
     }
 
     @Test
     void errorCreatesFailureResult() {
-        Result<Void> result = Result.error("500", "Something went wrong");
+        Result<Void> result = Result.error("Something went wrong");
         assertFalse(result.isSuccess());
         assertNull(result.getData());
         assertNull(result.getToken());
-        assertEquals("500", result.getCode());
+        assertEquals("B0001", result.getCode());
         assertEquals("Something went wrong", result.getMessage());
     }
 

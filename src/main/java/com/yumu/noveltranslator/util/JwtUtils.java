@@ -61,7 +61,7 @@ public class JwtUtils {
      */
     public Map<String, String> getUserInfoFromToken(String token) {
         DecodedJWT jwt = verifyToken(token);
-        Map<String, String> info = new HashMap<>();
+        Map<String, String> info = new HashMap<>(2);
         info.put("userId", jwt.getClaim("userId").asLong().toString());
         info.put("email", jwt.getClaim("email").asString());
         return info;

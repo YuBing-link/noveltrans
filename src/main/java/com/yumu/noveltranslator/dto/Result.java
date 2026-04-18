@@ -18,16 +18,23 @@ public class Result<T> {
     // 包含JWT Token的数据结构
     private String token;
 
+    public static <T> Result<T> ok(T data) {
+        return new Result<>(true, data, "00000", null, null);
+    }
+
     public static <T> Result<T> ok(T data, String code) {
         return new Result<>(true, data, code, null, null);
     }
 
-    public static <T> Result<T> okWithToken(T data, String token, String code) {
-        return new Result<>(true, data, code, null, token);
+    public static <T> Result<T> okWithToken(T data, String token) {
+        return new Result<>(true, data, "00000", null, token);
+    }
+
+    public static <T> Result<T> error(String message) {
+        return new Result<>(false, null, "B0001", message, null);
     }
 
     public static <T> Result<T> error(String message, String code) {
         return new Result<>(false, null, code, message, null);
     }
-
 }

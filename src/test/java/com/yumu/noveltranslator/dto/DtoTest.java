@@ -226,10 +226,11 @@ class DtoTest {
     void userQuotaResponse() {
         UserQuotaResponse resp = new UserQuotaResponse();
         resp.setUserLevel("free");
-        resp.setDailyLimit(100);
-        resp.setUsedToday(10);
-        resp.setRemaining(90);
-        assertEquals(100, resp.getDailyLimit());
+        resp.setMonthlyChars(10000L);
+        resp.setUsedThisMonth(3000L);
+        resp.setRemainingChars(7000L);
+        resp.setConcurrencyLimit(5);
+        assertEquals(10000L, resp.getMonthlyChars());
     }
 
     @Test

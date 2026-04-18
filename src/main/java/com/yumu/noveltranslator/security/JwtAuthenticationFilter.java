@@ -86,36 +86,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(authToken);
 
         } catch (TokenExpiredException e) {
-            logger.warn("JWT Token 已过期: {}", e.getMessage());
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"code\":\"401\",\"message\":\"Token 已过期，请重新登录\",\"error\":\"token_expired\"}");
-            return;
+            // Token 过期：对需要认证的接口由 Spring Security 统一处理返回 401
+            // 对公开接口直接放行（不在此处返回 401，避免误杀）
+            logger.debug("JWT Token 已过期，跳过认证: {}", e.getMessage());
         } catch (JWTVerificationException e) {
-            logger.warn("JWT Token 验证失败: {}", e.getMessage());
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"code\":\"401\",\"message\":\"Token 验证失败，无效凭证\",\"error\":\"invalid_token\"}");
-            return;
+            // Token 无效：同上
+            logger.debug("JWT Token 验证失败，跳过认证: {}", e.getMessage());
         }
 
         chain.doFilter(request, response);
     }
 
-    /**
-     * 判断请求路径是否在白名单中（委托给共享配置）
-     */
     private boolean isExcludedPath(String requestURI) {
         return SecurityPermitAllPaths.isPermitted(requestURI);
     }
 
     private String parseJwt(HttpServletRequest request) {
         String headerAuth = request.getHeader("Authorization");
-
         if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
             return headerAuth.substring(7);
         }
-
         return null;
     }
 }

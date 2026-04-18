@@ -51,7 +51,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
         // 查找 API Key
         ApiKey apiKey = apiKeyMapper.findByApiKey(jwt);
-        if (apiKey == null || !apiKey.getIsActive()) {
+        if (apiKey == null || !apiKey.getActive()) {
             logger.warn("API Key 无效或已禁用: {}", maskApiKey(jwt));
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "API Key 无效或已禁用");
             return;

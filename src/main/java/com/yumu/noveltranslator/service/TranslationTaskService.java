@@ -14,7 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -91,6 +93,111 @@ public class TranslationTaskService {
     }
 
     /**
+     * 启动文档翻译
+     */
+    public void startDocumentTranslation(TranslationTask task, Document doc) {
+        if (task == null || doc == null) {
+            return;
+        }
+        if (!"pending".equals(task.getStatus()) && !"failed".equals(task.getStatus())) {
+            return;
+        }
+
+        // 更新文档状态为处理中
+        doc.setStatus("processing");
+        doc.setUpdateTime(LocalDateTime.now());
+        documentMapper.updateById(doc);
+
+        updateTaskProgress(task, "processing", 10, null);
+
+        executeDocumentTranslation(task, doc);
+    }
+
+    /**
+     * 异步执行文档翻译（使用虚拟线程）
+     */
+    private void executeDocumentTranslation(TranslationTask task, Document doc) {
+        Thread.startVirtualThread(() -> {
+            try {
+                // 读取文件内容
+                String content = readDocumentContent(doc.getPath(), doc.getFileType());
+                if (content == null || content.trim().isEmpty()) {
+                    updateTaskProgress(task, "failed", 0, "文件内容为空");
+                    return;
+                }
+
+                // 按段落分割翻译（每 3000 字符一批）
+                updateTaskProgress(task, "processing", 20, null);
+                StringBuilder translatedContent = new StringBuilder();
+                String[] paragraphs = content.split("(?<=\n)");
+                int total = paragraphs.length;
+                int batchStart = 0;
+
+                while (batchStart < total) {
+                    StringBuilder batch = new StringBuilder();
+                    int batchEnd = batchStart;
+                    while (batchEnd < total && batch.length() + paragraphs[batchEnd].length() <= 3000) {
+                        batch.append(paragraphs[batchEnd]);
+                        batchEnd++;
+                    }
+
+                    if (batch.length() == 0) {
+                        // 单段落超长，直接翻译
+                        batch.append(paragraphs[batchStart]);
+                        batchEnd = batchStart + 1;
+                    }
+
+                    String result = userLevelThrottledTranslationClient.translate(
+                            batch.toString(),
+                            task.getTargetLang(),
+                            task.getEngine(),
+                            false);
+
+                    translatedContent.append(result);
+                    batchStart = batchEnd;
+
+                    int progress = 20 + (int) ((batchStart * 80.0) / total);
+                    updateTaskProgress(task, "processing", progress, null);
+                }
+
+                // 保存翻译结果到文件
+                String translatedPath = doc.getPath().replace(".", "_translated.");
+                Files.write(Paths.get(translatedPath), translatedContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+                // 更新文档状态为已完成
+                doc.setStatus("completed");
+                doc.setCompletedTime(LocalDateTime.now());
+                doc.setUpdateTime(LocalDateTime.now());
+                documentMapper.updateById(doc);
+
+                updateTaskProgress(task, "completed", 100, null);
+                saveTranslationHistory(task, content, translatedContent.toString());
+
+            } catch (Exception e) {
+                log.error("文档翻译失败: {}", e.getMessage(), e);
+                updateTaskProgress(task, "failed", 0, "翻译失败：" + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * 读取文档内容
+     */
+    private String readDocumentContent(String filePath, String fileType) throws IOException {
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path)) {
+            throw new IOException("文件不存在: " + filePath);
+        }
+
+        if ("txt".equals(fileType)) {
+            return Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
+        } else {
+            // DOCX/EPUB/PDF 暂不支持，返回原始文本
+            throw new IOException("暂不支持 " + fileType.toUpperCase() + " 格式，仅支持 TXT 文件");
+        }
+    }
+
+    /**
      * 异步执行文本翻译（使用虚拟线程）
      */
     private void executeTextTranslation(TranslationTask task, String text) {
@@ -143,9 +250,12 @@ public class TranslationTaskService {
         history.setSourceText(sourceText != null && sourceText.length() > 500
                 ? sourceText.substring(0, 500)
                 : sourceText);
-        history.setTargetText(targetText != null && targetText.length() > 500
-                ? targetText.substring(0, 500)
-                : targetText);
+
+        // 解析翻译响应，提取实际翻译内容
+        String translatedContent = extractTranslatedContent(targetText);
+        history.setTargetText(translatedContent != null && translatedContent.length() > 500
+                ? translatedContent.substring(0, 500)
+                : translatedContent);
         history.setEngine(task.getEngine());
         history.setCreateTime(LocalDateTime.now());
 
@@ -153,10 +263,67 @@ public class TranslationTaskService {
     }
 
     /**
+     * 从翻译响应中提取实际翻译内容
+     */
+    private String extractTranslatedContent(String response) {
+        if (response == null || response.isEmpty()) {
+            return response;
+        }
+        try {
+            // 尝试解析 JSON: {"success":true,"engine":"mtran","translatedContent":"..."}
+            if (response.startsWith("{")) {
+                int idx = response.indexOf("\"translatedContent\"");
+                if (idx >= 0) {
+                    int colonIdx = response.indexOf(':', idx + 19);
+                    int quoteStart = response.indexOf('"', colonIdx + 1);
+                    if (quoteStart >= 0) {
+                        int quoteEnd = findUnescapedQuoteEnd(response, quoteStart + 1);
+                        if (quoteEnd > quoteStart) {
+                            return response.substring(quoteStart + 1, quoteEnd)
+                                    .replace("\\n", "\n")
+                                    .replace("\\\\", "\\");
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("解析翻译响应失败: {}", e.getMessage());
+        }
+        return response;
+    }
+
+    /**
+     * 查找未转义的引号结束位置
+     */
+    private int findUnescapedQuoteEnd(String str, int start) {
+        int i = start;
+        while (i < str.length()) {
+            if (str.charAt(i) == '\\') {
+                i += 2;
+                continue;
+            }
+            if (str.charAt(i) == '"') {
+                return i;
+            }
+            i++;
+        }
+        // fallback: find closing quote loosely
+        int idx = str.lastIndexOf('"');
+        return idx > start ? idx : -1;
+    }
+
+    /**
      * 根据任务 ID 获取任务
      */
     public TranslationTask getTaskByTaskId(String taskId) {
         return translationTaskMapper.findByTaskId(taskId);
+    }
+
+    /**
+     * 根据文档 ID 获取任务
+     */
+    public TranslationTask getTaskByDocumentId(Long docId) {
+        return translationTaskMapper.findByDocumentId(docId);
     }
 
     /**

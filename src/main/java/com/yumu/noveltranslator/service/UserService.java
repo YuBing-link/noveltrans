@@ -94,7 +94,7 @@ public class UserService implements UserDetailsService {
                     userInfo.setUserLevel(user.getUserLevel());
                     userInfo.setCreateTime(user.getCreateTime());
 
-                    return Result.okWithToken(userInfo, token, ErrorCodeEnum.SUCCESS.getCode());
+                    return Result.okWithToken(userInfo, token);
                 } else {
                     return Result.error(ErrorCodeEnum.USER_PASSWORD_ERROR.getCode(),
                                       ErrorCodeEnum.USER_PASSWORD_ERROR.getMessage());
@@ -227,7 +227,7 @@ public class UserService implements UserDetailsService {
                     userInfo.get("email")
             );
 
-            return Result.okWithToken(null, newToken, ErrorCodeEnum.SUCCESS.getCode());
+            return Result.okWithToken(null, newToken);
         } catch (Exception e) {
             return Result.error(ErrorCodeEnum.TOKEN_INVALID.getCode(), "刷新令牌无效或已过期");
         }

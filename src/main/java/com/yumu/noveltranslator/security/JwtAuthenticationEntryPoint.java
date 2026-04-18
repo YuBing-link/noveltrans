@@ -29,7 +29,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
-        final Map<String, Object> body = new HashMap<>();
+        final Map<String, Object> body = new HashMap<>(4);
         body.put("success", false);
         body.put("code", "401");
         body.put("message", "未经授权: " + authException.getMessage());

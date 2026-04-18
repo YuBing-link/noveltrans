@@ -75,7 +75,8 @@ public class SecurityConfig {
                     "/v1/translate/webpage",
                     "/v1/translate/premium_selection",
                     "/v1/translate/premium_reader",
-                    "/v1/translate/document"
+                    "/v1/translate/document",
+                    "/v1/translate/task/**"
                 ).permitAll()
 
                 // 用户个人资料接口需要认证

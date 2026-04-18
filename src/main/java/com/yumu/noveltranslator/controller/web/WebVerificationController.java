@@ -1,18 +1,18 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.controller.web;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
 @Controller
-public class VerificationController {
+public class WebVerificationController {
 
     @GetMapping("/verification")
     public String verificationPage() {
-        return "verification"; // 返回verification.html模板
+        return "verification";
     }
 
     @GetMapping("/register")
     public String registerPage() {
-        return "verification"; // 注册页面也使用相同的验证码页面
+        return "verification";
     }
 }

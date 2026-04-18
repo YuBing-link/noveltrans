@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.controller.collab;
 
 import com.yumu.noveltranslator.dto.CommentResponse;
 import com.yumu.noveltranslator.dto.CreateCommentRequest;
@@ -30,7 +30,7 @@ public class CollabCommentController {
                                                    @Valid @RequestBody CreateCommentRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
         CommentResponse comment = collabCommentService.createComment(chapterTaskId, userId, request);
-        return Result.ok(comment, "200");
+        return Result.ok(comment);
     }
 
     @GetMapping("/chapters/{chapterTaskId}/comments")
@@ -45,7 +45,7 @@ public class CollabCommentController {
     public Result<Void> resolveComment(@PathVariable Long commentId) {
         Long userId = SecurityUtil.getRequiredUserId();
         collabCommentService.resolveComment(commentId, userId);
-        return Result.ok(null, "200");
+        return Result.ok(null);
     }
 
     @DeleteMapping("/comments/{commentId}")
@@ -53,6 +53,6 @@ public class CollabCommentController {
     public Result<Void> deleteComment(@PathVariable Long commentId) {
         Long userId = SecurityUtil.getRequiredUserId();
         collabCommentService.deleteComment(commentId, userId);
-        return Result.ok(null, "200");
+        return Result.ok(null);
     }
 }

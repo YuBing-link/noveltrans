@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.controller.collab;
 
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
@@ -30,7 +30,7 @@ public class ChapterTaskController {
                                                        @Valid @RequestBody AssignChapterRequest request) {
         Long assignerId = SecurityUtil.getRequiredUserId();
         ChapterTaskResponse chapter = chapterTaskService.assignChapter(chapterId, request.getAssigneeId(), assignerId);
-        return Result.ok(chapter, "200");
+        return Result.ok(chapter);
     }
 
     @PutMapping("/chapters/{chapterId}/submit")
@@ -38,7 +38,7 @@ public class ChapterTaskController {
     public Result<ChapterTaskResponse> submitChapter(@PathVariable Long chapterId,
                                                        @Valid @RequestBody SubmitChapterRequest request) {
         ChapterTaskResponse chapter = chapterTaskService.submitChapter(chapterId, request.getTranslatedText());
-        return Result.ok(chapter, "200");
+        return Result.ok(chapter);
     }
 
     @PutMapping("/chapters/{chapterId}/review")
@@ -47,14 +47,14 @@ public class ChapterTaskController {
                                                        @Valid @RequestBody ReviewChapterRequest request) {
         Long reviewerId = SecurityUtil.getRequiredUserId();
         ChapterTaskResponse chapter = chapterTaskService.reviewChapter(chapterId, request.getApproved(), request.getComment(), reviewerId);
-        return Result.ok(chapter, "200");
+        return Result.ok(chapter);
     }
 
     @GetMapping("/chapters/{chapterId}")
     @RequireProjectAccess
     public Result<ChapterTaskResponse> getChapter(@PathVariable Long chapterId) {
         ChapterTaskResponse chapter = chapterTaskService.getChapterById(chapterId);
-        return Result.ok(chapter, "200");
+        return Result.ok(chapter);
     }
 
     @GetMapping("/chapters/my")

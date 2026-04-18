@@ -1,14 +1,14 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.controller.web;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
 @Controller
-public class HomeController {
+public class WebHomeController {
 
     @GetMapping("/")
     public String home() {
-        return "index"; // 返回主页
+        return "index";
     }
 
     @GetMapping("/home")

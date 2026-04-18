@@ -1,7 +1,8 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.controller.collab;
 
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.security.annotation.RequireProjectAccess;
 import com.yumu.noveltranslator.service.ChapterTaskService;
 import com.yumu.noveltranslator.service.CollabProjectService;
@@ -32,21 +33,21 @@ public class CollabProjectController {
     public Result<CollabProjectResponse> createProject(@Valid @RequestBody CreateCollabProjectRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
         CollabProjectResponse project = collabProjectService.createProject(request, userId);
-        return Result.ok(project, "200");
+        return Result.ok(project);
     }
 
     @GetMapping("/projects")
     public Result<List<CollabProjectResponse>> listProjects() {
         Long userId = SecurityUtil.getRequiredUserId();
         List<CollabProjectResponse> projects = collabProjectService.listByUserId(userId);
-        return Result.ok(projects, "200");
+        return Result.ok(projects);
     }
 
     @GetMapping("/projects/{projectId}")
     @RequireProjectAccess
     public Result<CollabProjectResponse> getProject(@PathVariable Long projectId) {
         CollabProjectResponse project = collabProjectService.getProjectById(projectId);
-        return Result.ok(project, "200");
+        return Result.ok(project);
     }
 
     @PutMapping("/projects/{projectId}")
@@ -55,36 +56,36 @@ public class CollabProjectController {
                                                         @Valid @RequestBody CreateCollabProjectRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
         CollabProjectResponse project = collabProjectService.updateProject(projectId, request, userId);
-        return Result.ok(project, "200");
+        return Result.ok(project);
     }
 
     @PatchMapping("/projects/{projectId}/status")
-    @RequireProjectAccess(roles = {com.yumu.noveltranslator.enums.ProjectMemberRole.OWNER})
+    @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
     public Result<Void> changeProjectStatus(@PathVariable Long projectId,
                                              @RequestParam String targetStatus) {
         CollabProjectStatus target = CollabProjectStatus.fromValue(targetStatus);
         Long userId = SecurityUtil.getRequiredUserId();
         collabProjectService.changeProjectStatus(projectId, target, userId);
-        return Result.ok(null, "200");
+        return Result.ok(null);
     }
 
     // ==================== 章节管理 ====================
 
     @PostMapping("/projects/{projectId}/chapters")
-    @RequireProjectAccess(roles = {com.yumu.noveltranslator.enums.ProjectMemberRole.OWNER})
+    @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
     public Result<ChapterTaskResponse> createChapter(@PathVariable Long projectId,
                                                       @RequestParam Integer chapterNumber,
                                                       @RequestParam(required = false) String title,
                                                       @RequestParam(required = false) String sourceText) {
         Long userId = SecurityUtil.getRequiredUserId();
         ChapterTaskResponse chapter = chapterTaskService.createChapter(projectId, chapterNumber, title, sourceText, userId);
-        return Result.ok(chapter, "200");
+        return Result.ok(chapter);
     }
 
     @GetMapping("/projects/{projectId}/chapters")
     @RequireProjectAccess
     public Result<List<ChapterTaskResponse>> listChapters(@PathVariable Long projectId) {
         List<ChapterTaskResponse> chapters = chapterTaskService.listByProjectId(projectId);
-        return Result.ok(chapters, "200");
+        return Result.ok(chapters);
     }
 }

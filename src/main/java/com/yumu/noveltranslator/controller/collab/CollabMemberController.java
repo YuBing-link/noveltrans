@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.controller.collab;
 
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
@@ -30,21 +30,21 @@ public class CollabMemberController {
                                                        @Valid @RequestBody InviteMemberRequest request) {
         Long inviterId = SecurityUtil.getRequiredUserId();
         ProjectMemberResponse member = collabProjectService.inviteMember(projectId, request, inviterId);
-        return Result.ok(member, "200");
+        return Result.ok(member);
     }
 
     @PostMapping("/join")
     public Result<ProjectMemberResponse> joinByCode(@RequestParam String inviteCode) {
         Long userId = SecurityUtil.getRequiredUserId();
         ProjectMemberResponse member = collabProjectService.joinByInviteCode(inviteCode, userId);
-        return Result.ok(member, "200");
+        return Result.ok(member);
     }
 
     @GetMapping("/projects/{projectId}/members")
     @RequireProjectAccess
     public Result<List<ProjectMemberResponse>> listMembers(@PathVariable Long projectId) {
         List<ProjectMemberResponse> members = collabProjectService.getMembers(projectId);
-        return Result.ok(members, "200");
+        return Result.ok(members);
     }
 
     @DeleteMapping("/projects/{projectId}/members/{memberId}")
@@ -52,6 +52,6 @@ public class CollabMemberController {
     public Result<Void> removeMember(@PathVariable Long projectId, @PathVariable Long memberId) {
         Long operatorId = SecurityUtil.getRequiredUserId();
         collabProjectService.removeMember(projectId, memberId, operatorId);
-        return Result.ok(null, "200");
+        return Result.ok(null);
     }
 }

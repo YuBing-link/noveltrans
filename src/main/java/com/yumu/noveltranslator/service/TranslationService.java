@@ -435,14 +435,14 @@ public class TranslationService {
                                 extracted = original;
                             }
 
-                            Map<String, Object> eventData = new HashMap<>();
+                            Map<String, Object> eventData = new HashMap<>(3);
                             eventData.put("textId", id);
                             eventData.put("original", original);
                             eventData.put("translation", extracted);
                             SseEmitterUtil.sendData(emitter, JSON.toJSONString(eventData));
                         } catch (Exception e) {
                             log.error("翻译失败 - ID: {}, 错误: {}", item.getId(), e.getMessage());
-                            Map<String, Object> errorData = new HashMap<>();
+                            Map<String, Object> errorData = new HashMap<>(3);
                             errorData.put("textId", item.getId());
                             errorData.put("original", item.getOriginal());
                             errorData.put("translation", item.getOriginal());

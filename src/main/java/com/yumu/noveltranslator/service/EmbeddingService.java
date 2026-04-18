@@ -67,7 +67,7 @@ public class EmbeddingService {
             return new float[0];
         }
 
-        Map<String, Object> requestBody = new HashMap<>();
+        Map<String, Object> requestBody = new HashMap<>(2);
         requestBody.put("model", openaiModel);
         requestBody.put("input", text);
 
@@ -91,7 +91,7 @@ public class EmbeddingService {
     }
 
     private float[] embedWithOllama(String text) {
-        Map<String, Object> requestBody = new HashMap<>();
+        Map<String, Object> requestBody = new HashMap<>(2);
         requestBody.put("model", ollamaModel);
         requestBody.put("prompt", text);
 

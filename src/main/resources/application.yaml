@@ -84,6 +84,8 @@ mybatis-plus:
       id-type: assign_id  # 使用雪花算法生成 ID，避免 SQLite 自增主键问题
 
 translation:
+  external:
+    max-chars: 5000  # 外部 API 单次请求最大字符数
   openai:
     api-key: "${TRANSLATION_OPENAI_API_KEY:}"  # 必须通过环境变量 TRANSLATION_OPENAI_API_KEY 配置
     base-url: "https://api.openai.com"
