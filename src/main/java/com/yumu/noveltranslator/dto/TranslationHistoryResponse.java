@@ -39,4 +39,8 @@ public class TranslationHistoryResponse {
      * 创建时间
      */
     private String createTime;
+    /**
+     * 任务状态：pending, processing, completed, failed
+     */
+    private String status;
 }

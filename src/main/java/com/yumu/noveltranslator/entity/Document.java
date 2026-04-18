@@ -50,6 +50,11 @@ public class Document {
     private Long fileSize;
 
     /**
+     * 关联的翻译任务 ID
+     */
+    private String taskId;
+
+    /**
      * 翻译状态：pending, processing, completed, failed
      */
     private String status;

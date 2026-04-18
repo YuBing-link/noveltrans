@@ -155,7 +155,7 @@
                     sourceLang: item.sourceLang || 'auto',
                     targetLang: item.targetLang || '',
                     createTime: item.createTime,
-                    status: 'completed',
+                    status: item.status || 'completed',
                     fileSize: null
                 }));
             }

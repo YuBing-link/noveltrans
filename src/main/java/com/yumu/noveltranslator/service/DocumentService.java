@@ -145,6 +145,7 @@ public class DocumentService {
         response.setFileSize(doc.getFileSize());
         response.setSourceLang(doc.getSourceLang());
         response.setTargetLang(doc.getTargetLang());
+        response.setTaskId(doc.getTaskId());
         response.setStatus(doc.getStatus());
         response.setProgress(100); // 简化处理
         response.setCreateTime(doc.getCreateTime() != null

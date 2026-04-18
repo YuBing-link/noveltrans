@@ -32,6 +32,10 @@ public class DocumentInfoResponse {
      */
     private String targetLang;
     /**
+     * 关联的翻译任务 ID
+     */
+    private String taskId;
+    /**
      * 翻译状态
      */
     private String status;

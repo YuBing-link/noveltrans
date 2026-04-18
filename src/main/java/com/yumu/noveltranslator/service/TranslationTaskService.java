@@ -89,6 +89,10 @@ public class TranslationTaskService {
 
         translationTaskMapper.insert(task);
 
+        // 关联文档与任务
+        doc.setTaskId(taskId);
+        documentMapper.updateById(doc);
+
         return task;
     }
 
@@ -367,13 +371,35 @@ public class TranslationTaskService {
                 TranslationHistory history = translationHistoryMapper.findByTaskId(task.getTaskId());
                 if (history != null) {
                     response.setTranslatedText(history.getTargetText());
+                    response.setSourceContent(history.getSourceText());
                 }
             } else if ("document".equals(task.getType())) {
-                // 文档翻译，返回文件路径
+                // 文档翻译，读取文件内容
                 if (task.getDocumentId() != null) {
                     Document doc = documentMapper.findById(task.getDocumentId());
                     if (doc != null) {
                         response.setTranslatedFilePath(doc.getPath());
+                        // 尝试读取翻译文件内容
+                        String translatedPath = doc.getPath().replace(".", "_translated.");
+                        try {
+                            Path path = Paths.get(translatedPath);
+                            if (Files.exists(path)) {
+                                String content = Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
+                                response.setTranslatedText(content);
+                            }
+                        } catch (Exception e) {
+                            log.warn("读取翻译文件失败: {}", e.getMessage());
+                        }
+                        // 读取原文内容
+                        try {
+                            Path path = Paths.get(doc.getPath());
+                            if (Files.exists(path)) {
+                                String content = Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
+                                response.setSourceContent(content);
+                            }
+                        } catch (Exception e) {
+                            log.warn("读取原文文件失败: {}", e.getMessage());
+                        }
                     }
                 }
             }
@@ -482,6 +508,14 @@ public class TranslationTaskService {
         response.setCreateTime(history.getCreateTime() != null
                 ? history.getCreateTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                 : null);
+
+        // 查询关联任务状态
+        if (history.getTaskId() != null) {
+            TranslationTask task = translationTaskMapper.findByTaskId(history.getTaskId());
+            response.setStatus(task != null ? task.getStatus() : "completed");
+        } else {
+            response.setStatus("completed");
+        }
 
         return response;
     }

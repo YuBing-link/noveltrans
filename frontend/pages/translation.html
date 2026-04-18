@@ -670,9 +670,16 @@
         if (isCompleted) {
             el.querySelector('.view-result-btn').addEventListener('click', async function() {
                 const token = localStorage.getItem('authToken');
-                const taskId = doc.taskId || 'task_' + doc.id;
-                const url = `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH.replace('/translate', '')}/translate/task/${taskId}/result`;
                 try {
+                    // 先获取文档详情获取taskId
+                    const docRes = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${doc.id}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const docResult = await docRes.json();
+                    const taskId = docResult.success && docResult.data?.taskId ? docResult.data.taskId : null;
+                    if (!taskId) { showToast('error', '加载失败', '未找到翻译任务'); return; }
+
+                    const url = `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH.replace('/translate', '')}/translate/task/${taskId}/result`;
                     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
                     const result = await res.json();
                     if (res.ok && result.success) {

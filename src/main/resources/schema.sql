@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS `document` (
     `target_lang` VARCHAR(50) NOT NULL,
     `file_type` VARCHAR(50) DEFAULT NULL,
     `file_size` BIGINT DEFAULT NULL,
+    `task_id` VARCHAR(255) DEFAULT NULL,
     `status` VARCHAR(50) DEFAULT 'pending',
     `mode` VARCHAR(50) DEFAULT NULL,
     `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,

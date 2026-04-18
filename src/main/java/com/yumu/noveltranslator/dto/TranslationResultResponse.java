@@ -20,6 +20,10 @@ public class TranslationResultResponse {
      */
     private String translatedText;
     /**
+     * 原文内容
+     */
+    private String sourceContent;
+    /**
      * 翻译后的文件路径（文档翻译）
      */
     private String translatedFilePath;
