@@ -694,16 +694,57 @@ class ApiClient {
     }, true, false);
   }
 
+  /* ==================== API Key 管理接口 ==================== */
+
+  /**
+   * 生成 API Key
+   * POST /user/api-keys
+   */
+  async createApiKey(name = 'Default') {
+    return this.request('/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    }, true, false);
+  }
+
+  /**
+   * 获取 API Key 列表
+   * GET /user/api-keys
+   */
+  async getApiKeys() {
+    return this.request('/api-keys', {
+      method: 'GET'
+    }, true, false);
+  }
+
+  /**
+   * 删除 API Key
+   * DELETE /user/api-keys/{id}
+   */
+  async deleteApiKey(id) {
+    return this.request(`/api-keys/${id}`, {
+      method: 'DELETE'
+    }, true, false);
+  }
+
+  /**
+   * 重置 API Key
+   * POST /user/api-keys/{id}/reset
+   */
+  async resetApiKey(id) {
+    return this.request(`/api-keys/${id}/reset`, {
+      method: 'POST'
+    }, true, false);
+  }
+
   /* ==================== 术语库接口 ==================== */
 
   /**
-   * 获取用户术语库列表
+   * 获取术语列表（平铺术语项）
    * GET /user/glossaries
    */
-  async getGlossaries(params = {}) {
-    const { page = 1, pageSize = 20 } = params;
-    const queryString = new URLSearchParams({ page, pageSize }).toString();
-    return this.request(`/glossaries?${queryString}`, {
+  async getGlossaries() {
+    return this.request('/glossaries', {
       method: 'GET'
     }, true, false);
   }
@@ -719,45 +760,43 @@ class ApiClient {
   }
 
   /**
-   * 获取术语列表
+   * 获取术语列表（与 getGlossaries 相同，后端返回平铺术语）
    * GET /user/glossaries/{id}/terms
    */
-  async getTerms(glossaryId, params = {}) {
-    const { page = 1, pageSize = 100, search = '' } = params;
-    const queryString = new URLSearchParams({ page, pageSize, search }).toString();
-    return this.request(`/glossaries/${glossaryId}/terms?${queryString}`, {
+  async getTerms(glossaryId) {
+    return this.request(`/glossaries/${glossaryId}/terms`, {
       method: 'GET'
     }, true, false);
   }
 
   /**
-   * 创建术语库
+   * 创建术语项
    * POST /user/glossaries
    */
   async createGlossary(data) {
-    const { name, description, sourceLang, targetLang } = data;
+    const { sourceWord, targetWord, description, remark } = data;
     return this.request('/glossaries', {
       method: 'POST',
       body: JSON.stringify({
-        name,
-        description,
-        sourceLang,
-        targetLang
+        sourceWord,
+        targetWord,
+        remark: remark || description || ''
       })
     }, true, false);
   }
 
   /**
-   * 更新术语库
+   * 更新术语项
    * PUT /user/glossaries/{id}
    */
   async updateGlossary(glossaryId, data) {
-    const { name, description } = data;
+    const { sourceWord, targetWord, description, remark } = data;
     return this.request(`/glossaries/${glossaryId}`, {
       method: 'PUT',
       body: JSON.stringify({
-        name,
-        description
+        sourceWord,
+        targetWord,
+        remark: remark || description || ''
       })
     }, true, false);
   }

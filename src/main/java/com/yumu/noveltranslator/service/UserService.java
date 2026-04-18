@@ -398,8 +398,7 @@ public class UserService implements UserDetailsService {
      */
     public List<GlossaryResponse> getGlossaryList(Long userId) {
         LambdaQueryWrapper<Glossary> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Glossary::getUserId, userId)
-               .isNull(Glossary::getDeleted);
+        wrapper.eq(Glossary::getUserId, userId);
 
         List<Glossary> glossaries = glossaryMapper.selectList(wrapper);
         return glossaries.stream()

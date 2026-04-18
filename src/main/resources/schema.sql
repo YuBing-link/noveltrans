@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS `user` (
     INDEX `idx_user_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ==================== API Key 模块 ====================
+-- ==================== API Key 表 ====================
 CREATE TABLE IF NOT EXISTS `api_keys` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT NOT NULL,
@@ -87,46 +87,6 @@ CREATE TABLE IF NOT EXISTS `document` (
     INDEX `idx_document_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ==================== API Key 模块 ====================
-CREATE TABLE IF NOT EXISTS `api_keys` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `api_key` VARCHAR(64) NOT NULL,
-    `name` VARCHAR(50) DEFAULT 'Default',
-    `is_active` TINYINT(1) DEFAULT 1,
-    `last_used_at` DATETIME DEFAULT NULL,
-    `total_usage` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_api_key` (`api_key`),
-    INDEX `idx_api_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 配额使用记录 ====================
-CREATE TABLE IF NOT EXISTS `quota_usage` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `usage_date` DATE NOT NULL,
-    `characters_used` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_quota_user_date` (`user_id`, `usage_date`),
-    INDEX `idx_quota_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 用户档位变更历史 ====================
-CREATE TABLE IF NOT EXISTS `user_plan_history` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `old_plan` VARCHAR(20) NOT NULL,
-    `new_plan` VARCHAR(20) NOT NULL,
-    `changed_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `note` VARCHAR(255) DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    INDEX `idx_plan_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- ==================== 翻译任务模块 ====================
 CREATE TABLE IF NOT EXISTS `translation_task` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -151,46 +111,6 @@ CREATE TABLE IF NOT EXISTS `translation_task` (
     INDEX `idx_task_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ==================== API Key 模块 ====================
-CREATE TABLE IF NOT EXISTS `api_keys` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `api_key` VARCHAR(64) NOT NULL,
-    `name` VARCHAR(50) DEFAULT 'Default',
-    `is_active` TINYINT(1) DEFAULT 1,
-    `last_used_at` DATETIME DEFAULT NULL,
-    `total_usage` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_api_key` (`api_key`),
-    INDEX `idx_api_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 配额使用记录 ====================
-CREATE TABLE IF NOT EXISTS `quota_usage` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `usage_date` DATE NOT NULL,
-    `characters_used` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_quota_user_date` (`user_id`, `usage_date`),
-    INDEX `idx_quota_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 用户档位变更历史 ====================
-CREATE TABLE IF NOT EXISTS `user_plan_history` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `old_plan` VARCHAR(20) NOT NULL,
-    `new_plan` VARCHAR(20) NOT NULL,
-    `changed_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `note` VARCHAR(255) DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    INDEX `idx_plan_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- ==================== 翻译历史模块 ====================
 CREATE TABLE IF NOT EXISTS `translation_history` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -211,46 +131,6 @@ CREATE TABLE IF NOT EXISTS `translation_history` (
     INDEX `idx_history_deleted` (`deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ==================== API Key 模块 ====================
-CREATE TABLE IF NOT EXISTS `api_keys` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `api_key` VARCHAR(64) NOT NULL,
-    `name` VARCHAR(50) DEFAULT 'Default',
-    `is_active` TINYINT(1) DEFAULT 1,
-    `last_used_at` DATETIME DEFAULT NULL,
-    `total_usage` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_api_key` (`api_key`),
-    INDEX `idx_api_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 配额使用记录 ====================
-CREATE TABLE IF NOT EXISTS `quota_usage` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `usage_date` DATE NOT NULL,
-    `characters_used` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_quota_user_date` (`user_id`, `usage_date`),
-    INDEX `idx_quota_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 用户档位变更历史 ====================
-CREATE TABLE IF NOT EXISTS `user_plan_history` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `old_plan` VARCHAR(20) NOT NULL,
-    `new_plan` VARCHAR(20) NOT NULL,
-    `changed_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `note` VARCHAR(255) DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    INDEX `idx_plan_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- ==================== 术语表模块 ====================
 CREATE TABLE IF NOT EXISTS `glossary` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -264,46 +144,6 @@ CREATE TABLE IF NOT EXISTS `glossary` (
     INDEX `idx_glossary_user` (`user_id`),
     UNIQUE INDEX `idx_glossary_user_source` (`user_id`, `source_word`),
     INDEX `idx_glossary_deleted` (`deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== API Key 模块 ====================
-CREATE TABLE IF NOT EXISTS `api_keys` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `api_key` VARCHAR(64) NOT NULL,
-    `name` VARCHAR(50) DEFAULT 'Default',
-    `is_active` TINYINT(1) DEFAULT 1,
-    `last_used_at` DATETIME DEFAULT NULL,
-    `total_usage` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_api_key` (`api_key`),
-    INDEX `idx_api_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 配额使用记录 ====================
-CREATE TABLE IF NOT EXISTS `quota_usage` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `usage_date` DATE NOT NULL,
-    `characters_used` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_quota_user_date` (`user_id`, `usage_date`),
-    INDEX `idx_quota_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 用户档位变更历史 ====================
-CREATE TABLE IF NOT EXISTS `user_plan_history` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `old_plan` VARCHAR(20) NOT NULL,
-    `new_plan` VARCHAR(20) NOT NULL,
-    `changed_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `note` VARCHAR(255) DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    INDEX `idx_plan_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ==================== 翻译缓存模块 ====================
@@ -322,42 +162,20 @@ CREATE TABLE IF NOT EXISTS `translation_cache` (
     INDEX `idx_cache_expire` (`expire_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ==================== API Key 模块 ====================
-CREATE TABLE IF NOT EXISTS `api_keys` (
+-- ==================== 用户偏好设置 ====================
+CREATE TABLE IF NOT EXISTS `user_preference` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT NOT NULL,
-    `api_key` VARCHAR(64) NOT NULL,
-    `name` VARCHAR(50) DEFAULT 'Default',
-    `is_active` TINYINT(1) DEFAULT 1,
-    `last_used_at` DATETIME DEFAULT NULL,
-    `total_usage` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `default_engine` VARCHAR(50) DEFAULT 'google',
+    `default_target_lang` VARCHAR(50) DEFAULT 'zh',
+    `enable_glossary` TINYINT(1) DEFAULT 1,
+    `default_glossary_id` BIGINT DEFAULT NULL,
+    `enable_cache` TINYINT(1) DEFAULT 1,
+    `auto_translate_selection` TINYINT(1) DEFAULT 1,
+    `font_size` INT DEFAULT 14,
+    `theme_mode` VARCHAR(20) DEFAULT 'light',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_api_key` (`api_key`),
-    INDEX `idx_api_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 配额使用记录 ====================
-CREATE TABLE IF NOT EXISTS `quota_usage` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `usage_date` DATE NOT NULL,
-    `characters_used` BIGINT DEFAULT 0,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE INDEX `idx_quota_user_date` (`user_id`, `usage_date`),
-    INDEX `idx_quota_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ==================== 用户档位变更历史 ====================
-CREATE TABLE IF NOT EXISTS `user_plan_history` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT,
-    `user_id` BIGINT NOT NULL,
-    `old_plan` VARCHAR(20) NOT NULL,
-    `new_plan` VARCHAR(20) NOT NULL,
-    `changed_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `note` VARCHAR(255) DEFAULT NULL,
-    PRIMARY KEY (`id`),
-    INDEX `idx_plan_user` (`user_id`)
+    UNIQUE INDEX `idx_pref_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

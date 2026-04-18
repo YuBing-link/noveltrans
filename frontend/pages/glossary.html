@@ -31,28 +31,22 @@
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Header -->
         <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="book-open" class="w-6 h-6 text-primary-600"></i>术语库管理</h1>
-            <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-4 h-4"></i>创建术语库</button>
+            <div>
+                <h1 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="languages" class="w-6 h-6 text-primary-600"></i>术语库管理</h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">管理翻译术语，确保专有名词翻译一致性</p>
+            </div>
+            <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-4 h-4"></i>添加术语</button>
         </div>
 
-        <!-- Glossary Cards -->
-        <div id="glossaryList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8"></div>
-
-        <!-- Terms Section (hidden until glossary selected) -->
-        <div id="termsSection" class="hidden bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/60 dark:border-gray-800/60">
-            <div class="p-6 border-b border-gray-200/60 dark:border-gray-800/60">
-                <div class="flex items-center justify-between gap-4">
-                    <h2 id="termsTitle" class="text-lg font-bold">术语列表</h2>
-                    <div class="flex items-center gap-3">
-                        <div class="relative">
-                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="text" id="termSearch" placeholder="搜索术语..." class="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200/60 dark:border-gray-800/60 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 w-56">
-                        </div>
-                        <button onclick="addTerm()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-3.5 h-3.5"></i>添加术语</button>
-                    </div>
+        <!-- Terms Table -->
+        <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/60 dark:border-gray-800/60">
+            <div class="p-4 border-b border-gray-200/60 dark:border-gray-800/60">
+                <div class="relative max-w-xs">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="searchInput" placeholder="搜索术语..." class="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200/60 dark:border-gray-800/60 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 w-full">
                 </div>
             </div>
             <div class="overflow-x-auto">
@@ -62,7 +56,8 @@
                             <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">#</th>
                             <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">原文</th>
                             <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">译文</th>
-                            <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">语言对</th>
+                            <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">备注</th>
+                            <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">创建时间</th>
                             <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">操作</th>
                         </tr>
                     </thead>
@@ -73,50 +68,34 @@
 
         <!-- Empty State -->
         <div id="emptyState" class="hidden text-center py-16">
-            <div class="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4"><i data-lucide="book-open" class="w-8 h-8 text-gray-400"></i></div>
-            <h3 class="text-lg font-bold mb-2">暂无术语库</h3>
-            <p class="text-sm text-gray-500 mb-6">创建您的第一个术语库，开始管理专业术语</p>
-            <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-4 h-4"></i>创建术语库</button>
+            <div class="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4"><i data-lucide="languages" class="w-8 h-8 text-gray-400"></i></div>
+            <h3 class="text-lg font-bold mb-2">暂无术语</h3>
+            <p class="text-sm text-gray-500 mb-6">添加您的第一个术语，提升专有名词翻译质量</p>
+            <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-4 h-4"></i>添加术语</button>
         </div>
     </main>
 
-    <!-- Create Glossary Modal -->
-    <div id="createGlossaryModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
-        <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 class="text-lg font-bold mb-1">创建术语库</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">请输入术语库的基本信息</p>
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-1.5">术语库名称 <span class="text-red-500">*</span></label>
-                <input type="text" id="newGlossaryName" placeholder="请输入术语库名称" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
-            </div>
-            <div class="mb-5">
-                <label class="block text-sm font-medium mb-1.5">描述（可选）</label>
-                <textarea id="newGlossaryDesc" placeholder="请输入术语库描述" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none" rows="3"></textarea>
-            </div>
-            <div class="flex justify-end gap-3">
-                <button onclick="closeCreateGlossaryModal()" class="px-5 py-2 text-sm font-medium rounded-xl border border-gray-200/60 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">取消</button>
-                <button onclick="submitCreateGlossary()" class="px-5 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors">创建</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Term Modal -->
+    <!-- Create/Edit Term Modal -->
     <div id="termModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
         <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 id="termModalTitle" class="text-lg font-bold mb-1">添加术语</h3>
+            <h3 id="modalTitle" class="text-lg font-bold mb-1">添加术语</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">请输入术语的原文和译文</p>
             <input type="hidden" id="editTermId">
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1.5">原文 <span class="text-red-500">*</span></label>
-                <input type="text" id="termSourceText" placeholder="请输入原文" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
+                <input type="text" id="termSourceText" placeholder="例如：ソードアート・オンライン" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1.5">译文 <span class="text-red-500">*</span></label>
+                <input type="text" id="termTargetText" placeholder="例如：刀剑神域" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
             </div>
             <div class="mb-5">
-                <label class="block text-sm font-medium mb-1.5">译文 <span class="text-red-500">*</span></label>
-                <input type="text" id="termTargetText" placeholder="请输入译文" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
+                <label class="block text-sm font-medium mb-1.5">备注（可选）</label>
+                <textarea id="termRemark" placeholder="例如：SAO 的日文原名" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none" rows="2"></textarea>
             </div>
             <div class="flex justify-end gap-3">
                 <button onclick="closeTermModal()" class="px-5 py-2 text-sm font-medium rounded-xl border border-gray-200/60 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">取消</button>
-                <button onclick="submitTerm()" class="px-5 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors">确定</button>
+                <button onclick="submitTerm()" class="px-5 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors">保存</button>
             </div>
         </div>
     </div>
@@ -141,173 +120,134 @@
     (function() { const s = localStorage.getItem('theme'); setTheme(s === 'dark' || (!s && window.matchMedia('(prefers-color-scheme: dark)').matches)); })();
     document.getElementById('themeToggle').addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark')));
 
-    let currentGlossaryId = null;
-    let currentTerms = [];
+    let terms = [];
     let isEditMode = false;
 
-    async function loadGlossaries() {
+    async function loadTerms() {
         const token = localStorage.getItem('authToken');
         if (!token) { window.location.href = 'index.html?modal=login'; return; }
         try {
             const result = await apiClient.getGlossaries();
-            const container = document.getElementById('glossaryList');
-            const empty = document.getElementById('emptyState');
-            if (!result.success || !result.data || result.data.length === 0) {
-                container.innerHTML = ''; container.classList.add('hidden');
-                empty.classList.remove('hidden'); lucide.createIcons(); return;
+            if (result.success && result.data && result.data.length > 0) {
+                terms = result.data;
+                renderTerms(terms);
+            } else {
+                terms = [];
+                renderTerms([]);
             }
-            empty.classList.add('hidden');
-            container.classList.remove('hidden');
-            container.innerHTML = result.data.map((g, i) => `
-                <div class="bg-white dark:bg-gray-900 rounded-2xl border-2 ${i === 0 ? 'border-primary-500' : 'border-gray-200/60 dark:border-gray-800/60'} p-5 hover:border-primary-300 dark:hover:border-primary-700 transition-all cursor-pointer" onclick="selectGlossary(${g.id}, this)">
-                    <div class="flex items-start justify-between mb-3">
-                        <div class="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950/30 flex items-center justify-center"><i data-lucide="book-open" class="w-5 h-5 text-primary-600"></i></div>
-                        <button onclick="event.stopPropagation(); openGlossaryMenu(${g.id})" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i data-lucide="more-horizontal" class="w-4 h-4 text-gray-400"></i></button>
-                    </div>
-                    <p class="font-semibold mb-1">${escapeHtml(g.name)}</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">${escapeHtml(g.description || '暂无描述')}</p>
-                    <div class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
-                        <span class="text-xs text-gray-500"><span class="font-semibold text-primary-600">${g.termCount || 0}</span> 个术语</span>
-                        <span class="text-xs px-2 py-0.5 rounded-full bg-primary-50 dark:bg-primary-950/30 text-primary-600 font-medium">${g.sourceLang || 'auto'}→${g.targetLang || 'zh'}</span>
-                    </div>
-                </div>
-            `).join('');
-            if (result.data.length > 0) selectGlossary(result.data[0].id, container.querySelector('.bg-white'));
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error(e); showToast('error', '错误', '加载术语列表失败'); }
         lucide.createIcons();
     }
 
-    async function selectGlossary(id, card) {
-        document.querySelectorAll('#glossaryList > div').forEach(c => { c.classList.remove('border-primary-500'); c.classList.add('border-gray-200/60', 'dark:border-gray-800/60'); });
-        if (card) { card.classList.add('border-primary-500'); card.classList.remove('border-gray-200/60', 'dark:border-gray-800/60'); }
-        currentGlossaryId = id;
-        await loadTerms(id);
-    }
-
-    async function loadTerms(glossaryId) {
-        const section = document.getElementById('termsSection');
-        const title = document.getElementById('termsTitle');
+    function renderTerms(data) {
         const tbody = document.getElementById('termsList');
-        try {
-            const result = await apiClient.getTerms(glossaryId);
-            if (!result.success || !result.data || result.data.length === 0) {
-                section.classList.remove('hidden');
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-12 text-gray-400">暂无术语，点击右上角"添加术语"按钮添加</td></tr>';
-                return;
-            }
-            currentTerms = result.data;
-            section.classList.remove('hidden');
-            try {
-                const glossaryResult = await apiClient.getGlossary(glossaryId);
-                if (glossaryResult.success) title.textContent = glossaryResult.data.name + ' — 术语列表';
-            } catch {}
-            tbody.innerHTML = currentTerms.map((term, i) => `
+        const empty = document.getElementById('emptyState');
+        const table = tbody.closest('.bg-white');
+        if (data.length === 0) {
+            table.classList.add('hidden');
+            empty.classList.remove('hidden');
+            tbody.innerHTML = '';
+        } else {
+            table.classList.remove('hidden');
+            empty.classList.add('hidden');
+            tbody.innerHTML = data.map((term, i) => `
                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td class="px-6 py-4 text-sm text-gray-400">${i + 1}</td>
-                    <td class="px-6 py-4 text-sm font-medium">${escapeHtml(term.sourceText)}</td>
-                    <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">${escapeHtml(term.targetText)}</td>
-                    <td class="px-6 py-4"><span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">${term.sourceLang || 'auto'}→${term.targetLang || 'zh'}</span></td>
+                    <td class="px-6 py-4 text-sm font-medium">${escapeHtml(term.sourceWord || '')}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">${escapeHtml(term.targetWord || '')}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-500 max-w-xs truncate">${escapeHtml(term.remark || '—')}</td>
+                    <td class="px-6 py-4 text-sm text-gray-400">${formatTime(term.createTime)}</td>
                     <td class="px-6 py-4">
                         <div class="flex items-center gap-1">
-                            <button onclick="editTerm(${term.id})" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i data-lucide="pencil" class="w-3.5 h-3.5 text-gray-400"></i></button>
-                            <button onclick="deleteTerm(${term.id})" class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-gray-400 hover:text-red-500"></i></button>
+                            <button onclick="editTerm(${term.id})" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="编辑"><i data-lucide="pencil" class="w-3.5 h-3.5 text-gray-400"></i></button>
+                            <button onclick="deleteTerm(${term.id})" class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors" title="删除"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-gray-400 hover:text-red-500"></i></button>
                         </div>
                     </td>
                 </tr>
             `).join('');
-        } catch (e) { console.error(e); }
-        lucide.createIcons();
+        }
     }
 
     function openCreateModal() {
-        const modal = document.getElementById('createGlossaryModal');
-        modal.classList.remove('hidden');
-        document.getElementById('newGlossaryName').value = '';
-        document.getElementById('newGlossaryDesc').value = '';
-        document.getElementById('newGlossaryName').focus();
-    }
-    function closeCreateGlossaryModal(e) { if (!e || e.target === e.currentTarget) document.getElementById('createGlossaryModal').classList.add('hidden'); }
-    function closeTermModal(e) { if (!e || e.target === e.currentTarget) document.getElementById('termModal').classList.add('hidden'); }
-
-    async function submitCreateGlossary() {
-        const name = document.getElementById('newGlossaryName').value.trim();
-        const description = document.getElementById('newGlossaryDesc').value.trim();
-        if (!name) { showToast('error', '错误', '请输入术语库名称'); return; }
-        try {
-            const result = await apiClient.createGlossary({ name, description, sourceLang: 'ja', targetLang: 'zh' });
-            if (result.success) { showToast('success', '成功', '术语库创建成功'); closeCreateGlossaryModal(); loadGlossaries(); }
-            else showToast('error', '失败', '创建失败：' + result.error);
-        } catch (e) { showToast('error', '错误', '创建失败'); }
-    }
-
-    function openGlossaryMenu(id) {
-        if (confirm('确定要删除此术语库吗？此操作不可恢复！')) {
-            apiClient.deleteGlossary(id).then(result => {
-                if (result.success) { showToast('success', '成功', '术语库已删除'); loadGlossaries(); }
-                else showToast('error', '失败', '删除失败：' + result.error);
-            });
-        }
-    }
-
-    function addTerm() {
-        if (!currentGlossaryId) { showToast('info', '提示', '请先选择术语库'); return; }
         isEditMode = false;
-        document.getElementById('termModalTitle').textContent = '添加术语';
+        document.getElementById('modalTitle').textContent = '添加术语';
         document.getElementById('termSourceText').value = '';
         document.getElementById('termTargetText').value = '';
+        document.getElementById('termRemark').value = '';
         document.getElementById('editTermId').value = '';
         document.getElementById('termModal').classList.remove('hidden');
-        document.getElementById('termSourceText').focus();
+        setTimeout(() => document.getElementById('termSourceText').focus(), 100);
     }
 
-    function editTerm(termId) {
-        const term = currentTerms.find(t => t.id === termId);
+    function editTerm(id) {
+        const term = terms.find(t => t.id === id);
         if (!term) return;
         isEditMode = true;
-        document.getElementById('termModalTitle').textContent = '编辑术语';
-        document.getElementById('termSourceText').value = term.sourceText;
-        document.getElementById('termTargetText').value = term.targetText;
-        document.getElementById('editTermId').value = termId;
+        document.getElementById('modalTitle').textContent = '编辑术语';
+        document.getElementById('termSourceText').value = term.sourceWord || '';
+        document.getElementById('termTargetText').value = term.targetWord || '';
+        document.getElementById('termRemark').value = term.remark || '';
+        document.getElementById('editTermId').value = id;
         document.getElementById('termModal').classList.remove('hidden');
-        document.getElementById('termSourceText').focus();
+        setTimeout(() => document.getElementById('termSourceText').focus(), 100);
+    }
+
+    function closeTermModal() {
+        document.getElementById('termModal').classList.add('hidden');
     }
 
     async function submitTerm() {
-        const sourceText = document.getElementById('termSourceText').value.trim();
-        const targetText = document.getElementById('termTargetText').value.trim();
-        const termId = document.getElementById('editTermId').value;
-        if (!sourceText || !targetText) { showToast('error', '错误', '请输入原文和译文'); return; }
+        const sourceWord = document.getElementById('termSourceText').value.trim();
+        const targetWord = document.getElementById('termTargetText').value.trim();
+        const remark = document.getElementById('termRemark').value.trim();
+        const id = document.getElementById('editTermId').value;
+        if (!sourceWord || !targetWord) { showToast('error', '错误', '请输入原文和译文'); return; }
         try {
             let result;
             if (isEditMode) {
-                result = await apiClient.updateTerm(currentGlossaryId, termId, { sourceText, targetText, description: '' });
-                if (result.success) { showToast('success', '成功', '术语已更新'); closeTermModal(); loadTerms(currentGlossaryId); }
-                else showToast('error', '失败', '更新失败：' + result.error);
+                result = await apiClient.updateGlossary(id, { sourceWord, targetWord, remark });
+                if (result.success) { showToast('success', '成功', '术语已更新'); closeTermModal(); loadTerms(); }
+                else showToast('error', '失败', '更新失败：' + (result.error || result.message || '未知错误'));
             } else {
-                result = await apiClient.addTerm(currentGlossaryId, { sourceText, targetText, description: '' });
-                if (result.success) { showToast('success', '成功', '术语添加成功'); closeTermModal(); loadTerms(currentGlossaryId); }
-                else showToast('error', '失败', '添加失败：' + result.error);
+                result = await apiClient.createGlossary({ sourceWord, targetWord, remark });
+                if (result.success) { showToast('success', '成功', '术语添加成功'); closeTermModal(); loadTerms(); }
+                else showToast('error', '失败', '添加失败：' + (result.error || result.message || '未知错误'));
             }
-        } catch (e) { showToast('error', '错误', '操作失败'); }
+        } catch (e) { showToast('error', '错误', '操作失败：' + e.message); }
     }
 
-    function deleteTerm(termId) {
+    function deleteTerm(id) {
         if (confirm('确定要删除此术语吗？')) {
-            apiClient.deleteTerm(currentGlossaryId, termId).then(result => {
-                if (result.success) { showToast('success', '成功', '术语已删除'); loadTerms(currentGlossaryId); }
-                else showToast('error', '失败', '删除失败：' + result.error);
+            apiClient.deleteGlossary(id).then(result => {
+                if (result.success) { showToast('success', '成功', '术语已删除'); loadTerms(); }
+                else showToast('error', '失败', '删除失败：' + (result.error || result.message || '未知错误'));
             });
         }
     }
 
-    document.getElementById('termSearch')?.addEventListener('input', function(e) {
+    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    function formatTime(t) {
+        if (!t) return '—';
+        try {
+            if (typeof t === 'string' && t.includes('T')) t = t.replace('T', ' ').split('.')[0];
+            return t;
+        } catch { return '—'; }
+    }
+
+    document.getElementById('searchInput')?.addEventListener('input', function(e) {
         const value = e.target.value.toLowerCase();
-        document.querySelectorAll('#termsList tr').forEach(row => { row.style.display = row.textContent.toLowerCase().includes(value) ? '' : 'none'; });
+        if (!value) { renderTerms(terms); }
+        else {
+            const filtered = terms.filter(t =>
+                (t.sourceWord || '').toLowerCase().includes(value) ||
+                (t.targetWord || '').toLowerCase().includes(value) ||
+                (t.remark || '').toLowerCase().includes(value)
+            );
+            renderTerms(filtered);
+        }
     });
 
-    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-
-    document.addEventListener('DOMContentLoaded', () => { initIcons(); loadGlossaries(); });
+    document.addEventListener('DOMContentLoaded', () => { initIcons(); loadTerms(); });
     </script>
 </body>
 </html>
