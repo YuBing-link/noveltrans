@@ -379,13 +379,13 @@ public class TranslationTaskService {
                     Document doc = documentMapper.findById(task.getDocumentId());
                     if (doc != null) {
                         response.setTranslatedFilePath(doc.getPath());
-                        // 尝试读取翻译文件内容
+                        // 尝试读取翻译文件内容（解析JSON提取实际译文）
                         String translatedPath = doc.getPath().replace(".", "_translated.");
                         try {
                             Path path = Paths.get(translatedPath);
                             if (Files.exists(path)) {
-                                String content = Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
-                                response.setTranslatedText(content);
+                                String rawContent = Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
+                                response.setTranslatedText(extractTranslatedContent(rawContent));
                             }
                         } catch (Exception e) {
                             log.warn("读取翻译文件失败: {}", e.getMessage());
