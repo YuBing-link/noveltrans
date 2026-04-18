@@ -339,9 +339,9 @@
 
                     // 格式化数据显示
                     document.getElementById('statUsers').textContent =
-                        stats.totalUsers ? formatNumber(stats.totalUsers) : '10K+';
+                        stats.totalUsers != null ? formatNumber(stats.totalUsers) : '10K+';
                     document.getElementById('statChars').textContent =
-                        stats.totalCharacters ? formatNumber(stats.totalCharacters) : '500K+';
+                        stats.totalCharacters != null ? formatNumber(stats.totalCharacters) : '500K+';
                     document.getElementById('statLangs').textContent = '50+';
                     document.getElementById('statUptime').textContent = '99.9%';
                 } else {
