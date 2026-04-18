@@ -1,0 +1,72 @@
+{
+  "manifest_version": 3,
+  "name": "极简翻译 (Extreme Translator)",
+  "version": "1.0.0",
+  "description": "专业级沉浸式翻译插件，支持多模型选择与文档翻译。",
+
+  "icons": {
+    "16": "src/assets/icons/icon16.png",
+    "48": "src/assets/icons/icon48.png",
+    "128": "src/assets/icons/icon128.png"
+  },
+
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": "src/assets/icons/icon48.png"
+  },
+
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true  
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "src/lib/browser-polyfill.js",
+        "src/lib/config.js",
+        "src/lib/purify.js",
+        "src/lib/Readability.js",
+        "src/content/read.js",
+        "src/content/selection.js",
+        "src/content/content.js"
+      ],
+      "css": [
+        "src/content/selection-styles.css"
+      ]
+    }
+  ],
+  "background": {
+    "service_worker": "src/background/background.js"
+  },
+
+
+  "commands": {
+      "toggle-feature": {
+        "suggested_key": {
+          "default": "Ctrl+Shift+Y",
+          "mac": "Command+Shift+Y"
+        },
+        "description": "触发翻译/阅读模式"
+      }
+  },
+  "permissions": [
+    "activeTab",
+    "storage",
+    "contextMenus",
+    "tabs",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "http://127.0.0.1:7341/*",
+    "<all_urls>"
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["src/assets/icons/*", "src/options/reader-template.html", "src/options/welcome.html", "src/content/reader-styles.css", "src/content/selection-styles.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

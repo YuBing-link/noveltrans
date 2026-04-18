@@ -1,0 +1,247 @@
+<!-- settings.html -->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Extreme Translator — 设置</title>
+  <style>
+    :root{--bg:#f7fafc;--card:#fff;--muted:#6b7280;--accent:#3b82f6}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans SC",Helvetica,Arial; background:var(--bg); margin:0;padding:28px;color:#0f172a}
+    .container{max-width:980px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(2,6,23,0.06);margin-bottom:16px}
+    .row{display:flex;gap:12px;align-items:center}
+    label{display:block;margin-bottom:6px;font-weight:600}
+    .muted{color:var(--muted);font-size:13px}
+    .switch{position:relative;width:46px;height:26px;background:#e6eefc;border-radius:20px}
+    .switch input{display:none}
+    .slider{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:all .18s}
+    input:checked + .slider{transform:translateX(20px)}
+    select, input[type=text]{padding:8px 10px;border-radius:8px;border:1px solid #e6edf3;background:#fff}
+    .controls{display:flex;gap:8px;margin-top:12px}
+    button{padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+    button.secondary{background:#111827}
+    .group{margin-bottom:12px}
+    .small{font-size:13px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    textarea{width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid #e6edf3}
+    .export-area{display:flex;gap:8px}
+  </style>
+  <!-- 加载配置文件 -->
+  <script src="../lib/browser-polyfill.js"></script>
+  <script src="../lib/config.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>设置</h1>
+      <div class="muted">Extreme Translator • 配置中心</div>
+    </header>
+
+    <section class="card">
+      <div class="grid">
+        <div>
+          <label>自动翻译</label>
+          <div class="row">
+            <div class="small muted">当检测到选中文本后自动发起翻译</div>
+            <div style="margin-left:auto">
+              <label class="switch">
+                <input type="checkbox" id="autoTranslate">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label>显示音译 / 注音</label>
+          <div class="row">
+            <div class="small muted">在翻译结果中附加音译（如有）</div>
+            <div style="margin-left:auto">
+              <label class="switch">
+                <input type="checkbox" id="showTranslit">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <label>翻译质量</label>
+        <select id="translationQuality">
+          <option value="fast">快速（低成本）</option>
+          <option value="balanced">均衡（默认）</option>
+          <option value="high">高质量（耗时/成本高）</option>
+        </select>
+        <div class="small muted" style="margin-top:8px">高质量会使用更大的模型或更多上下文。</div>
+      </div>
+
+      <div class="group">
+        <label>首选翻译服务</label>
+        <select id="preferredService">
+          <!-- 选项将从 config.js 动态生成 -->
+        </select>
+      </div>
+
+      <div class="controls">
+        <button id="btn-save">保存设置</button>
+        <button class="secondary" id="btn-reset">恢复默认</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <label>导出 / 导入 设置</label>
+      <div style="margin-top:8px" class="export-area">
+        <textarea id="exportArea" placeholder="点击导出后将在此处看到JSON..."></textarea>
+      </div>
+      <div class="controls" style="margin-top:8px">
+        <button id="btn-export">导出到JSON</button>
+        <button id="btn-import" class="secondary">从JSON导入</button>
+      </div>
+      <div class="small muted" style="margin-top:8px">导入会覆盖当前设置。请谨慎操作。</div>
+    </section>
+
+    <footer style="text-align:center;margin-top:8px;color:var(--muted)">Version 1.0.0</footer>
+  </div>
+
+  <script>
+    const DEFAULTS = {
+      autoTranslate: true,
+      showTransliteration: false,
+      translationQuality: 'balanced',
+      preferredService: 'openai'
+    };
+
+    const qs = (s)=>document.querySelector(s);
+
+    async function load() {
+      try {
+        const res = await browser.storage.local.get(['extremeTranslatorSettings']);
+        let settings = DEFAULTS;
+        if (res && res.extremeTranslatorSettings) {
+          try { settings = JSON.parse(res.extremeTranslatorSettings);}catch(e){}
+        }
+
+        qs('#autoTranslate').checked = !!settings.autoTranslate;
+        qs('#showTranslit').checked = !!settings.showTransliteration;
+        qs('#translationQuality').value = settings.translationQuality || DEFAULTS.translationQuality;
+        qs('#preferredService').value = settings.preferredService || DEFAULTS.preferredService;
+      } catch (e) {
+        console.warn('browser.storage 不可用，尝试 localStorage');
+        const s = localStorage.getItem('extremeTranslatorSettings');
+        if (s) {
+          const parsed = JSON.parse(s);
+          qs('#autoTranslate').checked = !!parsed.autoTranslate;
+          qs('#showTranslit').checked = !!parsed.showTransliteration;
+          qs('#translationQuality').value = parsed.translationQuality || DEFAULTS.translationQuality;
+          qs('#preferredService').value = parsed.preferredService || DEFAULTS.preferredService;
+        }
+      }
+    }
+
+    async function save() {
+      const settings = {
+        autoTranslate: qs('#autoTranslate').checked,
+        showTransliteration: qs('#showTranslit').checked,
+        translationQuality: qs('#translationQuality').value,
+        preferredService: qs('#preferredService').value
+      };
+
+      try {
+        await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(settings)});
+        alert('已保存设置');
+      } catch (e) {
+        localStorage.setItem('extremeTranslatorSettings', JSON.stringify(settings));
+        alert('已保存到 localStorage');
+      }
+    }
+
+    async function exportSettings() {
+      try {
+        // Promise-style: 使用 await 替代回调
+        const res = await browser.storage.local.get(['extremeTranslatorSettings']);
+        if (res && res.extremeTranslatorSettings) {
+          qs('#exportArea').value = res.extremeTranslatorSettings;
+        } else if (localStorage.getItem('extremeTranslatorSettings')) {
+          qs('#exportArea').value = localStorage.getItem('extremeTranslatorSettings');
+        } else {
+          qs('#exportArea').value = JSON.stringify(DEFAULTS, null, 2);
+        }
+      } catch (e) {
+        qs('#exportArea').value = localStorage.getItem('extremeTranslatorSettings') || JSON.stringify(DEFAULTS, null, 2);
+      }
+    }
+
+    async function importSettings() {
+      const text = qs('#exportArea').value.trim();
+      if (!text) { alert('请输入或粘贴合法的JSON'); return; }
+      try {
+        const parsed = JSON.parse(text);
+        // Promise-style: 使用 await 替代回调
+        await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(parsed)});
+        alert('导入成功');
+        await load();
+      } catch (e) {
+        alert('JSON 格式不正确');
+      }
+    }
+
+    async function resetDefaults(){
+      if (!confirm('确定要恢复默认设置吗？')) return;
+      await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(DEFAULTS)});
+      await load();
+      alert('已恢复默认');
+    }
+
+    document.getElementById('btn-save').addEventListener('click', save);
+    document.getElementById('btn-reset').addEventListener('click', resetDefaults);
+    document.getElementById('btn-export').addEventListener('click', exportSettings);
+    document.getElementById('btn-import').addEventListener('click', importSettings);
+
+    // 动态生成翻译服务选项（从 config.js 读取）
+    document.addEventListener('DOMContentLoaded', async function() {
+      const select = document.getElementById('preferredService');
+
+      // 清空现有选项
+      while (select.options.length > 0) {
+        select.remove(0);
+      }
+
+      // 从 config.js 读取翻译服务列表
+      if (window.translationServices) {
+        const services = window.translationServices;
+        services.forEach(service => {
+          const option = document.createElement('option');
+          option.value = service.id;
+          option.textContent = service.name;
+          select.appendChild(option);
+        });
+      }
+
+      // 恢复用户选择 - Promise-style: 使用 await 替代回调
+      try {
+        const res = await browser.storage.local.get(['extremeTranslatorSettings']);
+        if (res && res.extremeTranslatorSettings) {
+          try {
+            const settings = JSON.parse(res.extremeTranslatorSettings);
+            select.value = settings.preferredService || 'openai';
+          } catch (e) {
+            console.error('加载设置失败:', e);
+          }
+        }
+      } catch (e) {
+        console.error('恢复用户选择失败:', e);
+      }
+    });
+
+    // 初始化
+    load();
+  </script>
+
+</body>
+</html>
+
+

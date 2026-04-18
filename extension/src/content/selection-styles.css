@@ -1,0 +1,360 @@
+/* selection-styles.css - 选中翻译模式样式 */
+
+/* CSS 变量 - 使用 nt- 前缀避免与页面冲突 */
+.nt-ext-root {
+    --nt-primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --nt-primary-color: #667eea;
+    --nt-primary-hover: #5a67d8;
+    --nt-text-primary: #1a202c;
+    --nt-text-secondary: #4a5568;
+    --nt-text-muted: #718096;
+    --nt-bg-primary: #ffffff;
+    --nt-bg-secondary: #f7fafc;
+    --nt-border-color: #e2e8f0;
+    --nt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --nt-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+    --nt-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.25);
+    --nt-radius-sm: 8px;
+    --nt-radius-md: 12px;
+    --nt-radius-lg: 16px;
+    --nt-z-max: 2147483647;
+    --nt-z-max-minus: 2147483646;
+}
+
+/* =============================================
+   翻译按钮样式
+   ============================================= */
+
+#selection-translator-button {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--nt-primary-gradient);
+    color: white;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    cursor: pointer;
+    z-index: var(--nt-z-max);
+    box-shadow: var(--nt-shadow-md), 0 2px 8px rgba(102, 126, 234, 0.3);
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+    border: none;
+    outline: none;
+}
+
+#selection-translator-button.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+#selection-translator-button:hover {
+    transform: translateY(0) scale(1.05);
+    box-shadow: var(--nt-shadow-lg), 0 4px 16px rgba(102, 126, 234, 0.4);
+}
+
+#selection-translator-button:active {
+    transform: translateY(0) scale(0.98);
+}
+
+#selection-translator-button .button-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+#selection-translator-button .button-text {
+    margin-left: 4px;
+}
+
+/* =============================================
+   翻译结果弹窗样式
+   ============================================= */
+
+#selection-translation-result {
+    position: absolute;
+    max-width: 420px;
+    background: var(--nt-bg-primary);
+    border-radius: var(--nt-radius-lg);
+    box-shadow: var(--nt-shadow-lg), 0 0 0 1px rgba(102, 126, 234, 0.1);
+    z-index: var(--nt-z-max-minus);
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    animation: nt-resultFadeIn 0.3s ease forwards;
+}
+
+@keyframes nt-resultFadeIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#selection-translation-result.hiding {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+/* 弹窗头部 */
+.selection-result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    background: var(--nt-primary-gradient);
+    color: white;
+}
+
+.selection-result-header .header-title {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.selection-result-header .header-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    padding: 0;
+}
+
+.selection-result-header .header-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.selection-result-header .header-close svg {
+    width: 14px;
+    height: 14px;
+    fill: white;
+}
+
+/* 弹窗内容区 */
+.selection-result-content {
+    padding: 18px 20px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--nt-text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.selection-result-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.selection-result-content::-webkit-scrollbar-track {
+    background: var(--nt-bg-secondary);
+    border-radius: 3px;
+}
+
+.selection-result-content::-webkit-scrollbar-thumb {
+    background: var(--nt-border-color);
+    border-radius: 3px;
+}
+
+.selection-result-content::-webkit-scrollbar-thumb:hover {
+    background: var(--nt-text-muted);
+}
+
+/* 双语原文区 */
+.selection-result-original {
+    padding: 16px 20px;
+    background: var(--nt-bg-secondary);
+    border-top: 1px solid var(--nt-border-color);
+    font-size: 13px;
+    color: var(--nt-text-secondary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* 双语对照模式 - 上下布局：译文在上，原文在下 */
+.selection-result-bilingual {
+    display: flex;
+    flex-direction: column;
+}
+
+.selection-bilingual-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-bottom: 1px solid var(--nt-border-color);
+}
+
+.selection-bilingual-row:last-child {
+    border-bottom: none;
+}
+
+.selection-bilingual-translation {
+    flex: 1;
+    min-width: 0;
+    padding: 18px 20px 12px 20px;
+    color: var(--nt-text-primary);
+    font-size: 15px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--nt-bg-primary);
+    border-bottom: 1px dashed var(--nt-border-color);
+}
+
+.selection-bilingual-original {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 20px 18px 20px;
+    color: var(--nt-text-secondary);
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--nt-bg-secondary);
+}
+
+/* 弹窗底部信息栏 */
+.selection-result-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    border-top: 1px solid var(--nt-border-color);
+    background: var(--nt-bg-secondary);
+    font-size: 12px;
+    color: var(--nt-text-muted);
+}
+
+/* =============================================
+   加载状态样式
+   ============================================= */
+
+.selection-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 40px 20px;
+    font-size: 14px;
+    color: var(--nt-text-muted);
+}
+
+.selection-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--nt-bg-secondary);
+    border-top: 3px solid var(--nt-primary-color);
+    border-radius: 50%;
+    animation: nt-spin 1s linear infinite;
+}
+
+@keyframes nt-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* =============================================
+   错误提示样式
+   ============================================= */
+
+.selection-error-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: var(--nt-bg-primary);
+    border-radius: var(--nt-radius-md);
+    box-shadow: var(--nt-shadow-lg), 0 0 0 1px rgba(239, 68, 68, 0.2);
+    z-index: var(--nt-z-max);
+    font-size: 14px;
+    color: var(--nt-text-primary);
+    opacity: 0;
+    transform: translateX(100px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    animation: nt-errorSlideIn 0.3s ease forwards;
+}
+
+@keyframes nt-errorSlideIn {
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.selection-error-toast.hiding {
+    opacity: 0;
+    transform: translateX(100px);
+}
+
+.selection-error-toast .error-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: #fee2e2;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.selection-error-toast .error-icon svg {
+    width: 12px;
+    height: 12px;
+    fill: #ef4444;
+}
+
+.selection-error-toast .error-message {
+    color: var(--nt-text-primary);
+}
+
+/* =============================================
+   移动端适配
+   ============================================= */
+
+@media (max-width: 600px) {
+    #selection-translator-button {
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: 16px;
+    }
+
+    #selection-translation-result {
+        max-width: calc(100vw - 30px);
+        margin: 0 15px;
+    }
+
+    .selection-result-content {
+        max-height: 40vh;
+        font-size: 14px;
+    }
+
+    .selection-bilingual-translation {
+        padding: 14px 16px 10px 16px;
+        font-size: 14px;
+    }
+
+    .selection-bilingual-original {
+        padding: 10px 16px 14px 16px;
+        font-size: 13px;
+    }
+}

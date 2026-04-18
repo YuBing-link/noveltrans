@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extreme Translator</title>
+    <link rel="stylesheet" href="popup.css">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+
+    <div class="app-container">
+
+        <!-- 头部：品牌 + 设置 -->
+        <header class="header">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="ri-translate"></i>
+                </div>
+                <span class="brand-name">极简翻译</span>
+            </div>
+            <button class="icon-btn settings-btn" id="btn-settings" title="设置">
+                <i class="ri-settings-3-line"></i>
+            </button>
+        </header>
+
+        <!-- 主操作区：大翻译按钮 + 目标语言选择 -->
+        <section class="main-action">
+            <button id="btn-translate" class="translate-btn">
+                <div class="btn-content">
+                    <i class="ri-magic-line btn-icon"></i>
+                    <span class="btn-text">翻译网页</span>
+                    <span class="btn-sub">将当前页面翻译成</span>
+                </div>
+            </button>
+            <!-- 目标语言选择器（独立按钮） -->
+            <button class="target-lang-btn" id="btn-target-lang">
+                <span class="target-label">翻译成</span>
+                <span class="lang-name" id="target-lang-display">简体中文</span>
+                <i class="ri-arrow-down-s-line"></i>
+            </button>
+        </section>
+
+        <!-- 翻译服务选择 -->
+        <section class="card service-section">
+            <div class="card-header">
+                <i class="ri-microchip-line"></i>
+                <span class="card-title">翻译引擎</span>
+            </div>
+            <button class="service-selector" id="btn-model-select">
+                <div class="service-info">
+                    <i class="ri-openai-fill service-icon"></i>
+                    <span class="service-name">Google 翻译</span>
+                </div>
+                <i class="ri-arrow-right-s-line arrow-icon"></i>
+            </button>
+        </section>
+
+        <!-- 快速设置 -->
+        <section class="card quick-settings">
+            <div class="setting-item">
+                <div class="setting-left">
+                    <i class="ri-text"></i>
+                    <span class="setting-label">双语对照</span>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="bilingual-check" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <div class="setting-left">
+                    <i class="ri-brain-line"></i>
+                    <span class="setting-label">专家模式</span>
+                    <span class="setting-desc">使用大模型翻译，速度较慢但质量更高</span>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="expert-mode-check">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </section>
+
+        <!-- 功能列表 -->
+        <section class="feature-list">
+            <button id="btn-reader" class="feature-card">
+                <div class="feature-icon reader-icon">
+                    <i class="ri-book-open-line"></i>
+                </div>
+                <div class="feature-info">
+                    <span class="feature-title">阅读模式</span>
+                    <span class="feature-sub">提取文章正文，优化阅读体验</span>
+                </div>
+                <i class="ri-arrow-right-line feature-arrow"></i>
+            </button>
+        </section>
+
+        <!-- 底部 -->
+        <footer class="app-footer">
+            <span>Version 1.0.0</span>
+            <span class="divider-dot">·</span>
+            <span>按 <kbd>Ctrl+Shift+Y</kbd> 快速翻译</span>
+        </footer>
+
+    </div>
+    <script src="../lib/config.js"></script>
+    <script src="../lib/browser-polyfill.js"></script>
+    <script src="popup.js"></script>
+
+</body>
+</html>
