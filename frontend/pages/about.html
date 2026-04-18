@@ -334,7 +334,8 @@
                 const result = await apiClient.getPlatformStats();
 
                 if (result.success && result.data) {
-                    const stats = result.data;
+                    // API 客户端返回双层嵌套: {success, data: {success, data: stats}}
+                    const stats = result.data.data || result.data;
 
                     // 格式化数据显示
                     document.getElementById('statUsers').textContent =
