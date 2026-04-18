@@ -16,11 +16,13 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis 缓存
+  # Redis 缓存（升级为 Redis Stack 支持向量搜索）
   redis:
-    image: redis:8.4.0-alpine
+    image: redis/redis-stack-server:latest
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -48,11 +50,25 @@ services:
       bash -c "pip install -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com fastapi uvicorn openai &&
                python translate_server.py"
     environment:
-      - OPENAI_API_KEY=sk-ec548dc392a14e2f8bd28949138151f5
-      - OPENAI_BASE_URL=https://api.deepseek.com/v1
-      - OPENAI_MODEL=deepseek-chat
+      - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_BASE_URL=${DEEPSEEK_BASE_URL}
+      - OPENAI_MODEL=${DEEPSEEK_MODEL}
     ports:
       - "8000:8000"
+
+  # Ollama Embedding 服务（可选，profiles: [optional] 默认不启动）
+  ollama:
+    image: ollama/ollama:latest
+    profiles:
+      - optional
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
 
   # Spring Boot 后端
   backend:
@@ -68,16 +84,24 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - JWT_SECRET=123456
+      - JWT_SECRET=${JWT_SECRET}
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
-      - MYSQL_DB=novel_translator
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=123456
+      - MYSQL_DB=${MYSQL_DB}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
       - MTRAN_HOST=mtran-server
-      - MTRAN_PORT=8989
+      - MTRAN_PORT=${MTRAN_PORT}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - PYTHON_TRANSLATE_URL=http://llm-engine:8000/translate
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER}
+      - EMBEDDING_OPENAI_API_KEY=${EMBEDDING_OPENAI_API_KEY}
+      - EMBEDDING_OPENAI_BASE_URL=${EMBEDDING_OPENAI_BASE_URL}
       - HTTP_PROXY=http://host.docker.internal:7890
       - HTTPS_PROXY=http://host.docker.internal:7890
       - http_proxy=http://host.docker.internal:7890
@@ -106,3 +130,5 @@ services:
 volumes:
   mysql-data:
   m2-cache:
+  redis-data:
+  ollama-data:

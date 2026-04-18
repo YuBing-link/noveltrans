@@ -4,6 +4,10 @@ spring:
   mvc:
     async:
       request-timeout: 300000
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:novel_translator}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -93,7 +97,7 @@ translation:
     anonymous-concurrency-limit: 3  # 匿名用户最大并发数
   verification:
     code:
-      validity: 1
+      validity: 5
       length: 6
 
 # JWT配置
@@ -108,6 +112,23 @@ mtran:
     port: ${MTRAN_PORT:8989}
 
 email:
+
+# Embedding 配置（RAG 翻译记忆）
+embedding:
+  provider: ${EMBEDDING_PROVIDER:openai}  # openai | ollama
+  openai:
+    api-key: "${EMBEDDING_OPENAI_API_KEY:}"
+    base-url: "https://api.openai.com"
+    model: "text-embedding-3-small"
+  ollama:
+    base-url: "http://localhost:11434"
+    model: "bge-m3"
+  rag:
+    direct-hit-threshold: 0.85      # 直接命中相似度阈值
+    reference-threshold: 0.5        # 提供参考的相似度阈值
+    knn-top-k: 5                    # KNN 搜索返回的 top-k 数量
+    hnsw-m: 6                       # HNSW 图参数 M
+    fallback-mysql-limit: 20        # MySQL 降级查询的最大记录数
 
 management:
   endpoints:

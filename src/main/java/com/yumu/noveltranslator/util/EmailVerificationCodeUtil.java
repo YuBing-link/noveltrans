@@ -43,10 +43,17 @@ public class EmailVerificationCodeUtil {
     // 使用 Caffeine 缓存存储验证码（key: email, value: code）
     private Cache<String, String> verificationCodeCache;
 
+    // 记录上次发送时间，限制发送频率（60秒内不能重复发送）
+    private Cache<String, Long> lastSendTimeCache;
+
     @PostConstruct
     public void init() {
         verificationCodeCache = Caffeine.newBuilder()
                 .expireAfterWrite(validity, TimeUnit.MINUTES)
+                .maximumSize(10000)
+                .build();
+        lastSendTimeCache = Caffeine.newBuilder()
+                .expireAfterWrite(5, TimeUnit.MINUTES)
                 .maximumSize(10000)
                 .build();
     }
@@ -75,14 +82,28 @@ public class EmailVerificationCodeUtil {
      */
     public boolean sendVerificationCode(String email) {
         try {
+            // 检查发送频率限制（60秒内不允许重复发送）
+            Long lastSendTime = lastSendTimeCache.getIfPresent(email);
+            if (lastSendTime != null) {
+                long elapsed = System.currentTimeMillis() - lastSendTime;
+                if (elapsed < 60000) {
+                    log.warn("验证码发送过于频繁，距离上次发送仅 {} ms", elapsed);
+                    return false;
+                }
+            }
+
             // 生成验证码
             String code = generateCode();
 
-            // 存储到缓存中
-            verificationCodeCache.put(email, code);
-
-            // 发送HTML格式邮件
+            // 先发送邮件，成功后再存储验证码
+            // 避免邮件发送失败但缓存已被覆盖的问题
             sendHtmlEmail(email, code);
+
+            // 以 email:code 为 key 存储，避免新验证码覆盖旧的
+            verificationCodeCache.put(email + ":" + code, code);
+
+            // 记录发送时间
+            lastSendTimeCache.put(email, System.currentTimeMillis());
 
             log.info("验证码已发送至邮箱: {}", email);
             return true;
@@ -124,21 +145,17 @@ public class EmailVerificationCodeUtil {
      */
     public boolean verifyCode(String email, String code) {
         try {
-            String cachedCode = verificationCodeCache.getIfPresent(email);
+            // 以 email:code 为 key 查找验证码
+            String cachedCode = verificationCodeCache.getIfPresent(email + ":" + code);
             if (cachedCode == null) {
                 log.warn("验证码已过期或不存在，邮箱: {}", email);
                 return false;
             }
 
-            if (cachedCode.equals(code)) {
-                // 验证成功，删除缓存中的验证码
-                verificationCodeCache.invalidate(email);
-                log.info("邮箱验证成功: {}", email);
-                return true;
-            } else {
-                log.warn("验证码错误，邮箱: {}", email);
-                return false;
-            }
+            // 验证成功，删除缓存中的验证码
+            verificationCodeCache.invalidate(email + ":" + code);
+            log.info("邮箱验证成功: {}", email);
+            return true;
         } catch (Exception e) {
             log.error("验证验证码时出错，邮箱: {}, 错误: {}", email, e.getMessage(), e);
             return false;
@@ -153,5 +170,15 @@ public class EmailVerificationCodeUtil {
      */
     public String getCodeFromCache(String email) {
         return verificationCodeCache.getIfPresent(email);
+    }
+
+    /**
+     * 获取上次发送验证码的时间戳
+     *
+     * @param email 邮箱地址
+     * @return 时间戳（毫秒），若未发送过返回 null
+     */
+    public Long getLastSendTime(String email) {
+        return lastSendTimeCache.getIfPresent(email);
     }
 }

@@ -57,6 +57,9 @@ public class UserService implements UserDetailsService {
     @Autowired
     private TranslationLimitProperties limitProperties;
 
+    @Autowired
+    private QuotaService quotaService;
+
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userMapper.findByEmail(email);
@@ -118,7 +121,17 @@ public class UserService implements UserDetailsService {
                               ErrorCodeEnum.USER_EMAIL_EXISTS.getMessage());
         }
 
-        if (!emailVerificationCodeUtil.sendVerificationCode(email.trim())) {
+        boolean sent = emailVerificationCodeUtil.sendVerificationCode(email.trim());
+        if (!sent) {
+            // 检查是否是频率限制
+            Long lastSend = emailVerificationCodeUtil.getLastSendTime(email.trim());
+            if (lastSend != null) {
+                long elapsed = System.currentTimeMillis() - lastSend;
+                if (elapsed < 60000) {
+                    int remaining = (int) ((60000 - elapsed) / 1000) + 1;
+                    return Result.error("429", "请等待 " + remaining + " 秒后再发送验证码");
+                }
+            }
             return Result.error(ErrorCodeEnum.EMAIL_SEND_FAILED.getCode(),
                               ErrorCodeEnum.EMAIL_SEND_FAILED.getMessage());
         }
@@ -326,19 +339,30 @@ public class UserService implements UserDetailsService {
      */
     public UserQuotaResponse getUserQuota(User user) {
         UserQuotaResponse response = new UserQuotaResponse();
-        response.setUserLevel(user.getUserLevel());
+        String level = user.getUserLevel() != null ? user.getUserLevel() : "free";
+        response.setUserLevel(level.toUpperCase());
 
-        if ("pro".equalsIgnoreCase(user.getUserLevel())) {
-            response.setDailyLimit(limitProperties.getProDailyLimit());
-            response.setConcurrencyLimit(limitProperties.getProConcurrencyLimit());
-        } else {
-            response.setDailyLimit(limitProperties.getFreeDailyLimit());
-            response.setConcurrencyLimit(limitProperties.getFreeConcurrencyLimit());
-        }
+        long monthlyChars = quotaService.getMonthlyQuota(level);
+        long usedThisMonth = quotaService.getUsedThisMonth(user.getId());
+        long remaining = Math.max(0, monthlyChars - usedThisMonth);
 
-        response.setUsedToday(0);
-        response.setRemaining(response.getDailyLimit() - response.getUsedToday());
-        response.setCanTranslateDocument("pro".equalsIgnoreCase(user.getUserLevel()));
+        response.setMonthlyChars(monthlyChars);
+        response.setUsedThisMonth(usedThisMonth);
+        response.setRemainingChars(remaining);
+
+        // 并发限制
+        int concurrency = "pro".equalsIgnoreCase(level) || "max".equalsIgnoreCase(level)
+            ? limitProperties.getProConcurrencyLimit()
+            : limitProperties.getFreeConcurrencyLimit();
+        response.setConcurrencyLimit(concurrency);
+
+        // 各模式等效原文字符
+        double fastMult = limitProperties.getFastModeMultiplier();
+        double expertMult = limitProperties.getExpertModeMultiplier();
+        double teamMult = limitProperties.getTeamModeMultiplier();
+        response.setFastModeEquivalent((long) (remaining / fastMult));
+        response.setExpertModeEquivalent((long) (remaining / expertMult));
+        response.setTeamModeEquivalent((long) (remaining / teamMult));
 
         return response;
     }

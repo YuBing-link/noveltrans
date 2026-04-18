@@ -38,4 +38,9 @@ public class SelectionTranslationRequest {
      */
     private String context;
 
+    /**
+     * 翻译模式: fast/expert/team
+     */
+    private String mode = "fast";
+
 }

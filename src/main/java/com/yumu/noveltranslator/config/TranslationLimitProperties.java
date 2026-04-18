@@ -39,4 +39,36 @@ public class TranslationLimitProperties {
      * 匿名用户最大并发数
      */
     private int anonymousConcurrencyLimit = 3;
+
+    // ==================== 字符配额配置 ====================
+
+    /**
+     * 免费用户月度字符包
+     */
+    private long freeMonthlyChars = 10_000;
+
+    /**
+     * 专业用户月度字符包
+     */
+    private long proMonthlyChars = 50_000;
+
+    /**
+     * Max 用户月度字符包
+     */
+    private long maxMonthlyChars = 200_000;
+
+    /**
+     * 快速模式系数（消耗更少）
+     */
+    private double fastModeMultiplier = 0.5;
+
+    /**
+     * 专家模式系数
+     */
+    private double expertModeMultiplier = 1.0;
+
+    /**
+     * 团队模式系数（消耗更多）
+     */
+    private double teamModeMultiplier = 2.0;
 }

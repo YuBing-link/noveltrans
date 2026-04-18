@@ -3,8 +3,11 @@ package com.yumu.noveltranslator.controller;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.service.DocumentService;
+import com.yumu.noveltranslator.service.QuotaService;
 import com.yumu.noveltranslator.service.TranslationTaskService;
+import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -35,6 +38,12 @@ public class DocumentController {
 
     @Autowired
     private TranslationTaskService translationTaskService;
+
+    @Autowired
+    private QuotaService quotaService;
+
+    @Autowired
+    private UserMapper userMapper;
 
     /**
      * 获取文档列表
@@ -123,6 +132,18 @@ public class DocumentController {
             @RequestParam(value = "mode", defaultValue = "novel") String mode) {
 
         Long userId = SecurityUtil.getRequiredUserId();
+
+        // 检查字符配额
+        User user = userMapper.selectById(userId);
+        if (user != null) {
+            // 预估文档字符数（文件大小/2，假设平均每个字符2字节）
+            int estimatedChars = (int) Math.ceil(file.getSize() / 2.0);
+            // 文档翻译使用专家模式系数
+            String quotaMode = "expert";
+            if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), estimatedChars, quotaMode)) {
+                return Result.error("字符配额不足，请升级档位或等待下月重置", "402");
+            }
+        }
 
         try {
             // 创建翻译请求

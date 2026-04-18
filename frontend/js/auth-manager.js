@@ -91,6 +91,9 @@ class AuthManager {
 
     localStorage.setItem('authToken', token);
     localStorage.setItem('userInfo', JSON.stringify(user));
+
+    // 触发登录事件，通知扩展等监听者
+    window.dispatchEvent(new CustomEvent('userLoggedIn'));
   }
 
   /**

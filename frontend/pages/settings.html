@@ -633,6 +633,10 @@
 
         // 加载用户设置
         async function loadUserSettings() {
+            if (!AuthManager.isAuthenticated()) {
+                document.getElementById('userName').textContent = '请先登录';
+                return;
+            }
             const result = await apiClient.getProfile();
             if (result.success && result.data) {
                 const user = result.data;
@@ -651,6 +655,7 @@
 
         // 加载偏好设置
         async function loadPreferences() {
+            if (!AuthManager.isAuthenticated()) return;
             const result = await apiClient.getPreferences();
             if (result.success && result.data) {
                 const prefs = result.data;
@@ -668,6 +673,10 @@
 
         // 加载术语库列表
         async function loadGlossaryList() {
+            if (!AuthManager.isAuthenticated()) {
+                document.getElementById('glossaryList').innerHTML = '<li style="text-align: center; padding: 20px; color: var(--text-sub);">请先登录后查看术语库</li>';
+                return;
+            }
             const result = await apiClient.getGlossaries({ pageSize: 50 });
             const container = document.getElementById('glossaryList');
 
@@ -798,12 +807,12 @@
             }, 2500);
         }
     </script>
-    <script src="config.js"></script>
-    <script src="js/api-client.js"></script>
-    <script src="js/auth-manager.js"></script>
-    <script src="utils/ui.js"></script>
-    <script src="js/auth-middleware.js"></script>
-    <script src="js/auth-utils.js"></script>
-    <script src="js/effects.js"></script>
+    <script src="../config.js"></script>
+    <script src="../js/api-client.js"></script>
+    <script src="../js/auth-manager.js"></script>
+    <script src="../utils/ui.js"></script>
+    <script src="../js/auth-middleware.js"></script>
+    <script src="../js/auth-utils.js"></script>
+    <script src="../js/effects.js"></script>
 </body>
 </html>

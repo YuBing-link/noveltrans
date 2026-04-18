@@ -3,126 +3,102 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-blue.svg)](https://www.mysql.com/)
-[![Redis](https://img.shields.io/badge/Redis-7-red.svg)](https://redis.io/)
+[![Redis Stack](https://img.shields.io/badge/Redis%20Stack-7-red.svg)](https://redis.io/docs/latest/develop/data-structures/search/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
 
-A full-stack bilingual novel translation system featuring a Chrome Extension, Spring Boot backend, LLM-powered translation microservice, and Nginx gateway. Supports OpenAI-compatible APIs, 3-tier caching, SSE streaming translation, glossary management, and user authentication with JWT.
+A full-stack bilingual novel translation system featuring a Chrome Extension, Spring Boot backend, LLM-powered translation microservice, and Nginx gateway. Supports three translation modes, four-tier caching, RAG semantic translation memory, entity-consistent translation, collaborative translation workflows, and SSE streaming responses.
 
 [中文文档](README.zh.md)
 
 ## Architecture
 
 ```
-┌──────────────┐    ┌──────────────┐    ┌───────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ Chrome       │───▶│   Nginx      │───▶│ Spring Boot   │───▶│ Python / MTran   │───▶│ OpenAI Compatible│
-│ Extension    │    │  (Port 7341) │    │ (Port 8080)   │    │ Engine (8000/8989│    │ API / Claude     │
-└──────────────┘    └──────────────┘    └───────────────┘    └──────────────────┘    │ / Ollama        │
-       │                    │                     │                                    └─────────────────┘
-       │             Static/CORS             ┌─────┴──────┐
-       │             Reverse Proxy           │ MySQL 8.0  │
-       │                                     │ Redis 7    │
-       │                                     │ Caffeine   │
-       └─────────────────────────────────────┴────────────┘
-                        WebSocket / REST API
+┌──────────────┐     ┌──────────────┐     ┌────────────────┐     ┌───────────────────┐     ┌──────────────────┐
+│ Chrome Ext    │────▶│  Nginx GW    │────▶│ Spring Boot    │────▶│ Python / MTran    │────▶│ OpenAI Compat.    │
+│ Manifest V3   │     │  Port 7341   │     │ Port 8080      │     │ Engine 8k / 8989  │     │ / Claude / Ollama │
+└──────────────┘     └──────────────┘     └───────┬────────┘     └───────────────────┘     └──────────────────┘
+                                  │
+                    ┌─────────────┼──────────────┐
+                    ▼             ▼              ▼
+                MySQL 8.0    Redis Stack 7    Caffeine
+                (Persistent)  (HNSW Vectors)  (In-Process)
 ```
-
-### Component Overview
-
-| Component | Technology | Port | Responsibility |
-|-----------|------------|------|----------------|
-| Chrome Extension | Manifest V3, Vanilla JS | - | DOM analysis, translation display |
-| Nginx Gateway | Nginx 1.28 | 7341 | Reverse proxy, static file serving, CORS |
-| Spring Boot Backend | Java 21, Undertow | 8080 | REST API, business logic, auth, caching |
-| Translation Engine | Python FastAPI / MTranServer | 8000 / 8989 | LLM translation, fallback chain |
-| MySQL | MySQL 8.0 | 3306 | Persistent storage (users, glossaries, history) |
-| Redis | Redis 7 | 6379 | Distributed cache (L2), session management |
 
 ## Key Features
 
-### 3-Tier Caching Architecture
-- **L1 Caffeine** (in-memory, 10 min TTL) -> **L2 Redis** (distributed, 30 min) -> **L3 MySQL** (persistent, 24h)
-- **Cache penetration** prevention via null-value placeholder with short TTL
-- **Cache breakdown** protection via per-key synchronized locking
-- **Cache avalanche** prevention via randomized TTL jitter
+### RAG Translation Memory
+- **Vector Semantic Search**: Redis Stack HNSW vector index encodes source text into 1536-dim Embedding vectors, KNN search against translation memory
+- **Four-Tier Cache Chain**: Caffeine (L1) → Redis (L2) → MySQL (L3) → RAG Semantic Retrieval (L4) → Translation Engine
+- **Quality Filtering**: Auto-rejects empty translations, length anomalies, ad keywords, and excessive special characters before storage
+- **Dual Fallback Strategy**: When Redis KNN is unavailable, automatically degrades to MySQL cosine similarity calculation
+- **User Isolation**: KNN queries filter by `user_id` + `target_lang` to prevent data cross-contamination
 
-### LLM-Powered Translation
-- **OpenAI-compatible API**: Works with OpenAI GPT, Claude (via compatibility layer), local Ollama, DeepSeek, and any compatible endpoint
-- **Novel translation system prompt**: 6 translation principles ensuring literary translation quality
-- **Dual-engine support**: LLM (DeepSeek/OpenAI) + lightweight (MTranServer) with intelligent routing
-- **Smart engine fallback**: Health checks, circuit breaker cooldown, multi-level degradation
-- **Rate limiting**: Sliding window algorithm, configurable per-user-tier limits
+### Translation Engine
+- **OpenAI-Compatible API**: Works with OpenAI GPT, Claude (compatibility layer), local Ollama, DeepSeek, and any compatible endpoint
+- **Novel Translation Prompt**: 6 translation principles ensuring literary translation quality
+- **Dual-Engine Fault Tolerance**: LLM engine + MTranServer lightweight engine with bidirectional fallback, health checks, and cooldown isolation
+- **Probabilistic Round-Robin Routing**: Intelligent engine selection based on historical success rates and response times
+
+### Four-Tier Caching
+| Tier | Component | TTL | Purpose |
+|------|-----------|-----|---------|
+| L1 | Caffeine | 10 min | In-process hot cache |
+| L2 | Redis | 30 min | Distributed cache |
+| L3 | MySQL | 24 h | Persistent cache |
+| L4 | RAG Vector Retrieval | Permanent | Semantic similarity matching |
+
+- **Penetration Prevention**: Null placeholder + short TTL expiration
+- **Breakdown Prevention**: `ConcurrentHashMap` per-key concurrent locking
+- **Avalanche Prevention**: Randomized TTL jitter on all expiration times
 
 ### Backend Engineering
-- **SSE streaming translation**: Progressive rendering in the browser for smooth UX with long texts
-- **Virtual threads concurrency**: Java 21 Virtual Threads + Semaphore-based per-user rate limiting
-- **Undertow server**: High-performance non-blocking web server replacing Tomcat
-- **Dual-engine probability routing**: Intelligent traffic routing based on historical success rates
-- **Document translation**: Async task-based large document translation with progress tracking
+- **SSE Streaming Translation**: Progressive browser-side rendering for smooth UX with long texts
+- **Virtual Thread Concurrency**: Java 21 Virtual Threads + Semaphore per-user rate limiting
+- **Entity Consistency Translation**: Long text auto-extracts named entities → merges glossary → placeholder replacement → translation → entity restoration, ensuring proper noun consistency
+- **Async Document Translation**: Large file async tasks + progress tracking
+- **Undertow Server**: High-performance non-blocking web server
 
 ### Browser Extension
-- **Three translation modes**: Full-page translation, reader mode, and selection-based translation
-- **DOM-aware translation**: Preserves original layout while translating text content
-- **Readability integration**: Extracts article content for optimized reading mode translation
-- **Smart translation button**: Appears contextually on text selection
+- **Full-Page Translation**: DOM traversal analysis → text registry → SSE streaming write-back → in-place replacement, preserving page layout
+- **Reader Mode**: Mozilla Readability integration extracts article body into a clean reading view
+- **Selection Translation**: Floating tooltip for instant translation of selected text
+- **Client-Side Cache**: IndexedDB + memory dual-tier cache + request deduplication
+
+### Collaborative Translation
+- **Project State Machine**: DRAFT → ACTIVE → COMPLETED → ARCHIVED, enforced state transition validation
+- **Chapter Workflow**: Create chapters → assign translator → submit translation → review approve/reject
+- **Role-Based Access**: OWNER / TRANSLATOR / REVIEWER, custom `@RequireProjectAccess` annotation
+- **Comment System**: Threaded replies + resolve marking
+- **Invitation System**: UUID-based invite codes for project joining
 
 ### Security
-- **JWT authentication**: Spring Security + auth0-jwt, secrets injected via environment variables only
-- **BCrypt password hashing**: All user passwords hashed before storage
-- **Email verification**: Double verification for registration and password reset
-- **Tiered rate limiting**: Anonymous / Free / Pro users with differentiated concurrency limits
+- **JWT + API Key Authentication**: Dual auth methods — Spring Security + auth0-jwt for JWT, `ApiKeyAuthenticationFilter` for `nt_sk_xxxx` format API keys. Both auth methods share the same translation pipeline
+- **API Key Management**: Generate, list, reset, and delete API keys via `/user/api-keys` endpoints. Keys use `nt_sk_` prefix with 32 random alphanumeric characters, masked in list view
+- **BCrypt Password Hashing**: All user passwords hashed before storage
+- **Email Verification**: Double verification for registration and password reset
+- **Tiered Rate Limiting**: Anonymous (3) / Free (5) / Pro (20) differentiated concurrency limits
 
-### User Features
-- **Glossary management**: Create, edit, and delete custom translation terms
-- **User preferences**: Configurable translation settings per user
-- **Translation history**: Track past translations with pagination
-- **User statistics**: Personal usage dashboard with quota tracking
-- **Change password**: Secure password update with current password verification
+### Character Quota System
+- **Three-Tier Plans**: Free (10K chars/month), Pro (50K chars/month), Max (200K chars/month)
+- **Mode Multipliers**: Fast mode ×0.5 (saves quota), Expert mode ×1.0, Team mode ×2.0
+- **Per-Request Consumption**: `cost = ceil(translated_chars × mode_multiplier)`, deducted before translation starts
+- **Daily Tracking Table**: `quota_usage` table tracks daily consumption aggregated monthly
+- **Monthly Auto-Reset**: Cron task runs on 1st of each month to clean up expired usage records
+- **Document Upload Estimate**: Pre-checks quota based on file size before processing
 
-## Project Structure
-
-```
-novelTranslator/
-├── extension/                    # Chrome Extension (Manifest V3)
-│   ├── manifest.json
-│   └── src/
-│       ├── background/           #   Service worker (message routing, API calls)
-│       ├── content/              #   Content scripts (page, reader, selection translation)
-│       ├── popup/                #   Extension popup UI
-│       ├── options/              #   Settings pages
-│       └── lib/                  #   Third-party libs (Readability, DOMPurify)
-├── frontend/                     # Web Dashboard (Vanilla HTML/CSS/JS)
-│   ├── pages/                    #   Dashboard pages
-│   ├── js/                       #   Client-side JavaScript
-│   ├── styles/                   #   CSS stylesheets
-│   ├── utils/                    #   Utility functions
-│   └── config.js                 #   API endpoint configuration
-├── src/main/java/                # Spring Boot Backend (Java 21)
-│   └── com/yumu/noveltranslator/
-│       ├── controller/           #   REST API Controllers
-│       ├── service/              #   Business Logic Layer
-│       ├── mapper/               #   MyBatis-Plus Data Access
-│       ├── entity/               #   Domain Entities
-│       ├── dto/                  #   Data Transfer Objects
-│       ├── config/               #   Configuration (Redis, Security, Threads)
-│       ├── security/             #   Spring Security + JWT
-│       ├── enums/                #   Enumerations (errors, engines, phases)
-│       └── util/                 #   Utility Classes
-├── services/translate-engine/    # Python Translation Microservice
-│   └── translate_server.py       #   FastAPI + OpenAI SDK + Fallback Chain
-├── nginx/                        # Nginx Gateway Configuration
-│   └── nginx.conf
-├── docker-compose.yml            # One-Command Docker Deployment
-└── pom.xml                       # Maven Build Configuration
-```
+| Plan | Monthly Chars | Fast (×0.5) | Expert (×1.0) | Team (×2.0) |
+|------|---------------|-------------|---------------|-------------|
+| **Free** | 10,000 | 20K source chars | 10K source chars | 5K source chars |
+| **Pro** | 50,000 | 100K source chars | 50K source chars | 25K source chars |
+| **Max** | 200,000 | 400K source chars | 200K source chars | 100K source chars |
 
 ## Quick Start
 
 ### Option 1: Docker Compose (Recommended)
 
 ```bash
-# Clone the repository
 git clone https://github.com/your-org/novelTranslator.git
 cd novelTranslator
 
@@ -130,7 +106,7 @@ cd novelTranslator
 docker compose up -d
 ```
 
-Access after startup:
+After startup:
 - **Web Dashboard**: http://localhost:7341
 - **Backend API**: http://localhost:7341/v1
 - **Health Check**: http://localhost:7341/health
@@ -138,11 +114,11 @@ Access after startup:
 ### Option 2: Manual Setup
 
 #### Prerequisites
-- Java 21 (Temurin/OpenJDK)
+- Java 21 (Temurin / OpenJDK)
 - Maven 3.9+
 - MySQL 8.0
-- Redis 7
-- Python 3.11+ (for translation microservice)
+- Redis 7 (Redis Stack recommended)
+- Python 3.11+ (translation microservice)
 
 #### 1. Start MySQL and Redis
 
@@ -152,19 +128,17 @@ docker run -d --name mysql -p 3306:3306 \
   -e MYSQL_DATABASE=novel_translator \
   mysql:8.0
 
-docker run -d --name redis -p 6379:6379 redis:7
+docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server:latest
 ```
 
-#### 2. Build and Start the Backend
+#### 2. Start the Backend
 
 ```bash
-mvn clean package -DskipTests
-
 export JWT_SECRET="your-secret-key-here"
 export MYSQL_HOST=localhost
 export REDIS_HOST=localhost
-export TRANSLATION_OPENAI_API_KEY="sk-xxx"
 
+mvn clean package -DskipTests
 java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar
 # Backend runs at http://localhost:8080
 ```
@@ -188,34 +162,49 @@ python services/translate-engine/translate_server.py
 2. Enable "Developer mode"
 3. Click "Load unpacked" and select the `extension/` directory
 
-## Screenshots
+## Project Structure
 
-### Web Dashboard
-![Web Dashboard](docs/screenshots/dashboard.png)
-*The web dashboard provides user management, glossary configuration, and translation statistics.*
-
-### Chrome Extension - Full Page Translation
-![Full Page Translation](docs/screenshots/webpage-translation.png)
-*The Chrome extension translates entire web pages while preserving the original DOM layout.*
-
-### Reader Mode
-![Reader Mode](docs/screenshots/reader-mode.png)
-*Reader mode extracts article content and provides a clean reading experience with translated text.*
-
-### Glossary Management
-![Glossary Management](docs/screenshots/glossary.png)
-*Create and manage custom translation terms for consistent novel terminology.*
+```
+novelTranslator/
+├── extension/                    # Chrome Extension (Manifest V3)
+│   ├── manifest.json
+│   └── src/
+│       ├── background/           #   Service Worker (message routing, API calls)
+│       ├── content/              #   Content scripts (page, reader, selection translation)
+│       ├── popup/                #   Popup UI
+│       ├── options/              #   Settings pages
+│       └── lib/                  #   Third-party libs (Readability, DOMPurify)
+├── frontend/                     # Web Dashboard (Vanilla HTML/CSS/JS)
+│   ├── pages/                    #   Pages (home, translation, user center, collab)
+│   ├── js/                       #   Business logic (API client, auth, translation)
+│   ├── styles/                   #   Styles (responsive, dark mode, animations)
+│   ├── utils/                    #   Utility functions
+│   └── config.js                 #   API endpoint configuration
+├── src/main/java/                # Spring Boot Backend (Java 21)
+│   └── com/yumu/noveltranslator/
+│       ├── controller/           #   REST API Controllers
+│       ├── service/              #   Business Logic Layer
+│       ├── mapper/               #   MyBatis-Plus Data Access
+│       ├── entity/               #   Domain Entities
+│       ├── dto/                  #   Data Transfer Objects
+│       ├── config/               #   Configuration (Redis vectors, Security, Threads)
+│       ├── security/             #   Spring Security + JWT
+│       ├── enums/                #   Enumerations (errors, engines, status)
+│       └── util/                 #   Utility Classes
+├── services/translate-engine/    # Python Translation Microservice
+│   └── translate_server.py       #   FastAPI + OpenAI SDK + Fallback Chain
+├── nginx/                        # Nginx Gateway Configuration
+│   └── nginx.conf
+├── docker-compose.yml            # Docker Compose Deployment
+└── pom.xml                       # Maven Build Configuration
+```
 
 ## API Documentation
 
-Detailed API documentation is available in the following files:
-
 - [API_ENDPOINTS.md](API_ENDPOINTS.md) - Three translation modes with request/response examples
-- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - Complete backend API reference including user module
+- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - Complete backend API reference
 
 ### Quick API Reference
-
-#### Translation Endpoints
 
 | Endpoint | Method | Description | Auth |
 |----------|--------|-------------|------|
@@ -224,42 +213,31 @@ Detailed API documentation is available in the following files:
 | `/v1/translate/selection` | POST | Selected text translation | No |
 | `/v1/translate/text` | POST | Plain text translation | No |
 | `/v1/translate/document` | POST | Async document translation | Yes |
-| `/v1/translate/task/{id}` | GET | Check translation task status | Yes |
-
-#### User Endpoints
-
-| Endpoint | Method | Description | Auth |
-|----------|--------|-------------|------|
+| `/v1/translate/rag` | POST | RAG semantic translation memory lookup | Yes |
 | `/user/register` | POST | User registration | No |
 | `/user/login` | POST | User login | No |
-| `/user/refresh` | POST | Refresh JWT token | No |
-| `/user/profile` | GET | Get user profile | Yes |
+| `/user/profile` | GET/PUT | Get/update user profile | Yes |
+| `/user/quota` | GET | Get character quota usage | Yes |
+| `/user/api-keys` | GET/POST | List/create API keys | Yes |
+| `/user/api-keys/{id}` | DELETE | Delete API key | Yes |
+| `/user/api-keys/{id}/reset` | POST | Reset (regenerate) API key | Yes |
 | `/user/glossaries` | GET/POST | List/Create glossary items | Yes |
-| `/user/preferences` | GET/PUT | Get/Update user preferences | Yes |
-| `/user/stats` | GET | User statistics | Yes |
-| `/user/quota` | GET | User quota info | Yes |
+| `/user/preferences` | GET/PUT | Get/update user preferences | Yes |
+| `/v1/collab/projects` | GET/POST | Collaborative project management | Yes |
 
-## Configuration
-
-### Environment Variables
+## Environment Variables
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `JWT_SECRET` | JWT signing secret key | None | Yes |
-| `JWT_EXPIRATION` | Token TTL in milliseconds | 2592000000 (30d) | No |
 | `MYSQL_HOST` | MySQL host | localhost | No |
-| `MYSQL_PORT` | MySQL port | 3306 | No |
-| `MYSQL_DB` | MySQL database name | novel_translator | No |
-| `MYSQL_USER` | MySQL username | root | No |
-| `MYSQL_PASSWORD` | MySQL password | None | No |
 | `REDIS_HOST` | Redis host | localhost | No |
-| `REDIS_PORT` | Redis port | 6379 | No |
-| `REDIS_PASSWORD` | Redis password | None | No |
-| `TRANSLATION_OPENAI_API_KEY` | OpenAI-compatible API key | None | Yes |
-| `OPENAI_BASE_URL` | API base URL (microservice) | https://api.openai.com/v1 | No |
-| `OPENAI_MODEL` | Translation model (microservice) | gpt-4o-mini | No |
-| `MAIL_USERNAME` | Email address (for verification) | None | Email feature |
-| `MAIL_PASSWORD` | Email SMTP auth code | None | Email feature |
+| `TRANSLATION_OPENAI_API_KEY` | Backend translation API key | None | Yes |
+| `OPENAI_API_KEY` | Microservice API key | None | Yes |
+| `OPENAI_BASE_URL` | API base URL | https://api.openai.com | No |
+| `OPENAI_MODEL` | Translation model | gpt-4o-mini | No |
+| `EMBEDDING_PROVIDER` | Embedding provider | openai | No |
+| `EMBEDDING_OPENAI_API_KEY` | Embedding API key | None | RAG requires |
 | `MTRAN_HOST` | MTranServer host | localhost | No |
 | `MTRAN_PORT` | MTranServer port | 8989 | No |
 
@@ -269,30 +247,12 @@ Detailed API documentation is available in the following files:
 |-------|------------|
 | **Backend** | Java 21, Spring Boot 3.2.0, Undertow, Spring Security, WebFlux |
 | **Database** | MySQL 8.0, MyBatis-Plus 3.5.5 |
-| **Cache** | Caffeine (L1), Redis 7 / Lettuce (L2) |
+| **Cache** | Caffeine (L1), Redis Stack 7 / Lettuce (L2), MySQL (L3) |
+| **Vector Retrieval** | RediSearch HNSW, OpenAI text-embedding-3-small (1536 dim) |
 | **Microservice** | Python 3.11, FastAPI, OpenAI SDK, MTranServer |
 | **Frontend** | Chrome Extension (Manifest V3), Vanilla JS, CSS3, Thymeleaf |
 | **Gateway** | Nginx 1.28 |
 | **Build & Deploy** | Maven, Docker Compose |
-| **Libraries** | jsoup, fastjson2, Lombok, auth0-jwt, Apache Commons Text |
-
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and contribution process.
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
-See [CODE_STYLE.md](CODE_STYLE.md) for coding standards and conventions.
-
-### Building from Source
-
-```bash
-mvn clean package -DskipTests
-```
-
-### Running Tests
-
-```bash
-mvn test
-```
 
 ## License
 

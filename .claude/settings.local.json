@@ -34,7 +34,18 @@
       "Bash(docker rm *)",
       "Bash(python -c ' *)",
       "Bash(iconv -f GBK -t UTF-8)",
-      "Bash(MSYS_NO_PATHCONV=1 docker compose exec backend javap -c -p /app/target/classes/com/yumu/noveltranslator/service/TranslationService.class)"
+      "Bash(MSYS_NO_PATHCONV=1 docker compose exec backend javap -c -p /app/target/classes/com/yumu/noveltranslator/service/TranslationService.class)",
+      "Bash(/c/Users/aex/.claude/skills/gstack/browse/dist/browse goto *)",
+      "Bash(/c/Users/aex/.claude/skills/gstack/browse/dist/browse js *)",
+      "Bash(/c/Users/aex/.claude/skills/gstack/browse/dist/browse console *)",
+      "Bash(python -m json.tool)",
+      "Bash(mvn compile *)",
+      "Bash(node -e ' *)",
+      "Bash(python3 -m http.server 7342 --bind 127.0.0.1)",
+      "Bash(docker-compose restart *)",
+      "Bash(node *)",
+      "Bash(mvn package *)",
+      "Bash(xargs grep *)"
     ]
   }
 }

@@ -14,4 +14,9 @@ public class ReaderTranslateRequest {
     private String sourceLang;
 
     private String engine;
+
+    /**
+     * 翻译模式: fast/expert/team
+     */
+    private String mode = "fast";
 }

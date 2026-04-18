@@ -3,32 +3,40 @@ package com.yumu.noveltranslator.dto;
 import lombok.Data;
 
 /**
- * 用户配额响应
+ * 用户字符配额响应
  */
 @Data
 public class UserQuotaResponse {
     /**
-     * 用户等级：FREE, PRO
+     * 用户等级：FREE, PRO, MAX
      */
     private String userLevel;
     /**
-     * 每日翻译限额
+     * 月度字符包
      */
-    private Integer dailyLimit;
+    private Long monthlyChars;
     /**
-     * 今日已用次数
+     * 本月已用字符
      */
-    private Integer usedToday;
+    private Long usedThisMonth;
     /**
-     * 剩余次数
+     * 剩余字符
      */
-    private Integer remaining;
+    private Long remainingChars;
     /**
      * 并发限制
      */
     private Integer concurrencyLimit;
     /**
-     * 是否可翻译文档
+     * 快速模式等效原文字符（×0.5）
      */
-    private Boolean canTranslateDocument;
+    private Long fastModeEquivalent;
+    /**
+     * 专家模式等效原文字符（×1.0）
+     */
+    private Long expertModeEquivalent;
+    /**
+     * 团队模式等效原文字符（×2.0）
+     */
+    private Long teamModeEquivalent;
 }

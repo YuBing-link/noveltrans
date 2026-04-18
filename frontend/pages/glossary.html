@@ -4,946 +4,310 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>术语库 - NovelTrans</title>
-    <link rel="stylesheet" href="styles/animations.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../lib/lucide.min.js"></script>
     <script>
-        // 页面加载前立即应用主题，防止闪烁
-        (function() {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'dark') {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
-        })();
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81', 950: '#1e1b4b' } } } } };
     </script>
-    <style>
-        :root {
-            --primary-color: #7c3aed;
-            --primary-hover: #6d28d9;
-            --primary-light: #8b5cf6;
-            --primary-bg: #f5f3ff;
-            --bg-color: #fafafa;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-sub: #6b7280;
-            --border-light: #e5e7eb;
-            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
-            --radius-lg: 16px;
-            --radius-md: 12px;
-            --radius-sm: 8px;
-            --radius-pill: 9999px;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            background: var(--bg-color);
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        a { text-decoration: none; color: inherit; }
-
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 14px 5%;
-            background: rgba(255,255,255,0.95);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border-light);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--primary-color);
-        }
-
-        .logo:hover { transform: scale(1.05); }
-
-        .nav-menu { display: flex; gap: 24px; align-items: center; }
-        .nav-menu a {
-            color: var(--text-sub);
-            font-weight: 500;
-            font-size: 14px;
-            transition: color 0.3s;
-        }
-
-        .nav-menu a:hover, .nav-menu a.active { color: var(--primary-color); }
-
-        .container {
-            flex: 1;
-            padding: 24px 5%;
-            max-width: 1400px;
-            margin: 0 auto;
-            width: 100%;
-        }
-
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .page-title {
-            font-size: 28px;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .page-title svg { width: 32px; height: 32px; color: var(--primary-color); }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 24px;
-            border-radius: var(--radius-pill);
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            border: none;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-            color: white;
-            box-shadow: 0 4px 14px rgba(124,58,237,0.35);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(124,58,237,0.45);
-        }
-
-        .btn-outline {
-            background: transparent;
-            border: 2px solid var(--border-light);
-            color: var(--text-main);
-        }
-
-        .btn-outline:hover {
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-
-        /* 术语库列表 */
-        .glossary-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            margin-bottom: 32px;
-        }
-
-        .glossary-card {
-            background: var(--card-bg);
-            border-radius: var(--radius-lg);
-            padding: 24px;
-            box-shadow: var(--shadow-md);
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-
-        .glossary-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 32px rgba(0,0,0,0.1);
-        }
-
-        .glossary-card.active {
-            border: 2px solid var(--primary-color);
-        }
-
-        .glossary-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 16px;
-        }
-
-        .glossary-icon {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, var(--primary-bg), #ede9fe);
-            border-radius: var(--radius-md);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .glossary-icon svg { width: 24px; height: 24px; color: var(--primary-color); }
-
-        .glossary-menu {
-            position: relative;
-        }
-
-        .glossary-menu-btn {
-            width: 32px;
-            height: 32px;
-            border: none;
-            background: var(--bg-color);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .glossary-menu-btn svg { width: 18px; height: 18px; color: var(--text-sub); }
-
-        .glossary-name {
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .glossary-desc {
-            font-size: 13px;
-            color: var(--text-sub);
-            margin-bottom: 16px;
-            line-height: 1.6;
-        }
-
-        .glossary-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-top: 16px;
-            border-top: 1px solid var(--border-light);
-        }
-
-        .glossary-count {
-            font-size: 13px;
-            color: var(--text-sub);
-        }
-
-        .glossary-count span {
-            font-weight: 600;
-            color: var(--primary-color);
-        }
-
-        .glossary-lang {
-            font-size: 12px;
-            padding: 4px 10px;
-            background: var(--primary-bg);
-            color: var(--primary-color);
-            border-radius: var(--radius-pill);
-            font-weight: 600;
-        }
-
-        /* 术语列表 */
-        .terms-section {
-            background: var(--card-bg);
-            border-radius: var(--radius-lg);
-            padding: 24px;
-            box-shadow: var(--shadow-md);
-        }
-
-        .terms-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border-light);
-        }
-
-        .terms-title {
-            font-size: 18px;
-            font-weight: 700;
-        }
-
-        .terms-actions {
-            display: flex;
-            gap: 12px;
-        }
-
-        .search-box {
-            position: relative;
-        }
-
-        .search-box input {
-            padding: 10px 16px 10px 40px;
-            border: 2px solid var(--border-light);
-            border-radius: var(--radius-md);
-            font-size: 14px;
-            width: 250px;
-        }
-
-        .search-box input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        .search-box svg {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-sub);
-            width: 18px;
-            height: 18px;
-        }
-
-        .terms-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .terms-table th {
-            text-align: left;
-            padding: 12px 16px;
-            background: var(--bg-color);
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-sub);
-            border-radius: var(--radius-sm);
-        }
-
-        .terms-table td {
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border-light);
-            font-size: 14px;
-        }
-
-        .terms-table tr:hover {
-            background: var(--primary-bg);
-        }
-
-        .term-source {
-            font-weight: 600;
-            color: var(--text-main);
-        }
-
-        .term-target {
-            color: var(--text-sub);
-        }
-
-        .term-lang {
-            font-size: 12px;
-            padding: 3px 8px;
-            background: var(--bg-color);
-            border-radius: var(--radius-sm);
-            color: var(--text-sub);
-        }
-
-        .term-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .term-btn {
-            width: 28px;
-            height: 28px;
-            border: none;
-            background: var(--bg-color);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .term-btn:hover {
-            background: var(--primary-color);
-        }
-
-        .term-btn:hover svg { color: white; }
-
-        .term-btn svg {
-            width: 14px;
-            height: 14px;
-            color: var(--text-sub);
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-        }
-
-        .empty-icon {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 20px;
-            background: var(--primary-bg);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .empty-icon svg { width: 40px; height: 40px; color: var(--primary-color); }
-
-        .empty-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-        .empty-desc { color: var(--text-sub); margin-bottom: 24px; }
-
-        @media (max-width: 1024px) {
-            .glossary-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        @media (max-width: 768px) {
-            .nav-menu { display: none; }
-            .glossary-grid { grid-template-columns: 1fr; }
-            .page-header { flex-direction: column; gap: 16px; }
-        }
-
-        /* 深色模式 */
-        html[data-theme="dark"] .navbar {
-            background: rgba(18, 18, 18, 0.95);
-            border-bottom-color: #262626;
-        }
-
-        html[data-theme="dark"] body {
-            background-color: #0a0a0a;
-            color: #e5e5e5;
-        }
-
-        html[data-theme="dark"] .card {
-            background: #121212;
-            border-color: #262626;
-        }
-
-        html[data-theme="dark"] .glossary-item {
-            border-color: #262626;
-        }
-
-        html[data-theme="dark"] .glossary-term {
-            color: #a78bfa;
-        }
-
-        html[data-theme="dark"] .glossary-translation,
-        html[data-theme="dark"] .glossary-desc {
-            color: #a3a3a3;
-        }
-
-        html[data-theme="dark"] .empty-icon {
-            background: rgba(124, 58, 237, 0.2);
-        }
-    </style>
+    <style>[data-theme="dark"] { color-scheme: dark; } .glass { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }</style>
 </head>
-<body>
-    <!-- 粒子背景 -->
-    <div class="particles-container">
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-    </div>
-    <nav class="navbar">
-        <a href="index.html" class="logo">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            <span>NovelTrans</span>
-        </a>
-        <div class="nav-menu">
-            <a href="index.html">首页</a>
-            <a href="translation.html">翻译</a>
-            <a href="user.html">用户中心</a>
-            <a href="glossary.html" class="active">术语库</a>
-            <a href="help.html">帮助</a>
+<body class="bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased min-h-screen">
+
+    <nav class="sticky top-0 z-50 bg-white/80 dark:bg-gray-950/80 glass border-b border-gray-200/60 dark:border-gray-800/60">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-14">
+                <a href="index.html" class="flex items-center gap-2 text-primary-600 dark:text-primary-400 font-bold text-lg"><i data-lucide="book-open" class="w-5 h-5"></i><span>NovelTrans</span></a>
+                <div class="hidden md:flex items-center gap-6 text-sm">
+                    <a href="index.html" class="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-colors">首页</a>
+                    <a href="translation.html" class="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-colors">翻译</a>
+                    <a href="user.html" class="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-colors">用户中心</a>
+                    <a href="glossary.html" class="font-medium text-primary-600 dark:text-primary-400">术语库</a>
+                    <a href="history.html" class="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-colors">历史</a>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="themeToggle" class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i><i data-lucide="moon" class="w-4 h-4 block dark:hidden"></i></button>
+                </div>
+            </div>
         </div>
     </nav>
 
-    <div class="container">
-        <div class="page-header">
-            <h1 class="page-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                术语库管理
-            </h1>
-            <button class="btn btn-primary" onclick="openCreateModal()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                创建术语库
-            </button>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="book-open" class="w-6 h-6 text-primary-600"></i>术语库管理</h1>
+            <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-4 h-4"></i>创建术语库</button>
         </div>
 
-        <!-- 术语库列表 -->
-        <div class="glossary-grid" id="glossaryList">
-            <!-- 动态加载术语库卡片 -->
-        </div>
+        <!-- Glossary Cards -->
+        <div id="glossaryList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8"></div>
 
-        <!-- 术语列表 -->
-        <div class="terms-section" id="termsSection" style="display: none;">
-            <div class="terms-header">
-                <h2 class="terms-title" id="termsTitle">术语列表</h2>
-                <div class="terms-actions">
-                    <div class="search-box">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" placeholder="搜索术语..." id="termSearch">
+        <!-- Terms Section (hidden until glossary selected) -->
+        <div id="termsSection" class="hidden bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/60 dark:border-gray-800/60">
+            <div class="p-6 border-b border-gray-200/60 dark:border-gray-800/60">
+                <div class="flex items-center justify-between gap-4">
+                    <h2 id="termsTitle" class="text-lg font-bold">术语列表</h2>
+                    <div class="flex items-center gap-3">
+                        <div class="relative">
+                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" id="termSearch" placeholder="搜索术语..." class="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200/60 dark:border-gray-800/60 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 w-56">
+                        </div>
+                        <button onclick="addTerm()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-3.5 h-3.5"></i>添加术语</button>
                     </div>
-                    <button class="btn btn-primary" onclick="addTerm()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        添加术语
-                    </button>
                 </div>
             </div>
-
-            <table class="terms-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px;">#</th>
-                        <th style="width: 200px;">原文</th>
-                        <th style="width: 200px;">译文</th>
-                        <th>语言对</th>
-                        <th style="width: 100px;">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="termsList">
-                    <!-- 动态加载术语 -->
-                </tbody>
-            </table>
-        </div>
-
-        <!-- 空状态提示 -->
-        <div class="empty-state" id="emptyState">
-            <div class="empty-icon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                            <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">#</th>
+                            <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">原文</th>
+                            <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">译文</th>
+                            <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">语言对</th>
+                            <th class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-6 py-3">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="termsList" class="divide-y divide-gray-200/60 dark:divide-gray-800/60"></tbody>
+                </table>
             </div>
-            <div class="empty-title">暂无术语库</div>
-            <div class="empty-desc">创建您的第一个术语库，开始管理专业术语</div>
-            <button class="btn btn-primary" onclick="openCreateModal()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                创建术语库
-            </button>
         </div>
-    </div>
 
-    <!-- 创建术语库模态框 -->
-    <div id="createGlossaryModal" style="display: none;">
-        <div style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10002;
-        " onclick="closeCreateGlossaryModal(event)">
-            <div style="
-                background: var(--card-bg);
-                border-radius: var(--radius-lg);
-                padding: 24px;
-                min-width: 400px;
-                max-width: 500px;
-                box-shadow: var(--shadow-lg);
-            ">
-                <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600; color: var(--text-main);">创建术语库</h3>
-                <p style="margin: 0 0 20px 0; font-size: 14px; color: var(--text-sub);">请输入术语库的基本信息</p>
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden text-center py-16">
+            <div class="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4"><i data-lucide="book-open" class="w-8 h-8 text-gray-400"></i></div>
+            <h3 class="text-lg font-bold mb-2">暂无术语库</h3>
+            <p class="text-sm text-gray-500 mb-6">创建您的第一个术语库，开始管理专业术语</p>
+            <button onclick="openCreateModal()" class="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-4 h-4"></i>创建术语库</button>
+        </div>
+    </main>
 
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--text-main);">术语库名称 <span style="color: var(--danger);">*</span></label>
-                    <input type="text" id="newGlossaryName" placeholder="请输入术语库名称" style="width: 100%; padding: 10px 12px; border: 2px solid var(--border-light); border-radius: 8px; font-size: 14px; color: var(--text-main); background: var(--card-bg);">
-                </div>
-
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--text-main);">描述（可选）</label>
-                    <textarea id="newGlossaryDesc" placeholder="请输入术语库描述" style="width: 100%; padding: 10px 12px; border: 2px solid var(--border-light); border-radius: 8px; font-size: 14px; color: var(--text-main); background: var(--card-bg); resize: vertical; min-height: 80px;"></textarea>
-                </div>
-
-                <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                    <button onclick="closeCreateGlossaryModal()" style="padding: 10px 24px; border: 1px solid var(--border-light); border-radius: 8px; background: transparent; color: var(--text-sub); cursor: pointer; font-weight: 500;">取消</button>
-                    <button onclick="submitCreateGlossary()" style="padding: 10px 24px; border: none; border-radius: 8px; background: var(--gradient-primary); color: white; cursor: pointer; font-weight: 500; box-shadow: 0 4px 14px rgba(124,58,237,0.3);">创建</button>
-                </div>
+    <!-- Create Glossary Modal -->
+    <div id="createGlossaryModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+            <h3 class="text-lg font-bold mb-1">创建术语库</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">请输入术语库的基本信息</p>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1.5">术语库名称 <span class="text-red-500">*</span></label>
+                <input type="text" id="newGlossaryName" placeholder="请输入术语库名称" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium mb-1.5">描述（可选）</label>
+                <textarea id="newGlossaryDesc" placeholder="请输入术语库描述" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none" rows="3"></textarea>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeCreateGlossaryModal()" class="px-5 py-2 text-sm font-medium rounded-xl border border-gray-200/60 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">取消</button>
+                <button onclick="submitCreateGlossary()" class="px-5 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors">创建</button>
             </div>
         </div>
     </div>
 
-    <!-- 添加/编辑术语模态框 -->
-    <div id="termModal" style="display: none;">
-        <div style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10002;
-        " onclick="closeTermModal(event)">
-            <div style="
-                background: var(--card-bg);
-                border-radius: var(--radius-lg);
-                padding: 24px;
-                min-width: 400px;
-                max-width: 500px;
-                box-shadow: var(--shadow-lg);
-            ">
-                <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600; color: var(--text-main);" id="termModalTitle">添加术语</h3>
-                <p style="margin: 0 0 20px 0; font-size: 14px; color: var(--text-sub);">请输入术语的原文和译文</p>
-
-                <input type="hidden" id="editTermId">
-
-                <div style="margin-bottom: 16px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--text-main);">原文 <span style="color: var(--danger);">*</span></label>
-                    <input type="text" id="termSourceText" placeholder="请输入原文" style="width: 100%; padding: 10px 12px; border: 2px solid var(--border-light); border-radius: 8px; font-size: 14px; color: var(--text-main); background: var(--card-bg);">
-                </div>
-
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--text-main);">译文 <span style="color: var(--danger);">*</span></label>
-                    <input type="text" id="termTargetText" placeholder="请输入译文" style="width: 100%; padding: 10px 12px; border: 2px solid var(--border-light); border-radius: 8px; font-size: 14px; color: var(--text-main); background: var(--card-bg);">
-                </div>
-
-                <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                    <button onclick="closeTermModal()" style="padding: 10px 24px; border: 1px solid var(--border-light); border-radius: 8px; background: transparent; color: var(--text-sub); cursor: pointer; font-weight: 500;">取消</button>
-                    <button onclick="submitTerm()" style="padding: 10px 24px; border: none; border-radius: 8px; background: var(--gradient-primary); color: white; cursor: pointer; font-weight: 500; box-shadow: 0 4px 14px rgba(124,58,237,0.3);">确定</button>
-                </div>
+    <!-- Term Modal -->
+    <div id="termModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+            <h3 id="termModalTitle" class="text-lg font-bold mb-1">添加术语</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">请输入术语的原文和译文</p>
+            <input type="hidden" id="editTermId">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1.5">原文 <span class="text-red-500">*</span></label>
+                <input type="text" id="termSourceText" placeholder="请输入原文" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium mb-1.5">译文 <span class="text-red-500">*</span></label>
+                <input type="text" id="termTargetText" placeholder="请输入译文" class="w-full px-3 py-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm">
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeTermModal()" class="px-5 py-2 text-sm font-medium rounded-xl border border-gray-200/60 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">取消</button>
+                <button onclick="submitTerm()" class="px-5 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors">确定</button>
             </div>
         </div>
     </div>
 
+    <div id="toastContainer" class="fixed top-16 right-4 z-[110] space-y-2 max-w-sm pointer-events-none"></div>
+
+    <script src="../config.js"></script>
+    <script src="../js/api-client.js"></script>
+    <script src="../js/auth-manager.js"></script>
     <script>
-        // 当前选中的术语库 ID
-        let currentGlossaryId = null;
-        let currentTerms = [];
-        let isEditMode = false;
+    function initIcons() { lucide.createIcons(); }
+    function showToast(type, title, message) {
+        const c = document.getElementById('toastContainer');
+        const colors = { success: { bg: 'bg-emerald-50 dark:bg-emerald-950/80', border: 'border-emerald-200 dark:border-emerald-800', icon: 'text-emerald-600', title: 'text-emerald-800 dark:text-emerald-200' }, error: { bg: 'bg-red-50 dark:bg-red-950/80', border: 'border-red-200 dark:border-red-800', icon: 'text-red-600', title: 'text-red-800 dark:text-red-200' }, info: { bg: 'bg-primary-50 dark:bg-primary-950/80', border: 'border-primary-200 dark:border-primary-800', icon: 'text-primary-600', title: 'text-primary-800 dark:text-primary-200' } };
+        const cl = colors[type] || colors.info;
+        const icons = { success: 'check-circle', error: 'x-circle', info: 'info' };
+        const t = document.createElement('div'); t.className = `${cl.bg} ${cl.border} border rounded-xl p-4 shadow-lg pointer-events-auto`;
+        t.innerHTML = `<div class="flex items-start gap-3"><i data-lucide="${icons[type]}" class="w-5 h-5 ${cl.icon} flex-shrink-0 mt-0.5"></i><div><p class="text-sm font-semibold ${cl.title}">${title}</p><p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">${message}</p></div></div>`;
+        c.appendChild(t); lucide.createIcons(); setTimeout(() => { if (t.parentNode) t.remove(); }, 3000);
+    }
+    function setTheme(dark) { document.documentElement.classList.toggle('dark', dark); localStorage.setItem('theme', dark ? 'dark' : 'light'); }
+    (function() { const s = localStorage.getItem('theme'); setTheme(s === 'dark' || (!s && window.matchMedia('(prefers-color-scheme: dark)').matches)); })();
+    document.getElementById('themeToggle').addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark')));
 
-        // 页面加载时获取术语库列表
-        document.addEventListener('DOMContentLoaded', function() {
-            loadGlossaries();
-        });
+    let currentGlossaryId = null;
+    let currentTerms = [];
+    let isEditMode = false;
 
-        // 打开创建术语库模态框
-        function openCreateModal() {
-            document.getElementById('createGlossaryModal').style.display = 'block';
-            document.getElementById('newGlossaryName').value = '';
-            document.getElementById('newGlossaryDesc').value = '';
-            document.getElementById('newGlossaryName').focus();
-        }
-
-        // 关闭创建术语库模态框
-        function closeCreateGlossaryModal(e) {
-            if (!e || e.target === e.currentTarget) {
-                document.getElementById('createGlossaryModal').style.display = 'none';
-            }
-        }
-
-        // 提交创建术语库
-        async function submitCreateGlossary() {
-            const name = document.getElementById('newGlossaryName').value.trim();
-            const description = document.getElementById('newGlossaryDesc').value.trim();
-
-            if (!name) {
-                showNotification('请输入术语库名称', 'error');
-                return;
-            }
-
-            const result = await apiClient.createGlossary({
-                name: name,
-                description: description,
-                sourceLang: 'ja',
-                targetLang: 'zh'
-            });
-
-            if (result.success) {
-                showNotification('术语库创建成功', 'success');
-                closeCreateGlossaryModal();
-                loadGlossaries();
-            } else {
-                showNotification('创建失败：' + result.error, 'error');
-            }
-        }
-
-        // 加载术语库列表
-        async function loadGlossaries() {
+    async function loadGlossaries() {
+        const token = localStorage.getItem('authToken');
+        if (!token) { window.location.href = 'index.html?modal=login'; return; }
+        try {
             const result = await apiClient.getGlossaries();
             const container = document.getElementById('glossaryList');
-            const emptyState = document.getElementById('emptyState');
-
+            const empty = document.getElementById('emptyState');
             if (!result.success || !result.data || result.data.length === 0) {
-                container.style.display = 'none';
-                emptyState.style.display = 'block';
-                return;
+                container.innerHTML = ''; container.classList.add('hidden');
+                empty.classList.remove('hidden'); lucide.createIcons(); return;
             }
-
-            container.style.display = 'grid';
-            emptyState.style.display = 'none';
-
-            container.innerHTML = result.data.map((glossary, index) => `
-                <div class="glossary-card ${index === 0 ? 'active' : ''}" onclick="selectGlossary(${glossary.id}, this)">
-                    <div class="glossary-header">
-                        <div class="glossary-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                        </div>
-                        <div class="glossary-menu">
-                            <button class="glossary-menu-btn" onclick="event.stopPropagation(); openGlossaryMenu(${glossary.id})">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-                            </button>
-                        </div>
+            empty.classList.add('hidden');
+            container.classList.remove('hidden');
+            container.innerHTML = result.data.map((g, i) => `
+                <div class="bg-white dark:bg-gray-900 rounded-2xl border-2 ${i === 0 ? 'border-primary-500' : 'border-gray-200/60 dark:border-gray-800/60'} p-5 hover:border-primary-300 dark:hover:border-primary-700 transition-all cursor-pointer" onclick="selectGlossary(${g.id}, this)">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950/30 flex items-center justify-center"><i data-lucide="book-open" class="w-5 h-5 text-primary-600"></i></div>
+                        <button onclick="event.stopPropagation(); openGlossaryMenu(${g.id})" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i data-lucide="more-horizontal" class="w-4 h-4 text-gray-400"></i></button>
                     </div>
-                    <div class="glossary-name">${escapeHtml(glossary.name)}</div>
-                    <div class="glossary-desc">${escapeHtml(glossary.description || '暂无描述')}</div>
-                    <div class="glossary-meta">
-                        <div class="glossary-count"><span>${glossary.termCount || 0}</span> 个术语</div>
-                        <div class="glossary-lang">${glossary.sourceLang || 'auto'}→${glossary.targetLang || 'zh'}</div>
+                    <p class="font-semibold mb-1">${escapeHtml(g.name)}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">${escapeHtml(g.description || '暂无描述')}</p>
+                    <div class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+                        <span class="text-xs text-gray-500"><span class="font-semibold text-primary-600">${g.termCount || 0}</span> 个术语</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-primary-50 dark:bg-primary-950/30 text-primary-600 font-medium">${g.sourceLang || 'auto'}→${g.targetLang || 'zh'}</span>
                     </div>
                 </div>
             `).join('');
+            if (result.data.length > 0) selectGlossary(result.data[0].id, container.querySelector('.bg-white'));
+        } catch (e) { console.error(e); }
+        lucide.createIcons();
+    }
 
-            // 默认选中第一个术语库
-            if (result.data.length > 0) {
-                selectGlossary(result.data[0].id, container.querySelector('.glossary-card'));
-            }
-        }
+    async function selectGlossary(id, card) {
+        document.querySelectorAll('#glossaryList > div').forEach(c => { c.classList.remove('border-primary-500'); c.classList.add('border-gray-200/60', 'dark:border-gray-800/60'); });
+        if (card) { card.classList.add('border-primary-500'); card.classList.remove('border-gray-200/60', 'dark:border-gray-800/60'); }
+        currentGlossaryId = id;
+        await loadTerms(id);
+    }
 
-        // 选择术语库
-        async function selectGlossary(id, cardElement) {
-            // 更新选中状态
-            document.querySelectorAll('.glossary-card').forEach(card => card.classList.remove('active'));
-            if (cardElement) {
-                cardElement.classList.add('active');
-            }
-
-            currentGlossaryId = id;
-
-            // 加载术语列表
-            await loadTerms(id);
-        }
-
-        // 加载术语列表
-        async function loadTerms(glossaryId) {
+    async function loadTerms(glossaryId) {
+        const section = document.getElementById('termsSection');
+        const title = document.getElementById('termsTitle');
+        const tbody = document.getElementById('termsList');
+        try {
             const result = await apiClient.getTerms(glossaryId);
-            const termsSection = document.getElementById('termsSection');
-            const termsTitle = document.getElementById('termsTitle');
-            const tbody = document.getElementById('termsList');
-
             if (!result.success || !result.data || result.data.length === 0) {
-                termsSection.style.display = 'block';
-                termsTitle.textContent = '术语列表';
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-sub);">暂无术语，点击右上角添加术语</td></tr>';
+                section.classList.remove('hidden');
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-12 text-gray-400">暂无术语，点击右上角"添加术语"按钮添加</td></tr>';
                 return;
             }
-
             currentTerms = result.data;
-            termsSection.style.display = 'block';
-
-            // 获取第一个术语库名称作为标题
-            const glossaryResult = await apiClient.getGlossary(glossaryId);
-            if (glossaryResult.success) {
-                termsTitle.textContent = `📚 ${glossaryResult.data.name} - 术语列表`;
-            }
-
-            tbody.innerHTML = result.data.map((term, index) => `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td class="term-source">${escapeHtml(term.sourceText)}</td>
-                    <td class="term-target">${escapeHtml(term.targetText)}</td>
-                    <td><span class="term-lang">${term.sourceLang || 'auto'}→${term.targetLang || 'zh'}</span></td>
-                    <td>
-                        <div class="term-actions">
-                            <button class="term-btn" title="编辑" onclick="editTerm(${term.id})">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
-                            <button class="term-btn" title="删除" onclick="deleteTerm(${term.id})">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
+            section.classList.remove('hidden');
+            try {
+                const glossaryResult = await apiClient.getGlossary(glossaryId);
+                if (glossaryResult.success) title.textContent = glossaryResult.data.name + ' — 术语列表';
+            } catch {}
+            tbody.innerHTML = currentTerms.map((term, i) => `
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <td class="px-6 py-4 text-sm text-gray-400">${i + 1}</td>
+                    <td class="px-6 py-4 text-sm font-medium">${escapeHtml(term.sourceText)}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">${escapeHtml(term.targetText)}</td>
+                    <td class="px-6 py-4"><span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500">${term.sourceLang || 'auto'}→${term.targetLang || 'zh'}</span></td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-1">
+                            <button onclick="editTerm(${term.id})" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i data-lucide="pencil" class="w-3.5 h-3.5 text-gray-400"></i></button>
+                            <button onclick="deleteTerm(${term.id})" class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-gray-400 hover:text-red-500"></i></button>
                         </div>
                     </td>
                 </tr>
             `).join('');
+        } catch (e) { console.error(e); }
+        lucide.createIcons();
+    }
+
+    function openCreateModal() {
+        const modal = document.getElementById('createGlossaryModal');
+        modal.classList.remove('hidden');
+        document.getElementById('newGlossaryName').value = '';
+        document.getElementById('newGlossaryDesc').value = '';
+        document.getElementById('newGlossaryName').focus();
+    }
+    function closeCreateGlossaryModal(e) { if (!e || e.target === e.currentTarget) document.getElementById('createGlossaryModal').classList.add('hidden'); }
+    function closeTermModal(e) { if (!e || e.target === e.currentTarget) document.getElementById('termModal').classList.add('hidden'); }
+
+    async function submitCreateGlossary() {
+        const name = document.getElementById('newGlossaryName').value.trim();
+        const description = document.getElementById('newGlossaryDesc').value.trim();
+        if (!name) { showToast('error', '错误', '请输入术语库名称'); return; }
+        try {
+            const result = await apiClient.createGlossary({ name, description, sourceLang: 'ja', targetLang: 'zh' });
+            if (result.success) { showToast('success', '成功', '术语库创建成功'); closeCreateGlossaryModal(); loadGlossaries(); }
+            else showToast('error', '失败', '创建失败：' + result.error);
+        } catch (e) { showToast('error', '错误', '创建失败'); }
+    }
+
+    function openGlossaryMenu(id) {
+        if (confirm('确定要删除此术语库吗？此操作不可恢复！')) {
+            apiClient.deleteGlossary(id).then(result => {
+                if (result.success) { showToast('success', '成功', '术语库已删除'); loadGlossaries(); }
+                else showToast('error', '失败', '删除失败：' + result.error);
+            });
         }
+    }
 
-        // 打开术语库菜单
-        function openGlossaryMenu(id) {
-            // 简单实现，可扩展为下拉菜单
-            if (typeof UITools !== 'undefined') {
-                UITools.confirmDialog('确认删除', '确定要删除此术语库吗？此操作不可恢复！').then((confirmed) => {
-                    if (confirmed) {
-                        apiClient.deleteGlossary(id).then(result => {
-                            if (result.success) {
-                                showNotification('术语库已删除', 'success');
-                                loadGlossaries();
-                            } else {
-                                showNotification('删除失败：' + result.error, 'error');
-                            }
-                        });
-                    }
-                });
-            } else {
-                if (confirm('确定要删除此术语库吗？此操作不可恢复！')) {
-                    apiClient.deleteGlossary(id).then(result => {
-                        if (result.success) {
-                            showNotification('术语库已删除', 'success');
-                            loadGlossaries();
-                        } else {
-                            showNotification('删除失败：' + result.error, 'error');
-                        }
-                    });
-                }
-            }
-        }
+    function addTerm() {
+        if (!currentGlossaryId) { showToast('info', '提示', '请先选择术语库'); return; }
+        isEditMode = false;
+        document.getElementById('termModalTitle').textContent = '添加术语';
+        document.getElementById('termSourceText').value = '';
+        document.getElementById('termTargetText').value = '';
+        document.getElementById('editTermId').value = '';
+        document.getElementById('termModal').classList.remove('hidden');
+        document.getElementById('termSourceText').focus();
+    }
 
-        // 添加术语
-        function addTerm() {
-            if (!currentGlossaryId) {
-                showNotification('请先选择术语库', 'info');
-                return;
-            }
+    function editTerm(termId) {
+        const term = currentTerms.find(t => t.id === termId);
+        if (!term) return;
+        isEditMode = true;
+        document.getElementById('termModalTitle').textContent = '编辑术语';
+        document.getElementById('termSourceText').value = term.sourceText;
+        document.getElementById('termTargetText').value = term.targetText;
+        document.getElementById('editTermId').value = termId;
+        document.getElementById('termModal').classList.remove('hidden');
+        document.getElementById('termSourceText').focus();
+    }
 
-            isEditMode = false;
-            document.getElementById('termModalTitle').textContent = '添加术语';
-            document.getElementById('termSourceText').value = '';
-            document.getElementById('termTargetText').value = '';
-            document.getElementById('editTermId').value = '';
-            document.getElementById('termModal').style.display = 'block';
-            document.getElementById('termSourceText').focus();
-        }
-
-        // 编辑术语
-        function editTerm(termId) {
-            const term = currentTerms.find(t => t.id === termId);
-            if (!term) return;
-
-            isEditMode = true;
-            document.getElementById('termModalTitle').textContent = '编辑术语';
-            document.getElementById('termSourceText').value = term.sourceText;
-            document.getElementById('termTargetText').value = term.targetText;
-            document.getElementById('editTermId').value = termId;
-            document.getElementById('termModal').style.display = 'block';
-            document.getElementById('termSourceText').focus();
-        }
-
-        // 关闭术语模态框
-        function closeTermModal(e) {
-            if (!e || e.target === e.currentTarget) {
-                document.getElementById('termModal').style.display = 'none';
-            }
-        }
-
-        // 提交术语（添加或编辑）
-        async function submitTerm() {
-            const sourceText = document.getElementById('termSourceText').value.trim();
-            const targetText = document.getElementById('termTargetText').value.trim();
-            const termId = document.getElementById('editTermId').value;
-
-            if (!sourceText || !targetText) {
-                showNotification('请输入原文和译文', 'error');
-                return;
-            }
-
+    async function submitTerm() {
+        const sourceText = document.getElementById('termSourceText').value.trim();
+        const targetText = document.getElementById('termTargetText').value.trim();
+        const termId = document.getElementById('editTermId').value;
+        if (!sourceText || !targetText) { showToast('error', '错误', '请输入原文和译文'); return; }
+        try {
             let result;
             if (isEditMode) {
-                result = await apiClient.updateTerm(currentGlossaryId, termId, {
-                    sourceText: sourceText,
-                    targetText: targetText,
-                    description: term.description || ''
-                });
-
-                if (result.success) {
-                    showNotification('术语已更新', 'success');
-                    closeTermModal();
-                    loadTerms(currentGlossaryId);
-                } else {
-                    showNotification('更新失败：' + result.error, 'error');
-                }
+                result = await apiClient.updateTerm(currentGlossaryId, termId, { sourceText, targetText, description: '' });
+                if (result.success) { showToast('success', '成功', '术语已更新'); closeTermModal(); loadTerms(currentGlossaryId); }
+                else showToast('error', '失败', '更新失败：' + result.error);
             } else {
-                result = await apiClient.addTerm(currentGlossaryId, {
-                    sourceText: sourceText,
-                    targetText: targetText,
-                    description: ''
-                });
-
-                if (result.success) {
-                    showNotification('术语添加成功', 'success');
-                    closeTermModal();
-                    loadTerms(currentGlossaryId);
-                } else {
-                    showNotification('添加失败：' + result.error, 'error');
-                }
+                result = await apiClient.addTerm(currentGlossaryId, { sourceText, targetText, description: '' });
+                if (result.success) { showToast('success', '成功', '术语添加成功'); closeTermModal(); loadTerms(currentGlossaryId); }
+                else showToast('error', '失败', '添加失败：' + result.error);
             }
-        }
+        } catch (e) { showToast('error', '错误', '操作失败'); }
+    }
 
-        // 删除术语
-        function deleteTerm(termId) {
-            if (typeof UITools !== 'undefined') {
-                UITools.confirmDialog('确认删除', '确定要删除此术语吗？').then((confirmed) => {
-                    if (confirmed) {
-                        apiClient.deleteTerm(currentGlossaryId, termId).then(result => {
-                            if (result.success) {
-                                showNotification('术语已删除', 'success');
-                                loadTerms(currentGlossaryId);
-                            } else {
-                                showNotification('删除失败：' + result.error, 'error');
-                            }
-                        });
-                    }
-                });
-            } else {
-                if (confirm('确定要删除此术语吗？')) {
-                    apiClient.deleteTerm(currentGlossaryId, termId).then(result => {
-                        if (result.success) {
-                            showNotification('术语已删除', 'success');
-                            loadTerms(currentGlossaryId);
-                        } else {
-                            showNotification('删除失败：' + result.error, 'error');
-                        }
-                    });
-                }
-            }
-        }
-
-        // 搜索术语
-        document.getElementById('termSearch')?.addEventListener('input', function(e) {
-            const value = e.target.value.toLowerCase();
-            document.querySelectorAll('#termsList tr').forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(value) ? '' : 'none';
+    function deleteTerm(termId) {
+        if (confirm('确定要删除此术语吗？')) {
+            apiClient.deleteTerm(currentGlossaryId, termId).then(result => {
+                if (result.success) { showToast('success', '成功', '术语已删除'); loadTerms(currentGlossaryId); }
+                else showToast('error', '失败', '删除失败：' + result.error);
             });
-        });
-
-        // HTML 转义防止 XSS
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
         }
+    }
 
-        // 显示通知
-        function showNotification(message, type) {
-            const notification = document.createElement('div');
-            notification.textContent = message;
-            notification.style.cssText = `
-                position: fixed;
-                top: 80px;
-                right: 24px;
-                padding: 14px 24px;
-                background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#7c3aed'};
-                color: white;
-                border-radius: 12px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-                font-size: 14px;
-                font-weight: 600;
-                z-index: 10000;
-                animation: slideIn 0.3s ease;
-            `;
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 2500);
-        }
+    document.getElementById('termSearch')?.addEventListener('input', function(e) {
+        const value = e.target.value.toLowerCase();
+        document.querySelectorAll('#termsList tr').forEach(row => { row.style.display = row.textContent.toLowerCase().includes(value) ? '' : 'none'; });
+    });
+
+    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    document.addEventListener('DOMContentLoaded', () => { initIcons(); loadGlossaries(); });
     </script>
-    <script src="config.js"></script>
-    <script src="js/api-client.js"></script>
-    <script src="js/auth-manager.js"></script>
-    <script src="utils/ui.js"></script>
-    <script src="js/auth-middleware.js"></script>
-    <script src="js/auth-utils.js"></script>
-    <script src="js/effects.js"></script>
 </body>
 </html>

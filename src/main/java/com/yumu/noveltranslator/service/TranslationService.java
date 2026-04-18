@@ -2,6 +2,7 @@ package com.yumu.noveltranslator.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.yumu.noveltranslator.dto.*;
+import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
@@ -38,6 +39,10 @@ public class TranslationService {
     // 依赖注入
     private final UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
     private final TranslationCacheService cacheService;
+    private final RagTranslationService ragTranslationService;
+    private final EntityConsistencyService entityConsistencyService;
+    private final QuotaService quotaService;
+    private final com.yumu.noveltranslator.mapper.UserMapper userMapper;
 
     /**
      * 选中文本翻译
@@ -52,6 +57,18 @@ public class TranslationService {
 
         String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
+
+        // 检查字符配额
+        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        if (userId != null) {
+            User user = userMapper.selectById(userId);
+            if (user != null) {
+                String mode = req.getMode() != null ? req.getMode() : "fast";
+                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), combined.length(), mode)) {
+                    return new SelectionTranslateResponse(false, engine, "字符配额不足，请升级档位或等待下月重置");
+                }
+            }
+        }
 
         try {
             String result = translateWithCache(combined, target, engine);
@@ -83,7 +100,34 @@ public class TranslationService {
             return cached;
         }
 
-        // 2. 缓存未命中，调用翻译服务（支持降级）
+        // 2. 缓存未命中，查询 RAG 翻译记忆（L4 语义匹配层）
+        com.yumu.noveltranslator.dto.RagTranslationResponse ragResult =
+                ragTranslationService.searchSimilar(text, target, engine);
+
+        if (ragResult.isDirectHit()) {
+            log.info("RAG L4 直接命中，相似度: {}", ragResult.getSimilarity());
+            cacheService.putCache(cacheKey, text, ragResult.getTranslation(), "auto", target, engine);
+            return ragResult.getTranslation();
+        }
+
+        // 3. RAG 未直接命中，检查是否需要实体一致性翻译
+        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        if (entityConsistencyService.shouldUseConsistency(text) && userId != null) {
+            log.info("文本长度超过阈值，启用实体一致性翻译");
+            com.yumu.noveltranslator.dto.ConsistencyTranslationResult consistencyResult =
+                    entityConsistencyService.translateWithConsistency(text, target, engine, userId, "default");
+            if (consistencyResult.isConsistencyApplied() && consistencyResult.getTranslatedText() != null) {
+                String result = consistencyResult.getTranslatedText();
+                if (isValidTranslation(text, result) && shouldCache(text, result)) {
+                    cacheService.putCache(cacheKey, text, result, "auto", target, engine);
+                }
+                // RAG L4：翻译完成后自动存储到翻译记忆
+                ragTranslationService.storeTranslationMemory(text, result, target, engine);
+                return result;
+            }
+        }
+
+        // 4. 调用翻译服务（支持降级）
         String rawJson = userLevelThrottledTranslationClient.translate(text, target, engine, false);
         String result = ExternalResponseUtil.extractDataField(rawJson);
 
@@ -100,6 +144,8 @@ public class TranslationService {
         // 3. 仅当翻译成功且译文与原文不一致时才缓存
         if (shouldCache(text, result)) {
             cacheService.putCache(cacheKey, text, result, "auto", target, engine);
+            // RAG L4：翻译完成后自动存储到翻译记忆
+            ragTranslationService.storeTranslationMemory(text, result, target, engine);
         } else {
             log.debug("译文与原文一致，跳过缓存：{}", cacheKey.substring(0, Math.min(16, cacheKey.length())));
         }
@@ -170,6 +216,18 @@ public class TranslationService {
 
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
         String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
+
+        // 检查字符配额
+        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        if (userId != null) {
+            User user = userMapper.selectById(userId);
+            if (user != null) {
+                String mode = req.getMode() != null ? req.getMode() : "fast";
+                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), content.length(), mode)) {
+                    return new ReaderTranslateResponse(false, engine, "字符配额不足，请升级档位或等待下月重置");
+                }
+            }
+        }
 
         // 文本分段
         List<String> segments = TextSegmentationUtil.segmentByTextEngine(content, engine);
@@ -312,11 +370,31 @@ public class TranslationService {
     public SseEmitter webpageTranslateStream(WebpageTranslateRequest req) {
         SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L); // 5 分钟超时
 
+        // 计算总字符数
+        var items = req.getTextRegistry();
+        int totalChars = items.stream()
+                .mapToInt(item -> item.getOriginal() != null ? item.getOriginal().length() : 0)
+                .sum();
+
+        // 检查字符配额
+        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        String mode = (req.getFastMode() != null && !req.getFastMode()) ? "expert" : "fast";
+
+        if (userId != null) {
+            User user = userMapper.selectById(userId);
+            if (user != null) {
+                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), totalChars, mode)) {
+                    SseEmitterUtil.sendError(emitter, "字符配额不足，请升级档位或等待下月重置");
+                    SseEmitterUtil.complete(emitter);
+                    return emitter;
+                }
+            }
+        }
+
         Thread.startVirtualThread(() -> {
             try {
                 String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
                 String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
-                var items = req.getTextRegistry();
                 int totalCount = items.size();
 
                 // 限制并发数，避免超过 DeepSeek 限流（10 req/s）和用户级别并发限制

@@ -4,849 +4,152 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>翻译历史 - NovelTrans</title>
-    <link rel="stylesheet" href="styles/animations.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../lib/lucide.min.js"></script>
     <script>
-        // 页面加载前立即应用主题，防止闪烁
-        (function() {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'dark') {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
-        })();
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { primary: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81', 950: '#1e1b4b' } } } } };
     </script>
-    <style>
-        :root {
-            --primary-color: #7c3aed;
-            --primary-hover: #6d28d9;
-            --primary-light: #8b5cf6;
-            --primary-bg: #f5f3ff;
-            --bg-color: #fafafa;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-sub: #6b7280;
-            --text-light: #9ca3af;
-            --border-light: #e5e7eb;
-            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
-            --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.1);
-            --radius-lg: 16px;
-            --radius-md: 12px;
-            --radius-sm: 8px;
-            --radius-pill: 9999px;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            background: var(--bg-color);
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        a { text-decoration: none; color: inherit; }
-
-        /* 导航栏 */
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 14px 5%;
-            background: rgba(255,255,255,0.95);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border-light);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--primary-color);
-            transition: transform 0.3s;
-        }
-
-        .logo:hover { transform: scale(1.05); }
-
-        .nav-menu { display: flex; gap: 24px; align-items: center; }
-        .nav-menu a {
-            color: var(--text-sub);
-            font-weight: 500;
-            font-size: 14px;
-            transition: color 0.3s;
-            position: relative;
-        }
-
-        .nav-menu a::after {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--primary-color);
-            transition: width 0.3s;
-        }
-
-        .nav-menu a:hover, .nav-menu a.active { color: var(--primary-color); }
-        .nav-menu a:hover::after, .nav-menu a.active::after { width: 100%; }
-
-        /* 主容器 */
-        .container {
-            flex: 1;
-            padding: 24px 5%;
-            max-width: 1400px;
-            margin: 0 auto;
-            width: 100%;
-        }
-
-        /* 页面头部 */
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .page-title {
-            font-size: 28px;
-            font-weight: 800;
-            color: var(--text-main);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .page-title svg { width: 32px; height: 32px; color: var(--primary-color); }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 24px;
-            border-radius: var(--radius-pill);
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            border: none;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-            color: white;
-            box-shadow: 0 4px 14px rgba(124,58,237,0.35);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(124,58,237,0.45);
-        }
-
-        .btn-outline {
-            background: transparent;
-            border: 2px solid var(--border-light);
-            color: var(--text-main);
-        }
-
-        .btn-outline:hover {
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-
-        /* 搜索过滤栏 */
-        .filter-bar {
-            background: var(--card-bg);
-            border-radius: var(--radius-lg);
-            padding: 20px;
-            margin-bottom: 24px;
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-            align-items: center;
-            box-shadow: var(--shadow-md);
-        }
-
-        .search-box {
-            flex: 1;
-            min-width: 280px;
-            position: relative;
-        }
-
-        .search-box input {
-            width: 100%;
-            padding: 12px 16px 12px 44px;
-            border: 2px solid var(--border-light);
-            border-radius: var(--radius-md);
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-
-        .search-box input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 4px rgba(124,58,237,0.1);
-        }
-
-        .search-box svg {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-sub);
-            width: 20px;
-            height: 20px;
-        }
-
-        .filter-select {
-            padding: 12px 20px;
-            border: 2px solid var(--border-light);
-            border-radius: var(--radius-md);
-            font-size: 14px;
-            background: white;
-            cursor: pointer;
-            min-width: 150px;
-        }
-
-        .filter-select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        /* 历史列表 */
-        .history-container {
-            background: var(--card-bg);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-            box-shadow: var(--shadow-md);
-        }
-
-        .history-header {
-            display: grid;
-            grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr;
-            padding: 16px 20px;
-            background: var(--bg-color);
-            border-bottom: 1px solid var(--border-light);
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-sub);
-        }
-
-        .history-list { list-style: none; }
-
-        .history-item {
-            display: grid;
-            grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr;
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-light);
-            align-items: center;
-            transition: all 0.3s;
-        }
-
-        .history-item:hover {
-            background: var(--primary-bg);
-        }
-
-        .history-item:last-child { border-bottom: none; }
-
-        .file-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .file-icon {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, var(--primary-bg), #ede9fe);
-            border-radius: var(--radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .file-icon svg { width: 22px; height: 22px; color: var(--primary-color); }
-
-        .file-name {
-            font-weight: 600;
-            color: var(--text-main);
-            margin-bottom: 2px;
-        }
-
-        .file-size { font-size: 12px; color: var(--text-sub); }
-
-        .lang-pair {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .lang-badge {
-            padding: 4px 10px;
-            border-radius: var(--radius-pill);
-            font-size: 12px;
-            font-weight: 600;
-            background: var(--primary-bg);
-            color: var(--primary-color);
-        }
-
-        .time-text { font-size: 13px; color: var(--text-sub); }
-
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: var(--radius-pill);
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .status-completed { background: #d1fae5; color: #065f46; }
-        .status-processing { background: #fef3c7; color: #92400e; }
-        .status-failed { background: #fee2e2; color: #991b1b; }
-
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: currentColor;
-        }
-
-        .actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .action-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border-light);
-            background: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .action-btn:hover {
-            transform: translateY(-1px);
-            border-color: var(--primary-color);
-            background: var(--primary-color);
-        }
-
-        .action-btn:hover svg { color: white; }
-
-        .action-btn svg { width: 16px; height: 16px; color: var(--text-sub); transition: color 0.2s; }
-
-        /* 空状态 */
-        .empty-state {
-            text-align: center;
-            padding: 80px 20px;
-        }
-
-        .empty-icon {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 24px;
-            background: var(--primary-bg);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .empty-icon svg { width: 60px; height: 60px; color: var(--primary-color); }
-
-        .empty-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-        .empty-desc { color: var(--text-sub); margin-bottom: 24px; }
-
-        /* 分页 */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            padding: 24px;
-        }
-
-        .page-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: var(--radius-md);
-            border: 2px solid var(--border-light);
-            background: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .page-btn:hover, .page-btn.active {
-            border-color: var(--primary-color);
-            background: var(--primary-color);
-            color: white;
-        }
-
-        /* 响应式 */
-        @media (max-width: 1024px) {
-            .history-header { display: none; }
-            .history-item {
-                grid-template-columns: 1fr;
-                gap: 12px;
-                border: 2px solid var(--border-light);
-                border-radius: var(--radius-lg);
-                margin-bottom: 16px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .nav-menu { display: none; }
-            .filter-bar { flex-direction: column; }
-            .search-box { min-width: 100%; }
-        }
-
-        /* 深色模式 */
-        html[data-theme="dark"] .navbar {
-            background: rgba(18, 18, 18, 0.95);
-            border-bottom-color: #262626;
-        }
-
-        html[data-theme="dark"] body {
-            background-color: #0a0a0a;
-            color: #e5e5e5;
-        }
-
-        html[data-theme="dark"] .card {
-            background: #121212;
-            border-color: #262626;
-        }
-
-        html[data-theme="dark"] .history-item {
-            border-color: #262626;
-        }
-
-        html[data-theme="dark"] .history-time,
-        html[data-theme="dark"] .history-meta {
-            color: #a3a3a3;
-        }
-
-        html[data-theme="dark"] .filter-bar {
-            background: #121212;
-            border-color: #262626;
-        }
-
-        html[data-theme="dark"] .search-box,
-        html[data-theme="dark"] .filter-select {
-            background: #1a1a1a;
-            border-color: #262626;
-            color: #e5e5e5;
-        }
-
-        html[data-theme="dark"] .page-btn {
-            background: #1a1a1a;
-            border-color: #262626;
-            color: #e5e5e5;
-        }
-
-        html[data-theme="dark"] .empty-icon {
-            background: rgba(124, 58, 237, 0.2);
-        }
-
-        html[data-theme="dark"] .action-btn {
-            background: #1a1a1a;
-            border-color: #262626;
-        }
-    </style>
+    <style>[data-theme="dark"] { color-scheme: dark; } .glass { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }</style>
 </head>
-<body>
-    <!-- 粒子背景 -->
-    <div class="particles-container">
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-        <div class="particle"></div>
-    </div>
-    <nav class="navbar">
-        <a href="index.html" class="logo">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            <span>NovelTrans</span>
-        </a>
-        <div class="nav-menu">
-            <a href="index.html">首页</a>
-            <a href="translation.html">翻译</a>
-            <a href="user.html">用户中心</a>
-            <a href="history.html" class="active">翻译历史</a>
-            <a href="help.html">帮助</a>
+<body class="bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans antialiased min-h-screen">
+
+    <nav class="sticky top-0 z-50 bg-white/80 dark:bg-gray-950/80 glass border-b border-gray-200/60 dark:border-gray-800/60">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-14">
+                <a href="index.html" class="flex items-center gap-2 text-primary-600 dark:text-primary-400 font-bold text-lg"><i data-lucide="book-open" class="w-5 h-5"></i><span>NovelTrans</span></a>
+                <div class="hidden md:flex items-center gap-6 text-sm">
+                    <a href="index.html" class="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-colors">首页</a>
+                    <a href="translation.html" class="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-colors">翻译</a>
+                    <a href="user.html" class="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-colors">用户中心</a>
+                    <a href="history.html" class="font-medium text-primary-600 dark:text-primary-400">历史</a>
+                    <a href="glossary.html" class="text-gray-500 dark:text-gray-400 hover:text-primary-600 transition-colors">术语库</a>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="themeToggle" class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i><i data-lucide="moon" class="w-4 h-4 block dark:hidden"></i></button>
+                </div>
+            </div>
         </div>
     </nav>
 
-    <div class="container">
-        <div class="page-header">
-            <h1 class="page-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><path d="M12 8v4l3 3"/></svg>
-                翻译历史
-            </h1>
-            <a href="translation.html" class="btn btn-primary">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/></svg>
-                开始翻译
-            </a>
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="clock" class="w-6 h-6 text-primary-600"></i>翻译历史</h1>
+            <a href="translation.html" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-xl transition-colors"><i data-lucide="plus" class="w-4 h-4"></i>新建翻译</a>
         </div>
 
-        <!-- 搜索过滤栏 -->
-        <div class="filter-bar">
-            <div class="search-box">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" placeholder="搜索文件名..." id="searchInput">
+        <!-- Filter -->
+        <div class="flex items-center gap-3 mb-6">
+            <div class="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200/60 dark:border-gray-800/60 p-1">
+                <button class="filter-btn active px-3 py-1.5 text-sm font-medium rounded-lg transition-colors" data-filter="all">全部</button>
+                <button class="filter-btn px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-filter="completed">已完成</button>
+                <button class="filter-btn px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-filter="processing">翻译中</button>
             </div>
-            <select class="filter-select" id="langFilter">
-                <option value="">全部语言</option>
-                <option value="ja-zh">日语 → 中文</option>
-                <option value="en-zh">英语 → 中文</option>
-                <option value="ko-zh">韩语 → 中文</option>
-                <option value="zh-en">中文 → 英语</option>
-            </select>
-            <select class="filter-select" id="statusFilter">
-                <option value="">全部状态</option>
-                <option value="completed">已完成</option>
-                <option value="processing">翻译中</option>
-                <option value="failed">失败</option>
-            </select>
-        </div>
-
-        <!-- 历史列表 -->
-        <div class="history-container">
-            <div class="history-header">
-                <span>文件名</span>
-                <span>语言对</span>
-                <span>翻译时间</span>
-                <span>状态</span>
-                <span>操作</span>
+            <div class="flex-1"></div>
+            <div class="relative">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="searchInput" placeholder="搜索文件名..." class="pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200/60 dark:border-gray-800/60 bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 w-56">
             </div>
-            <ul class="history-list" id="historyList">
-                <!-- 数据从后端 API 动态加载 -->
-            </ul>
         </div>
 
-        <!-- 分页 -->
-        <div class="pagination">
-            <!-- 分页按钮由 JavaScript 动态生成 -->
-        </div>
-    </div>
+        <!-- History List -->
+        <div id="historyList" class="space-y-3"></div>
 
-    <script src="config.js"></script>
-    <script src="js/api-client.js"></script>
-    <script src="js/auth-manager.js"></script>
-    <script src="utils/ui.js"></script>
-    <script src="js/auth-middleware.js"></script>
-    <script src="js/auth-utils.js"></script>
-    <script src="js/effects.js"></script>
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden text-center py-16">
+            <div class="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4"><i data-lucide="inbox" class="w-8 h-8 text-gray-400"></i></div>
+            <h3 class="text-lg font-bold mb-2">暂无翻译记录</h3>
+            <p class="text-sm text-gray-500 mb-6">上传第一份文档开始翻译吧</p>
+            <a href="translation.html" class="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors">开始翻译</a>
+        </div>
+    </main>
+
+    <script src="../config.js"></script>
+    <script src="../js/api-client.js"></script>
     <script>
-        let currentPage = 1;
-        let allHistory = [];
+    function initIcons() { lucide.createIcons(); }
+    function setTheme(dark) { document.documentElement.classList.toggle('dark', dark); localStorage.setItem('theme', dark ? 'dark' : 'light'); }
+    (function() { const s = localStorage.getItem('theme'); setTheme(s === 'dark' || (!s && window.matchMedia('(prefers-color-scheme: dark)').matches)); })();
+    document.getElementById('themeToggle').addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark')));
 
-        // 从后端加载翻译历史
-        async function loadHistory(page = 1, filters = {}) {
-            try {
-                const result = await apiClient.getTranslationHistory({
-                    page: page,
-                    pageSize: 10,
-                    type: filters.status || 'all'
-                });
+    // Filter state
+    let currentFilter = 'all';
+    let allHistoryItems = [];
 
-                if (result.success && result.data) {
-                    const history = result.data.list || result.data || [];
-                    allHistory = history;
-                    renderHistory(history);
-                    renderPagination(result.data.total || 0, page);
-                }
-            } catch (error) {
-                console.error('Failed to load history:', error);
-                showNotification('加载历史记录失败', 'error');
-            }
-        }
-
-        // 渲染历史列表
-        function renderHistory(history) {
-            const historyList = document.getElementById('historyList');
-            if (!historyList) return;
-
-            if (history.length === 0) {
-                historyList.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        </div>
-                        <div class="empty-title">暂无翻译历史</div>
-                        <div class="empty-desc">开始你的第一次翻译吧</div>
-                        <a href="translation.html" class="btn btn-primary">开始翻译</a>
-                    </div>
-                `;
-                return;
-            }
-
-            historyList.innerHTML = history.map(item => {
-                const statusClass = item.status === 'completed' ? 'status-completed' :
-                                   item.status === 'failed' ? 'status-failed' : 'status-processing';
-                const statusText = item.status === 'completed' ? '已完成' :
-                                  item.status === 'failed' ? '失败' : '翻译中';
-                const statusDot = item.status === 'processing' ? '<span class="status-dot"></span>' : '';
-
-                const fileExt = (item.fileName || '').split('.').pop().toLowerCase();
-                const iconName = getFileIcon(fileExt);
-
-                return `
-                    <li class="history-item">
-                        <div class="file-info">
-                            <div class="file-icon">
-                                ${iconName}
-                            </div>
-                            <div>
-                                <div class="file-name">${escapeHtml(item.fileName || '未知文件')}</div>
-                                <div class="file-size">${formatFileSize(item.fileSize || 0)}</div>
-                            </div>
-                        </div>
-                        <div class="lang-pair">
-                            <span class="lang-badge">${item.sourceLang || '自动'}</span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                            <span class="lang-badge">${item.targetLang || '中文'}</span>
-                        </div>
-                        <div class="time-text">${formatDate(item.createdAt)}</div>
-                        <div><span class="status-badge ${statusClass}">${statusDot}${statusText}</span></div>
-                        <div class="actions">
-                            ${item.status === 'completed' ? `
-                                <button class="action-btn" title="查看" onclick="viewHistory('${item.id}')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                </button>
-                                <button class="action-btn" title="下载" onclick="downloadHistory('${item.id}')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                </button>
-                            ` : `
-                                <button class="action-btn" title="查看进度" onclick="viewHistory('${item.id}')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                </button>
-                            `}
-                            ${item.status !== 'completed' ? `
-                                <button class="action-btn" title="取消" onclick="cancelHistory('${item.id}')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                </button>
-                            ` : `
-                                <button class="action-btn" title="删除" onclick="deleteHistory('${item.id}')">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                </button>
-                            `}
-                        </div>
-                    </li>
-                `;
-            }).join('');
-        }
-
-        // 获取文件类型图标
-        function getFileIcon(ext) {
-            const icons = {
-                txt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
-                epub: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
-                docx: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
-                pdf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
-            };
-            return icons[ext] || icons.txt;
-        }
-
-        // 渲染分页
-        function renderPagination(total, current) {
-            const totalPages = Math.ceil(total / 10);
-            const pagination = document.querySelector('.pagination');
-            if (!pagination) return;
-
-            pagination.innerHTML = `
-                <button class="page-btn" onclick="loadHistory(${current - 1})" ${current === 1 ? 'disabled' : ''}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-                </button>
-                ${Array.from({ length: totalPages }, (_, i) => i + 1).map(p => `
-                    <button class="page-btn ${p === current ? 'active' : ''}" onclick="loadHistory(${p})">${p}</button>
-                `).join('')}
-                <button class="page-btn" onclick="loadHistory(${current + 1})" ${current === totalPages ? 'disabled' : ''}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-            `;
-        }
-
-        // 格式化文件大小
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-        }
-
-        // 格式化日期
-        function formatDate(dateString) {
-            if (!dateString) return '';
-            const date = new Date(dateString);
-            return date.toLocaleString('zh-CN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
-
-        // 转义 HTML 防止 XSS
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // 查看历史
-        function viewHistory(id) {
-            window.location.href = `translation.html?taskId=${id}`;
-        }
-
-        // 下载历史
-        async function downloadHistory(id) {
-            try {
-                const result = await apiClient.downloadTaskResult(id);
-                if (result.success) {
-                    const blob = result.blob;
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = downloadUrl;
-                    a.download = `translation_${id}.txt`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(downloadUrl);
-                    showNotification('下载成功', 'success');
-                }
-            } catch (error) {
-                showNotification('下载失败', 'error');
-            }
-        }
-
-        // 删除历史
-        async function deleteHistory(id) {
-            if (typeof UITools !== 'undefined') {
-                UITools.confirmDialog('确认删除', '确定要删除这条翻译记录吗？').then((confirmed) => {
-                    if (confirmed) {
-                        doDeleteHistory(id);
-                    }
-                });
-            } else {
-                if (confirm('确定要删除这条翻译记录吗？')) {
-                    doDeleteHistory(id);
-                }
-            }
-        }
-
-        async function doDeleteHistory(id) {
-            try {
-                const result = await apiClient.deleteDocument(id);
-                if (result.success) {
-                    showNotification('已删除', 'success');
-                    loadHistory(currentPage);
-                } else {
-                    showNotification('删除失败', 'error');
-                }
-            } catch (error) {
-                showNotification('删除失败', 'error');
-            }
-        }
-
-        // 取消历史
-        async function cancelHistory(id) {
-            if (typeof UITools !== 'undefined') {
-                UITools.confirmDialog('确认取消', '确定要取消翻译吗？').then((confirmed) => {
-                    if (confirmed) {
-                        doCancelHistory(id);
-                    }
-                });
-            } else {
-                if (confirm('确定要取消翻译吗？')) {
-                    doCancelHistory(id);
-                }
-            }
-        }
-
-        async function doCancelHistory(id) {
-            try {
-                const result = await apiClient.cancelTask(id);
-                if (result.success) {
-                    showNotification('已取消翻译', 'success');
-                    loadHistory(currentPage);
-                } else {
-                    showNotification('取消失败', 'error');
-                }
-            } catch (error) {
-                showNotification('取消失败', 'error');
-            }
-        }
-
-        // 页面加载时
-        document.addEventListener('DOMContentLoaded', function() {
-            // 保护此页面需要登录
-            if (typeof requireAuth !== 'undefined') {
-                if (!requireAuth()) return; // 未登录则重定向，不再执行后续 API 调用
-            }
-
-            // 加载历史数据
-            loadHistory();
-
-            // 搜索功能
-            document.getElementById('searchInput')?.addEventListener('input', function(e) {
-                const value = e.target.value.toLowerCase();
-                const filtered = allHistory.filter(item =>
-                    (item.fileName || '').toLowerCase().includes(value)
-                );
-                renderHistory(filtered);
-            });
-
-            // 语言筛选
-            document.getElementById('langFilter')?.addEventListener('change', function(e) {
-                const lang = e.target.value;
-                const filtered = allHistory.filter(item =>
-                    !lang || (item.sourceLang + '-' + item.targetLang).includes(lang)
-                );
-                renderHistory(filtered);
-            });
-
-            // 状态筛选
-            document.getElementById('statusFilter')?.addEventListener('change', function(e) {
-                const status = e.target.value;
-                currentPage = 1;
-                loadHistory(1, { status: status });
-            });
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filter-btn').forEach(b => { b.classList.remove('active', 'bg-gray-100', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-gray-100'); b.classList.add('text-gray-500'); });
+            btn.classList.add('active', 'bg-gray-100', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-gray-100');
+            btn.classList.remove('text-gray-500');
+            currentFilter = btn.dataset.filter;
+            renderHistory();
         });
+    });
+    document.querySelector('.filter-btn.active')?.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-900', 'dark:text-gray-100');
 
-        // 动画样式
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(150%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
+    document.getElementById('searchInput')?.addEventListener('input', function() { renderHistory(); });
+
+    function formatTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+    function formatSize(bytes) { if (!bytes) return '--'; if (bytes < 1024) return bytes + ' B'; if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'; return (bytes / 1048576).toFixed(1) + ' MB'; }
+
+    const STATUS_MAP = {
+        pending: { text: '待处理', bg: 'bg-amber-100 dark:bg-amber-900/40', color: 'text-amber-700 dark:text-amber-300', icon: 'clock', iconBg: 'bg-amber-50 dark:bg-amber-950/30', iconColor: 'text-amber-600' },
+        processing: { text: '翻译中', bg: 'bg-blue-100 dark:bg-blue-900/40', color: 'text-blue-700 dark:text-blue-300', icon: 'loader', iconBg: 'bg-blue-50 dark:bg-blue-950/30', iconColor: 'text-blue-600', animate: true },
+        completed: { text: '已完成', bg: 'bg-emerald-100 dark:bg-emerald-900/40', color: 'text-emerald-700 dark:text-emerald-300', icon: 'file-check', iconBg: 'bg-emerald-50 dark:bg-emerald-950/30', iconColor: 'text-emerald-600' },
+        failed: { text: '失败', bg: 'bg-red-100 dark:bg-red-900/40', color: 'text-red-700 dark:text-red-300', icon: 'x-circle', iconBg: 'bg-red-50 dark:bg-red-950/30', iconColor: 'text-red-600' }
+    };
+
+    function renderHistory() {
+        const q = document.getElementById('searchInput')?.value.toLowerCase() || '';
+        let items = allHistoryItems;
+        if (currentFilter !== 'all') items = items.filter(i => i.status === currentFilter);
+        if (q) items = items.filter(i => (i.name || '').toLowerCase().includes(q));
+
+        const list = document.getElementById('historyList');
+        const empty = document.getElementById('emptyState');
+        if (items.length === 0) { list.innerHTML = ''; empty.classList.remove('hidden'); lucide.createIcons(); return; }
+        empty.classList.add('hidden');
+
+        list.innerHTML = items.map(item => {
+            const s = STATUS_MAP[item.status] || STATUS_MAP.pending;
+            return `<div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/60 dark:border-gray-800/60 p-4 hover:border-primary-300 dark:hover:border-primary-700 transition-colors cursor-pointer" data-status="${item.status}">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl ${s.iconBg} flex items-center justify-center flex-shrink-0"><i data-lucide="${s.icon}" class="w-5 h-5 ${s.iconColor}${s.animate ? ' animate-spin' : ''}"></i></div>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium truncate">${escapeHtml(item.name || '未命名文档')}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">${formatTime(item.createTime)}</p>
+                    </div>
+                    <div class="text-right hidden sm:block">
+                        <p class="text-sm font-medium">${formatSize(item.fileSize)}</p>
+                    </div>
+                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full ${s.bg} ${s.color}">${s.text}</span>
+                </div>
+            </div>`;
+        }).join('');
+        lucide.createIcons();
+    }
+
+    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    async function loadHistory() {
+        const token = localStorage.getItem('authToken');
+        if (!token) { window.location.href = 'index.html?modal=login'; return; }
+        try {
+            const res = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/translation-history?page=1&pageSize=50&type=all`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await res.json();
+            if (result.success && result.data?.data?.length > 0) {
+                allHistoryItems = result.data.data;
             }
-            @keyframes slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(150%); opacity: 0; }
-            }
-        `;
-        document.head.appendChild(style);
+        } catch { /* ignore */ }
+        renderHistory();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { initIcons(); loadHistory(); });
     </script>
 </body>
 </html>

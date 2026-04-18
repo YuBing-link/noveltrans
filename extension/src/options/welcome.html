@@ -25,164 +25,147 @@
             background: white;
             border-radius: 24px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
+            max-width: 520px;
             width: 100%;
             overflow: hidden;
             animation: slideUp 0.5s ease-out;
         }
 
         @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 40px 30px;
+            padding: 32px 30px 24px;
             text-align: center;
         }
 
-        .logo {
-            font-size: 64px;
-            margin-bottom: 16px;
-        }
+        .logo { font-size: 48px; margin-bottom: 12px; }
+        .title { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+        .version { font-size: 13px; opacity: 0.8; }
 
-        .title {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
+        .content { padding: 28px 28px 20px; }
 
-        .version {
-            font-size: 14px;
-            opacity: 0.8;
-        }
-
-        .content {
-            padding: 40px 30px;
-        }
-
-        .features {
-            margin-bottom: 30px;
-        }
-
-        .feature-item {
-            display: flex;
-            align-items: center;
-            padding: 16px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .feature-item:last-child {
-            border-bottom: none;
-        }
-
-        .feature-icon {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            margin-right: 16px;
-            flex-shrink: 0;
-        }
-
-        .feature-text {
-            flex: 1;
-        }
-
-        .feature-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 4px;
-        }
-
-        .feature-desc {
-            font-size: 14px;
-            color: #666;
-        }
-
-        .quick-start {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 30px;
-        }
-
-        .quick-start h3 {
-            font-size: 18px;
-            color: #333;
-            margin-bottom: 12px;
-        }
-
+        /* 步骤引导 */
+        .steps { margin-bottom: 24px; }
         .step {
             display: flex;
-            align-items: center;
-            padding: 8px 0;
-            color: #555;
-            font-size: 14px;
+            gap: 14px;
+            padding: 14px 0;
+            position: relative;
+        }
+        .step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 17px;
+            top: 52px;
+            bottom: -6px;
+            width: 2px;
+            background: #e5e7eb;
         }
 
-        .step-number {
-            width: 24px;
-            height: 24px;
-            background: #667eea;
+        .step-num {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-            margin-right: 12px;
+            font-size: 14px;
+            font-weight: 700;
             flex-shrink: 0;
+            position: relative;
+            z-index: 1;
         }
 
-        .actions {
-            display: flex;
-            gap: 12px;
+        .step-body { flex: 1; padding-top: 4px; }
+        .step-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 4px;
         }
+        .step-desc {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        /* 提示卡片 */
+        .notice {
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        .notice-icon {
+            width: 24px;
+            height: 24px;
+            background: #f97316;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        .notice-text { font-size: 13px; color: #9a3412; line-height: 1.6; }
+        .notice-text strong { color: #c2410c; }
+
+        /* 功能预览 */
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        .feat {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 14px;
+            text-align: center;
+        }
+        .feat-icon { font-size: 24px; margin-bottom: 6px; }
+        .feat-name { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 2px; }
+        .feat-desc { font-size: 11px; color: #9ca3af; }
+
+        .actions { display: flex; gap: 10px; }
 
         .btn {
             flex: 1;
-            padding: 14px 24px;
+            padding: 13px 20px;
             border: none;
             border-radius: 12px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
         }
-
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
-
         .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
         }
-
         .btn-secondary {
-            background: #f0f0f0;
-            color: #333;
+            background: #f3f4f6;
+            color: #374151;
         }
-
-        .btn-secondary:hover {
-            background: #e0e0e0;
-        }
+        .btn-secondary:hover { background: #e5e7eb; }
     </style>
 </head>
 <body>
@@ -194,76 +177,71 @@
         </div>
 
         <div class="content">
-            <div class="features">
-                <div class="feature-item">
-                    <div class="feature-icon">📄</div>
-                    <div class="feature-text">
-                        <div class="feature-title">整个网页翻译</div>
-                        <div class="feature-desc">一键翻译整个网页内容，保留原有排版</div>
+            <!-- 步骤引导 -->
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-body">
+                        <div class="step-title">访问网站</div>
+                        <div class="step-desc">点击下方"前往登录"按钮，或在浏览器工具栏点击插件图标打开设置</div>
                     </div>
                 </div>
-                <div class="feature-item">
-                    <div class="feature-icon">📖</div>
-                    <div class="feature-text">
-                        <div class="feature-title">阅读模式</div>
-                        <div class="feature-desc">提取文章正文，提供沉浸式阅读体验</div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-body">
+                        <div class="step-title">注册账号</div>
+                        <div class="step-desc">使用邮箱注册，接收验证码后完成注册</div>
                     </div>
                 </div>
-                <div class="feature-item">
-                    <div class="feature-icon">✨</div>
-                    <div class="feature-text">
-                        <div class="feature-title">选中翻译</div>
-                        <div class="feature-desc">选中任意文本即可即时翻译</div>
-                    </div>
-                </div>
-                <div class="feature-item">
-                    <div class="feature-icon">📚</div>
-                    <div class="feature-text">
-                        <div class="feature-title">文档翻译</div>
-                        <div class="feature-desc">支持 PDF、Word、EPUB 文件翻译</div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-body">
+                        <div class="step-title">开始翻译</div>
+                        <div class="step-desc">登录后即可使用网页翻译、阅读模式和专家模式</div>
                     </div>
                 </div>
             </div>
 
-            <div class="quick-start">
-                <h3>快速开始</h3>
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <span>点击浏览器工具栏中的扩展图标</span>
+            <!-- 提示卡片 -->
+            <div class="notice">
+                <div class="notice-icon">!</div>
+                <div class="notice-text">
+                    <strong>专家模式需要登录</strong><br>
+                    专家模式使用大语言模型进行翻译，翻译质量更高但速度较慢。为保障服务质量，该功能仅对已登录用户开放。免费用户也可享受基础翻译功能。
                 </div>
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <span>选择目标翻译语言</span>
+            </div>
+
+            <!-- 功能预览 -->
+            <div class="features">
+                <div class="feat">
+                    <div class="feat-icon">📄</div>
+                    <div class="feat-name">网页翻译</div>
+                    <div class="feat-desc">一键翻译整个页面</div>
                 </div>
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <span>点击翻译按钮开始翻译</span>
+                <div class="feat">
+                    <div class="feat-icon">📖</div>
+                    <div class="feat-name">阅读模式</div>
+                    <div class="feat-desc">沉浸式阅读体验</div>
+                </div>
+                <div class="feat">
+                    <div class="feat-icon">✨</div>
+                    <div class="feat-name">选中翻译</div>
+                    <div class="feat-desc">划词即时翻译</div>
+                </div>
+                <div class="feat">
+                    <div class="feat-icon">🧠</div>
+                    <div class="feat-name">专家模式</div>
+                    <div class="feat-desc">登录后解锁</div>
                 </div>
             </div>
 
             <div class="actions">
-                <button class="btn btn-primary" id="btn-settings">前往设置</button>
+                <button class="btn btn-primary" id="btn-login">前往登录</button>
                 <button class="btn btn-secondary" id="btn-close">关闭</button>
             </div>
         </div>
     </div>
 
-    <script src="../lib/browser-polyfill.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('btn-settings').addEventListener('click', function() {
-                if (typeof browser !== 'undefined') {
-                    browser.runtime.openOptionsPage();
-                } else {
-                    chrome.tabs.create({ url: chrome.runtime.getURL('src/options/options.html') });
-                }
-                window.close();
-            });
-
-            document.getElementById('btn-close').addEventListener('click', function() {
-                window.close();
-            });
-        });
-    </script>
+    <script src="welcome.js"></script>
 </body>
 </html>

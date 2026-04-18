@@ -1876,6 +1876,35 @@ class TranslationApplier {
     this.isProgressCompleted = false;  // 进度条是否已完成
   }
 
+  // 注入双语显示样式（在翻译开始时调用）
+  injectBilingualStyles() {
+    if (document.getElementById('extreme-bilingual-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'extreme-bilingual-styles';
+    style.textContent = `
+      .extreme-bilingual-text {
+        display: block !important;
+        padding: 4px 0 !important;
+      }
+      .extreme-bilingual-text .ext-bilingual-original {
+        display: block !important;
+        color: rgba(128, 128, 128, 0.75) !important;
+        font-size: 0.88em !important;
+        line-height: 1.4 !important;
+        margin-bottom: 3px !important;
+        padding-bottom: 3px !important;
+        border-bottom: 1px dashed rgba(128, 128, 128, 0.2) !important;
+      }
+      .extreme-bilingual-text .ext-bilingual-translated {
+        display: block !important;
+        font-size: 1em !important;
+        line-height: 1.5 !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   // 渐进式翻译更新
   async progressiveUpdate(translations, textRegistry, options = {}) {
     const {
@@ -2096,9 +2125,8 @@ class TranslationApplier {
     }
   }
 
-  // 应用双语翻译 - 简化版（使用换行符分隔原文和译文）
+  // 应用双语翻译 - 使用styled DOM结构显示原文和译文
   applyBilingualTranslation(textNode, originalText, translatedText) {
-    // 获取原始父元素
     const parentElement = textNode.parentElement;
     if (!parentElement) {
       console.warn('原文本节点没有父元素，使用默认翻译方式');
@@ -2106,19 +2134,26 @@ class TranslationApplier {
       return;
     }
 
-    // 保存原始文本信息
-    const formattedOriginal = originalText;
     const formattedTranslation = this.protectFormat(originalText, translatedText);
 
-    // 在同一文本节点中显示双语文本（用换行符分隔）
-    textNode.textContent = `${formattedOriginal}\n${formattedTranslation}`;
+    // 构建双语DOM结构
+    parentElement.textContent = '';
 
-    // 标记元素为已翻译
+    const originalSpan = document.createElement('span');
+    originalSpan.className = 'ext-bilingual-original';
+    originalSpan.textContent = originalText;
+
+    const translatedSpan = document.createElement('span');
+    translatedSpan.className = 'ext-bilingual-translated';
+    translatedSpan.textContent = formattedTranslation;
+
+    parentElement.appendChild(originalSpan);
+    parentElement.appendChild(translatedSpan);
+
+    // 标记元素
     parentElement.classList.add('extreme-translated');
     parentElement.setAttribute('data-original-text', originalText);
     parentElement.setAttribute('data-translated-text', formattedTranslation);
-
-    // 标记为双语模式
     parentElement.setAttribute('data-bilingual-mode', 'true');
     parentElement.classList.add('extreme-bilingual-text');
   }
@@ -2146,21 +2181,21 @@ class TranslationApplier {
           from { opacity: 1; }
           to { opacity: 0; }
         }
-        @keyframes nt-progressGlow {
-          0%, 100% { box-shadow: 0 2px 10px rgba(102, 126, 234, 0.5); }
-          50% { box-shadow: 0 2px 20px rgba(102, 126, 234, 0.8); }
-        }
         @keyframes nt-shimmerProgress {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
+        }
+        @keyframes nt-counterFadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         #extreme-translation-progress-bar {
           position: fixed !important;
           top: 0 !important;
           left: 0 !important;
           width: 100% !important;
-          height: 4px !important;
-          background: linear-gradient(90deg, rgba(30, 30, 46, 0.95) 0%, rgba(40, 40, 60, 0.95) 100%) !important;
+          height: 3px !important;
+          background: rgba(0, 0, 0, 0.08) !important;
           z-index: 2147483647 !important;
           display: block !important;
           animation: nt-progressSlideDown 0.3s ease-out !important;
@@ -2168,28 +2203,49 @@ class TranslationApplier {
         #extreme-translation-progress-bar .progress-fill {
           height: 100% !important;
           width: 0% !important;
-          background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
+          background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 50%, #7c3aed 100%) !important;
           background-size: 200% 100% !important;
-          animation: nt-progressGlow 1.5s ease-in-out infinite, nt-shimmerProgress 1s linear infinite !important;
-          transition: width 0.3s ease-out !important;
+          animation: nt-shimmerProgress 1.5s linear infinite !important;
+          transition: width 0.2s ease-out !important;
           position: relative !important;
           overflow: hidden !important;
         }
         #extreme-translation-progress-bar.completed .progress-fill {
-          background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%) !important;
+          background: linear-gradient(90deg, #10b981 0%, #34d399 100%) !important;
           animation: none !important;
         }
         #extreme-translation-progress-bar.completed {
-          animation: nt-progressFadeOut 0.4s ease-out 0.5s forwards !important;
+          animation: nt-progressFadeOut 0.3s ease-out 0.3s forwards !important;
+        }
+        #extreme-translation-progress-bar.completed .progress-counter {
+          opacity: 0 !important;
+          transition: opacity 0.2s ease-out !important;
+        }
+        .progress-counter {
+          position: absolute !important;
+          top: 8px !important;
+          right: 12px !important;
+          background: rgba(0, 0, 0, 0.7) !important;
+          color: white !important;
+          padding: 4px 10px !important;
+          border-radius: 12px !important;
+          font-size: 12px !important;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+          z-index: 2147483647 !important;
+          animation: nt-counterFadeIn 0.3s ease-out !important;
+          pointer-events: none !important;
+          line-height: 1.2 !important;
+          white-space: nowrap !important;
+          backdrop-filter: blur(4px) !important;
         }
       `;
       document.head.appendChild(style);
     }
 
-    // 创建进度条
+    // 创建进度条（含计数器）
     progressBar = document.createElement('div');
     progressBar.id = 'extreme-translation-progress-bar';
-    progressBar.innerHTML = '<div class="progress-fill"></div>';
+    progressBar.innerHTML = '<div class="progress-fill"></div><div class="progress-counter">翻译中...</div>';
     document.body.appendChild(progressBar);
 
     // 重置完成标志
@@ -2201,19 +2257,21 @@ class TranslationApplier {
     let progressBar = document.getElementById('extreme-translation-progress-bar');
     if (!progressBar) return;
 
-    // 使用非线性增长曲线，让进度条平滑增长
-    // 在翻译过程中最多只增长到 85%，留出余量给翻译完成时补充
+    // 使用线性进度，让用户能感知翻译过程
     const rawPercentage = total > 0 ? (current / total) * 100 : 0;
 
-    // 使用平方根曲线让进度增长更平滑，前期快后期慢
-    const smoothedPercentage = Math.sqrt(rawPercentage / 100) * 100;
-
-    // 限制最大值为 85%，给翻译完成留出余量
-    const percentage = Math.min(smoothedPercentage, 85);
+    // 限制最大值为 90%，给翻译完成留出余量
+    const percentage = Math.min(rawPercentage, 90);
 
     const progressFill = progressBar.querySelector('.progress-fill');
     if (progressFill) {
       progressFill.style.width = `${percentage}%`;
+    }
+
+    // 更新计数器
+    const counter = progressBar.querySelector('.progress-counter');
+    if (counter) {
+      counter.textContent = `${current} / ${total}`;
     }
   }
 
@@ -2247,46 +2305,61 @@ class TranslationApplier {
   }
 
   // 切换所有双语元素的显示模式（切换显示方式：双语/单语）
-  // 新实现：双语模式切换时，重新设置元素属性并更新显示
   toggleAllBilingualDisplay(showBilingual = true) {
     console.log(`toggleAllBilingualDisplay: 切换到 ${showBilingual ? '双语模式' : '单语模式'}`);
 
     try {
+      // 确保双语样式已注入
+      if (showBilingual) {
+        this.injectBilingualStyles();
+      }
+
       // 获取所有已翻译的元素
       const translatedElements = document.querySelectorAll('.extreme-translated');
 
       if (translatedElements.length === 0) {
         console.log('toggleAllBilingualDisplay: 没有找到已翻译的元素');
-        // 如果没有已翻译内容，请求重新翻译
         this.requestReTranslateWithBilingualMode(showBilingual);
         return;
       }
+
+      let switchedCount = 0;
 
       // 更新所有元素的双语模式标记
       translatedElements.forEach(element => {
         const originalText = element.getAttribute('data-original-text');
         const translatedText = element.getAttribute('data-translated-text');
 
+        if (!originalText || !translatedText) return;
+
         if (showBilingual) {
-          // 启用双语模式
+          // 启用双语模式：构建原文+译语的DOM结构
           element.setAttribute('data-bilingual-mode', 'true');
           element.classList.add('extreme-bilingual-text');
-          // 显示原文 + 译文
-          if (originalText && translatedText) {
-            element.textContent = originalText + '\n' + translatedText;
-          }
+
+          // 清除旧内容，构建双语DOM
+          element.textContent = '';
+          const originalSpan = document.createElement('span');
+          originalSpan.className = 'ext-bilingual-original';
+          originalSpan.textContent = originalText;
+
+          const translatedSpan = document.createElement('span');
+          translatedSpan.className = 'ext-bilingual-translated';
+          translatedSpan.textContent = translatedText;
+
+          element.appendChild(originalSpan);
+          element.appendChild(translatedSpan);
+          switchedCount++;
         } else {
-          // 禁用双语模式
+          // 禁用双语模式：只显示译文
           element.removeAttribute('data-bilingual-mode');
           element.classList.remove('extreme-bilingual-text');
-          // 只显示译文
-          if (translatedText) {
-            element.textContent = translatedText;
-          }
+          element.textContent = translatedText;
+          switchedCount++;
         }
       });
 
-      console.log(`toggleAllBilingualDisplay: 已切换 ${translatedElements.length} 个元素到 ${showBilingual ? '双语' : '单语'} 模式`);
+      console.log(`toggleAllBilingualDisplay: 已切换 ${switchedCount} 个元素到 ${showBilingual ? '双语' : '单语'} 模式`);
 
       // 更新本地状态
       this.updateTranslationStatus(showBilingual ? 'bilingual_mode' : 'single_mode');
@@ -2299,7 +2372,6 @@ class TranslationApplier {
 
     } catch (error) {
       console.error('toggleAllBilingualDisplay: 切换异常:', error);
-      // 切换失败时，请求重新翻译
       this.requestReTranslateWithBilingualMode(showBilingual);
     }
   }
@@ -3212,6 +3284,38 @@ class TranslationService {
 
         this.isInitialized = true;
         console.log('⚙️ 翻译服务初始化完成');
+
+        // 监听网页登录/登出事件，同步认证状态到扩展
+        this.setupAuthSync();
+    }
+
+    // 设置认证同步监听
+    setupAuthSync() {
+        window.addEventListener('userLoggedIn', (event) => {
+            try {
+                const token = localStorage.getItem('authToken');
+                const userStr = localStorage.getItem('userInfo');
+                const userInfo = userStr ? JSON.parse(userStr) : null;
+
+                if (token) {
+                    browser.runtime.sendMessage({
+                        action: 'setAuthToken',
+                        token: token,
+                        userInfo: userInfo
+                    }).catch(() => {});
+                    console.log('🔐 认证状态已同步到扩展');
+                }
+            } catch (error) {
+                console.error('同步认证状态失败:', error);
+            }
+        });
+
+        window.addEventListener('userLoggedOut', () => {
+            browser.runtime.sendMessage({
+                action: 'clearAuthToken'
+            }).catch(() => {});
+            console.log('🔐 扩展认证状态已清除');
+        });
     }
 
     // 将错误消息转换为用户友好的消息
@@ -3392,22 +3496,6 @@ class TranslationService {
                         console.log('toggleDisplayMode 方法已调用');
                     } catch (error) {
                         console.error('切换显示模式时发生错误:', error);
-                        sendResponse({ success: false, error: error.message });
-                    }
-                    break;
-
-        case 'toggleBilingualDisplay':
-                    // 处理双语显示切换
-                    try {
-                        const showBilingual = request.showBilingual !== undefined ? request.showBilingual : true;
-                        this.translationApplier.toggleAllBilingualDisplay(showBilingual);
-
-                        sendResponse({
-                            success: true,
-                            message: `双语显示已${showBilingual ? '开启' : '关闭'}`,
-                            showBilingual: showBilingual
-                        });
-                    } catch (error) {
                         sendResponse({ success: false, error: error.message });
                     }
                     break;
@@ -3777,11 +3865,8 @@ class TranslationService {
         try {
             console.log('🚀 翻译开始...');
 
-            // 显示顶部进度条
+            // 显示顶部进度条（翻译进行中）
             this.translationApplier.showTranslationProgress();
-
-            // 立即显示翻译启动提示
-            this.translationApplier.showSuccessNotification(`开始翻译...`);
 
             // 获取用户设置
             const settings = await this.getUserSettings();
@@ -3792,6 +3877,11 @@ class TranslationService {
             const expertMode = settings.expert_mode || false;
 
             console.log(`🔧 翻译设置: engine=${engine}, expertMode=${expertMode}, targetLang=${targetLang}`);
+
+            // 如果启用了双语模式，提前注入样式
+            if (bilingual) {
+                this.translationApplier.injectBilingualStyles();
+            }
 
             // 使用DOMWalker分析DOM结构并生成映射表（已按5,10,20,30,50分批）
             const scanResult = this.domWalker.collectTextByPhaseWithReadability(this.domWalker.aggressiveFilter);  // 混合模式：Readability + TreeWalker（使用宽松过滤器）
@@ -3831,10 +3921,7 @@ class TranslationService {
             const duration = Date.now() - startTime;
             console.log(`✅ 映射表已上传，耗时: ${duration}ms`);
 
-            // 1秒后更新提示为翻译中
-            setTimeout(() => {
-                this.translationApplier.showSuccessNotification(`翻译中...`);
-            }, 1000);
+            // 进度条已显示，不再单独弹出"翻译中"通知
 
             sendResponse({
                 success: true,
@@ -3924,9 +4011,6 @@ class TranslationService {
                     tabId: this.getCurrentTabId()
                 }).catch(() => {});
             } catch (err) {}
-
-            // 显示翻译完成提示
-            this.translationApplier.showSuccessNotification(`翻译完成！`);
 
             // 隐藏进度条（完成状态）
             this.translationApplier.hideTranslationProgress();

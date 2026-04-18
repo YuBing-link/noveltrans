@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.config;
 
+import com.yumu.noveltranslator.security.ApiKeyAuthenticationFilter;
 import com.yumu.noveltranslator.security.JwtAuthenticationEntryPoint;
 import com.yumu.noveltranslator.security.JwtAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,9 @@ public class SecurityConfig {
 
     @Autowired
     private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
+    @Autowired
+    private ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
 
     @Bean
     public JwtAuthenticationFilter authenticationTokenFilter() {
@@ -81,8 +85,11 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             );
 
+        // 添加 API Key 过滤器（在 JWT 之前执行）
+        http.addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
         // 添加 JWT 过滤器
-        http.addFilterBefore(authenticationTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(authenticationTokenFilter(), ApiKeyAuthenticationFilter.class);
 
         return http.build();
     }

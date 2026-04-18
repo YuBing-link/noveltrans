@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "极简翻译 (Extreme Translator)",
+  "name": "NovelTrans - 专业小说翻译",
   "version": "1.0.0",
-  "description": "专业级沉浸式翻译插件，支持多模型选择与文档翻译。",
+  "description": "NovelTrans 专业翻译插件，支持网页翻译、阅读模式和选中文本翻译。",
 
   "icons": {
     "16": "src/assets/icons/icon16.png",
@@ -65,7 +65,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["src/assets/icons/*", "src/options/reader-template.html", "src/options/welcome.html", "src/content/reader-styles.css", "src/content/selection-styles.css"],
+      "resources": ["src/assets/icons/*", "src/options/reader-template.html", "src/options/welcome.html", "src/options/welcome.js", "src/content/reader-styles.css", "src/content/selection-styles.css"],
       "matches": ["<all_urls>"]
     }
   ]

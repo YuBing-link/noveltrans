@@ -216,6 +216,7 @@ async function handleTranslate() {
       // 从background获取设置
       let isBilingual = false;
       let engine = 'google';
+      let expertMode = false;
       try {
         console.log('📡 请求获取设置...');
         const response = await browser.runtime.sendMessage({
@@ -228,24 +229,25 @@ async function handleTranslate() {
           const settings = response.settings.settings || {};
           isBilingual = settings.bilingual !== false;
           engine = settings.engine || 'google';
-          
+          expertMode = settings.expertMode === true;
         } else {
-          // 如果background请求失败，从本地存储获取
+          // 如果background请求失败，从本地存储和UI获取
           console.log('⚠️ background请求失败，使用本地存储');
           const result = await browser.storage.local.get(['settings']);
           const localSettings = result.settings || {};
           isBilingual = localSettings.bilingual !== false;
           engine = localSettings.engine || 'google';
-          
+          expertMode = localSettings.expertMode === true;
         }
       } catch (error) {
-        
-        // 从本地存储获取
+        // 从UI控件和本地存储获取
+        const bilingualCheck = document.getElementById('bilingual-check');
+        isBilingual = bilingualCheck ? bilingualCheck.checked : true;
+        const expertModeCheck = document.getElementById('expert-mode-check');
+        expertMode = expertModeCheck ? expertModeCheck.checked : false;
         const result = await browser.storage.local.get(['settings']);
         const localSettings = result.settings || {};
-        isBilingual = localSettings.bilingual !== false;
         engine = localSettings.engine || 'google';
-        
       }
 
       console.log('📤 准备发送翻译请求:', {
@@ -486,12 +488,6 @@ function bindEvents() {
     
   }
 
-  const btnSettings = document.getElementById('btn-settings');
-  if (btnSettings) {
-    
-    btnSettings.addEventListener('click', handleSettings);
-  }
-
   const btnReader = document.getElementById('btn-reader');
   if (btnReader) {
     
@@ -514,62 +510,66 @@ function bindEvents() {
     });
   }
 
-  // 双语按钮
-  const toggleSwitch = document.querySelector('.toggle-switch');
-  const bilingualCheck = document.getElementById('bilingual-check');
-
-  if (toggleSwitch && bilingualCheck) {
-    toggleSwitch.addEventListener('click', function(e) {
-      e.stopPropagation();
-      bilingualCheck.checked = !bilingualCheck.checked;
-      const event = new Event('change', { bubbles: true });
-      bilingualCheck.dispatchEvent(event);
-    });
-
-    bilingualCheck.addEventListener('change', async function() {
-      const isChecked = this.checked;
-
-      // 保存到本地存储
-      await saveSetting('bilingual', isChecked);
-
-      // 发送消息到 background 来保存设置
-      try {
-        await browser.runtime.sendMessage({
-          action: 'updateSetting',
-          key: 'bilingual',
-          value: isChecked
-        });
-      } catch (error) {
-        console.error('发送双语设置更新失败:', error);
-      }
-
-      if (currentTabId) {
-        try {
-          await browser.tabs.sendMessage(currentTabId, {
-            action: 'toggleBilingualDisplay',
-            showBilingual: isChecked
-          });
-        } catch (error) {
-          console.log(`发送双语切换指令失败：${error.message}`);
-        }
+  // 登录按钮
+  const loginBtn = document.getElementById('btn-login');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', async function() {
+      const isLoggedIn = await checkLoginState();
+      if (isLoggedIn) {
+        // 已登录，跳转到用户中心
+        browser.tabs.create({ url: `${GlobalConfig.API_BASE_URL}/pages/user.html` });
+        window.close();
+      } else {
+        openLoginPage();
       }
     });
   }
 
-  // 专家模式开关
-  const expertCheck = document.getElementById('expert-mode-check');
-  if (expertCheck) {
-    expertCheck.addEventListener('change', async function() {
-      const isChecked = this.checked;
-      await saveSetting('expert_mode', isChecked);
+  // 双语模式切换
+  const bilingualCheck = document.getElementById('bilingual-check');
+  if (bilingualCheck) {
+    bilingualCheck.addEventListener('change', async function() {
+      await saveSetting('bilingual', this.checked);
       try {
         await browser.runtime.sendMessage({
           action: 'updateSetting',
-          key: 'expert_mode',
-          value: isChecked
+          key: 'bilingual',
+          value: this.checked
         });
       } catch (error) {
-        console.error('发送专家模式设置更新失败:', error);
+        console.error('同步双语模式到 background 失败:', error);
+      }
+      console.log('双语模式:', this.checked ? '开启' : '关闭');
+    });
+  }
+
+  // 专家模式切换
+  const expertModeCheck = document.getElementById('expert-mode-check');
+  if (expertModeCheck) {
+    expertModeCheck.addEventListener('change', async function() {
+      await saveSetting('expertMode', this.checked);
+      try {
+        await browser.runtime.sendMessage({
+          action: 'updateSetting',
+          key: 'expertMode',
+          value: this.checked
+        });
+      } catch (error) {
+        console.error('同步专家模式到 background 失败:', error);
+      }
+      console.log('专家模式:', this.checked ? '开启' : '关闭');
+    });
+  }
+
+  // 未登录时点击专家模式开关，提示登录
+  const expertModeToggle = document.getElementById('expert-mode-toggle');
+  if (expertModeToggle) {
+    expertModeToggle.addEventListener('click', async function(e) {
+      const expertCheck = document.getElementById('expert-mode-check');
+      if (expertCheck && expertCheck.disabled) {
+        e.preventDefault();
+        e.stopPropagation();
+        openLoginPage();
       }
     });
   }
@@ -588,13 +588,87 @@ async function saveSetting(key, value) {
   }
 }
 
+// 检查登录状态
+async function checkLoginState() {
+  try {
+    const result = await browser.storage.local.get(['auth_token']);
+    return !!(result.auth_token);
+  } catch (error) {
+    console.error('检查登录状态失败:', error);
+    return false;
+  }
+}
+
+// 打开登录页面
+function openLoginPage() {
+  browser.tabs.create({ url: `${GlobalConfig.API_BASE_URL}/pages/index.html` }).then((tab) => {
+    // 监听标签页更新，检测登录成功后自动同步 token
+    const tabUpdateHandler = async (tabId, changeInfo) => {
+      if (tabId !== tab.id || changeInfo.status !== 'complete') return;
+      try {
+        const results = await browser.scripting.executeScript({
+          target: { tabId },
+          func: () => {
+            const token = localStorage.getItem('authToken');
+            const userInfo = localStorage.getItem('userInfo');
+            return { token, userInfo };
+          }
+        });
+        if (results && results[0] && results[0].result && results[0].result.token) {
+          const { token, userInfo } = results[0].result;
+          await browser.storage.local.set({
+            auth_token: token,
+            user_info: userInfo ? JSON.parse(userInfo) : {}
+          });
+          console.log('✅ 登录状态已同步到插件');
+          browser.tabs.onUpdated.removeListener(tabUpdateHandler);
+          await updateLoginButtonState();
+        }
+      } catch (e) {
+        // 跨域或脚本注入失败，忽略（用户可能还未登录）
+      }
+    };
+    browser.tabs.onUpdated.addListener(tabUpdateHandler);
+
+    // 30 秒后自动移除监听器
+    setTimeout(() => {
+      browser.tabs.onUpdated.removeListener(tabUpdateHandler);
+    }, 30000);
+  });
+  window.close();
+}
+
+// 更新登录按钮视觉状态
+async function updateLoginButtonState() {
+  const loginBtn = document.getElementById('btn-login');
+  if (!loginBtn) return;
+
+  const isLoggedIn = await checkLoginState();
+  if (isLoggedIn) {
+    loginBtn.classList.add('logged-in');
+    loginBtn.title = '用户中心';
+    // 登录后启用专家模式开关
+    const expertCheck = document.getElementById('expert-mode-check');
+    if (expertCheck) {
+      expertCheck.disabled = false;
+    }
+  } else {
+    loginBtn.classList.remove('logged-in');
+    loginBtn.title = '登录';
+    // 未登录时禁用专家模式开关
+    const expertCheck = document.getElementById('expert-mode-check');
+    if (expertCheck) {
+      expertCheck.disabled = true;
+    }
+  }
+}
+
 // 根据语言代码获取语言名称
 function getLanguageNameByCode(code) {
   if (typeof languages !== 'undefined') {
     const lang = languages.find(l => l.code === code);
     if (lang) return lang.name;
   }
-  // 常用语言映射
   const langMap = {
     'zh': '简体中文',
     'en': 'English',
@@ -622,17 +696,6 @@ function getEngineInfoById(id) {
     }
   }
   return null;
-}
-
-// 处理设置
-async function handleSettings() {
-  const settingsUrl = browser.runtime.getURL('src/options/options.html');
-  browser.tabs.create({
-    url: settingsUrl,
-    active: true
-  }).catch(error => {
-    console.error('打开设置页面失败:', error);
-  });
 }
 
 // 处理阅读模式
@@ -835,7 +898,7 @@ function showLanguageDropdown(anchorEl) {
     langItem.innerHTML = `
       <span class="flag">${lang.flag}</span>
       <span class="name">${lang.name}</span>
-      ${isSelected ? '<i class="ri-check-line"></i>' : ''}
+      ${isSelected ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#6366f1"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
     `;
 
     langItem.addEventListener('click', async (e) => {
@@ -913,6 +976,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('加载页面状态:', currentPageStatus);
     updateTranslateButton();
   }
+
+  // 更新登录状态
+  await updateLoginButtonState();
 });
 
 // 翻译服务下拉菜单
@@ -976,9 +1042,9 @@ function showModelDropdown(modelSelector) {
     }
 
     serviceItem.innerHTML = `
-      <i class="${service.icon} service-icon" style="--service-color: ${service.color || '#64748b'};"></i>
+      <svg class="service-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${service.color || '#64748b'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
       <span class="service-name">${service.name}</span>
-      ${isSelected ? '<i class="ri-check-line"></i>' : ''}
+      ${isSelected ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#6366f1"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
     `;
 
     serviceItem.addEventListener('click', async (e) => {
@@ -991,8 +1057,7 @@ function showModelDropdown(modelSelector) {
         const serviceName = serviceInfo.querySelector('.service-name');
 
         if (serviceIcon) {
-          serviceIcon.className = `${service.icon} service-icon`;
-          serviceIcon.style.color = service.color || '#64748b';
+          serviceIcon.setAttribute('stroke', service.color || '#64748b');
         }
 
         if (serviceName) {
@@ -1076,8 +1141,11 @@ async function loadGlobalSettings() {
         if (serviceIcon && serviceName) {
           let engineInfo = getEngineInfoById(settings.engine);
           if (engineInfo) {
-            serviceIcon.className = `${engineInfo.icon} service-icon`;
-            serviceIcon.style.color = engineInfo.color || '#64748b';
+            if (serviceIcon.tagName === 'svg') {
+              serviceIcon.setAttribute('stroke', engineInfo.color || '#64748b');
+            } else {
+              serviceIcon.style.color = engineInfo.color || '#64748b';
+            }
             serviceName.textContent = engineInfo.name;
           }
         }
@@ -1089,9 +1157,11 @@ async function loadGlobalSettings() {
         bilingualCheck.checked = settings.bilingual !== false;
       }
 
-      const expertCheck = document.getElementById('expert-mode-check');
-      if (expertCheck) {
-        expertCheck.checked = !!settings.expert_mode;
+      // 更新专家模式开关状态
+      const expertModeCheck = document.getElementById('expert-mode-check');
+      if (expertModeCheck) {
+        expertModeCheck.checked = settings.expertMode === true;
+        expertModeCheck.disabled = false;
       }
 
       console.log('已从 background 加载全局设置:', settings);
@@ -1124,21 +1194,26 @@ async function loadLocalSettings() {
       if (serviceIcon && serviceName) {
         let engineInfo = getEngineInfoById(settings.engine);
         if (engineInfo) {
-          serviceIcon.className = `${engineInfo.icon} service-icon`;
-          serviceIcon.style.color = engineInfo.color || '#64748b';
+          if (serviceIcon.tagName === 'svg') {
+            serviceIcon.setAttribute('stroke', engineInfo.color || '#64748b');
+          } else {
+            serviceIcon.style.color = engineInfo.color || '#64748b';
+          }
           serviceName.textContent = engineInfo.name;
         }
       }
     }
 
+    // 更新双语开关状态
     const bilingualCheck = document.getElementById('bilingual-check');
     if (bilingualCheck) {
       bilingualCheck.checked = settings.bilingual !== false;
     }
 
-    const expertCheck = document.getElementById('expert-mode-check');
-    if (expertCheck) {
-      expertCheck.checked = !!settings.expert_mode;
+    // 更新专家模式开关状态
+    const expertModeCheck = document.getElementById('expert-mode-check');
+    if (expertModeCheck) {
+      expertModeCheck.checked = settings.expertMode === true;
     }
 
     console.log('已从本地存储加载设置:', settings);
@@ -1152,4 +1227,5 @@ async function loadLocalSettings() {
 // 加载保存的设置
 async function loadSavedSettings() {
   await loadGlobalSettings();
+  await loadLocalSettings();
 }

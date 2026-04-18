@@ -4,6 +4,7 @@ import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationTask;
 import com.yumu.noveltranslator.service.DocumentService;
+import com.yumu.noveltranslator.service.RagTranslationService;
 import com.yumu.noveltranslator.service.TranslationTaskService;
 import com.yumu.noveltranslator.service.TranslationService;
 import com.yumu.noveltranslator.util.SecurityUtil;
@@ -38,6 +39,9 @@ public class TranslateController {
     @Autowired
     private DocumentService documentService;
 
+    @Autowired
+    private RagTranslationService ragTranslationService;
+
     // ==================== 文本翻译 ====================
 
     /**
@@ -53,7 +57,8 @@ public class TranslateController {
                 request.getSourceLang(),
                 request.getTargetLang(),
                 request.getEngine(),
-                null
+                null,
+                "fast"
             );
 
             String result = translationService.selectionTranslate(selectionReq).getTranslation();
@@ -82,7 +87,7 @@ public class TranslateController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "sourceLang", defaultValue = "auto") String sourceLang,
             @RequestParam(value = "targetLang") String targetLang,
-            @RequestParam(value = "mode", defaultValue = "novel") String mode) {
+            @RequestParam(value = "mode", defaultValue = "fast") String mode) {
 
         Long userId = SecurityUtil.getRequiredUserId();
 
@@ -90,7 +95,29 @@ public class TranslateController {
             DocumentTranslationRequest request = new DocumentTranslationRequest();
             request.setSourceLang(sourceLang);
             request.setTargetLang(targetLang);
-            request.setMode(mode);
+
+            String engine;
+            String translateMode;
+            switch (mode) {
+                case "fast" -> {
+                    engine = "mtran";
+                    translateMode = "literal";
+                }
+                case "expert" -> {
+                    engine = "openai";
+                    translateMode = "novel";
+                }
+                case "team" -> {
+                    engine = "collab";
+                    translateMode = "free";
+                }
+                default -> {
+                    engine = "google";
+                    translateMode = "novel";
+                }
+            }
+            request.setEngine(engine);
+            request.setMode(translateMode);
 
             Document doc = documentService.uploadDocument(userId, file, request);
             TranslationTask task = translationTaskService.createDocumentTask(userId, doc);
@@ -225,5 +252,19 @@ public class TranslateController {
     @PreAuthorize("isAuthenticated()")
     public ReaderTranslateResponse premiumTranslateReader(@RequestBody @Valid ReaderTranslateRequest req) {
         return translationService.readerTranslate(req);
+    }
+
+    // ==================== RAG 翻译记忆查询 ====================
+
+    /**
+     * RAG 翻译记忆查询
+     * POST /v1/translate/rag
+     * 查询相似翻译记忆，返回直接命中或参考译文
+     */
+    @PostMapping("/rag")
+    public Result<RagTranslationResponse> queryRag(@RequestBody @Valid RagTranslationRequest request) {
+        RagTranslationResponse response = ragTranslationService.searchSimilar(
+                request.getText(), request.getTargetLang(), request.getEngine());
+        return Result.ok(response, "200");
     }
 }

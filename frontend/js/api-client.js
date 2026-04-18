@@ -843,6 +843,176 @@ class ApiClient {
     }, true, false);
   }
 
+  /* ==================== 协作翻译接口 ==================== */
+
+  /**
+   * 创建协作项目
+   * POST /v1/collab/projects
+   */
+  async createCollabProject(data) {
+    return this.request('/v1/collab/projects', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * 获取我参与的项目列表
+   * GET /v1/collab/projects
+   */
+  async listCollabProjects() {
+    return this.request('/v1/collab/projects', {
+      method: 'GET'
+    });
+  }
+
+  /**
+   * 获取项目详情
+   * GET /v1/collab/projects/{projectId}
+   */
+  async getCollabProject(projectId) {
+    return this.request(`/v1/collab/projects/${projectId}`, {
+      method: 'GET'
+    });
+  }
+
+  /**
+   * 邀请成员
+   * POST /v1/collab/projects/{projectId}/invite
+   */
+  async inviteMember(projectId, data) {
+    return this.request(`/v1/collab/projects/${projectId}/invite`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * 通过邀请码加入
+   * POST /v1/collab/join
+   */
+  async joinByInviteCode(code) {
+    return this.request('/v1/collab/join', {
+      method: 'POST',
+      body: JSON.stringify({ inviteCode: code })
+    });
+  }
+
+  /**
+   * 获取项目成员列表
+   * GET /v1/collab/projects/{projectId}/members
+   */
+  async listProjectMembers(projectId) {
+    return this.request(`/v1/collab/projects/${projectId}/members`, {
+      method: 'GET'
+    });
+  }
+
+  /**
+   * 分配章节
+   * PUT /v1/collab/chapters/{chapterId}/assign
+   */
+  async assignChapter(chapterId, data) {
+    return this.request(`/v1/collab/chapters/${chapterId}/assign`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * 提交章节翻译
+   * PUT /v1/collab/chapters/{chapterId}/submit
+   */
+  async submitChapter(chapterId, data) {
+    return this.request(`/v1/collab/chapters/${chapterId}/submit`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * 审核章节
+   * PUT /v1/collab/chapters/{chapterId}/review
+   */
+  async reviewChapter(chapterId, data) {
+    return this.request(`/v1/collab/chapters/${chapterId}/review`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * 获取章节详情
+   * GET /v1/collab/chapters/{chapterId}
+   */
+  async getChapter(chapterId) {
+    return this.request(`/v1/collab/chapters/${chapterId}`, {
+      method: 'GET'
+    });
+  }
+
+  /**
+   * 获取我的章节任务
+   * GET /v1/collab/chapters/my
+   */
+  async listMyChapters() {
+    return this.request('/v1/collab/chapters/my', {
+      method: 'GET'
+    });
+  }
+
+  /**
+   * 创建评论
+   * POST /v1/collab/chapters/{chapterId}/comments
+   */
+  async createComment(chapterId, data) {
+    return this.request(`/v1/collab/chapters/${chapterId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  /**
+   * 获取章节评论列表
+   * GET /v1/collab/chapters/{chapterId}/comments
+   */
+  async listComments(chapterId) {
+    return this.request(`/v1/collab/chapters/${chapterId}/comments`, {
+      method: 'GET'
+    });
+  }
+
+  /**
+   * 标记评论已解决
+   * PUT /v1/collab/comments/{commentId}/resolve
+   */
+  async resolveComment(commentId) {
+    return this.request(`/v1/collab/comments/${commentId}/resolve`, {
+      method: 'PUT'
+    });
+  }
+
+  /**
+   * 删除评论
+   * DELETE /v1/collab/comments/{commentId}
+   */
+  async deleteComment(commentId) {
+    return this.request(`/v1/collab/comments/${commentId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  /**
+   * RAG 翻译记忆查询
+   * POST /v1/translate/rag
+   */
+  async queryRag(text, targetLang, engine) {
+    return this.request('/rag', {
+      method: 'POST',
+      body: JSON.stringify({ text, targetLang, engine })
+    }, false, true);
+  }
+
   /* ==================== 平台统计接口 ==================== */
 
   /**

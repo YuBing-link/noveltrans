@@ -2147,6 +2147,43 @@ class BackgroundManager {
                     }
                     break;
 
+                // 认证相关消息处理
+                case 'setAuthToken':
+                    try {
+                        const { token, userInfo } = request;
+                        await browser.storage.local.set({ auth_token: token, auth_user: userInfo });
+                        console.log('✅ 认证令牌已保存');
+                        sendResponse({ success: true });
+                    } catch (error) {
+                        console.error('保存认证令牌失败:', error);
+                        sendResponse({ success: false, error: error.message });
+                    }
+                    break;
+
+                case 'getAuthState':
+                    try {
+                        const result = await browser.storage.local.get(['auth_token', 'auth_user']);
+                        sendResponse({
+                            success: true,
+                            isLoggedIn: !!result.auth_token,
+                            token: result.auth_token || null,
+                            user: result.auth_user || null
+                        });
+                    } catch (error) {
+                        sendResponse({ success: false, error: error.message });
+                    }
+                    break;
+
+                case 'clearAuthToken':
+                    try {
+                        await browser.storage.local.remove(['auth_token', 'auth_user']);
+                        console.log('✅ 认证令牌已清除');
+                        sendResponse({ success: true });
+                    } catch (error) {
+                        sendResponse({ success: false, error: error.message });
+                    }
+                    break;
+
                 case 'toggleDisplayMode':
                     // 将切换显示模式的请求转发到对应的标签页
                     try {
