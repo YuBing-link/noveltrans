@@ -1,0 +1,108 @@
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0-oracle
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: novel_translator
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存
+  redis:
+    image: redis:8.4.0-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # MTranServer 本地翻译小模型
+  mtran-server:
+    image: xxnuo/mtranserver:latest
+    ports:
+      - "8989:8989"
+    environment:
+      - HTTP_PROXY=http://host.docker.internal:7890
+      - HTTPS_PROXY=http://host.docker.internal:7890
+      - http_proxy=http://host.docker.internal:7890
+      - https_proxy=http://host.docker.internal:7890
+
+  # Python 翻译微服务（调用 DeepSeek 大模型）
+  llm-engine:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./services/translate-engine:/app
+    command: >
+      bash -c "pip install -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com fastapi uvicorn openai &&
+               python translate_server.py"
+    environment:
+      - OPENAI_API_KEY=sk-ec548dc392a14e2f8bd28949138151f5
+      - OPENAI_BASE_URL=https://api.deepseek.com/v1
+      - OPENAI_MODEL=deepseek-chat
+    ports:
+      - "8000:8000"
+
+  # Spring Boot 后端
+  backend:
+    image: maven:3.9-eclipse-temurin-21
+    working_dir: /app
+    volumes:
+      - .:/app
+      - m2-cache:/root/.m2
+      - ./maven-settings.xml:/root/.m2/settings.xml:ro
+    command: >
+      bash -c "mvn clean package -DskipTests -Dmaven.test.skip=true &&
+               java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar"
+    ports:
+      - "8080:8080"
+    environment:
+      - JWT_SECRET=123456
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_DB=novel_translator
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=123456
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MTRAN_HOST=mtran-server
+      - MTRAN_PORT=8989
+      - HTTP_PROXY=http://host.docker.internal:7890
+      - HTTPS_PROXY=http://host.docker.internal:7890
+      - http_proxy=http://host.docker.internal:7890
+      - https_proxy=http://host.docker.internal:7890
+      - MAVEN_OPTS=-Dhttp.proxyHost=host.docker.internal -Dhttp.proxyPort=7890 -Dhttps.proxyHost=host.docker.internal -Dhttps.proxyPort=7890
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mtran-server:
+        condition: service_started
+
+  # Nginx 网关
+  nginx:
+    image: nginx:1.28-alpine
+    working_dir: /etc/nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend:/etc/nginx/frontend:ro
+    ports:
+      - "7341:7341"
+    depends_on:
+      - backend
+
+volumes:
+  mysql-data:
+  m2-cache:

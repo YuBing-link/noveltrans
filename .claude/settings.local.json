@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(del \"D:\\\\Git-Submission-Files\\\\noveltrans\\\\novelTranslator\\\\src\\\\main\\\\java\\\\com\\\\yumu\\\\noveltranslator\\\\service\\\\SseTranslationService.java\")",
+      "Bash(dir /s /b *.java *.py)",
+      "Bash(dir /s *.java *.py)",
+      "Bash(powershell \"Get-ChildItem -Recurse -Include *.java,*.py\")",
+      "Bash(if exist novel_translator.db del novel_translator.db)",
+      "Bash(dir novel_translator.db)",
+      "Bash(del novel_translator.db)",
+      "Bash(dir)",
+      "Bash(cd:*)",
+      "Bash(head:*)",
+      "Bash(export:*)",
+      "Bash(mvn test:*)",
+      "Bash(mvn dependency:purge-local-repository:*)",
+      "Bash(mvn clean:*)",
+      "Bash(mvn test-compile:*)",
+      "Read(//c/Users/aex/.m2/repository/io/agentscope/agentscope-core/1.0.1/**)",
+      "Bash(jar -tf agentscope-core-1.0.1.jar)",
+      "Bash(jar:*)",
+      "Bash(cp -r \"D:/Server/nginx/nginx-1.28.0/html/\"*.html frontend/html/)",
+      "Bash(cp -r \"D:/Server/nginx/nginx-1.28.0/html/js/\" frontend/js/)",
+      "Bash(cp -r \"D:/Server/nginx/nginx-1.28.0/html/styles/\" frontend/styles/)",
+      "Bash(cp -r \"D:/Server/nginx/nginx-1.28.0/html/utils/\" frontend/utils/)",
+      "Bash(cp \"D:/Server/nginx/nginx-1.28.0/html/config.js\" frontend/)",
+      "Bash(mkdir -p pages)",
+      "Bash(mv html/*.html pages/)",
+      "Bash(ls -la frontend/)",
+      "Bash(find . -name \"*.java\" -exec sed -i 's/@TableId\\(type = IdType.ASSIGN_ID\\)/@TableId\\(type = IdType.AUTO\\)/g' {} +)",
+      "Bash(docker compose *)",
+      "Bash(curl *)",
+      "Bash(docker stop *)",
+      "Bash(docker rm *)",
+      "Bash(python -c ' *)",
+      "Bash(iconv -f GBK -t UTF-8)",
+      "Bash(MSYS_NO_PATHCONV=1 docker compose exec backend javap -c -p /app/target/classes/com/yumu/noveltranslator/service/TranslationService.class)"
+    ]
+  }
+}
