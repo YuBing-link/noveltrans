@@ -1,0 +1,2036 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档翻译 - NovelTrans</title>
+    <link rel="stylesheet" href="styles/animations.css">
+    <script>
+        // 页面加载前立即应用主题，防止闪烁
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <style>
+        :root {
+            --primary-color: #7c3aed;
+            --primary-hover: #6d28d9;
+            --primary-light: #8b5cf6;
+            --primary-bg: #f5f3ff;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-sub: #64748b;
+            --text-light: #9ca3af;
+            --border-light: #e5e7eb;
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+            --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.1);
+            --shadow-xl: 0 25px 50px -12px rgba(124,58,237,0.25);
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --radius-pill: 9999px;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0a0a0a;
+            --card-bg: #121212;
+            --text-main: #e5e5e5;
+            --text-sub: #a3a3a3;
+            --text-light: #737373;
+            --border-light: #262626;
+            --primary-bg: #1a1a2e;
+        }
+
+        [data-theme="dark"] body {
+            background: var(--bg-color);
+        }
+
+        [data-theme="dark"] .sidebar,
+        [data-theme="dark"] .main-content,
+        [data-theme="dark"] .nav-bar {
+            background: var(--card-bg);
+            border-color: var(--border-light);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, var(--primary-light), var(--primary-color));
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, var(--primary-color), var(--primary-hover));
+        }
+
+        a { text-decoration: none; color: inherit; }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 28px;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-light);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary-color);
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+
+        .logo:hover { transform: scale(1.05); }
+
+        .logo svg {
+            transition: transform 0.3s;
+        }
+
+        .logo:hover svg {
+            transform: rotate(-5deg);
+        }
+
+        .nav-menu { display: flex; gap: 24px; align-items: center; }
+        .nav-menu a {
+            color: var(--text-sub);
+            font-weight: 500;
+            font-size: 14px;
+            transition: color 0.3s;
+            padding: 8px 0;
+            position: relative;
+        }
+
+        .nav-menu a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary-color);
+            transition: width 0.3s;
+        }
+
+        .nav-menu a:hover { color: var(--primary-color); }
+        .nav-menu a:hover::after { width: 100%; }
+        .nav-menu a.active { color: var(--primary-color); }
+        .nav-menu a.active::after { width: 100%; }
+
+        .user-menu { display: flex; gap: 12px; align-items: center; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: var(--radius-pill);
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            cursor: pointer;
+            border: none;
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: inherit;
+            background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            box-shadow: 0 4px 14px rgba(124,58,237,0.35);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(124,58,237,0.45);
+            filter: brightness(1.05);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--border-light);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            background: var(--primary-bg);
+            transform: translateY(-1px);
+        }
+
+        .main-container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 0;
+            background: var(--border-light);
+            overflow: hidden;
+        }
+
+        /* 深色模式 */
+        [data-theme="dark"] .main-container {
+            background: #0a0a0a;
+        }
+
+        [data-theme="dark"] .sidebar {
+            background: linear-gradient(180deg, #121212 0%, #0a0a0a 100%);
+            border-right-color: var(--border-light);
+        }
+
+        [data-theme="dark"] .navbar {
+            background: rgba(18, 18, 18, 0.95);
+            border-bottom-color: var(--border-light);
+        }
+
+        [data-theme="dark"] .upload-area {
+            background: var(--card-bg);
+            border-color: var(--border-light);
+        }
+
+        [data-theme="dark"] .file-item {
+            background: var(--card-bg);
+            border-color: var(--border-light);
+        }
+
+        [data-theme="dark"] .result-container {
+            background: #0a0a0a;
+        }
+
+        [data-theme="dark"] .result-panel {
+            background: var(--card-bg);
+            border-color: var(--border-light);
+        }
+
+        [data-theme="dark"] .result-header {
+            background: var(--card-bg);
+            border-bottom-color: var(--border-light);
+        }
+
+        [data-theme="dark"] .result-text {
+            color: var(--text-main);
+        }
+
+        [data-theme="dark"] .setting-group {
+            background: #0a0a0a;
+            border-color: var(--border-light);
+        }
+
+        [data-theme="dark"] .setting-select {
+            background: #121212;
+            border-color: var(--border-light);
+            color: var(--text-main);
+        }
+
+        [data-theme="dark"] .history-item {
+            border-color: transparent;
+        }
+
+        [data-theme="dark"] .history-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        [data-theme="dark"] .history-item.active {
+            background: rgba(124, 58, 237, 0.15);
+        }
+
+        [data-theme="dark"] .upload-icon {
+            background: linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(139,92,246,0.2) 100%);
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid var(--border-light);
+            box-shadow: 2px 0 8px rgba(0,0,0,0.02);
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--border-light);
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: var(--text-light);
+        }
+
+        .sidebar-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--primary-bg);
+        }
+
+        .setting-group {
+            margin-bottom: 24px;
+            padding: 16px;
+            background: var(--bg-color);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+        }
+
+        .setting-group:hover {
+            border-color: var(--primary-light);
+            box-shadow: 0 2px 8px rgba(124,58,237,0.08);
+        }
+
+        .setting-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .setting-label::before {
+            content: '';
+            width: 4px;
+            height: 4px;
+            background: var(--primary-color);
+            border-radius: 50%;
+        }
+
+        .setting-select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 40px;
+        }
+
+        .setting-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(124,58,237,0.1);
+        }
+
+        .setting-select:hover {
+            border-color: var(--primary-light);
+        }
+
+        .new-translation-btn {
+            width: 100%;
+            padding: 14px;
+            border: 2px dashed var(--border-light);
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, #faf9ff 0%, #f9f8ff 100%);
+            color: var(--text-sub);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .new-translation-btn:hover {
+            border-color: var(--primary-color);
+            border-style: solid;
+            color: var(--primary-color);
+            background: var(--primary-bg);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(124,58,237,0.15);
+        }
+
+        .new-translation-btn svg {
+            transition: transform 0.3s;
+        }
+
+        .new-translation-btn:hover svg {
+            transform: rotate(90deg);
+        }
+
+        .history-list { list-style: none; }
+
+        .history-item {
+            padding: 14px 12px;
+            border-radius: var(--radius-md);
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            border: 1px solid transparent;
+        }
+
+        .history-item:hover {
+            background: var(--bg-color);
+            border-color: var(--border-light);
+            transform: translateX(4px);
+        }
+
+        .history-item.active {
+            background: linear-gradient(135deg, var(--primary-bg) 0%, #ede9fe 100%);
+            border-left: 3px solid var(--primary-color);
+            box-shadow: 0 2px 8px rgba(124,58,237,0.1);
+        }
+
+        .history-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .history-date {
+            font-size: 11px;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .history-date::before {
+            content: '';
+            width: 4px;
+            height: 4px;
+            background: var(--text-light);
+            border-radius: 50%;
+        }
+
+        /* 文档上传区域 */
+        .upload-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            gap: 24px;
+            overflow-y: auto;
+            background: var(--bg-color);
+        }
+
+        .upload-area {
+            background: var(--card-bg);
+            border: 2px dashed var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: 60px 40px;
+            text-align: center;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background: var(--primary-bg);
+            transform: translateY(-2px);
+        }
+
+        .upload-area.drag-over {
+            border-color: var(--primary-color);
+            background: var(--primary-bg);
+            box-shadow: 0 0 0 4px rgba(124,58,237,0.1);
+        }
+
+        .upload-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, var(--primary-bg) 0%, #ede9fe 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-icon svg {
+            width: 40px;
+            height: 40px;
+            color: var(--primary-color);
+        }
+
+        .upload-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .upload-subtitle {
+            font-size: 14px;
+            color: var(--text-sub);
+            margin-bottom: 24px;
+        }
+
+        /* 已上传文件列表 */
+        .uploaded-files {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            background: var(--card-bg);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+            transition: all 0.3s;
+        }
+
+        .file-item:hover {
+            border-color: var(--primary-light);
+            box-shadow: 0 4px 12px rgba(124,58,237,0.1);
+            transform: translateY(-2px);
+        }
+
+        .file-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--primary-bg) 0%, #ede9fe 100%);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .file-icon svg {
+            width: 24px;
+            height: 24px;
+            color: var(--primary-color);
+        }
+
+        .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-sub);
+        }
+
+        .file-size {
+            color: var(--text-light);
+        }
+
+        .file-status {
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+            font-weight: 500;
+        }
+
+        .status-ready {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-translating {
+            background: var(--primary-bg);
+            color: var(--primary-color);
+        }
+
+        .status-completed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .file-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-light);
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .file-btn svg {
+            width: 18px;
+            height: 18px;
+            color: var(--text-sub);
+        }
+
+        .file-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-translate:hover {
+            border-color: var(--primary-color);
+            background: var(--primary-color);
+        }
+
+        .btn-translate:hover svg {
+            color: white;
+        }
+
+        .btn-delete:hover {
+            border-color: #ef4444;
+            background: #ef4444;
+        }
+
+        .btn-delete:hover svg {
+            color: white;
+        }
+
+        /* 翻译结果区域 */
+        .result-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-color);
+            overflow: hidden;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .result-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .result-title svg {
+            color: var(--primary-color);
+        }
+
+        .result-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .result-content {
+            flex: 1;
+            display: flex;
+            padding: 24px;
+            gap: 24px;
+            overflow: hidden;
+        }
+
+        .result-panel {
+            flex: 1;
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid var(--border-light);
+        }
+
+        .result-panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--primary-bg);
+        }
+
+        .result-text {
+            font-family: inherit;
+            font-size: 15px;
+            line-height: 2.2;
+            color: var(--text-main);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .result-divider {
+            width: 1px;
+            background: var(--border-light);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .btn.loading {
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        .btn.loading .btn-text {
+            display: none;
+        }
+
+        /* 优化后的图标类 */
+        .icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        /* 模态框样式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-container {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            padding: 32px 28px;
+            width: 100%;
+            max-width: 360px;
+            max-height: 85vh;
+            overflow-y: auto;
+            transform: scale(0.9) translateY(-20px);
+            transition: transform 0.3s ease;
+            position: relative;
+        }
+
+        .modal-overlay.active .modal-container {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: var(--bg-color);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .modal-close:hover {
+            background: var(--primary-bg);
+            color: var(--primary-color);
+        }
+
+        .modal-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 4px;
+        }
+
+        .modal-logo svg { width: 26px; height: 26px; }
+
+        .modal-title {
+            text-align: center;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .modal-subtitle {
+            text-align: center;
+            color: var(--text-sub);
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+
+        .input-group { margin-bottom: 14px; }
+
+        .label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 6px;
+        }
+
+        .input-wrapper { position: relative; }
+
+        .input-field {
+            width: 100%;
+            padding: 11px 14px;
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            transition: all 0.3s;
+            background: var(--bg-color);
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background: white;
+            box-shadow: 0 0 0 4px rgba(124,58,237,0.1);
+        }
+
+        .input-field::placeholder { color: var(--text-sub); }
+
+        .toggle-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: var(--text-sub);
+            width: 18px;
+            height: 18px;
+            transition: color 0.3s;
+        }
+
+        .toggle-icon:hover { color: var(--primary-color); }
+
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            font-size: 12px;
+        }
+
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-sub);
+            cursor: pointer;
+        }
+
+        .remember-me input {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+            accent-color: var(--primary-color);
+        }
+
+        .link-text {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+            cursor: pointer;
+        }
+
+        .link-text:hover { color: var(--primary-hover); }
+
+        .btn-submit {
+            width: 100%;
+            padding: 12px;
+            border-radius: var(--radius-pill);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+            margin-top: 4px;
+        }
+
+        .btn-submit svg { width: 16px; height: 16px; }
+
+        .btn-submit {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: white;
+            box-shadow: 0 4px 14px rgba(124,58,237,0.35);
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(124,58,237,0.45);
+        }
+
+        .separator {
+            text-align: center;
+            color: var(--text-sub);
+            font-size: 12px;
+            margin: 18px 0;
+            position: relative;
+        }
+
+        .separator::before, .separator::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 35%;
+            height: 1px;
+            background: var(--border-light);
+        }
+
+        .separator::before { left: 0; }
+        .separator::after { right: 0; }
+
+        .social-login { display: flex; flex-direction: column; gap: 10px; }
+
+        .btn-social {
+            padding: 11px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            border: 2px solid var(--border-light);
+            background: white;
+            color: var(--text-main);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .btn-social:hover {
+            border-color: var(--text-sub);
+            background: var(--bg-color);
+            transform: translateY(-1px);
+        }
+
+        .btn-social svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+        .modal-footer {
+            text-align: center;
+            margin-top: 18px;
+            font-size: 13px;
+            color: var(--text-sub);
+        }
+
+        .modal-footer .link-text {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .verification-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .verification-group .input-field { flex: 1; }
+
+        .btn-code {
+            padding: 10px 14px;
+            border: 2px solid var(--primary-color);
+            background: white;
+            color: var(--primary-color);
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 12px;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+
+        .btn-code:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-code:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .terms-checkbox {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 16px 0;
+            font-size: 12px;
+            color: var(--text-sub);
+        }
+
+        .terms-checkbox input {
+            margin-top: 2px;
+            cursor: pointer;
+            width: 14px;
+            height: 14px;
+            accent-color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <!-- 粒子背景 -->
+    <div class="particles-container">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <nav class="navbar">
+        <a href="index.html" class="logo">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <span>NovelTrans</span>
+        </a>
+        <div class="nav-menu">
+            <a href="index.html">首页</a>
+            <a href="translation.html" class="active">翻译</a>
+            <a href="user.html">用户中心</a>
+            <a href="history.html">历史</a>
+            <a href="help.html">帮助</a>
+        </div>
+        <div class="user-menu" id="nav-user-menu">
+            <!-- 未登录时显示 -->
+            <div id="login-link" style="display: flex; gap: 12px;">
+                <button id="nav-login-btn" class="btn btn-outline ripple-btn" onclick="openModal('login')">登录</button>
+                <button id="nav-register-btn" class="btn btn-primary ripple-btn" onclick="openModal('register')">注册</button>
+            </div>
+            <!-- 已登录时显示用户菜单 -->
+            <div id="user-menu" style="display: none; align-items: center; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div id="user-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--primary-color), var(--primary-light)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">U</div>
+                    <span id="user-name" style="font-weight: 500; color: var(--text-main);">用户</span>
+                </div>
+                <button id="logout-link" class="btn btn-outline" style="display: none;">退出</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <aside class="sidebar">
+            <div class="setting-group">
+                <div class="sidebar-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>翻译设置</span>
+                </div>
+                <div class="setting-label">翻译为</div>
+                <select class="setting-select" id="targetLang">
+                    <option value="zh">中文</option>
+                    <option value="en">英语</option>
+                    <option value="ja">日语</option>
+                    <option value="ko">韩语</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <div class="sidebar-title">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>文档列表</span>
+                </div>
+                <ul class="history-list" id="docList">
+                    <li class="history-item active">
+                        <div class="history-title">📄 小说第一章.txt</div>
+                        <div class="history-date">2026-02-21 10:30 · 已完成</div>
+                    </li>
+                    <li class="history-item">
+                        <div class="history-title">📄 小说第二章.txt</div>
+                        <div class="history-date">2026-02-21 09:15 · 已完成</div>
+                    </li>
+                    <li class="history-item">
+                        <div class="history-title">📄 短篇小说.docx</div>
+                        <div class="history-date">2026-02-20 18:45 · 翻译中</div>
+                    </li>
+                </ul>
+            </div>
+        </aside>
+
+        <main style="display: flex; flex-direction: column; overflow: hidden;">
+            <!-- 文档上传区域 -->
+            <div class="upload-container">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <h3 class="upload-title">拖拽文件到此处上传</h3>
+                    <p class="upload-subtitle" id="uploadSubtitle">支持 TXT、EPUB、DOCX 格式，最大 50MB</p>
+                    <button class="btn btn-primary ripple-btn" id="selectFileBtn">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span class="btn-text">选择文件</span>
+                    </button>
+                    <input type="file" id="fileInput" accept=".txt,.epub,.docx,.pdf" style="display: none;">
+                </div>
+
+                <!-- 已上传文件列表 -->
+                <div class="uploaded-files" id="uploadedFiles">
+                    <div class="file-item">
+                        <div class="file-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                        </div>
+                        <div class="file-info">
+                            <div class="file-name">小说第一章.txt</div>
+                            <div class="file-meta">
+                                <span class="file-size">125 KB</span>
+                                <span class="file-status status-ready">待翻译</span>
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="file-btn btn-translate" title="翻译">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/></svg>
+                            </button>
+                            <button class="file-btn btn-delete" title="删除">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 翻译结果区域 -->
+            <div class="result-container" id="resultContainer" style="display: none;">
+                <div class="result-header">
+                    <div class="result-title">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        <span id="resultFileName">翻译结果</span>
+                    </div>
+                    <div class="result-actions">
+                        <button class="btn btn-outline ripple-btn" id="copyResultBtn">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            复制
+                        </button>
+                        <button class="btn btn-primary ripple-btn" id="downloadResultBtn">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            下载译文
+                        </button>
+                    </div>
+                </div>
+                <div class="result-content">
+                    <div class="result-panel">
+                        <div class="result-panel-title">原文</div>
+                        <pre class="result-text" id="resultSource"></pre>
+                    </div>
+                    <div class="result-divider"></div>
+                    <div class="result-panel">
+                        <div class="result-panel-title">译文</div>
+                        <pre class="result-text" id="resultTarget"></pre>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 登录模态框 -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal-container">
+            <button class="modal-close" onclick="closeModal('login')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div class="modal-logo">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                <span>NovelTrans</span>
+            </div>
+            <h2 class="modal-title">欢迎回来</h2>
+            <p class="modal-subtitle">请登录以继续翻译</p>
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="loginEmail" class="label">邮箱</label>
+                    <div class="input-wrapper">
+                        <input type="email" id="loginEmail" class="input-field" placeholder="请输入邮箱" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="loginPassword" class="label">密码</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="loginPassword" class="input-field" placeholder="请输入密码" required>
+                        <svg class="toggle-icon" onclick="togglePassword('loginPassword')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
+                </div>
+                <div class="flex-between">
+                    <label class="remember-me"><input type="checkbox" id="rememberMe"> 记住我</label>
+                    <a href="#" class="link-text">忘记密码？</a>
+                </div>
+                <button type="submit" class="btn-submit">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    登录
+                </button>
+            </form>
+            <div class="separator">其他登录方式</div>
+            <div class="social-login">
+                <button class="btn-social google">
+                    <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                    Google
+                </button>
+                <button class="btn-social github">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    GitHub
+                </button>
+            </div>
+            <p class="modal-footer">没有账户？<span class="link-text" onclick="switchModal('login', 'register')">去注册</span></p>
+        </div>
+    </div>
+
+    <!-- 注册模态框 -->
+    <div class="modal-overlay" id="registerModal">
+        <div class="modal-container">
+            <button class="modal-close" onclick="closeModal('register')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div class="modal-logo">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                <span>NovelTrans</span>
+            </div>
+            <h2 class="modal-title">创建账户</h2>
+            <p class="modal-subtitle">立即注册，开始翻译</p>
+            <form id="registerForm">
+                <div class="input-group">
+                    <label for="regUsername" class="label">用户名</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="regUsername" class="input-field" placeholder="请输入用户名" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="regEmail" class="label">邮箱</label>
+                    <div class="input-wrapper">
+                        <input type="email" id="regEmail" class="input-field" placeholder="请输入邮箱" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="regPassword" class="label">密码</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="regPassword" class="input-field" placeholder="请设置密码" required>
+                        <svg class="toggle-icon" onclick="togglePassword('regPassword')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="regCode" class="label">验证码</label>
+                    <div class="verification-group">
+                        <input type="text" id="regCode" class="input-field" placeholder="输入验证码" maxlength="6" required>
+                        <button type="button" id="sendCodeBtn" class="btn-code" onclick="sendVerificationCode()">发送</button>
+                    </div>
+                </div>
+                <label class="terms-checkbox">
+                    <input type="checkbox" required>
+                    <span>同意 <a href="#" class="link-text">服务条款</a> 和 <a href="#" class="link-text">隐私政策</a></span>
+                </label>
+                <button type="submit" class="btn-submit">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                    注册
+                </button>
+            </form>
+            <p class="modal-footer">已有账户？<span class="link-text" onclick="switchModal('register', 'login')">去登录</span></p>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="js/api-client.js"></script>
+    <script src="js/auth-manager.js"></script>
+    <script src="utils/ui.js"></script>
+    <script src="js/auth-middleware.js"></script>
+    <script src="js/auth-utils.js"></script>
+    <script src="js/doc-translation.js"></script>
+    <script src="js/effects.js"></script>
+    <script>
+        // 页面加载时检查登录状态，处理待上传文件
+        document.addEventListener('DOMContentLoaded', function() {
+            // 待上传文件存储在内存中（File 对象无法序列化到 localStorage）
+            window._pendingFileUpload = null;
+
+            // 监听登录事件，触发待上传文件处理
+            window.addEventListener('userLoggedIn', function(e) {
+                if (window._pendingFileUpload) {
+                    const file = window._pendingFileUpload;
+                    window._pendingFileUpload = null;
+                    showNotification(`正在上传 ${file.name}...`, 'info');
+                    // 自动触发上传
+                    uploadAndTranslate(file);
+                }
+            });
+        });
+
+        // 文档翻译功能
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const selectFileBtn = document.getElementById('selectFileBtn');
+        const uploadedFiles = document.getElementById('uploadedFiles');
+        const resultContainer = document.getElementById('resultContainer');
+        const resultFileName = document.getElementById('resultFileName');
+        const resultSource = document.getElementById('resultSource');
+        const resultTarget = document.getElementById('resultTarget');
+
+        // 绑定文件选择按钮事件
+        if (selectFileBtn) {
+            selectFileBtn.addEventListener('click', () => fileInput.click());
+        }
+
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+        }
+
+        // 动态更新上传提示信息
+        function updateUploadHint() {
+            const hintEl = document.getElementById('uploadSubtitle');
+            if (hintEl && UPLOAD_CONFIG) {
+                const types = UPLOAD_CONFIG.ALLOWED_TYPES.map(t => t.replace('.', '').toUpperCase()).join('、');
+                const maxSize = UPLOAD_CONFIG.MAX_SIZE_MB;
+                hintEl.textContent = `支持 ${types} 格式，最大 ${maxSize}MB`;
+            }
+
+            // 更新 accept 属性
+            if (fileInput && UPLOAD_CONFIG) {
+                fileInput.accept = UPLOAD_CONFIG.ALLOWED_TYPES.join(',');
+            }
+        }
+
+        // HTML 转义工具函数（防 XSS）
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 页面加载时更新提示信息
+        updateUploadHint();
+
+        // 拖拽上传
+        if (uploadArea) {
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('drag-over');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('drag-over');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+        }
+
+        // 处理文件 - 调用真实 API
+        async function handleFile(file) {
+            // 使用配置文件中的文件类型和大小限制
+            const validTypes = UPLOAD_CONFIG?.ALLOWED_TYPES || ['.txt', '.epub', '.docx', '.pdf'];
+            const maxSize = (UPLOAD_CONFIG?.MAX_SIZE_MB || 50) * 1024 * 1024;
+            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+
+            if (!validTypes.includes(fileExt)) {
+                const allowedTypesStr = UPLOAD_CONFIG?.ALLOWED_TYPES
+                    ? UPLOAD_CONFIG.ALLOWED_TYPES.map(t => t.replace('.', '')).join('、')
+                    : 'TXT、EPUB、DOCX、PDF';
+                showNotification(`不支持的文件格式，请上传 ${allowedTypesStr} 文件`, 'error');
+                return;
+            }
+
+            if (file.size > maxSize) {
+                const maxSizeMB = UPLOAD_CONFIG?.MAX_SIZE_MB || 50;
+                showNotification(`文件大小超过 ${maxSizeMB}MB 限制`, 'error');
+                return;
+            }
+
+            // 检查用户是否登录
+            if (!AuthManager.isAuthenticated()) {
+                showNotification('需要登录才能上传文件', 'warning');
+                // 存储文件引用到内存，登录后通过 userLoggedIn 事件触发上传
+                window._pendingFileUpload = file;
+                setTimeout(() => {
+                    openModal('login');
+                }, 1000);
+                return;
+            }
+
+            // 上传文件到服务器
+            await uploadFileToServer(file);
+        }
+
+        // 上传文件到服务器
+        async function uploadFileToServer(file) {
+            showNotification(`正在上传 ${file.name}...`, 'info');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const targetLang = document.getElementById('targetLang')?.value || 'zh';
+            formData.append('targetLang', targetLang);
+
+            const url = `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH.replace('/translate', '')}/translate/document`;
+            const token = AuthManager.getAuthToken();
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const taskId = result.data?.taskId || result.data?.id;
+                    showNotification(`文件 "${file.name}" 已上传`, 'success');
+
+                    // 添加文件到列表
+                    const fileItem = addFileToList(file, taskId);
+
+                    // 开始翻译
+                    if (taskId) {
+                        translateFile(file, fileItem, taskId);
+                    }
+                } else {
+                    const errorMessage = result.message || result.error || '上传失败';
+                    showNotification(errorMessage, 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showNotification('网络错误或服务器不可用', 'error');
+            }
+        }
+
+        // 添加文件到列表
+        function addFileToList(file, taskId) {
+            const fileSize = formatFileSize(file.size);
+            const fileItem = document.createElement('li');
+            fileItem.className = 'file-item';
+            fileItem.dataset.taskId = taskId;
+            fileItem.innerHTML = `
+                <div class="file-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                </div>
+                <div class="file-info">
+                    <div class="file-name">${escapeHtml(file.name)}</div>
+                    <div class="file-meta">
+                        <span class="file-size">${fileSize}</span>
+                        <span class="file-status status-ready">待翻译</span>
+                    </div>
+                </div>
+                <div class="file-actions">
+                    <button class="file-btn btn-translate" title="翻译">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/></svg>
+                    </button>
+                    <button class="file-btn btn-delete" title="删除">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                </div>
+            `;
+
+            // 绑定按钮事件
+            const translateBtn = fileItem.querySelector('.btn-translate');
+            const deleteBtn = fileItem.querySelector('.btn-delete');
+
+            translateBtn.addEventListener('click', () => {
+                if (taskId) {
+                    translateFile(file, fileItem, taskId);
+                } else {
+                    showNotification('请先上传文件', 'warning');
+                }
+            });
+
+            deleteBtn.addEventListener('click', () => {
+                fileItem.remove();
+                showNotification('文件已删除', 'info');
+            });
+
+            // 添加到列表开头
+            uploadedFiles.insertBefore(fileItem, uploadedFiles.firstChild);
+
+            return fileItem;
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // 翻译文件 - 调用真实 API
+        async function translateFile(file, fileItem, taskId) {
+            const statusSpan = fileItem.querySelector('.file-status');
+            statusSpan.textContent = '翻译中';
+            statusSpan.className = 'file-status status-translating';
+
+            // 轮询任务状态
+            await pollTaskStatus(taskId, file, fileItem);
+        }
+
+        // 轮询任务状态
+        async function pollTaskStatus(taskId, file, fileItem) {
+            const url = `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH.replace('/translate', '')}/translate/task/${taskId}`;
+            const token = AuthManager.getAuthToken();
+
+            const checkStatus = async () => {
+                try {
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        const status = result.data?.status;
+                        const statusSpan = fileItem.querySelector('.file-status');
+
+                        if (status === 'completed') {
+                            statusSpan.textContent = '已完成';
+                            statusSpan.className = 'file-status status-completed';
+                            showNotification('翻译完成', 'success');
+                            // 获取翻译结果
+                            await getTranslationResult(taskId, file);
+                        } else if (status === 'failed') {
+                            statusSpan.textContent = '失败';
+                            statusSpan.className = 'file-status status-failed';
+                            showNotification(result.data?.error || '翻译失败', 'error');
+                        } else {
+                            // 继续轮询
+                            setTimeout(checkStatus, 2000);
+                        }
+                    } else {
+                        setTimeout(checkStatus, 2000);
+                    }
+                } catch (error) {
+                    console.error('Status check error:', error);
+                    setTimeout(checkStatus, 2000);
+                }
+            };
+
+            checkStatus();
+        }
+
+        // 获取翻译结果
+        async function getTranslationResult(taskId, file) {
+            const url = `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH.replace('/translate', '')}/translate/task/${taskId}/result`;
+            const token = AuthManager.getAuthToken();
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const sourceContent = result.data?.sourceContent || result.data?.originalText || '';
+                    const targetContent = result.data?.translatedText || result.data?.content || '';
+                    showResult(file, sourceContent, targetContent);
+                }
+            } catch (error) {
+                console.error('Get result error:', error);
+            }
+        }
+
+        // 显示翻译结果
+        function showResult(file, sourceContent, targetContent) {
+            resultFileName.textContent = file.name;
+            resultSource.textContent = sourceContent || '原文内容加载中...';
+            resultTarget.textContent = targetContent || '翻译结果加载中...';
+
+            resultContainer.style.display = 'flex';
+            uploadArea.style.display = 'none';
+        }
+
+        // 复制结果 - 调用真实 API
+        document.getElementById('copyResultBtn')?.addEventListener('click', async () => {
+            if (resultTarget.textContent) {
+                navigator.clipboard.writeText(resultTarget.textContent);
+                showNotification('已复制到剪贴板', 'success');
+            }
+        });
+
+        // 下载结果 - 调用真实 API
+        document.getElementById('downloadResultBtn')?.addEventListener('click', async () => {
+            const taskId = document.querySelector('#uploadedFiles li.file-item')?.dataset?.taskId;
+            if (taskId) {
+                await downloadTranslation(taskId);
+            } else if (resultTarget.textContent) {
+                // 备用方案：如果没有 taskId，下载当前显示的内容
+                const blob = new Blob([resultTarget.textContent], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'translation_' + new Date().getTime() + '.txt';
+                a.click();
+                URL.revokeObjectURL(url);
+                showNotification('下载成功', 'success');
+            }
+        });
+
+        // 下载翻译结果
+        async function downloadTranslation(taskId) {
+            const url = `${CONFIG.API_BASE_URL}${CONFIG.TRANSLATE_API_PATH.replace('/translate', '')}/translate/task/${taskId}/download`;
+            const token = AuthManager.getAuthToken();
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = 'translation_result.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(downloadUrl);
+                    showNotification('下载成功', 'success');
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                showNotification('下载失败', 'error');
+            }
+        }
+
+        // 模态框控制
+        function openModal(type) {
+            document.getElementById(type + 'Modal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeModal(type) {
+            document.getElementById(type + 'Modal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        function switchModal(from, to) {
+            closeModal(from);
+            setTimeout(() => openModal(to), 200);
+        }
+
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('active');
+                    document.body.style.overflow = '';
+                }
+            });
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal-overlay').forEach(overlay => {
+                    overlay.classList.remove('active');
+                });
+                document.body.style.overflow = '';
+            }
+        });
+
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+            input.setAttribute('type', type);
+        }
+
+        function sendVerificationCode() {
+            const email = document.getElementById('regEmail').value;
+            if (!email || !email.includes('@')) {
+                showNotification('请先输入有效的邮箱', 'warning');
+                return;
+            }
+
+            // 调用 API 发送验证码
+            apiClient.sendVerificationCode(email).then(result => {
+                if (result.success) {
+                    showNotification('验证码已发送至您的邮箱，请查收', 'success');
+                    const btn = document.getElementById('sendCodeBtn');
+                    let countdown = 60;
+                    btn.textContent = countdown + '秒后重发';
+                    btn.disabled = true;
+                    const timer = setInterval(() => {
+                        countdown--;
+                        btn.textContent = countdown + '秒后重发';
+                        if (countdown <= 0) {
+                            clearInterval(timer);
+                            btn.textContent = '发送验证码';
+                            btn.disabled = false;
+                        }
+                    }, 1000);
+                } else {
+                    showNotification(result.error || '发送验证码失败', 'warning');
+                    const btn = document.getElementById('sendCodeBtn');
+                    btn.disabled = false;
+                    btn.textContent = '发送验证码';
+                }
+            }).catch(error => {
+                console.error('Send code error:', error);
+                showNotification('网络错误或服务器不可用', 'warning');
+                const btn = document.getElementById('sendCodeBtn');
+                btn.disabled = false;
+                btn.textContent = '发送验证码';
+            });
+        }
+
+        // 登录表单提交处理
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const rememberMe = document.getElementById('rememberMe').checked;
+
+            if (!email || !password) {
+                showNotification('请填写邮箱和密码', 'warning');
+                return;
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showNotification('邮箱格式不正确', 'warning');
+                return;
+            }
+
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="loading-spinner"></span> 登录中...';
+
+            try {
+                const result = await apiClient.login({ email, password });
+                if (result.success) {
+                    const token = result.data.token;
+                    const userData = result.data.data;
+                    if (token && userData) {
+                        localStorage.setItem('authToken', token);
+                        localStorage.setItem('userInfo', JSON.stringify(userData));
+                    }
+                    const notificationMsg = (userData && userData.email) ? `欢迎回来，${userData.email}！` : '登录成功';
+                    showNotification(notificationMsg, 'success');
+                    if (rememberMe) {
+                        localStorage.setItem('rememberMe', 'true');
+                    }
+                    setTimeout(() => {
+                        window.location.href = PAGE.INDEX;
+                    }, 1500);
+                } else {
+                    let errorMessage = result.error || '登录失败';
+                    if (result.data && result.data.code) {
+                        switch (result.data.code) {
+                            case 'U001': errorMessage = '用户不存在，请检查邮箱地址'; break;
+                            case 'U002': errorMessage = '密码错误，请重新输入'; break;
+                            case '400': errorMessage = '参数错误：' + (result.data.message || '邮箱格式不正确'); break;
+                            case '500': errorMessage = '服务器错误，请稍后再试'; break;
+                            default: errorMessage = result.data.message || errorMessage;
+                        }
+                    }
+                    showNotification(errorMessage, 'warning');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showNotification('网络错误或服务器不可用', 'warning');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            }
+        });
+
+        // 注册表单提交处理
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const confirmPassword = document.getElementById('regConfirmPassword').value;
+            const verificationCode = document.getElementById('regCode').value.trim();
+            const username = document.getElementById('regUsername').value.trim();
+            const termsCheckbox = document.querySelector('.terms-checkbox input[type="checkbox"]');
+
+            if (!email || !password || !confirmPassword || !verificationCode || !username) {
+                showNotification('请填写所有必填项', 'warning');
+                return;
+            }
+
+            if (!termsCheckbox.checked) {
+                showNotification('请同意服务条款和隐私政策', 'warning');
+                return;
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showNotification('邮箱格式不正确', 'warning');
+                return;
+            }
+
+            if (password.length < 6) {
+                showNotification('密码长度至少为 6 位', 'warning');
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                showNotification('两次输入的密码不一致', 'warning');
+                return;
+            }
+
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="loading-spinner"></span> 注册中...';
+
+            try {
+                const result = await apiClient.register({
+                    email: email,
+                    password: password,
+                    code: verificationCode
+                });
+                if (result.success) {
+                    showNotification('您的账户已成功创建！正在自动登录...', 'success');
+
+                    // 注册成功后自动登录
+                    setTimeout(async () => {
+                        try {
+                            const loginResult = await apiClient.login({
+                                email: email,
+                                password: password
+                            });
+
+                            if (loginResult.success) {
+                                showNotification('登录成功，欢迎加入！', 'success');
+
+                                // 关闭注册模态框
+                                const registerModal = document.getElementById('registerModal');
+                                if (registerModal) {
+                                    registerModal.classList.remove('active');
+                                }
+                                document.body.style.overflow = '';
+
+                                // 刷新页面更新 UI 状态
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 1500);
+                            } else {
+                                showNotification('注册成功，请关闭弹窗后手动登录', 'info');
+                            }
+                        } catch (loginError) {
+                            console.error('Auto login error:', loginError);
+                            showNotification('注册成功，请关闭弹窗后手动登录', 'info');
+                        }
+                    }, 1000);
+                } else {
+                    let errorMessage = result.error || '注册失败';
+                    if (result.data && result.data.code) {
+                        switch (result.data.code) {
+                            case 'U003': errorMessage = '验证码错误或已过期，请重新获取'; break;
+                            case 'U004': errorMessage = '该邮箱已被注册，请直接登录或使用其他邮箱'; break;
+                            case '400': errorMessage = '参数错误：' + (result.data.message || '请检查输入信息'); break;
+                            case '500': errorMessage = '服务器错误，请稍后再试'; break;
+                            default: errorMessage = result.data.message || errorMessage;
+                        }
+                    }
+                    showNotification(errorMessage, 'warning');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showNotification('网络错误或服务器不可用', 'warning');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            }
+        });
+
+        // 提示消息函数 - 兼容两种调用方式
+        // showNotification(message, type) -- 统一两参数签名
+        // type: 'success' | 'error' | 'warning' | 'info'
+        function showNotification(message, type) {
+            type = type || 'info';
+            const titleMap = { success: '成功', error: '错误', warning: '警告', info: '提示' };
+            const title = titleMap[type] || '提示';
+
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `<strong>${escapeHtml(title)}</strong><br>${escapeHtml(message)}`;
+            notification.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 24px;
+                padding: 14px 24px;
+                background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#7c3aed'};
+                color: white;
+                border-radius: 12px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+                font-size: 14px;
+                font-weight: 600;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+            `;
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 2500);
+        }
+
+        // 添加动画样式
+        if (!document.getElementById('notificationStyles')) {
+            const style = document.createElement('style');
+            style.id = 'notificationStyles';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // 文档列表点击事件
+        document.querySelectorAll('#docList .history-item').forEach(item => {
+            item.addEventListener('click', function() {
+                document.querySelectorAll('#docList .history-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+
+                const fileName = this.querySelector('.history-title').textContent;
+                if (typeof UITools !== 'undefined') {
+                    UITools.showNotification('info', '提示', `已加载：${fileName}`);
+                } else if (typeof showNotification !== 'undefined') {
+                    showNotification(`已加载：${fileName}`, 'info');
+                } else {
+                    alert(`已加载：${fileName}`);
+                }
+
+                // 显示翻译结果
+                resultFileName.textContent = fileName.replace('📄 ', '');
+                resultSource.textContent = '此处显示原文内容...\n\n这是演示效果，实际翻译需要连接后端 API 处理文件。';
+                resultTarget.textContent = '此处显示翻译结果...\n\nTranslated content will appear here.';
+                resultContainer.style.display = 'flex';
+                uploadArea.style.display = 'none';
+            });
+        });
+    </script>
+</body>
+</html>

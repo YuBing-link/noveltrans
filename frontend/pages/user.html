@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户中心 - NovelTrans</title>
+    <link rel="stylesheet" href="styles/animations.css">
+    <script>
+        // 页面加载前立即应用主题，防止闪烁
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <style>
+        :root {
+            --primary-color: #7c3aed;
+            --primary-hover: #6d28d9;
+            --primary-light: #8b5cf6;
+            --primary-bg: #f5f3ff;
+            --bg-color: #fafafa;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-sub: #6b7280;
+            --text-light: #9ca3af;
+            --border-light: #e5e7eb;
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+            --shadow-lg: 0 20px 25px -5px rgba(0,0,0,0.1);
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-pill: 9999px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        a { text-decoration: none; color: inherit; }
+
+        /* 导航栏 */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 5%;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-light);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary-color);
+            transition: transform 0.3s;
+        }
+
+        .logo:hover { transform: scale(1.05); }
+
+        .nav-menu { display: flex; gap: 24px; align-items: center; }
+        .nav-menu a {
+            color: var(--text-sub);
+            font-weight: 500;
+            font-size: 14px;
+            transition: color 0.3s;
+            position: relative;
+        }
+
+        .nav-menu a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary-color);
+            transition: width 0.3s;
+        }
+
+        .nav-menu a:hover { color: var(--primary-color); }
+        .nav-menu a:hover::after { width: 100%; }
+        .nav-menu a.active { color: var(--primary-color); }
+        .nav-menu a.active::after { width: 100%; }
+
+        /* 主容器 */
+        .container {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 24px;
+            padding: 24px 5%;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+            box-shadow: var(--shadow-md);
+        }
+
+        .user-card {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-light);
+            margin-bottom: 20px;
+        }
+
+        .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 32px;
+            color: white;
+            font-weight: 700;
+        }
+
+        .user-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+        .user-email { font-size: 13px; color: var(--text-sub); }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: var(--text-sub);
+        }
+
+        .nav-item:hover {
+            background: var(--primary-bg);
+            color: var(--primary-color);
+        }
+
+        .nav-item.active {
+            background: var(--primary-bg);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .nav-item svg { width: 20px; height: 20px; }
+
+        /* 主内容区 */
+        .main-content {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            align-items: start;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-md);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title svg { width: 20px; height: 20px; color: var(--primary-color); }
+
+        /* 会员信息卡片 */
+        .member-card {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .member-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .member-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .member-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 6px 16px;
+            border-radius: var(--radius-pill);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .member-info h3 { font-size: 24px; margin-bottom: 8px; }
+        .member-info p { opacity: 0.9; font-size: 14px; }
+
+        .quota-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .quota-item {
+            background: rgba(255,255,255,0.15);
+            padding: 16px;
+            border-radius: var(--radius-md);
+            text-align: center;
+        }
+
+        .quota-value { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+        .quota-label { font-size: 12px; opacity: 0.9; }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: white;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        /* 统计卡片 */
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 8px;
+        }
+
+        .stat-label { font-size: 14px; color: var(--text-sub); }
+
+        /* 快捷操作 */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .action-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px;
+            background: var(--bg-color);
+            border: 2px solid var(--border-light);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-btn:hover {
+            border-color: var(--primary-color);
+            background: var(--primary-bg);
+            transform: translateY(-2px);
+        }
+
+        .action-btn svg {
+            width: 32px;
+            height: 32px;
+            color: var(--primary-color);
+        }
+
+        .action-btn span { font-size: 13px; font-weight: 600; }
+
+        /* 最近活动 */
+        .activity-list {
+            list-style: none;
+        }
+
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .activity-item:last-child { border-bottom: none; }
+
+        .activity-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .activity-icon svg { width: 20px; height: 20px; color: var(--primary-color); }
+
+        .activity-info { flex: 1; min-width: 0; }
+        .activity-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+        .activity-time { font-size: 12px; color: var(--text-sub); }
+
+        .activity-action {
+            padding: 6px 12px;
+            border-radius: var(--radius-pill);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-success { background: #d1fae5; color: #065f46; }
+        .status-warning { background: #fef3c7; color: #92400e; }
+        .status-info { background: var(--primary-bg); color: var(--primary-color); }
+
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .container { grid-template-columns: 1fr; }
+            .sidebar { position: static; }
+            .main-content { grid-template-columns: 1fr; }
+            .quota-container { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .nav-menu { display: none; }
+            .quota-container { grid-template-columns: 1fr; }
+            .quick-actions { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* 深色模式 */
+        html[data-theme="dark"] .navbar {
+            background: rgba(18, 18, 18, 0.95);
+            border-bottom-color: #262626;
+        }
+
+        html[data-theme="dark"] .sidebar {
+            background: #121212;
+            border-color: #262626;
+        }
+
+        html[data-theme="dark"] .card {
+            background: #121212;
+            border: 1px solid #262626;
+        }
+
+        html[data-theme="dark"] body {
+            background-color: #0a0a0a;
+            color: #e5e5e5;
+        }
+
+        html[data-theme="dark"] .nav-item {
+            color: #a3a3a3;
+        }
+
+        html[data-theme="dark"] .nav-item:hover,
+        html[data-theme="dark"] .nav-item.active {
+            background: rgba(124, 58, 237, 0.15);
+            color: #a78bfa;
+        }
+
+        html[data-theme="dark"] .user-email,
+        html[data-theme="dark"] .stat-label,
+        html[data-theme="dark"] .activity-time {
+            color: #a3a3a3;
+        }
+
+        html[data-theme="dark"] .action-btn {
+            background: #0a0a0a;
+            border-color: #262626;
+        }
+
+        html[data-theme="dark"] .action-btn:hover {
+            border-color: #7c3aed;
+            background: rgba(124, 58, 237, 0.1);
+        }
+
+        html[data-theme="dark"] .activity-item {
+            border-bottom-color: #262626;
+        }
+
+        html[data-theme="dark"] .avatar {
+            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+        }
+
+        html[data-theme="dark"] .stat-value {
+            color: #a78bfa;
+        }
+
+        html[data-theme="dark"] .member-card {
+            background: linear-gradient(135deg, #5b21b6 0%, #4c1d95 100%);
+        }
+
+        html[data-theme="dark"] .activity-icon {
+            background: rgba(124, 58, 237, 0.2);
+        }
+
+        html[data-theme="dark"] .activity-icon svg {
+            color: #a78bfa;
+        }
+    </style>
+</head>
+<body>
+    <!-- 粒子背景 -->
+    <div class="particles-container">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <nav class="navbar">
+        <a href="index.html" class="logo">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <span>NovelTrans</span>
+        </a>
+        <div class="nav-menu">
+            <a href="index.html">首页</a>
+            <a href="translation.html">翻译</a>
+            <a href="user.html" class="active">用户中心</a>
+            <a href="help.html">帮助</a>
+        </div>
+        <div class="nav-actions" id="nav-actions">
+            <!-- 未登录时显示 -->
+            <div id="login-link" style="display: flex; gap: 12px;">
+                <a href="login.html" class="btn btn-ghost">登录</a>
+                <a href="register.html" class="btn btn-primary">注册</a>
+            </div>
+            <!-- 已登录时显示用户菜单 -->
+            <div id="user-menu" style="display: none; align-items: center; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div id="user-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--primary-color), var(--primary-light)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">U</div>
+                    <span id="user-name" style="font-weight: 500; color: var(--text-main);">用户</span>
+                </div>
+                <button id="logout-link" class="btn btn-outline" style="display: none;">退出</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="user-card">
+                <div class="avatar" id="sidebar-avatar">U</div>
+                <div class="user-name" id="sidebar-user-name">加载中...</div>
+                <div class="user-email" id="sidebar-user-email">加载中...</div>
+            </div>
+            <nav>
+                <div class="nav-item active">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span>个人中心</span>
+                </div>
+                <a href="history.html" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>翻译历史</span>
+                </a>
+                <a href="settings.html" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>设置</span>
+                </a>
+                <a href="glossary.html" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                    <span>术语库</span>
+                </a>
+                <a href="help.html" class="nav-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span>帮助</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <!-- 会员信息卡片 -->
+            <div class="card member-card">
+                <div class="member-header">
+                    <div class="member-info">
+                        <h3 id="member-greeting">尊敬的用户</h3>
+                        <p id="member-message">感谢您的支持，继续享受优质的翻译服务吧</p>
+                    </div>
+                    <div class="member-badge" id="member-badge">VIP 会员</div>
+                </div>
+                <div class="quota-container">
+                    <div class="quota-item">
+                        <div class="quota-value" id="quota-chars">2,458</div>
+                        <div class="quota-label">已翻译字符</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 24%"></div>
+                        </div>
+                    </div>
+                    <div class="quota-item">
+                        <div class="quota-value" id="quota-files">12</div>
+                        <div class="quota-label">已翻译文件</div>
+                    </div>
+                    <div class="quota-item">
+                        <div class="quota-value" id="quota-days">27 天</div>
+                        <div class="quota-label">会员剩余天数</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计卡片 -->
+            <div class="card stat-card">
+                <div class="stat-value">12</div>
+                <div class="stat-label">累计翻译</div>
+            </div>
+            <div class="card stat-card">
+                <div class="stat-value">156K</div>
+                <div class="stat-label">翻译字符</div>
+            </div>
+            <div class="card stat-card">
+                <div class="stat-value">3</div>
+                <div class="stat-label">术语库</div>
+            </div>
+            <div class="card stat-card">
+                <div class="stat-value">28</div>
+                <div class="stat-label">导出次数</div>
+            </div>
+
+            <!-- 快捷操作 -->
+            <div class="card">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    快捷操作
+                </div>
+                <div class="quick-actions">
+                    <a href="translation.html" class="action-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
+                        <span>开始翻译</span>
+                    </a>
+                    <a href="history.html" class="action-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>查看历史</span>
+                    </a>
+                    <a href="glossary.html" class="action-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                        <span>管理术语</span>
+                    </a>
+                    <a href="settings.html" class="action-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 .33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        <span>账户设置</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 最近活动 -->
+            <div class="card">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    最近活动
+                </div>
+                <ul class="activity-list">
+                    <li class="activity-item">
+                        <div class="activity-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        </div>
+                        <div class="activity-info">
+                            <div class="activity-title">翻译了《小说第一章.txt》</div>
+                            <div class="activity-time">2026-02-21 15:30</div>
+                        </div>
+                        <span class="activity-action status-success">已完成</span>
+                    </li>
+                    <li class="activity-item">
+                        <div class="activity-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </div>
+                        <div class="activity-info">
+                            <div class="activity-title">导出了翻译结果</div>
+                            <div class="activity-time">2026-02-21 14:20</div>
+                        </div>
+                        <span class="activity-action status-info">EPUB</span>
+                    </li>
+                    <li class="activity-item">
+                        <div class="activity-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </div>
+                        <div class="activity-info">
+                            <div class="activity-title">更新了术语库</div>
+                            <div class="activity-time">2026-02-20 10:15</div>
+                        </div>
+                        <span class="activity-action status-warning">已修改</span>
+                    </li>
+                </ul>
+            </div>
+        </main>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="js/api-client.js"></script>
+    <script src="js/auth-manager.js"></script>
+    <script src="utils/ui.js"></script>
+    <script src="js/auth-middleware.js"></script>
+    <script src="js/auth-utils.js"></script>
+    <script src="js/effects.js"></script>
+    <script>
+        // 更新用户信息显示
+        function updateUserInfo() {
+            const user = AuthManager.getCurrentUser();
+            if (user) {
+                const name = user.userName || user.username || user.email || '用户';
+                const email = user.email || '';
+
+                // 更新侧边栏用户信息
+                document.getElementById('sidebar-user-name').textContent = name;
+                document.getElementById('sidebar-user-email').textContent = email;
+
+                // 更新头像首字母
+                const firstChar = name.charAt(0).toUpperCase();
+                document.getElementById('sidebar-avatar').textContent = firstChar;
+            }
+        }
+
+        // 从后端加载用户资料
+        async function loadUserProfile() {
+            try {
+                const result = await apiClient.getProfile();
+                if (result.success && result.data) {
+                    const user = result.data;
+
+                    // 更新 localStorage 中的用户信息
+                    localStorage.setItem('userInfo', JSON.stringify(user));
+
+                    const name = user.userName || user.username || user.email || '用户';
+                    const email = user.email || '';
+
+                    // 更新侧边栏用户信息
+                    document.getElementById('sidebar-user-name').textContent = name;
+                    document.getElementById('sidebar-user-email').textContent = email;
+
+                    // 更新头像首字母
+                    const firstChar = name.charAt(0).toUpperCase();
+                    document.getElementById('sidebar-avatar').textContent = firstChar;
+
+                    // 更新会员卡片问候语
+                    const greetingElement = document.getElementById('member-greeting');
+                    if (greetingElement) {
+                        greetingElement.textContent = `尊敬的用户 ${name}`;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load profile:', error);
+                // 如果 API 调用失败，使用 localStorage 中的信息
+                updateUserInfo();
+            }
+        }
+
+        // 从后端加载用户配额信息
+        async function loadUserQuota() {
+            try {
+                const result = await apiClient.getQuota();
+                if (result.success && result.data) {
+                    const quota = result.data;
+
+                    // 已翻译字符
+                    const translatedChars = quota.translatedChars || 0;
+                    const charLimit = quota.charLimit || 10000;
+                    const charPercentage = Math.min((translatedChars / charLimit) * 100, 100);
+
+                    // 已翻译文件
+                    const translatedFiles = quota.translatedFiles || 0;
+
+                    // 会员剩余天数（从过期时间计算）
+                    let remainingDays = 27;
+                    if (quota.vipExpiryTime) {
+                        const expiryDate = new Date(quota.vipExpiryTime);
+                        const now = new Date();
+                        const diffTime = expiryDate - now;
+                        remainingDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                    }
+
+                    // 更新 DOM
+                    document.getElementById('quota-chars').textContent = translatedChars.toLocaleString();
+                    document.querySelector('.quota-container .progress-fill').style.width = charPercentage + '%';
+                    document.getElementById('quota-files').textContent = translatedFiles.toLocaleString();
+                    document.getElementById('quota-days').textContent = remainingDays + ' 天';
+
+                    // 更新会员等级
+                    const isVip = quota.isVip || false;
+                    const badgeElement = document.getElementById('member-badge');
+                    if (badgeElement) {
+                        badgeElement.textContent = isVip ? 'VIP 会员' : '免费用户';
+                    }
+
+                    // 更新问候语
+                    const user = AuthManager.getCurrentUser();
+                    const name = user?.userName || user?.username || user?.email || '用户';
+                    document.getElementById('member-greeting').textContent = `尊敬的用户 ${name}`;
+                }
+            } catch (error) {
+                console.error('Failed to load quota:', error);
+            }
+        }
+
+        // 从后端加载用户统计信息
+        async function loadUserStatistics() {
+            try {
+                const result = await apiClient.getStatistics();
+                if (result.success && result.data) {
+                    const stats = result.data;
+
+                    const statValues = document.querySelectorAll('.stat-card .stat-value');
+
+                    // 累计翻译文件数
+                    if (statValues[0]) {
+                        statValues[0].textContent = (stats.totalFiles || 12).toLocaleString();
+                    }
+
+                    // 累计翻译字符数
+                    if (statValues[1]) {
+                        statValues[1].textContent = formatNumber(stats.totalChars || 156000) + 'K';
+                    }
+
+                    // 术语库数量
+                    if (statValues[2]) {
+                        statValues[2].textContent = (stats.glossaryCount || 3).toLocaleString();
+                    }
+
+                    // 导出次数
+                    if (statValues[3]) {
+                        statValues[3].textContent = (stats.exportCount || 28).toLocaleString();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load statistics:', error);
+            }
+        }
+
+        // 格式化数字为 K 单位
+        function formatNumber(num) {
+            if (num >= 1000) {
+                return (num / 1000).toFixed(0);
+            }
+            return num.toString();
+        }
+
+        // 从后端加载最近活动
+        async function loadRecentActivity() {
+            try {
+                const result = await apiClient.getTranslationHistory({ page: 1, pageSize: 3 });
+                if (result.success && result.data) {
+                    const history = result.data.list || result.data || [];
+                    const activityList = document.querySelector('.activity-list');
+
+                    if (history.length > 0) {
+                        activityList.innerHTML = '';
+                        history.forEach(item => {
+                            const activityItem = document.createElement('li');
+                            activityItem.className = 'activity-item';
+
+                            const statusClass = item.status === 'completed' ? 'status-success' :
+                                               item.status === 'failed' ? 'status-warning' : 'status-info';
+                            const statusText = item.status === 'completed' ? '已完成' :
+                                              item.status === 'failed' ? '失败' : '翻译中';
+
+                            const fileType = (item.fileName || '').split('.').pop().toUpperCase() || 'TXT';
+
+                            activityItem.innerHTML = `
+                                <div class="activity-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                </div>
+                                <div class="activity-info">
+                                    <div class="activity-title">${escapeHtml(item.fileName || '未知文件')}</div>
+                                    <div class="activity-time">${formatDate(item.createdAt)}</div>
+                                </div>
+                                <span class="activity-action ${statusClass}">${statusText}</span>
+                            `;
+                            activityList.appendChild(activityItem);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load activity:', error);
+            }
+        }
+
+        // 转义 HTML 防止 XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 格式化日期
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // 页面加载时更新用户信息
+        document.addEventListener('DOMContentLoaded', function() {
+            // 保护此页面需要登录
+            if (typeof requireAuth !== 'undefined') {
+                if (!requireAuth()) return; // 未登录则重定向，不再执行后续 API 调用
+            }
+
+            // 从后端加载用户资料
+            loadUserProfile();
+
+            // 从后端加载数据
+            loadUserQuota();
+            loadUserStatistics();
+            loadRecentActivity();
+        });
+
+        // 更新进度条动画
+        document.querySelectorAll('.progress-fill').forEach(bar => {
+            const width = bar.style.width;
+            bar.style.width = '0';
+            setTimeout(() => {
+                bar.style.width = width;
+            }, 500);
+        });
+    </script>
+</body>
+</html>
