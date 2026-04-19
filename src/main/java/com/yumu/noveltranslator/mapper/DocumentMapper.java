@@ -18,4 +18,7 @@ public interface DocumentMapper extends BaseMapper<Document> {
 
     @Select("SELECT * FROM document WHERE user_id = #{userId} AND id = #{id} AND deleted = 0")
     Document findByIdAndUserId(Long id, Long userId);
+
+    @org.apache.ibatis.annotations.Update("UPDATE document SET deleted = 1 WHERE id = #{id}")
+    int updateDeletedStatus(Long id);
 }

@@ -595,14 +595,114 @@
                 docList.innerHTML = docs.map(doc => {
                     const statusMap = { pending: { text: '待处理', color: 'text-amber-500', dot: 'bg-amber-500' }, processing: { text: '处理中', color: 'text-blue-500', dot: 'bg-blue-500 animate-pulse' }, completed: { text: '已完成', color: 'text-emerald-500', dot: 'bg-emerald-500' }, failed: { text: '失败', color: 'text-red-500', dot: 'bg-red-500' } };
                     const s = statusMap[doc.status] || statusMap.pending;
-                    return `<li class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors">
+                    const isCompleted = doc.status === 'completed';
+                    const isProcessing = doc.status === 'processing';
+                    const isFailed = doc.status === 'failed';
+                    return `<li class="doc-list-item flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors" data-doc-id="${doc.id}">
                         <i data-lucide="file-text" class="w-4 h-4 text-gray-400 flex-shrink-0"></i>
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-medium truncate">${escapeHtml(doc.name || '未命名文档')}</p>
                             <p class="text-xs ${s.color}"><span class="w-1.5 h-1.5 rounded-full ${s.dot} inline-block mr-1"></span>${s.text}</p>
                         </div>
+                        ${isCompleted ? `<button class="doc-view-btn p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="查看结果"><i data-lucide="eye" class="w-3.5 h-3.5 text-gray-500"></i></button>` : ''}
+                        ${isProcessing ? `<button class="doc-cancel-btn p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="取消翻译"><i data-lucide="x" class="w-3.5 h-3.5 text-gray-500"></i></button>` : ''}
+                        ${isFailed ? `<button class="doc-retry-btn p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="重新翻译"><i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-gray-500"></i></button>` : ''}
+                        <button class="doc-delete-btn p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors" title="删除"><i data-lucide="trash-2" class="w-3.5 h-3.5 text-gray-400 hover:text-red-500"></i></button>
                     </li>`;
                 }).join('');
+                // 绑定文档列表点击事件
+                docList.querySelectorAll('.doc-list-item').forEach(li => {
+                    li.addEventListener('click', (e) => {
+                        // 如果点击的是按钮，不切换文档
+                        if (e.target.closest('button')) return;
+                        const docId = li.dataset.docId;
+                        const doc = docs.find(d => String(d.id) === docId);
+                        if (doc) showRestoredDocument(doc);
+                    });
+                });
+                docList.querySelectorAll('.doc-delete-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const li = e.target.closest('li');
+                        const docId = li.dataset.docId;
+                        if (!confirm('确定删除此文档？')) return;
+                        try {
+                            const token = localStorage.getItem('authToken');
+                            const res = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${docId}`, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const result = await res.json();
+                            if (result.success) {
+                                li.remove();
+                                showToast('success', '删除成功', '');
+                                loadDocumentList();
+                            } else {
+                                showToast('error', '删除失败', result.message || '未知错误');
+                            }
+                        } catch {
+                            showToast('error', '删除失败', '网络错误');
+                        }
+                    });
+                });
+                docList.querySelectorAll('.doc-view-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const li = e.target.closest('li');
+                        const docId = li.dataset.docId;
+                        const doc = docs.find(d => String(d.id) === docId);
+                        if (doc) showRestoredDocument(doc);
+                    });
+                });
+                docList.querySelectorAll('.doc-cancel-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const li = e.target.closest('li');
+                        const docId = li.dataset.docId;
+                        if (!confirm('确定取消此翻译任务？')) return;
+                        try {
+                            const token = localStorage.getItem('authToken');
+                            const res = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${docId}/cancel`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const result = await res.json();
+                            if (result.success) {
+                                showToast('success', '已取消', '翻译任务已取消');
+                                loadDocumentList();
+                            } else {
+                                showToast('error', '取消失败', result.message || '未知错误');
+                            }
+                        } catch {
+                            showToast('error', '取消失败', '网络错误');
+                        }
+                    });
+                });
+                docList.querySelectorAll('.doc-retry-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const li = e.target.closest('li');
+                        const docId = li.dataset.docId;
+                        const doc = docs.find(d => String(d.id) === docId);
+                        try {
+                            const token = localStorage.getItem('authToken');
+                            const res = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${docId}/retry`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const result = await res.json();
+                            if (result.success) {
+                                showToast('success', '已重试', '翻译任务已重新提交');
+                                loadDocumentList();
+                                if (doc) showRestoredDocument({...doc, status: 'processing'});
+                            } else {
+                                showToast('error', '重试失败', result.message || '未知错误');
+                            }
+                        } catch {
+                            showToast('error', '重试失败', '网络错误');
+                        }
+                    });
+                });
             } else {
                 docList.innerHTML = '<li class="text-xs text-gray-400 dark:text-gray-500 py-2 text-center">暂无文档</li>';
             }
@@ -650,6 +750,8 @@
 
         const isPending = doc.status === 'pending';
         const isCompleted = doc.status === 'completed';
+        const isProcessing = doc.status === 'processing';
+        const isFailed = doc.status === 'failed';
         el.innerHTML = `
             <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950/50 flex items-center justify-center flex-shrink-0"><i data-lucide="file-text" class="w-5 h-5 text-primary-600"></i></div>
@@ -661,6 +763,8 @@
                     <span class="w-1.5 h-1.5 rounded-full ${s.dot}"></span> ${s.text}
                 </span>
                 ${isPending ? '<button class="start-translate-btn ml-auto py-1.5 px-3 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"><i data-lucide="play" class="w-3 h-3"></i> 开始翻译</button>' : ''}
+                ${isProcessing ? '<button class="cancel-translate-btn ml-auto py-1.5 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"><i data-lucide="x-circle" class="w-3 h-3"></i> 取消翻译</button>' : ''}
+                ${isFailed ? '<button class="retry-translate-btn ml-auto py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1"><i data-lucide="refresh-cw" class="w-3 h-3"></i> 重新翻译</button>' : ''}
             </div>
         `;
         uploadedFiles.insertBefore(el, uploadedFiles.firstChild);
@@ -731,6 +835,63 @@
             // 正在翻译中，轮询状态
             const taskId = doc.taskId || 'task_' + doc.id;
             pollTask(taskId, { name: doc.name }, el);
+            // 绑定取消翻译按钮
+            const cancelBtn = el.querySelector('.cancel-translate-btn');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', async function() {
+                    if (!confirm('确定取消翻译任务？')) return;
+                    const statusEl = el.querySelector('.status-indicator');
+                    try {
+                        const cancelRes = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${doc.id}/cancel`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const cancelResult = await cancelRes.json();
+                        if (cancelResult.success) {
+                            statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-red-600';
+                            statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> 已取消';
+                            this.remove();
+                            showToast('success', '已取消', '翻译任务已取消');
+                            loadDocumentList();
+                        } else {
+                            showToast('error', '取消失败', cancelResult.message || '未知错误');
+                        }
+                    } catch {
+                        showToast('error', '取消失败', '网络错误');
+                    }
+                });
+            }
+        } else if (doc.status === 'failed') {
+            // 翻译失败，绑定重试按钮
+            const retryBtn = el.querySelector('.retry-translate-btn');
+            if (retryBtn) {
+                retryBtn.addEventListener('click', async function() {
+                    const statusEl = el.querySelector('.status-indicator');
+                    statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-primary-600 dark:text-primary-400';
+                    statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"></span> 重新翻译...';
+                    this.remove();
+                    try {
+                        const retryRes = await fetch(`${CONFIG.API_BASE_URL}${CONFIG.USER_API_PATH}/documents/${doc.id}/retry`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const retryResult = await retryRes.json();
+                        if (retryResult.success) {
+                            statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-primary-600 dark:text-primary-400';
+                            statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"></span> 翻译中...';
+                            const retryTaskId = doc.taskId || 'task_' + doc.id;
+                            await pollTask(retryTaskId, { name: doc.name }, el);
+                            showToast('success', '已重试', '翻译任务已重新提交');
+                        } else {
+                            statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-red-600';
+                            statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> 重试失败';
+                        }
+                    } catch {
+                        statusEl.className = 'status-indicator flex items-center gap-1.5 text-xs font-medium text-red-600';
+                        statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> 重试失败';
+                    }
+                });
+            }
         }
     }
 

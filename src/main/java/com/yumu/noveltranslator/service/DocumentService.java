@@ -108,9 +108,8 @@ public class DocumentService {
             } catch (IOException e) {
                 // 忽略文件删除失败
             }
-            // 逻辑删除
-            doc.setDeleted(1);
-            documentMapper.updateById(doc);
+            // 逻辑删除 - 使用直接更新避免 MyBatis-Plus @TableLogic 干扰
+            documentMapper.updateDeletedStatus(docId);
             return true;
         }
         return false;
@@ -126,6 +125,17 @@ public class DocumentService {
             doc.setErrorMessage(null);
             doc.setUpdateTime(LocalDateTime.now());
             documentMapper.updateById(doc);
+            // 同时重置关联的翻译任务状态
+            TranslationTask task = translationTaskMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<TranslationTask>()
+                            .eq(TranslationTask::getDocumentId, docId));
+            if (task != null) {
+                task.setStatus("pending");
+                task.setErrorMessage(null);
+                task.setProgress(0);
+                task.setUpdateTime(LocalDateTime.now());
+                translationTaskMapper.updateById(task);
+            }
             return true;
         }
         return false;

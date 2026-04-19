@@ -93,6 +93,28 @@ public class WebDocumentController {
     }
 
     /**
+     * 取消翻译
+     * POST /user/documents/{docId}/cancel
+     */
+    @PostMapping("/{docId}/cancel")
+    public Result<Void> cancelTranslation(@PathVariable Long docId) {
+        Long userId = SecurityUtil.getRequiredUserId();
+
+        TranslationTask task = translationTaskService.getTaskByDocumentId(docId);
+        if (task == null) {
+            return Result.error("翻译任务不存在");
+        }
+        if (!task.getUserId().equals(userId)) {
+            return Result.error("无权操作");
+        }
+        if (translationTaskService.cancelTask(task.getTaskId(), userId)) {
+            return Result.ok(null);
+        } else {
+            return Result.error("取消失败，任务可能已完成或正在处理");
+        }
+    }
+
+    /**
      * 重新翻译
      * POST /user/documents/{docId}/retry
      */
