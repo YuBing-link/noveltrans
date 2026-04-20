@@ -1,0 +1,109 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "N NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e8]: "N"
+          - text: NovelTrans
+        - navigation [ref=e9]:
+          - link "翻译" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img [ref=e11]
+            - text: 翻译
+      - generic [ref=e14]:
+        - button "切换主题" [ref=e15]:
+          - img [ref=e16]
+        - link "登录" [ref=e18] [cursor=pointer]:
+          - /url: /login
+  - main [ref=e19]:
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - heading "智能翻译" [level=1] [ref=e22]
+        - paragraph [ref=e23]: 输入文本，即时获取高质量翻译结果
+      - generic [ref=e25]:
+        - combobox [ref=e28]:
+          - option "自动检测" [selected]
+          - option "中文"
+          - option "英语"
+          - option "日语"
+          - option "韩语"
+          - option "法语"
+          - option "德语"
+          - option "西班牙语"
+          - option "俄语"
+          - option "葡萄牙语"
+          - option "意大利语"
+          - option "泰语"
+          - option "越南语"
+        - button "切换语言" [ref=e29]:
+          - img [ref=e30]
+        - combobox [ref=e35]:
+          - option "中文" [selected]
+          - option "英语"
+          - option "日语"
+          - option "韩语"
+          - option "法语"
+          - option "德语"
+          - option "西班牙语"
+          - option "俄语"
+          - option "葡萄牙语"
+          - option "意大利语"
+          - option "泰语"
+          - option "越南语"
+      - generic [ref=e36]:
+        - generic [ref=e38]:
+          - generic [ref=e39]:
+            - heading "源文本" [level=3] [ref=e40]
+            - generic [ref=e42]: "0"
+          - textbox "请输入要翻译的文本..." [ref=e43]
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - heading "翻译结果" [level=3] [ref=e47]
+            - button "清空" [ref=e49]:
+              - img [ref=e50]
+          - generic [ref=e54]: 翻译结果将显示在这里
+      - button "翻译" [disabled] [ref=e56]
+  - contentinfo [ref=e57]:
+    - generic [ref=e58]:
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - heading "产品" [level=4] [ref=e61]
+          - list [ref=e62]:
+            - listitem [ref=e63]:
+              - link "文本翻译" [ref=e64] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e65]:
+              - link "文档翻译" [ref=e66] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e67]:
+              - link "术语管理" [ref=e68] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e69]:
+          - heading "支持" [level=4] [ref=e70]
+          - list [ref=e71]:
+            - listitem [ref=e72]:
+              - link "帮助中心" [ref=e73] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e74]:
+              - link "关于我们" [ref=e75] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e76]:
+          - heading "法律" [level=4] [ref=e77]
+          - list [ref=e78]:
+            - listitem [ref=e79]:
+              - link "隐私政策" [ref=e80] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e81]:
+              - link "服务条款" [ref=e82] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e83]:
+          - heading "账户" [level=4] [ref=e84]
+          - list [ref=e85]:
+            - listitem [ref=e86]:
+              - link "登录" [ref=e87] [cursor=pointer]:
+                - /url: /login
+            - listitem [ref=e88]:
+              - link "注册" [ref=e89] [cursor=pointer]:
+                - /url: /register
+      - paragraph [ref=e91]: © 2026 NovelTrans. All rights reserved.

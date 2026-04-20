@@ -1,0 +1,62 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "N NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e8]: "N"
+          - text: NovelTrans
+        - navigation [ref=e9]:
+          - link "翻译" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img [ref=e11]
+            - text: 翻译
+      - generic [ref=e14]:
+        - button "切换主题" [ref=e15]:
+          - img [ref=e16]
+        - link "登录" [ref=e18] [cursor=pointer]:
+          - /url: /login
+  - main [ref=e19]
+  - contentinfo [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - heading "产品" [level=4] [ref=e24]
+          - list [ref=e25]:
+            - listitem [ref=e26]:
+              - link "文本翻译" [ref=e27] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e28]:
+              - link "文档翻译" [ref=e29] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e30]:
+              - link "术语管理" [ref=e31] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e32]:
+          - heading "支持" [level=4] [ref=e33]
+          - list [ref=e34]:
+            - listitem [ref=e35]:
+              - link "帮助中心" [ref=e36] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e37]:
+              - link "关于我们" [ref=e38] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e39]:
+          - heading "法律" [level=4] [ref=e40]
+          - list [ref=e41]:
+            - listitem [ref=e42]:
+              - link "隐私政策" [ref=e43] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e44]:
+              - link "服务条款" [ref=e45] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e46]:
+          - heading "账户" [level=4] [ref=e47]
+          - list [ref=e48]:
+            - listitem [ref=e49]:
+              - link "登录" [ref=e50] [cursor=pointer]:
+                - /url: /login
+            - listitem [ref=e51]:
+              - link "注册" [ref=e52] [cursor=pointer]:
+                - /url: /register
+      - paragraph [ref=e54]: © 2026 NovelTrans. All rights reserved.

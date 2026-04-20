@@ -1,0 +1,119 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "N NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e8]: "N"
+          - text: NovelTrans
+        - navigation [ref=e9]:
+          - link "翻译" [ref=e10] [cursor=pointer]:
+            - /url: /
+      - generic [ref=e11]:
+        - button "切换主题" [ref=e12]:
+          - img [ref=e13]
+        - link "登录" [ref=e15] [cursor=pointer]:
+          - /url: /login
+  - main [ref=e16]:
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - heading "智能翻译" [level=1] [ref=e20]
+        - paragraph [ref=e21]: 输入文本，即时获取高质量翻译结果
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - combobox [ref=e27]:
+            - option "自动检测" [selected]
+            - option "中文"
+            - option "英语"
+            - option "日语"
+            - option "韩语"
+            - option "法语"
+            - option "德语"
+            - option "西班牙语"
+            - option "俄语"
+            - option "葡萄牙语"
+            - option "意大利语"
+            - option "泰语"
+            - option "越南语"
+          - button "切换语言" [ref=e28]:
+            - img [ref=e29]
+          - combobox [ref=e34]:
+            - option "中文" [selected]
+            - option "英语"
+            - option "日语"
+            - option "韩语"
+            - option "法语"
+            - option "德语"
+            - option "西班牙语"
+            - option "俄语"
+            - option "葡萄牙语"
+            - option "意大利语"
+            - option "泰语"
+            - option "越南语"
+        - generic [ref=e36]:
+          - generic [ref=e37]: 翻译引擎
+          - combobox [ref=e38]:
+            - option "AI 翻译 (推荐)" [selected]
+            - option "神经网络"
+            - option "统计机器"
+      - generic [ref=e40]:
+        - button "快速" [ref=e41]
+        - button "专家" [ref=e42]
+      - generic [ref=e43]:
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - heading "源文本" [level=3] [ref=e47]
+            - generic [ref=e49]: "0"
+          - textbox "请输入要翻译的文本..." [ref=e50]
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - heading "翻译结果" [level=3] [ref=e54]
+            - button "清空" [ref=e56]:
+              - img [ref=e57]
+          - generic [ref=e61]: 翻译结果将显示在这里
+      - button "翻译" [disabled] [ref=e63]
+  - contentinfo [ref=e64]:
+    - generic [ref=e65]:
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - heading "产品" [level=4] [ref=e68]
+          - list [ref=e69]:
+            - listitem [ref=e70]:
+              - link "文本翻译" [ref=e71] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e72]:
+              - link "文档翻译" [ref=e73] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e74]:
+              - link "术语管理" [ref=e75] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e76]:
+          - heading "支持" [level=4] [ref=e77]
+          - list [ref=e78]:
+            - listitem [ref=e79]:
+              - link "帮助中心" [ref=e80] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e81]:
+              - link "关于我们" [ref=e82] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e83]:
+          - heading "法律" [level=4] [ref=e84]
+          - list [ref=e85]:
+            - listitem [ref=e86]:
+              - link "隐私政策" [ref=e87] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e88]:
+              - link "服务条款" [ref=e89] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e90]:
+          - heading "账户" [level=4] [ref=e91]
+          - list [ref=e92]:
+            - listitem [ref=e93]:
+              - link "登录" [ref=e94] [cursor=pointer]:
+                - /url: /login
+            - listitem [ref=e95]:
+              - link "注册" [ref=e96] [cursor=pointer]:
+                - /url: /register
+      - generic [ref=e97]:
+        - paragraph [ref=e98]: © 2026 NovelTrans. All rights reserved.
+        - paragraph [ref=e99]: 智能翻译，让语言不再是障碍
