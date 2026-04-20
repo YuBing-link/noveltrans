@@ -20,6 +20,9 @@ public class CollabProject {
 
     private Long ownerId;
 
+    /** 关联的上传文档ID */
+    private Long documentId;
+
     private String sourceLang;
 
     private String targetLang;

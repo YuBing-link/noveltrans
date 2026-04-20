@@ -3,6 +3,8 @@ package com.yumu.noveltranslator.controller.web;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.enums.TranslationStatus;
+import com.yumu.noveltranslator.service.CollabProjectService;
 import com.yumu.noveltranslator.service.DocumentService;
 import com.yumu.noveltranslator.service.TranslationTaskService;
 import com.yumu.noveltranslator.util.SecurityUtil;
@@ -32,6 +34,7 @@ public class WebDocumentController {
 
     private final DocumentService documentService;
     private final TranslationTaskService translationTaskService;
+    private final CollabProjectService collabProjectService;
 
     /**
      * 获取文档列表
@@ -119,40 +122,18 @@ public class WebDocumentController {
      * POST /user/documents/{docId}/retry
      */
     @PostMapping("/{docId}/retry")
-    public Result<Void> retryTranslation(@PathVariable Long docId) {
+    public Result<Void> retryDocument(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
         if (documentService.retryTranslation(docId, userId)) {
             return Result.ok(null);
         } else {
-            return Result.error("重新翻译失败");
+            return Result.error("重试失败，文档不存在");
         }
     }
 
     /**
-     * 开始翻译（上传后用户点击触发）
-     * POST /user/documents/{docId}/start
-     */
-    @PostMapping("/{docId}/start")
-    public Result<TaskStatusResponse> startTranslation(@PathVariable Long docId) {
-        Long userId = SecurityUtil.getRequiredUserId();
-
-        Document doc = documentService.getDocumentById(docId, userId);
-        if (doc == null) {
-            return Result.error("文档不存在");
-        }
-
-        TranslationTask task = translationTaskService.getTaskByDocumentId(docId);
-        if (task == null) {
-            return Result.error("翻译任务不存在");
-        }
-
-        translationTaskService.startDocumentTranslation(task, doc);
-        return Result.ok(translationTaskService.toTaskStatusResponse(task));
-    }
-
-    /**
-     * 上传文档（不自动翻译）
+     * 上传文档（自动创建翻译任务，后续由前端触发SSE流式翻译）
      * POST /user/documents/upload
      */
     @PostMapping("/upload")
@@ -160,7 +141,7 @@ public class WebDocumentController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "sourceLang", defaultValue = "auto") String sourceLang,
             @RequestParam(value = "targetLang") String targetLang,
-            @RequestParam(value = "mode", defaultValue = "novel") String mode) {
+            @RequestParam(value = "mode", defaultValue = "fast") String mode) {
 
         Long userId = SecurityUtil.getRequiredUserId();
 
@@ -171,14 +152,38 @@ public class WebDocumentController {
             request.setMode(mode);
 
             Document doc = documentService.uploadDocument(userId, file, request);
+
+            // 团队模式：自动创建协作项目并拆分章节
+            if ("team".equals(mode)) {
+                CollabProjectService.TeamProjectCreateResult result =
+                        collabProjectService.createProjectFromDocument(
+                                userId, doc.getId(), doc.getName(), doc.getPath(), doc.getFileType(),
+                                sourceLang, targetLang);
+
+                // 事务已提交，启动多 Agent 翻译
+                collabProjectService.startMultiAgentTranslation(result.projectId());
+
+                DocumentTranslationResponse response = new DocumentTranslationResponse();
+                response.setTaskId(null);
+                response.setDocumentId(doc.getId());
+                response.setDocumentName(doc.getName());
+                response.setStatus(TranslationStatus.PENDING.getValue());
+                response.setProjectId(result.projectId());
+                response.setMessage("团队模式已创建项目，共 " + result.chapterCount() + " 个章节");
+                return Result.ok(response);
+            }
+
+            // fast/expert 模式：创建任务后直接异步启动翻译
             TranslationTask task = translationTaskService.createDocumentTask(userId, doc);
+            translationTaskService.startDocumentTranslation(task, doc);
 
             DocumentTranslationResponse response = new DocumentTranslationResponse();
             response.setTaskId(task.getTaskId());
             response.setDocumentId(doc.getId());
             response.setDocumentName(doc.getName());
             response.setStatus(task.getStatus());
-            response.setMessage("文档上传成功，请点击开始翻译");
+            response.setProjectId(null);
+            response.setMessage("文档上传成功");
 
             return Result.ok(response);
 

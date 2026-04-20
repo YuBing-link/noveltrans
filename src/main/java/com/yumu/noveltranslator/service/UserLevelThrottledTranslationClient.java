@@ -82,9 +82,25 @@ public class UserLevelThrottledTranslationClient {
     private Semaphore proUserSemaphore;
     private Semaphore anonymousUserSemaphore;
 
+    /**
+     * 禁用代理的 ProxySelector，确保内部 Docker 服务直连
+     */
+    private static final java.net.ProxySelector NO_PROXY_SELECTOR = new java.net.ProxySelector() {
+        @Override
+        public java.util.List<java.net.Proxy> select(java.net.URI uri) {
+            System.out.println("[直连] ProxySelector.select(" + uri + ") -> NO_PROXY");
+            return java.util.List.of(java.net.Proxy.NO_PROXY);
+        }
+        @Override
+        public void connectFailed(java.net.URI uri, java.net.SocketAddress sa, java.io.IOException ioe) {
+            System.out.println("[直连] connectFailed(" + uri + "): " + ioe.getMessage());
+        }
+    };
+
     private final HttpClient client = HttpClient.newBuilder()
             .connectTimeout(Duration.ofMillis(CONNECT_TIMEOUT_MS))
             .executor(Executors.newVirtualThreadPerTaskExecutor())
+            .proxy(NO_PROXY_SELECTOR)
             .build();
 
     /**
@@ -110,6 +126,38 @@ public class UserLevelThrottledTranslationClient {
      */
     public String translate(String text, String targetLang, String engine, boolean html) {
         return translate(text, targetLang, engine, html, false);
+    }
+
+    /**
+     * 强制走 Python 服务翻译（专家模式）
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     * @param engine 翻译引擎（如 google/deepl 等）
+     * @return 翻译结果 JSON
+     */
+    public String translateWithPython(String text, String targetLang, String engine) {
+        Semaphore userSemaphore = getUserSemaphore();
+        try {
+            if (userSemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                try {
+                    return doTranslateRequest(text, targetLang, engine);
+                } finally {
+                    userSemaphore.release();
+                }
+            } else {
+                String errorMsg = "并发请求过多，请稍后重试";
+                log.warn("限流：{}", errorMsg);
+                throw new RuntimeException(errorMsg);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("请求被中断", e);
+        } catch (Exception e) {
+            String errorMsg = "翻译失败：" + e.getMessage();
+            log.error("Python 翻译失败：{}", errorMsg);
+            throw new RuntimeException(errorMsg, e);
+        }
     }
 
     /**
@@ -166,11 +214,11 @@ public class UserLevelThrottledTranslationClient {
     }
 
     /**
-     * 基于优秀率概率的轮询翻译（支持双向降级：Python⇄MTranServer，最终使用原文兜底）
+     * 基于优秀率概率的轮询翻译（支持双向降级：Python⇄MTranServer）
      *
      * 降级策略：
-     * 1. 轮询到 Python 服务 → Python 所有引擎失败 → 降级到 MTranServer → MTranServer 失败 → 保留原文
-     * 2. 轮询到 MTranServer → MTranServer 失败 → 降级到 Python 服务 → Python 所有引擎失败 → 保留原文
+     * 1. 轮询到 Python 服务 → Python 所有引擎失败 → 降级到 MTranServer → MTranServer 失败 → 抛出异常
+     * 2. 轮询到 MTranServer → MTranServer 失败 → 降级到 Python 服务 → Python 所有引擎失败 → 抛出异常
      *
      * 核心逻辑：
      * 1. 检查并重置过期的统计计数器
@@ -179,7 +227,7 @@ public class UserLevelThrottledTranslationClient {
      * 4. 根据优秀率计算被选中的概率
      * 5. 随机决定使用哪个引擎
      * 6. 首选引擎失败自动降级到另一引擎
-     * 7. 所有引擎都失败时，返回原文作为兜底
+     * 7. 所有引擎都失败时，抛出异常由调用方处理
      */
     private String translateWithRoundRobin(String text, String targetLang, String engine) {
         // 检查并重置过期统计
@@ -188,47 +236,39 @@ public class UserLevelThrottledTranslationClient {
         // 计算当前应该使用哪个服务
         boolean usePythonService = shouldUsePythonService();
 
-        String result;
-        try {
-            if (usePythonService) {
-                // 场景 1：轮询到 Python 服务
-                log.debug("轮询：Python 服务（优秀率概率选择）");
+        if (usePythonService) {
+            // 场景 1：轮询到 Python 服务
+            log.debug("轮询：Python 服务（优秀率概率选择）");
+            try {
+                return doTranslateRequest(text, targetLang, engine);
+            } catch (Exception e) {
+                // Python 服务（所有引擎）失败，降级到 MTranServer（本地引擎）
+                log.warn("Python 服务翻译失败，降级到 MTranServer: {}", e.getMessage());
                 try {
-                    result = doTranslateRequest(text, targetLang, engine);
-                } catch (Exception e) {
-                    // Python 服务（所有引擎）失败，降级到 MTranServer（本地引擎）
-                    log.warn("Python 服务翻译失败，降级到 MTranServer: {}", e.getMessage());
-                    try {
-                        result = doExternalTranslationRequest(text, targetLang);
-                    } catch (Exception e2) {
-                        // MTranServer 也失败，使用原文兜底
-                        log.error("MTranServer 翻译也失败，使用原文兜底：{} (根本原因：{})", e2.getMessage(),
-                                 e2.getCause() != null ? e2.getCause().getMessage() : "未知", e2);
-                        return buildFallbackResponse(text, "Python 和 MTranServer 均失败，使用原文兜底");
-                    }
-                }
-            } else {
-                // 场景 2：轮询到 MTranServer（本地引擎）
-                log.debug("轮询：MTran 服务（优秀率概率选择）");
-                try {
-                    result = doExternalTranslationRequest(text, targetLang);
-                } catch (Exception e) {
-                    // MTranServer 失败，降级到 Python 服务
-                    log.warn("MTranServer 翻译失败，降级到 Python 服务：{}", e.getMessage());
-                    try {
-                        result = doTranslateRequest(text, targetLang, engine);
-                    } catch (Exception e2) {
-                        // Python 服务（所有引擎）也失败，使用原文兜底
-                        log.error("Python 服务翻译也失败，使用原文兜底：{}", e2.getMessage());
-                        return buildFallbackResponse(text, "MTranServer 和 Python 均失败，使用原文兜底");
-                    }
+                    return doExternalTranslationRequest(text, targetLang);
+                } catch (Exception e2) {
+                    // MTranServer 也失败，抛出异常
+                    log.error("MTranServer 翻译也失败：{} (根本原因：{})", e2.getMessage(),
+                             e2.getCause() != null ? e2.getCause().getMessage() : "未知", e2);
+                    throw new RuntimeException("所有翻译引擎均失败 (Python → MTranServer): " + e.getMessage() + "; " + e2.getMessage(), e2);
                 }
             }
-            return result;
-        } catch (Exception e) {
-            // 兜底：所有引擎都失败，使用原文兜底
-            log.error("轮询翻译失败，使用原文兜底：{}", e.getMessage());
-            return buildFallbackResponse(text, "所有翻译引擎失败，使用原文兜底");
+        } else {
+            // 场景 2：轮询到 MTranServer（本地引擎）
+            log.debug("轮询：MTran 服务（优秀率概率选择）");
+            try {
+                return doExternalTranslationRequest(text, targetLang);
+            } catch (Exception e) {
+                // MTranServer 失败，降级到 Python 服务
+                log.warn("MTranServer 翻译失败，降级到 Python 服务：{}", e.getMessage());
+                try {
+                    return doTranslateRequest(text, targetLang, engine);
+                } catch (Exception e2) {
+                    // Python 服务（所有引擎）也失败，抛出异常
+                    log.error("Python 服务翻译也失败：{}", e2.getMessage());
+                    throw new RuntimeException("所有翻译引擎均失败 (MTranServer → Python): " + e.getMessage() + "; " + e2.getMessage(), e2);
+                }
+            }
         }
     }
 
@@ -238,7 +278,7 @@ public class UserLevelThrottledTranslationClient {
      * 降级策略：
      * 1. 首先尝试 Python 远程引擎
      * 2. Python 失败则降级到 MTranServer 本地引擎
-     * 3. MTranServer 也失败则使用原文兜底
+     * 3. MTranServer 也失败则抛出异常
      *
      * @param text 待翻译文本
      * @param targetLang 目标语言
@@ -255,25 +295,11 @@ public class UserLevelThrottledTranslationClient {
             try {
                 return doExternalTranslationRequest(text, targetLang);
             } catch (Exception e2) {
-                // MTranServer 也失败，使用原文兜底
-                log.error("MTranServer 翻译也失败，使用原文兜底：{}", e2.getMessage());
-                return buildFallbackResponse(text, "所有翻译引擎均失败，使用原文兜底");
+                // MTranServer 也失败，抛出异常
+                log.error("MTranServer 翻译也失败：{}", e2.getMessage());
+                throw new RuntimeException("所有翻译引擎均失败: " + e.getMessage() + "; " + e2.getMessage(), e2);
             }
         }
-    }
-
-    /**
-     * 构建兜底响应（使用原文）
-     * @param originalText 原文
-     * @param message 兜底说明
-     * @return 兜底响应 JSON
-     */
-    private String buildFallbackResponse(String originalText, String message) {
-        return String.format(
-            "{\"code\":200,\"data\":\"%s\",\"engine\":\"fallback\",\"fallback_reason\":\"%s\"}",
-            originalText.replace("\"", "\\\""),
-            message
-        );
     }
 
     /**
@@ -376,7 +402,7 @@ public class UserLevelThrottledTranslationClient {
         try {
             Map<String, Object> bodyMap = new LinkedHashMap<>();
             bodyMap.put("text", text);
-            bodyMap.put("to", targetLang);
+            bodyMap.put("target_lang", targetLang);
             bodyMap.put("engine", engine);
             bodyMap.put("fallback", true);
             String jsonBody = JSON.toJSONString(bodyMap);
@@ -393,6 +419,7 @@ public class UserLevelThrottledTranslationClient {
      * 调用 Python 翻译服务
      */
     private String doPythonServiceRequest(String jsonBody, String text) throws Exception {
+        log.info("[Python请求] URL={}, body length={}", pythonTranslateUrl, jsonBody.length());
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(pythonTranslateUrl))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -401,7 +428,9 @@ public class UserLevelThrottledTranslationClient {
                 .timeout(Duration.ofMillis(READ_TIMEOUT_MS))
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                 .build();
+        log.info("[Python请求] 发送请求到 {}", request.uri());
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        log.info("[Python响应] status={}, body length={}", response.statusCode(), response.body().length());
         if (response.statusCode() != 200) {
             throw new Exception("HTTP 错误：" + response.statusCode());
         }

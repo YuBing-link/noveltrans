@@ -48,6 +48,15 @@ public class PluginTranslateController {
     }
 
     /**
+     * 文本流式翻译（SSE）— 适用于长文本的单段流式输出
+     * POST /v1/translate/text/stream
+     */
+    @PostMapping(value = "/text/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamTextTranslate(@RequestBody @Valid SelectionTranslationRequest req) {
+        return translationService.streamTextTranslate(req);
+    }
+
+    /**
      * 为认证用户提供高级翻译功能
      * POST /v1/translate/premium-selection
      */

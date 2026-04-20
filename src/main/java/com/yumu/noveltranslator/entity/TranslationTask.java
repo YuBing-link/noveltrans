@@ -56,7 +56,7 @@ public class TranslationTask {
     private String engine;
 
     /**
-     * 任务状态：pending, processing, translating, completed, failed
+     * 任务状态：见 {@link com.yumu.noveltranslator.enums.TranslationStatus}
      */
     private String status;
 

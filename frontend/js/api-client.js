@@ -199,32 +199,6 @@ class ApiClient {
   /* ==================== 翻译接口 ==================== */
 
   /**
-   * 文本翻译
-   * POST /v1/translate/text
-   */
-  async translateText(params) {
-    const { text, sourceLang = 'auto', targetLang, mode = 'novel', engine } = params;
-
-    if (!text) {
-      return { success: false, error: '翻译文本不能为空' };
-    }
-    if (!targetLang) {
-      return { success: false, error: '目标语言不能为空' };
-    }
-
-    return this.request('/text', {
-      method: 'POST',
-      body: JSON.stringify({
-        text,
-        sourceLang,
-        targetLang,
-        mode,
-        engine
-      })
-    }, false, true);
-  }
-
-  /**
    * 选中翻译
    * POST /v1/translate/selection
    */
@@ -325,24 +299,6 @@ class ApiClient {
     };
 
     return xhr;
-  }
-
-  /**
-   * 文档翻译（需要认证）
-   * POST /v1/translate/document
-   */
-  async translateDocument(file, params = {}) {
-    const { sourceLang = 'auto', targetLang, mode = 'novel' } = params;
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('sourceLang', sourceLang);
-    formData.append('targetLang', targetLang);
-    formData.append('mode', mode);
-
-    return this.requestFormData('/document', formData, {
-      method: 'POST'
-    }, false, true);
   }
 
   /**
@@ -657,16 +613,6 @@ class ApiClient {
   }
 
   /**
-   * 重新翻译
-   * POST /user/documents/{docId}/retry
-   */
-  async retryDocument(docId) {
-    return this.request(`/documents/${docId}/retry`, {
-      method: 'POST'
-    }, true, false);
-  }
-
-  /**
    * 上传并翻译文档
    * POST /user/documents/upload
    */
@@ -680,16 +626,6 @@ class ApiClient {
     formData.append('mode', mode);
 
     return this.requestFormData('/documents/upload', formData, {
-      method: 'POST'
-    }, true, false);
-  }
-
-  /**
-   * 开始文档翻译
-   * POST /user/documents/{docId}/start
-   */
-  async startDocumentTranslation(docId) {
-    return this.request(`/documents/${docId}/start`, {
       method: 'POST'
     }, true, false);
   }

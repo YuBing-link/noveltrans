@@ -76,6 +76,8 @@ public class SecurityConfig {
                     "/v1/translate/premium_selection",
                     "/v1/translate/premium_reader",
                     "/v1/translate/document",
+                    "/v1/translate/document/stream",
+                    "/v1/translate/document/stream/**",
                     "/v1/translate/task/**"
                 ).permitAll()
 

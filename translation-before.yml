@@ -1,0 +1,61 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "NovelTrans" [ref=e4] [cursor=pointer]:
+        - /url: index.html
+        - img [ref=e5]
+        - generic [ref=e7]: NovelTrans
+      - generic [ref=e8]:
+        - link "首页" [ref=e9] [cursor=pointer]:
+          - /url: index.html
+        - link "翻译" [ref=e10] [cursor=pointer]:
+          - /url: translation.html
+        - link "用户中心" [ref=e11] [cursor=pointer]:
+          - /url: user.html
+        - link "历史" [ref=e12] [cursor=pointer]:
+          - /url: history.html
+        - link "术语库" [ref=e13] [cursor=pointer]:
+          - /url: glossary.html
+      - generic [ref=e14]:
+        - button [ref=e15] [cursor=pointer]:
+          - img [ref=e16]
+        - generic [ref=e18]:
+          - button "登录" [ref=e19] [cursor=pointer]
+          - button "注册" [ref=e20] [cursor=pointer]
+  - generic [ref=e21]:
+    - complementary [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - img [ref=e26]
+            - text: 翻译设置
+          - generic [ref=e29]: 翻译为
+          - combobox [ref=e30]:
+            - option "中文" [selected]
+            - option "英语"
+            - option "日语"
+            - option "韩语"
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - img [ref=e33]
+            - text: 翻译模式
+          - combobox [ref=e35]:
+            - option "快速模式 — 小模型" [selected]
+            - option "专家模式 — 大模型精翻"
+            - option "团队模式 — 多引擎 + RAG"
+          - paragraph [ref=e36]: 小模型快速翻译，适合日常使用
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - img [ref=e39]
+            - text: 文档列表
+          - list [ref=e41]:
+            - listitem [ref=e42]: 请先登录查看文档
+    - main [ref=e43]:
+      - generic [ref=e46] [cursor=pointer]:
+        - img [ref=e48]
+        - heading "拖拽文件到此处" [level=3] [ref=e51]
+        - paragraph [ref=e52]: 支持 TXT、EPUB、DOCX、PDF 格式，最大 50MB
+        - button "选择文件" [ref=e53]:
+          - img [ref=e54]
+          - text: 选择文件
+        - button "Choose File" [ref=e56]

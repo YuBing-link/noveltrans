@@ -4,9 +4,11 @@ import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationHistory;
 import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.service.state.TranslationStateMachine;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,9 @@ public class DocumentService {
 
     @Autowired
     private TranslationTaskMapper translationTaskMapper;
+
+    @Autowired
+    private TranslationStateMachine stateMachine;
 
     /**
      * 上传文档
@@ -67,7 +72,7 @@ public class DocumentService {
         doc.setTargetLang(request.getTargetLang());
         doc.setFileType(extension.replace(".", "").toLowerCase());
         doc.setFileSize(file.getSize());
-        doc.setStatus("pending");
+        doc.setStatus(TranslationStatus.PENDING.getValue());
         doc.setMode(request.getMode());
         doc.setCreateTime(LocalDateTime.now());
 
@@ -116,12 +121,12 @@ public class DocumentService {
     }
 
     /**
-     * 重新翻译文档
+     * 重新翻译文档（仅重置状态，实际翻译由前端 SSE 触发）
      */
     public boolean retryTranslation(Long docId, Long userId) {
         Document doc = documentMapper.findByIdAndUserId(docId, userId);
         if (doc != null) {
-            doc.setStatus("pending");
+            doc.setStatus(TranslationStatus.PENDING.getValue());
             doc.setErrorMessage(null);
             doc.setUpdateTime(LocalDateTime.now());
             documentMapper.updateById(doc);

@@ -27,4 +27,8 @@ public class DocumentTranslationResponse {
      * 消息
      */
     private String message;
+    /**
+     * 协作项目 ID（仅团队模式返回）
+     */
+    private Long projectId;
 }

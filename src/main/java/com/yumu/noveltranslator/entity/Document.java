@@ -55,7 +55,7 @@ public class Document {
     private String taskId;
 
     /**
-     * 翻译状态：pending, processing, completed, failed
+     * 翻译状态：见 {@link com.yumu.noveltranslator.enums.TranslationStatus}
      */
     private String status;
 

@@ -68,26 +68,6 @@ class DtoTest {
     }
 
     @Test
-    void textTranslationRequest() {
-        TextTranslationRequest req = new TextTranslationRequest();
-        req.setText("Hello World");
-        req.setSourceLang("en");
-        req.setTargetLang("zh");
-        req.setEngine("google");
-        assertEquals("Hello World", req.getText());
-    }
-
-    @Test
-    void textTranslationResponse() {
-        TextTranslationResponse resp = new TextTranslationResponse();
-        resp.setTranslatedText("你好世界");
-        resp.setTargetLang("zh");
-        resp.setDetectedLang("en");
-        resp.setEngine("google");
-        assertEquals("你好世界", resp.getTranslatedText());
-    }
-
-    @Test
     void documentTranslationRequest() {
         DocumentTranslationRequest req = new DocumentTranslationRequest();
         req.setSourceLang("en");

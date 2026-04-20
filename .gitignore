@@ -28,7 +28,11 @@ venv/
 # Environment
 .env
 *.env
-
+*.png
+*.txt
 # Node
 node_modules/
+web-app/node_modules/
+web-app/dist/
 .gstack/
+*.md

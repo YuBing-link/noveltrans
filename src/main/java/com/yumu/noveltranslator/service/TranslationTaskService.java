@@ -4,9 +4,18 @@ import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationHistory;
 import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.service.state.TranslationStateMachine;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yumu.noveltranslator.util.SseEmitterUtil;
+import com.yumu.noveltranslator.util.CacheKeyUtil;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.scheduling.annotation.Scheduled;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +29,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -40,33 +52,22 @@ public class TranslationTaskService {
     private DocumentMapper documentMapper;
 
     @Autowired
+    private TranslationStateMachine stateMachine;
+
+    @Autowired
     private UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
 
-    /**
-     * 创建文本翻译任务
-     */
-    public TranslationTask createTextTask(Long userId, TextTranslationRequest request) {
-        String taskId = generateTaskId();
+    @Autowired
+    private TranslationCacheService cacheService;
 
-        TranslationTask task = new TranslationTask();
-        task.setTaskId(taskId);
-        task.setUserId(userId);
-        task.setType("text");
-        task.setSourceLang(request.getSourceLang());
-        task.setTargetLang(request.getTargetLang());
-        task.setMode(request.getMode());
-        task.setEngine("google");
-        task.setStatus("pending");
-        task.setProgress(0);
-        task.setCreateTime(LocalDateTime.now());
+    @Autowired
+    private RagTranslationService ragTranslationService;
 
-        translationTaskMapper.insert(task);
+    @Autowired
+    private EntityConsistencyService entityConsistencyService;
 
-        // 异步执行翻译
-        executeTextTranslation(task, request.getText());
-
-        return task;
-    }
+    @Autowired
+    private TranslationPostProcessingService postProcessingService;
 
     /**
      * 创建文档翻译任务
@@ -83,7 +84,7 @@ public class TranslationTaskService {
         task.setTargetLang(doc.getTargetLang());
         task.setMode(doc.getMode());
         task.setEngine("google");
-        task.setStatus("pending");
+        task.setStatus(TranslationStatus.PENDING.getValue());
         task.setProgress(0);
         task.setCreateTime(LocalDateTime.now());
 
@@ -103,22 +104,23 @@ public class TranslationTaskService {
         if (task == null || doc == null) {
             return;
         }
-        if (!"pending".equals(task.getStatus()) && !"failed".equals(task.getStatus())) {
+        if (!TranslationStatus.PENDING.getValue().equals(task.getStatus()) && !TranslationStatus.FAILED.getValue().equals(task.getStatus())) {
             return;
         }
 
         // 更新文档状态为处理中
-        doc.setStatus("processing");
+        doc.setStatus(TranslationStatus.PROCESSING.getValue());
         doc.setUpdateTime(LocalDateTime.now());
         documentMapper.updateById(doc);
 
-        updateTaskProgress(task, "processing", 10, null);
+        updateTaskProgress(task, TranslationStatus.PROCESSING, 10, null);
 
         executeDocumentTranslation(task, doc);
     }
 
     /**
      * 异步执行文档翻译（使用虚拟线程）
+     * 接入三级缓存 + RAG + 实体一致性
      */
     private void executeDocumentTranslation(TranslationTask task, Document doc) {
         Thread.startVirtualThread(() -> {
@@ -126,16 +128,20 @@ public class TranslationTaskService {
                 // 读取文件内容
                 String content = readDocumentContent(doc.getPath(), doc.getFileType());
                 if (content == null || content.trim().isEmpty()) {
-                    updateTaskProgress(task, "failed", 0, "文件内容为空");
+                    updateTaskProgress(task, TranslationStatus.FAILED, 0, "文件内容为空");
                     return;
                 }
 
                 // 按段落分割翻译（每 3000 字符一批）
-                updateTaskProgress(task, "processing", 20, null);
+                updateTaskProgress(task, TranslationStatus.PROCESSING, 20, null);
                 StringBuilder translatedContent = new StringBuilder();
                 String[] paragraphs = content.split("(?<=\n)");
                 int total = paragraphs.length;
                 int batchStart = 0;
+                String targetLang = task.getTargetLang();
+                String engine = task.getEngine();
+                Long userId = task.getUserId();
+                String docId = "doc_" + doc.getId();
 
                 while (batchStart < total) {
                     StringBuilder batch = new StringBuilder();
@@ -146,42 +152,122 @@ public class TranslationTaskService {
                     }
 
                     if (batch.length() == 0) {
-                        // 单段落超长，直接翻译
                         batch.append(paragraphs[batchStart]);
                         batchEnd = batchStart + 1;
                     }
 
-                    String result = userLevelThrottledTranslationClient.translate(
-                            batch.toString(),
-                            task.getTargetLang(),
-                            task.getEngine(),
-                            false);
-
-                    translatedContent.append(result);
+                    String batchText = batch.toString();
+                    String translated = translateBatchWithCacheAndRag(batchText, targetLang, engine, userId, docId);
+                    translatedContent.append(translated);
                     batchStart = batchEnd;
 
                     int progress = 20 + (int) ((batchStart * 80.0) / total);
-                    updateTaskProgress(task, "processing", progress, null);
+                    updateTaskProgress(task, TranslationStatus.PROCESSING, progress, null);
                 }
 
                 // 保存翻译结果到文件
-                String translatedPath = doc.getPath().replace(".", "_translated.");
+                String translatedPath = buildTranslatedPath(doc.getPath());
                 Files.write(Paths.get(translatedPath), translatedContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
                 // 更新文档状态为已完成
-                doc.setStatus("completed");
+                doc.setStatus(TranslationStatus.COMPLETED.getValue());
                 doc.setCompletedTime(LocalDateTime.now());
                 doc.setUpdateTime(LocalDateTime.now());
                 documentMapper.updateById(doc);
 
-                updateTaskProgress(task, "completed", 100, null);
+                updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
                 saveTranslationHistory(task, content, translatedContent.toString());
 
             } catch (Exception e) {
                 log.error("文档翻译失败: {}", e.getMessage(), e);
-                updateTaskProgress(task, "failed", 0, "翻译失败：" + e.getMessage());
+                updateTaskProgress(task, TranslationStatus.FAILED, 0, "翻译失败：" + e.getMessage());
             }
         });
+    }
+
+    /**
+     * 带三级缓存+RAG+实体一致性的批量翻译
+     */
+    private String translateBatchWithCacheAndRag(String text, String targetLang, String engine, Long userId, String docId) {
+        log.info("[翻译批次] textLength={}, targetLang={}, engine={}", text.length(), targetLang, engine);
+        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang, engine);
+
+        // 1. L1/L2/L3 缓存查询
+        String cached = cacheService.getCache(cacheKey);
+        if (cached != null) {
+            log.info("[翻译批次] 缓存命中");
+            log.debug("文档翻译缓存命中");
+            return cached;
+        }
+        log.info("[翻译批次] 缓存未命中，继续");
+
+        // 2. RAG 查询
+        RagTranslationResponse ragResult = ragTranslationService.searchSimilar(text, targetLang, engine);
+        if (ragResult.isDirectHit()) {
+            log.info("文档翻译 RAG 直接命中, similarity={}", ragResult.getSimilarity());
+            String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, engine);
+            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine);
+            return result;
+        }
+
+        // 3. 长文本使用实体一致性（术语表+占位符保护）
+        boolean useConsistency = entityConsistencyService.shouldUseConsistency(text);
+        log.info("[翻译批次] 是否使用一致性={}", useConsistency);
+        if (useConsistency) {
+            log.info("[翻译批次] 进入实体一致性翻译");
+            ConsistencyTranslationResult consistencyResult =
+                    entityConsistencyService.translateWithConsistency(text, targetLang, engine, userId, docId);
+            log.info("[翻译批次] 一致性结果: applied={}, textNull={}",
+                    consistencyResult.isConsistencyApplied(),
+                    consistencyResult.getTranslatedText() == null);
+            if (consistencyResult.isConsistencyApplied() && consistencyResult.getTranslatedText() != null) {
+                String result = postProcessingService.fixUntranslatedChinese(text, consistencyResult.getTranslatedText(), targetLang, engine);
+                if (shouldCacheResult(text, result)) {
+                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine);
+                }
+                ragTranslationService.storeTranslationMemory(text, result, targetLang, engine);
+                return result;
+            }
+        }
+
+        // 4. 兜底：直接调用翻译服务
+        log.info("[翻译批次] 调用翻译客户端");
+        String result = userLevelThrottledTranslationClient.translate(text, targetLang, engine, false);
+        log.info("[翻译批次] 翻译客户端返回: length={}", result != null ? result.length() : "null");
+        String translation = extractTranslatedContent(result);
+        log.info("翻译结果: translation={}, result_length={}", translation == null ? "null" : "not-null", result != null ? result.length() : 0);
+        if (translation == null || translation.isBlank()) {
+            log.error("翻译服务返回空响应，原文长度：{}，响应内容前100字符：{}", text.length(), result != null && result.length() > 100 ? result.substring(0, 100) : result);
+            throw new RuntimeException("翻译服务返回空响应，原文长度：" + text.length());
+        }
+        // 翻译后处理：检测并补救残留中文
+        translation = postProcessingService.fixUntranslatedChinese(text, translation, targetLang, engine);
+        if (shouldCacheResult(text, translation)) {
+            cacheService.putCache(cacheKey, text, translation, "auto", targetLang, engine);
+            ragTranslationService.storeTranslationMemory(text, translation, targetLang, engine);
+        }
+        return translation;
+    }
+
+    /**
+     * 判断是否应该缓存翻译结果
+     */
+    private boolean shouldCacheResult(String original, String translated) {
+        if (original == null || translated == null) return false;
+        String o = original.trim();
+        String t = translated.trim();
+        return !o.equals(t) && !o.equalsIgnoreCase(t);
+    }
+
+    /**
+     * 构建翻译文件路径（在扩展名前插入 _translated）
+     */
+    private String buildTranslatedPath(String originalPath) {
+        int lastDot = originalPath.lastIndexOf('.');
+        if (lastDot > 0) {
+            return originalPath.substring(0, lastDot) + "_translated" + originalPath.substring(lastDot);
+        }
+        return originalPath + "_translated";
     }
 
     /**
@@ -201,38 +287,16 @@ public class TranslationTaskService {
         }
     }
 
-    /**
-     * 异步执行文本翻译（使用虚拟线程）
-     */
-    private void executeTextTranslation(TranslationTask task, String text) {
-        Thread.startVirtualThread(() -> {
-            try {
-                // 更新状态为处理中
-                updateTaskProgress(task, "translating", 50, null);
-
-                // 调用翻译服务
-                String result = userLevelThrottledTranslationClient.translate(
-                        text,
-                        task.getTargetLang(),
-                        task.getEngine(),
-                        false);
-
-                // 更新状态为完成并保存历史
-                updateTaskProgress(task, "completed", 100, null);
-                saveTranslationHistory(task, text, result);
-
-            } catch (Exception e) {
-                // 更新状态为失败
-                updateTaskProgress(task, "failed", 0, "翻译失败：" + e.getMessage());
-            }
-        });
-    }
-
     @Transactional
-    protected void updateTaskProgress(TranslationTask task, String status, int progress, String errorMessage) {
-        task.setStatus(status);
+    protected void updateTaskProgress(TranslationTask task, TranslationStatus status, int progress, String errorMessage) {
+        // 如果任务已被取消，不再更新
+        TranslationTask current = translationTaskMapper.findByTaskId(task.getTaskId());
+        if (current != null && TranslationStatus.FAILED.getValue().equals(current.getStatus()) && "用户取消任务".equals(current.getErrorMessage())) {
+            return;
+        }
+        task.setStatus(status.getValue());
         task.setProgress(progress);
-        if ("completed".equals(status)) {
+        if (status == TranslationStatus.COMPLETED) {
             task.setCompletedTime(LocalDateTime.now());
         }
         if (errorMessage != null) {
@@ -249,6 +313,7 @@ public class TranslationTaskService {
         history.setUserId(task.getUserId());
         history.setTaskId(task.getTaskId());
         history.setType(task.getType());
+        history.setDocumentId(task.getDocumentId());
         history.setSourceLang(task.getSourceLang());
         history.setTargetLang(task.getTargetLang());
         history.setSourceText(sourceText != null && sourceText.length() > 500
@@ -266,54 +331,36 @@ public class TranslationTaskService {
         translationHistoryMapper.insert(history);
     }
 
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+
     /**
      * 从翻译响应中提取实际翻译内容
+     * 支持格式: {"translatedContent":"..."} 或 {"code":200,"data":"..."}
+     * 使用 JSON 解析自动处理 \n 等转义字符
      */
     private String extractTranslatedContent(String response) {
         if (response == null || response.isEmpty()) {
             return response;
         }
         try {
-            // 尝试解析 JSON: {"success":true,"engine":"mtran","translatedContent":"..."}
             if (response.startsWith("{")) {
-                int idx = response.indexOf("\"translatedContent\"");
-                if (idx >= 0) {
-                    int colonIdx = response.indexOf(':', idx + 19);
-                    int quoteStart = response.indexOf('"', colonIdx + 1);
-                    if (quoteStart >= 0) {
-                        int quoteEnd = findUnescapedQuoteEnd(response, quoteStart + 1);
-                        if (quoteEnd > quoteStart) {
-                            return response.substring(quoteStart + 1, quoteEnd)
-                                    .replace("\\n", "\n")
-                                    .replace("\\\\", "\\");
-                        }
-                    }
+                JsonNode node = JSON_MAPPER.readTree(response);
+
+                JsonNode contentNode = node.get("translatedContent");
+                if (contentNode != null && contentNode.isTextual()) {
+                    return contentNode.asText();
+                }
+
+                JsonNode dataNode = node.get("data");
+                if (dataNode != null && dataNode.isTextual()) {
+                    return dataNode.asText();
                 }
             }
         } catch (Exception e) {
             log.warn("解析翻译响应失败: {}", e.getMessage());
+            return null;
         }
         return response;
-    }
-
-    /**
-     * 查找未转义的引号结束位置
-     */
-    private int findUnescapedQuoteEnd(String str, int start) {
-        int i = start;
-        while (i < str.length()) {
-            if (str.charAt(i) == '\\') {
-                i += 2;
-                continue;
-            }
-            if (str.charAt(i) == '"') {
-                return i;
-            }
-            i++;
-        }
-        // fallback: find closing quote loosely
-        int idx = str.lastIndexOf('"');
-        return idx > start ? idx : -1;
     }
 
     /**
@@ -336,10 +383,20 @@ public class TranslationTaskService {
     public boolean cancelTask(String taskId, Long userId) {
         TranslationTask task = translationTaskMapper.findByTaskId(taskId);
         if (task != null && task.getUserId().equals(userId)) {
-            if ("pending".equals(task.getStatus()) || "processing".equals(task.getStatus())) {
-                task.setStatus("failed");
+            if (TranslationStatus.PENDING.getValue().equals(task.getStatus()) || TranslationStatus.PROCESSING.getValue().equals(task.getStatus())) {
+                task.setStatus(TranslationStatus.FAILED.getValue());
                 task.setErrorMessage("用户取消任务");
                 translationTaskMapper.updateById(task);
+                // 同步更新 Document 表状态
+                if (task.getDocumentId() != null) {
+                    Document doc = documentMapper.selectById(task.getDocumentId());
+                    if (doc != null) {
+                        doc.setStatus(TranslationStatus.FAILED.getValue());
+                        doc.setErrorMessage("用户取消任务");
+                        doc.setUpdateTime(LocalDateTime.now());
+                        documentMapper.updateById(doc);
+                    }
+                }
                 return true;
             }
         }
@@ -361,10 +418,13 @@ public class TranslationTaskService {
         response.setSourceLang(task.getSourceLang());
         response.setTargetLang(task.getTargetLang());
 
-        if ("completed".equals(task.getStatus())) {
-            response.setCompletedTime(task.getCompletedTime() != null
-                    ? task.getCompletedTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                    : null);
+        String status = task.getStatus();
+        if (TranslationStatus.COMPLETED.getValue().equals(status) || TranslationStatus.PROCESSING.getValue().equals(status) || TranslationStatus.PENDING.getValue().equals(status) || TranslationStatus.FAILED.getValue().equals(status)) {
+            if (TranslationStatus.COMPLETED.getValue().equals(status)) {
+                response.setCompletedTime(task.getCompletedTime() != null
+                        ? task.getCompletedTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                        : null);
+            }
 
             // 如果是文本翻译，从历史中获取结果
             if ("text".equals(task.getType())) {
@@ -379,18 +439,7 @@ public class TranslationTaskService {
                     Document doc = documentMapper.findById(task.getDocumentId());
                     if (doc != null) {
                         response.setTranslatedFilePath(doc.getPath());
-                        // 尝试读取翻译文件内容（解析JSON提取实际译文）
-                        String translatedPath = doc.getPath().replace(".", "_translated.");
-                        try {
-                            Path path = Paths.get(translatedPath);
-                            if (Files.exists(path)) {
-                                String rawContent = Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
-                                response.setTranslatedText(extractTranslatedContent(rawContent));
-                            }
-                        } catch (Exception e) {
-                            log.warn("读取翻译文件失败: {}", e.getMessage());
-                        }
-                        // 读取原文内容
+                        // 读取原文内容（任何状态都尝试读取）
                         try {
                             Path path = Paths.get(doc.getPath());
                             if (Files.exists(path)) {
@@ -399,6 +448,19 @@ public class TranslationTaskService {
                             }
                         } catch (Exception e) {
                             log.warn("读取原文文件失败: {}", e.getMessage());
+                        }
+                        // 已完成的文档翻译，读取翻译文件内容
+                        if (TranslationStatus.COMPLETED.getValue().equals(status)) {
+                            String translatedPath = buildTranslatedPath(doc.getPath());
+                            try {
+                                Path path = Paths.get(translatedPath);
+                                if (Files.exists(path)) {
+                                    String rawContent = Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
+                                    response.setTranslatedText(extractTranslatedContent(rawContent));
+                                }
+                            } catch (Exception e) {
+                                log.warn("读取翻译文件失败: {}", e.getMessage());
+                            }
                         }
                     }
                 }
@@ -417,7 +479,7 @@ public class TranslationTaskService {
             return null;
         }
 
-        if ("completed".equals(task.getStatus()) && "document".equals(task.getType())) {
+        if (TranslationStatus.COMPLETED.getValue().equals(task.getStatus()) && "document".equals(task.getType())) {
             if (task.getDocumentId() != null) {
                 Document doc = documentMapper.findById(task.getDocumentId());
                 if (doc != null && Files.exists(Paths.get(doc.getPath()))) {
@@ -430,11 +492,51 @@ public class TranslationTaskService {
     }
 
     /**
-     * 获取翻译历史列表
+     * 获取翻译历史列表（包含进行中的任务）
      */
     public List<TranslationHistory> getTranslationHistory(Long userId, int page, int pageSize, String type) {
         int offset = (page - 1) * pageSize;
-        List<TranslationHistory> histories = translationHistoryMapper.findByUserId(userId, offset, pageSize);
+
+        // 查询进行中的任务（pending/processing），这些任务可能还没有历史记录
+        List<TranslationHistory> histories = new ArrayList<>();
+
+        // 先查询进行中的任务
+        List<TranslationTask> inProgressTasks = translationTaskMapper.findByUserIdAndStatus(userId, offset, pageSize);
+        for (TranslationTask task : inProgressTasks) {
+            TranslationHistory history = new TranslationHistory();
+            history.setUserId(task.getUserId());
+            history.setTaskId(task.getTaskId());
+            history.setType(task.getType());
+            history.setDocumentId(task.getDocumentId());
+            history.setSourceLang(task.getSourceLang());
+            history.setTargetLang(task.getTargetLang());
+            history.setSourceText(null);
+            history.setTargetText(null);
+            history.setEngine(task.getEngine());
+            history.setCreateTime(task.getCreateTime());
+            histories.add(history);
+        }
+
+        // 再查询已完成的历史记录
+        List<TranslationHistory> completedHistories = translationHistoryMapper.findByUserId(userId, offset, pageSize);
+        histories.addAll(completedHistories);
+
+        // 去重（按taskId）
+        histories = histories.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        TranslationHistory::getTaskId,
+                        h -> h,
+                        (existing, replacement) -> existing
+                ))
+                .values()
+                .stream()
+                .sorted((a, b) -> {
+                    if (a.getCreateTime() == null) return 1;
+                    if (b.getCreateTime() == null) return -1;
+                    return b.getCreateTime().compareTo(a.getCreateTime());
+                })
+                .limit(pageSize)
+                .toList();
 
         if (type != null && !"all".equals(type)) {
             return histories.stream()
@@ -512,12 +614,290 @@ public class TranslationTaskService {
         // 查询关联任务状态
         if (history.getTaskId() != null) {
             TranslationTask task = translationTaskMapper.findByTaskId(history.getTaskId());
-            response.setStatus(task != null ? task.getStatus() : "completed");
+            response.setStatus(task != null ? task.getStatus() : TranslationStatus.COMPLETED.getValue());
         } else {
-            response.setStatus("completed");
+            response.setStatus(TranslationStatus.COMPLETED.getValue());
+        }
+
+        // 查询关联文档名称
+        if (history.getDocumentId() != null) {
+            Document doc = documentMapper.findById(history.getDocumentId());
+            if (doc != null) {
+                response.setDocumentName(doc.getName());
+            }
+        }
+
+        // fallback：如果documentName为空，尝试从任务关联的文档获取
+        if (response.getDocumentName() == null && history.getTaskId() != null) {
+            TranslationTask task = translationTaskMapper.findByTaskId(history.getTaskId());
+            if (task != null && task.getDocumentId() != null) {
+                Document doc = documentMapper.findById(task.getDocumentId());
+                if (doc != null) {
+                    response.setDocumentName(doc.getName());
+                }
+            }
+        }
+
+        // 最终fallback：使用任务类型作为名称
+        if (response.getDocumentName() == null) {
+            response.setDocumentName("document".equals(history.getType()) ? "文档翻译" : "文本翻译");
         }
 
         return response;
+    }
+
+    /**
+     * SSE 流式文档翻译（基于已上传文档）
+     * 读取磁盘文件 → 分段翻译 → 逐段推送 SSE → 更新文档状态
+     */
+    public SseEmitter streamTranslateDocumentById(Long docId, String targetLang, String mode) {
+        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);
+        ObjectMapper mapper = new ObjectMapper();
+
+        Thread.startVirtualThread(() -> {
+            try {
+                Document doc = documentMapper.findById(docId);
+                if (doc == null) {
+                    SseEmitterUtil.sendError(emitter, "文档不存在");
+                    SseEmitterUtil.complete(emitter);
+                    return;
+                }
+
+                // 创建翻译任务
+                TranslationTask task = createDocumentTask(doc.getUserId(), doc);
+                doc.setStatus(TranslationStatus.PROCESSING.getValue());
+                doc.setUpdateTime(LocalDateTime.now());
+                documentMapper.updateById(doc);
+                updateTaskProgress(task, TranslationStatus.PROCESSING, 10, null);
+
+                // 读取文件内容
+                String content = readDocumentContent(doc.getPath(), doc.getFileType());
+                if (content == null || content.trim().isEmpty()) {
+                    updateTaskProgress(task, TranslationStatus.FAILED, 0, "文件内容为空");
+                    SseEmitterUtil.sendError(emitter, "文件内容为空");
+                    SseEmitterUtil.complete(emitter);
+                    return;
+                }
+
+                // 按段落分割翻译
+                String[] paragraphs = content.split("(?<=\n)");
+                int total = paragraphs.length;
+                StringBuilder translatedContent = new StringBuilder();
+
+                for (int i = 0; i < total; i++) {
+                    // 检查任务是否已被取消
+                    TranslationTask currentTask = translationTaskMapper.findByTaskId(task.getTaskId());
+                    if (currentTask != null && TranslationStatus.FAILED.getValue().equals(currentTask.getStatus())) {
+                        log.info("翻译任务已被取消，提前退出 [taskId={}]", task.getTaskId());
+                        SseEmitterUtil.complete(emitter);
+                        return;
+                    }
+
+                    String paragraph = paragraphs[i];
+                    if (paragraph.trim().isEmpty()) {
+                        translatedContent.append(paragraph);
+                        continue;
+                    }
+
+                    String textId = "seg_" + i;
+                    try {
+                        String result;
+                        if ("expert".equals(mode)) {
+                            result = userLevelThrottledTranslationClient.translateWithPython(
+                                    paragraph, targetLang, "google");
+                        } else {
+                            result = userLevelThrottledTranslationClient.translate(
+                                    paragraph, targetLang, "google", false, true);
+                        }
+                        String translation = extractTranslatedContent(result);
+                        // 补回原文中的换行符以保持格式对齐
+                        if (translation != null && !translation.endsWith("\n") && !translation.endsWith("\r")) {
+                            if (paragraph.endsWith("\r\n")) {
+                                translation += "\r\n";
+                            } else if (paragraph.endsWith("\n")) {
+                                translation += "\n";
+                            } else if (paragraph.endsWith("\r")) {
+                                translation += "\r";
+                            }
+                        }
+                        translatedContent.append(translation);
+
+                        Map<String, Object> eventData = new HashMap<>();
+                        eventData.put("textId", textId);
+                        eventData.put("original", paragraph);
+                        eventData.put("translation", translation);
+                        eventData.put("progress", (int) (((i + 1) * 100.0) / total));
+
+                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(eventData));
+                    } catch (Exception e) {
+                        log.warn("段落翻译失败 [{}]: {}", i, e.getMessage());
+                        translatedContent.append(paragraph);
+                        Map<String, Object> errorData = new HashMap<>();
+                        errorData.put("textId", textId);
+                        errorData.put("original", paragraph);
+                        errorData.put("translation", paragraph);
+                        errorData.put("error", true);
+                        errorData.put("progress", (int) (((i + 1) * 100.0) / total));
+                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(errorData));
+                    }
+
+                    int progress = 20 + (int) (((i + 1) * 80.0) / total);
+                    updateTaskProgress(task, TranslationStatus.PROCESSING, progress, null);
+                }
+
+                // 保存翻译结果到文件
+                String translatedPath = buildTranslatedPath(doc.getPath());
+                Files.write(Paths.get(translatedPath), translatedContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+                // 更新文档和任务状态
+                doc.setStatus(TranslationStatus.COMPLETED.getValue());
+                doc.setCompletedTime(LocalDateTime.now());
+                doc.setUpdateTime(LocalDateTime.now());
+                documentMapper.updateById(doc);
+
+                updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
+                saveTranslationHistory(task, content, translatedContent.toString());
+
+                SseEmitterUtil.sendDone(emitter);
+                SseEmitterUtil.complete(emitter);
+
+            } catch (Exception e) {
+                log.error("流式文档翻译失败: {}", e.getMessage(), e);
+                SseEmitterUtil.sendError(emitter, "翻译失败：" + e.getMessage());
+                SseEmitterUtil.complete(emitter);
+            }
+        });
+
+        return emitter;
+    }
+
+    /**
+     * SSE 流式文档翻译
+     * 读取文件 → 分段翻译 → 逐段推送 SSE
+     */
+    public SseEmitter streamTranslateDocument(MultipartFile file, String sourceLang, String targetLang, String mode) {
+        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);
+        ObjectMapper mapper = new ObjectMapper();
+
+        Thread.startVirtualThread(() -> {
+            try {
+                String fileName = file.getOriginalFilename();
+                String fileType = fileName != null ? fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase() : "";
+                String content = readMultipartFileContent(file, fileType);
+                if (content == null || content.trim().isEmpty()) {
+                    SseEmitterUtil.sendError(emitter, "文件内容为空");
+                    SseEmitterUtil.complete(emitter);
+                    return;
+                }
+
+                String[] paragraphs = content.split("(?<=\n)");
+                int total = paragraphs.length;
+                int translated = 0;
+
+                for (int i = 0; i < total; i++) {
+                    String paragraph = paragraphs[i];
+                    if (paragraph.trim().isEmpty()) {
+                        translated++;
+                        continue;
+                    }
+
+                    String textId = "seg_" + i;
+                    try {
+                        String result;
+                        if ("expert".equals(mode)) {
+                            result = userLevelThrottledTranslationClient.translateWithPython(
+                                    paragraph, targetLang, "google");
+                        } else {
+                            result = userLevelThrottledTranslationClient.translate(
+                                    paragraph, targetLang, "google", false, true);
+                        }
+
+                        // 提取实际翻译内容
+                        String translation = extractTranslatedContent(result);
+                        // 补回原文中的换行符以保持格式对齐
+                        if (translation != null && !translation.endsWith("\n") && !translation.endsWith("\r")) {
+                            if (paragraph.endsWith("\r\n")) {
+                                translation += "\r\n";
+                            } else if (paragraph.endsWith("\n")) {
+                                translation += "\n";
+                            } else if (paragraph.endsWith("\r")) {
+                                translation += "\r";
+                            }
+                        }
+
+                        Map<String, Object> eventData = new HashMap<>();
+                        eventData.put("textId", textId);
+                        eventData.put("original", paragraph);
+                        eventData.put("translation", translation);
+                        eventData.put("progress", (int) (((i + 1) * 100.0) / total));
+
+                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(eventData));
+                    } catch (Exception e) {
+                        log.warn("段落翻译失败 [{}]: {}", i, e.getMessage());
+                        Map<String, Object> errorData = new HashMap<>();
+                        errorData.put("textId", textId);
+                        errorData.put("original", paragraph);
+                        errorData.put("translation", paragraph);
+                        errorData.put("error", true);
+                        errorData.put("progress", (int) (((i + 1) * 100.0) / total));
+                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(errorData));
+                    }
+
+                    translated++;
+                }
+
+                SseEmitterUtil.sendDone(emitter);
+                SseEmitterUtil.complete(emitter);
+
+            } catch (Exception e) {
+                log.error("流式文档翻译失败: {}", e.getMessage(), e);
+                SseEmitterUtil.sendError(emitter, "翻译失败：" + e.getMessage());
+                SseEmitterUtil.complete(emitter);
+            }
+        });
+
+        return emitter;
+    }
+
+    /**
+     * 读取 MultipartFile 内容
+     */
+    private String readMultipartFileContent(MultipartFile file, String fileType) throws IOException {
+        byte[] bytes = file.getBytes();
+        String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+
+        if ("txt".equals(fileType)) {
+            return content;
+        } else {
+            throw new IOException("暂不支持 " + fileType.toUpperCase() + " 格式，仅支持 TXT 文件");
+        }
+    }
+
+    /**
+     * 定时清理卡死的任务（每 5 分钟执行一次）
+     * 将超过 30 分钟仍处于 PENDING/PROCESSING 状态的任务标记为 FAILED
+     */
+    @Scheduled(fixedRate = 300000)
+    public void cleanupStuckTasks() {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
+        List<TranslationTask> stuckTasks = translationTaskMapper.findByStatusAndCreateTimeBefore(
+                TranslationStatus.PROCESSING.getValue(), cutoff);
+        for (TranslationTask task : stuckTasks) {
+            log.warn("清理卡死任务: taskId={}, createTime={}", task.getTaskId(), task.getCreateTime());
+            task.setStatus(TranslationStatus.FAILED.getValue());
+            task.setErrorMessage("任务超时，自动标记为失败");
+            translationTaskMapper.updateById(task);
+            // 同步更新文档状态
+            if (task.getDocumentId() != null) {
+                Document doc = documentMapper.selectById(task.getDocumentId());
+                if (doc != null && TranslationStatus.PROCESSING.getValue().equals(doc.getStatus())) {
+                    doc.setStatus(TranslationStatus.FAILED.getValue());
+                    doc.setErrorMessage("任务超时，自动标记为失败");
+                    doc.setUpdateTime(LocalDateTime.now());
+                    documentMapper.updateById(doc);
+                }
+            }
+        }
     }
 
     /**

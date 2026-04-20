@@ -35,8 +35,19 @@ public class EntityConsistencyService {
     /** 文本超过此字符数才启用实体一致性 */
     private static final int MIN_TEXT_LENGTH = 500;
 
+    /** 禁用代理的 ProxySelector，确保内部 Docker 服务直连 */
+    private static final java.net.ProxySelector NO_PROXY_SELECTOR = new java.net.ProxySelector() {
+        @Override
+        public java.util.List<java.net.Proxy> select(java.net.URI uri) {
+            return java.util.List.of(java.net.Proxy.NO_PROXY);
+        }
+        @Override
+        public void connectFailed(java.net.URI uri, java.net.SocketAddress sa, java.io.IOException ioe) {}
+    };
+
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
+            .proxy(NO_PROXY_SELECTOR)
             .build();
 
     @Value("${translation.python.url:http://llm-engine:8000/translate}")
@@ -155,20 +166,27 @@ public class EntityConsistencyService {
         body.put("source_lang", "auto");
         body.put("target_lang", targetLang);
 
+        String jsonBody = JSON.toJSONString(body);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .timeout(Duration.ofSeconds(30))
-                .POST(HttpRequest.BodyPublishers.ofString(JSON.toJSONString(body), StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("实体提取 HTTP 错误: " + response.statusCode());
+        HttpResponse<String> response = sendWithRetry(request, 2);
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.isBlank()) {
+            throw new RuntimeException("Python服务返回空响应体, status=" + response.statusCode());
         }
 
-        EntityExtractionResponse result = JSON.parseObject(response.body(), EntityExtractionResponse.class);
-        return result.getEntities() != null ? result.getEntities() : Collections.emptyList();
+        try {
+            EntityExtractionResponse result = JSON.parseObject(responseBody, EntityExtractionResponse.class);
+            return result.getEntities() != null ? result.getEntities() : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("实体提取 JSON 解析失败: 响应前200字符={}", responseBody.length() > 200 ? responseBody.substring(0, 200) : responseBody);
+            throw e;
+        }
     }
 
     /**
@@ -183,20 +201,27 @@ public class EntityConsistencyService {
         body.put("source_lang", "auto");
         body.put("target_lang", targetLang);
 
+        String jsonBody = JSON.toJSONString(body);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .timeout(Duration.ofSeconds(30))
-                .POST(HttpRequest.BodyPublishers.ofString(JSON.toJSONString(body), StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("实体翻译 HTTP 错误: " + response.statusCode());
+        HttpResponse<String> response = sendWithRetry(request, 2);
+        String responseBody = response.body();
+        if (responseBody == null || responseBody.isBlank()) {
+            throw new RuntimeException("Python服务返回空响应体, status=" + response.statusCode());
         }
 
-        EntityTranslationResponse result = JSON.parseObject(response.body(), EntityTranslationResponse.class);
-        return result.getTranslations() != null ? result.getTranslations() : Collections.emptyMap();
+        try {
+            EntityTranslationResponse result = JSON.parseObject(responseBody, EntityTranslationResponse.class);
+            return result.getTranslations() != null ? result.getTranslations() : Collections.emptyMap();
+        } catch (Exception e) {
+            log.error("实体翻译 JSON 解析失败: 响应前200字符={}", responseBody.length() > 200 ? responseBody.substring(0, 200) : responseBody);
+            throw e;
+        }
     }
 
     /**
@@ -205,6 +230,7 @@ public class EntityConsistencyService {
     private String translateWithPlaceholders(String text, String targetLang, String engine) throws Exception {
         String baseUrl = pythonTranslateUrl.replace("/translate", "");
         String url = baseUrl + "/translate-with-placeholders";
+        log.info("[一致性翻译] URL={}, text length={}", url, text.length());
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("text", text);
@@ -212,20 +238,30 @@ public class EntityConsistencyService {
         body.put("engine", engine != null ? engine : "openai");
         body.put("fallback", true);
 
+        String jsonBody = JSON.toJSONString(body);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .timeout(Duration.ofSeconds(60))
-                .POST(HttpRequest.BodyPublishers.ofString(JSON.toJSONString(body), StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("占位符翻译 HTTP 错误: " + response.statusCode());
+        log.info("[一致性翻译] 发送请求到 {}", request.uri());
+        HttpResponse<String> response = sendWithRetry(request, 2);
+        String responseBody = response.body();
+        log.info("[一致性翻译] 响应: status={}, body length={}", response.statusCode(), responseBody != null ? responseBody.length() : 0);
+
+        if (responseBody == null || responseBody.isBlank()) {
+            throw new RuntimeException("Python服务返回空响应体, status=" + response.statusCode());
         }
 
-        JSONObject json = JSON.parseObject(response.body());
-        return json.getString("data");
+        try {
+            JSONObject json = JSON.parseObject(responseBody);
+            return json.getString("data");
+        } catch (Exception e) {
+            log.error("占位符翻译 JSON 解析失败: 响应前200字符={}", responseBody.length() > 200 ? responseBody.substring(0, 200) : responseBody);
+            throw e;
+        }
     }
 
     /**
@@ -348,6 +384,31 @@ public class EntityConsistencyService {
             result = result.replace(mapping.getPlaceholder(), mapping.getTranslatedText());
         }
         return result;
+    }
+
+    /**
+     * 带重试的 HTTP 请求发送
+     */
+    private HttpResponse<String> sendWithRetry(HttpRequest request, int maxRetries) throws Exception {
+        HttpResponse<String> response = null;
+        for (int i = 0; i <= maxRetries; i++) {
+            try {
+                response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    return response;
+                }
+                log.warn("HTTP 请求失败 (尝试 {}/{}): status={}", i + 1, maxRetries + 1, response.statusCode());
+            } catch (Exception e) {
+                log.warn("HTTP 请求异常 (尝试 {}/{}): {}", i + 1, maxRetries + 1, e.getMessage());
+            }
+            if (i < maxRetries) {
+                Thread.sleep(1000L * (i + 1));
+            }
+        }
+        if (response != null) {
+            return response;
+        }
+        throw new RuntimeException("HTTP 请求重试 " + maxRetries + " 次后仍失败");
     }
 
     /**

@@ -4,6 +4,7 @@ import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabProject;
 import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
@@ -201,7 +202,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         if (project != null) {
             project.setProgress(progress);
             if (progress == 100) {
-                project.setStatus("COMPLETED");
+                project.setStatus(CollabProjectStatus.COMPLETED.getValue());
             }
             collabProjectMapper.updateById(project);
         }

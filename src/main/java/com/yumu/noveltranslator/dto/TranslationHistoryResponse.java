@@ -43,4 +43,8 @@ public class TranslationHistoryResponse {
      * 任务状态：pending, processing, completed, failed
      */
     private String status;
+    /**
+     * 文档名称（文档翻译时）
+     */
+    private String documentName;
 }

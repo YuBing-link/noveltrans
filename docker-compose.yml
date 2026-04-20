@@ -35,10 +35,10 @@ services:
     ports:
       - "8989:8989"
     environment:
-      - HTTP_PROXY=http://host.docker.internal:7890
-      - HTTPS_PROXY=http://host.docker.internal:7890
-      - http_proxy=http://host.docker.internal:7890
-      - https_proxy=http://host.docker.internal:7890
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+      - http_proxy=
+      - https_proxy=
 
   # Python 翻译微服务（调用 DeepSeek 大模型）
   llm-engine:
@@ -99,6 +99,7 @@ services:
       - MAIL_USERNAME=${MAIL_USERNAME}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - PYTHON_TRANSLATE_URL=http://llm-engine:8000/translate
+      - TRANSLATION_UPLOAD_DIR=/app/uploads
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER}
       - EMBEDDING_OPENAI_API_KEY=${EMBEDDING_OPENAI_API_KEY}
       - EMBEDDING_OPENAI_BASE_URL=${EMBEDDING_OPENAI_BASE_URL}
@@ -106,7 +107,10 @@ services:
       - HTTPS_PROXY=http://host.docker.internal:7890
       - http_proxy=http://host.docker.internal:7890
       - https_proxy=http://host.docker.internal:7890
+      - NO_PROXY=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis
+      - no_proxy=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis
       - MAVEN_OPTS=-Dhttp.proxyHost=host.docker.internal -Dhttp.proxyPort=7890 -Dhttps.proxyHost=host.docker.internal -Dhttps.proxyPort=7890
+      - JAVA_TOOL_OPTIONS=-Dhttp.nonProxyHosts=localhost|127.0.0.1|llm-engine|mtran-server|mysql|redis -Djava.net.useSystemProxies=false
     depends_on:
       mysql:
         condition: service_healthy

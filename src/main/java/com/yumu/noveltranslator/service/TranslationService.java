@@ -471,6 +471,83 @@ public class TranslationService {
     }
 
     /**
+     * 文本流式翻译（SSE）— 适用于长文本的单段流式输出
+     * 按段落分段，逐段 SSE 输出
+     */
+    public SseEmitter streamTextTranslate(SelectionTranslationRequest req) {
+        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L);
+
+        String text = req.getText();
+        if (text == null || text.trim().isEmpty()) {
+            SseEmitterUtil.sendError(emitter, "文本不能为空");
+            SseEmitterUtil.complete(emitter);
+            return emitter;
+        }
+
+        String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
+        String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
+        String mode = req.getMode() != null ? req.getMode() : "fast";
+
+        // 检查字符配额
+        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        if (userId != null) {
+            User user = userMapper.selectById(userId);
+            if (user != null) {
+                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), text.length(), mode)) {
+                    SseEmitterUtil.sendError(emitter, "字符配额不足，请升级档位或等待下月重置");
+                    SseEmitterUtil.complete(emitter);
+                    return emitter;
+                }
+            }
+        }
+
+        Thread.startVirtualThread(() -> {
+            try {
+                List<String> segments = TextSegmentationUtil.segmentByTextEngine(text, engine);
+                if (segments.isEmpty()) {
+                    segments = List.of(text);
+                }
+
+                for (int i = 0; i < segments.size(); i++) {
+                    String segment = segments.get(i);
+                    String cacheKey = CacheKeyUtil.buildCacheKey(segment, target, engine);
+                    String extracted = cacheService.getCache(cacheKey);
+
+                    if (extracted == null) {
+                        String rawJson = userLevelThrottledTranslationClient.translate(segment, target, engine, false);
+                        extracted = ExternalResponseUtil.extractDataField(rawJson);
+                        if (extracted != null && !extracted.trim().isEmpty()) {
+                            if (isValidTranslation(segment, extracted) && shouldCache(segment, extracted)) {
+                                cacheService.putCache(cacheKey, segment, extracted, "auto", target, engine);
+                            } else if (!isValidTranslation(segment, extracted)) {
+                                log.warn("流式翻译结果无效，使用原文兜底：索引 {}", i);
+                                extracted = segment;
+                            }
+                        }
+                    }
+
+                    if (extracted == null) {
+                        log.warn("流式翻译失败，使用原文兜底：索引 {}", i);
+                        extracted = segment;
+                    }
+
+                    SseEmitterUtil.sendData(emitter, extracted);
+                }
+
+                SseEmitterUtil.sendDone(emitter);
+                SseEmitterUtil.complete(emitter);
+
+            } catch (Exception e) {
+                log.error("文本流式翻译失败：{}", e.getMessage());
+                SseEmitterUtil.sendError(emitter, "翻译失败：" + e.getMessage());
+                SseEmitterUtil.complete(emitter);
+            }
+        });
+
+        return emitter;
+    }
+
+    /**
      * 获取缓存统计信息
      */
     public Map<String, Object> getCacheStats() {

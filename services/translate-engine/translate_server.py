@@ -265,6 +265,23 @@ async def translate_openai(text: str, target_lang: str) -> str:
     """
     return await translate_with_system_prompt(text, target_lang, SYSTEM_PROMPT)
 
+import re
+
+def clean_json_response(text: str) -> str:
+    """从 LLM 响应中提取 JSON，处理 markdown 代码块、前后多余文本等。"""
+    cleaned = text.strip()
+    if not cleaned:
+        raise ValueError("LLM 返回空响应")
+    # 1. 尝试提取 markdown 代码块中的 JSON
+    fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', cleaned)
+    if fence_match:
+        cleaned = fence_match.group(1).strip()
+    # 2. 尝试从文本中提取 JSON 对象或数组
+    json_match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', cleaned)
+    if json_match:
+        cleaned = json_match.group(1).strip()
+    return cleaned
+
 # =============================================================================
 # 5. 请求/响应模型
 # =============================================================================
@@ -324,22 +341,20 @@ async def extract_entities_api(req: EntityExtractionRequest):
     start_time = time.perf_counter()
 
     try:
+        logger.info(f"[实体提取] 开始调用 LLM, text_length={len(req.text)}")
         result = await translate_with_system_prompt(
             req.text, req.source_lang, ENTITY_EXTRACTION_PROMPT
         )
+        logger.info(f"[实体提取] LLM 返回, result_length={len(result) if result else 0}")
         # 解析 LLM 返回的 JSON 数组
         import json
-        # 清理可能的 markdown 代码块
-        cleaned = result.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("```")[1]
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:]
-            cleaned = cleaned.strip().rstrip("```").strip()
+        cleaned = clean_json_response(result)
+        logger.info(f"[实体提取] clean_json_response 返回, cleaned_length={len(cleaned) if cleaned else 0}")
 
         entities = json.loads(cleaned)
+        logger.info(f"[实体提取] json.loads 成功, entities_count={len(entities) if isinstance(entities, list) else 'not-list'}")
         if not isinstance(entities, list):
-            raise ValueError("LLM 返回的不是列表格式")
+            raise ValueError(f"LLM 返回的不是列表格式，原始响应: {result[:200]}")
 
         # 去重
         seen = set()
@@ -388,16 +403,11 @@ async def translate_entities_api(req: EntityTranslationRequestModel):
 
         # 解析 JSON
         import json
-        cleaned = result.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("```")[1]
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:]
-            cleaned = cleaned.strip().rstrip("```").strip()
+        cleaned = clean_json_response(result)
 
         translations = json.loads(cleaned)
         if not isinstance(translations, dict):
-            raise ValueError("LLM 返回的不是字典格式")
+            raise ValueError(f"LLM 返回的不是字典格式，原始响应: {result[:200]}")
 
         cost_ms = (time.perf_counter() - start_time) * 1000
         logger.info(f"实体翻译成功: 翻译 {len(translations)} 个实体, cost_ms={cost_ms:.1f}")

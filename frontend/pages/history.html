@@ -43,6 +43,7 @@
                 <button class="filter-btn active px-3 py-1.5 text-sm font-medium rounded-lg transition-colors" data-filter="all">全部</button>
                 <button class="filter-btn px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-filter="completed">已完成</button>
                 <button class="filter-btn px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-filter="processing">翻译中</button>
+                <button class="filter-btn px-3 py-1.5 text-sm font-medium text-gray-500 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" data-filter="failed">失败</button>
             </div>
             <div class="flex-1"></div>
             <div class="relative">
@@ -105,7 +106,8 @@
     function renderHistory() {
         const q = document.getElementById('searchInput')?.value.toLowerCase() || '';
         let items = allHistoryItems;
-        if (currentFilter !== 'all') items = items.filter(i => i.status === currentFilter);
+        if (currentFilter === 'processing') { items = items.filter(i => i.status === 'processing' || i.status === 'pending'); }
+        else if (currentFilter !== 'all') items = items.filter(i => i.status === currentFilter);
         if (q) items = items.filter(i => (i.name || '').toLowerCase().includes(q));
 
         const list = document.getElementById('historyList');
@@ -164,6 +166,18 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => { initIcons(); loadHistory(); });
+
+    // 点击历史项跳转到翻译视图
+    document.addEventListener('click', (e) => {
+        const item = e.target.closest('#historyList > div');
+        if (!item) return;
+        const idx = Array.from(item.parentNode.children).indexOf(item);
+        if (idx < 0 || idx >= allHistoryItems.length) return;
+        const historyItem = allHistoryItems[idx];
+        if (historyItem?.taskId) {
+            window.location.href = `translation.html?taskId=${historyItem.taskId}`;
+        }
+    });
     </script>
 </body>
 </html>

@@ -16,6 +16,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,36 +36,6 @@ public class SharedTranslateController {
     private final TranslationTaskService translationTaskService;
     private final DocumentService documentService;
     private final RagTranslationService ragTranslationService;
-
-    /**
-     * 文本翻译
-     * POST /v1/translate/text
-     */
-    @PostMapping("/text")
-    public Result<TextTranslationResponse> translateText(@RequestBody @Valid TextTranslationRequest request) {
-        try {
-            SelectionTranslationRequest selectionReq = new SelectionTranslationRequest(
-                request.getText(),
-                request.getSourceLang(),
-                request.getTargetLang(),
-                request.getEngine(),
-                null,
-                "fast"
-            );
-
-            String result = translationService.selectionTranslate(selectionReq).getTranslation();
-
-            TextTranslationResponse response = new TextTranslationResponse();
-            response.setTranslatedText(result);
-            response.setTargetLang(request.getTargetLang());
-            response.setDetectedLang(request.getSourceLang());
-            response.setEngine(request.getEngine() != null ? request.getEngine() : "auto");
-
-            return Result.ok(response);
-        } catch (Exception e) {
-            return Result.error("翻译失败：" + e.getMessage());
-        }
-    }
 
     /**
      * 查询翻译任务状态
@@ -135,6 +107,31 @@ public class SharedTranslateController {
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    /**
+     * 文档流式翻译（SSE）— 直接上传文件并翻译
+     * POST /v1/translate/document/stream
+     */
+    @PostMapping(value = "/document/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamDocumentTranslate(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "sourceLang", defaultValue = "auto") String sourceLang,
+            @RequestParam(value = "targetLang", defaultValue = "zh") String targetLang,
+            @RequestParam(value = "mode", defaultValue = "fast") String mode) {
+        return translationTaskService.streamTranslateDocument(file, sourceLang, targetLang, mode);
+    }
+
+    /**
+     * 文档流式翻译（SSE）— 基于已上传的文档
+     * POST /v1/translate/document/stream/{docId}
+     */
+    @PostMapping(value = "/document/stream/{docId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamDocumentTranslateById(
+            @PathVariable Long docId,
+            @RequestParam(value = "targetLang", defaultValue = "zh") String targetLang,
+            @RequestParam(value = "mode", defaultValue = "fast") String mode) {
+        return translationTaskService.streamTranslateDocumentById(docId, targetLang, mode);
     }
 
     /**
