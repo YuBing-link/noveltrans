@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .collect(Collectors.joining("; "));
         log.warn("参数校验失败：{}", message);
-        return Result.error(message, "400");
+        return Result.error("400", message);
     }
 
     // 捕获 JWT 验证异常

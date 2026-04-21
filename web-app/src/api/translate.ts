@@ -9,6 +9,7 @@ export const translateApi = {
   // Task operations
   getTaskStatus: (taskId: string) => api.get<TaskStatus>(`/v1/translate/task/${taskId}`),
   cancelTask: (taskId: string) => api.delete<null>(`/v1/translate/task/${taskId}`),
+  deleteHistory: (taskId: string) => api.delete<null>(`/v1/translate/history/${taskId}`),
   getTaskResult: (taskId: string) => api.get<TranslationResult>(`/v1/translate/task/${taskId}/result`),
   downloadTaskResult: async (taskId: string) => {
     const token = localStorage.getItem('authToken');

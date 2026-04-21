@@ -25,7 +25,7 @@ public class UserPreferencesResponse {
     /**
      * 默认术语库 ID
      */
-    private Integer defaultGlossaryId;
+    private Long defaultGlossaryId;
 
     /**
      * 是否启用缓存

@@ -21,4 +21,6 @@ public class ChapterTaskResponse {
     private LocalDateTime submittedTime;
     private LocalDateTime reviewedTime;
     private LocalDateTime completedTime;
+    private String sourceText;
+    private String translatedText;
 }

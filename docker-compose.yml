@@ -122,10 +122,9 @@ services:
   # Nginx 网关
   nginx:
     image: nginx:1.28-alpine
-    working_dir: /etc/nginx
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./frontend:/etc/nginx/frontend:ro
+      - ./web-app/dist:/etc/nginx/web-app/dist:ro
     ports:
       - "7341:7341"
     depends_on:

@@ -1,19 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '../components/ui/Toast';
-import { PageLayout } from '../components/layout/PageLayout';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { DocumentUploader } from '../components/features/DocumentUploader';
-import { TaskProgress } from '../components/features/TaskProgress';
-import { LanguageSelector } from '../components/features/LanguageSelector';
 import { documentApi } from '../api/documents';
 import type { DocumentItem } from '../api/types';
-import { FileText, Download, Trash2, RefreshCw, XCircle } from 'lucide-react';
+import { FileText, Download, Trash2, RefreshCw, XCircle, ChevronDown } from 'lucide-react';
+import { SUPPORTED_LANGUAGES } from '../api/types';
 
 function DocumentPage() {
   const { success, error: toastError } = useToast();
   const [sourceLang, setSourceLang] = useState('auto');
   const [targetLang, setTargetLang] = useState('zh');
+  const [mode, setMode] = useState('fast');
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,7 +38,7 @@ function DocumentPage() {
   const handleUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
-      await documentApi.upload(file, { sourceLang, targetLang });
+      await documentApi.upload(file, { sourceLang, targetLang, mode });
       success('文件上传成功，开始翻译');
       loadDocuments();
     } catch (err) {
@@ -53,40 +49,31 @@ function DocumentPage() {
   }, [sourceLang, targetLang]);
 
   const handleDelete = async (docId: number) => {
-    try {
-      await documentApi.delete(docId);
-      success('已删除');
-      loadDocuments();
-    } catch { toastError('删除失败'); }
+    try { await documentApi.delete(docId); success('已删除'); loadDocuments(); }
+    catch { toastError('删除失败'); }
   };
 
   const handleDownload = async (docId: number) => {
     try {
       const blob = await documentApi.download(docId);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `translated_${docId}`;
-      a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `translated_${docId}`; a.click();
       URL.revokeObjectURL(url);
       success('下载成功');
-    } catch { toastError('下载失败'); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '下载失败';
+      toastError(msg.includes('401') ? '请先登录' : msg.includes('404') ? '文件不存在' : msg);
+    }
   };
 
   const handleRetry = async (docId: number) => {
-    try {
-      await documentApi.retry(docId);
-      success('已重新提交翻译');
-      loadDocuments();
-    } catch { toastError('重试失败'); }
+    try { await documentApi.retry(docId); success('已重新提交翻译'); loadDocuments(); }
+    catch { toastError('重试失败'); }
   };
 
   const handleCancel = async (docId: number) => {
-    try {
-      await documentApi.cancel(docId);
-      success('已取消');
-      loadDocuments();
-    } catch { toastError('取消失败'); }
+    try { await documentApi.cancel(docId); success('已取消'); loadDocuments(); }
+    catch { toastError('取消失败'); }
   };
 
   const statusLabel: Record<string, string> = {
@@ -95,107 +82,108 @@ function DocumentPage() {
   };
 
   return (
-    <PageLayout className="py-8 min-h-[calc(100vh-3.5rem)]">
-      <div className="mb-10 text-center">
-        <h1 className="text-[28px] sm:text-[32px] font-semibold text-text-primary tracking-display leading-[1.07] mb-2">
-          文档翻译
-        </h1>
-        <p className="text-text-secondary text-[15px]">
-          上传文档，支持 TXT、EPUB、DOCX、PDF 格式
-        </p>
-      </div>
+    <div className="w-full" style={{ minHeight: 'calc(100vh - 200px)' }}>
+      <div className="border border-border/50 rounded-lg overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 200px)' }}>
+        {/* Language bar */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-border/50">
+          <select
+            value={sourceLang}
+            onChange={e => setSourceLang(e.target.value)}
+            className="appearance-none bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors"
+          >
+            {SUPPORTED_LANGUAGES.map(lang => (
+              <option key={lang.code} value={lang.code}>{lang.name}</option>
+            ))}
+          </select>
+          <select
+            value={targetLang}
+            onChange={e => setTargetLang(e.target.value)}
+            className="appearance-none bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors"
+          >
+            {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => (
+              <option key={lang.code} value={lang.code}>{lang.name}</option>
+            ))}
+          </select>
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-[12px] text-text-tertiary">模式:</span>
+            <select
+              value={mode}
+              onChange={e => setMode(e.target.value)}
+              className="appearance-none bg-transparent text-text-primary text-[13px] cursor-pointer hover:text-accent transition-colors"
+            >
+              <option value="fast">快速翻译</option>
+              <option value="expert">专家翻译</option>
+              <option value="team">团队协作</option>
+            </select>
+          </div>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Upload Section */}
-        <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <div className="p-6">
-              <DocumentUploader onUpload={handleUpload} loading={uploading} />
-            </div>
-          </Card>
+        {/* Upload area */}
+        <div className="p-6 border-b border-border/50">
+          <div
+            onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-accent'); }}
+            onDragLeave={e => { e.currentTarget.classList.remove('border-accent'); }}
+            onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('border-accent'); if (e.dataTransfer.files[0]) handleUpload(e.dataTransfer.files[0]); }}
+            className="border-2 border-dashed border-border/50 rounded-lg p-8 text-center hover:border-accent/50 transition-colors cursor-pointer"
+            onClick={() => { const input = document.createElement('input'); input.type = 'file'; input.accept = '.txt,.epub,.docx,.pdf'; input.onchange = () => { if (input.files?.[0]) handleUpload(input.files[0]); }; input.click(); }}
+          >
+            <p className="text-[14px] text-text-tertiary mb-2">拖拽文件到此处或点击上传</p>
+            <p className="text-[12px] text-text-placeholder">支持 TXT、EPUB、DOCX、PDF</p>
+          </div>
+          {uploading && <p className="text-center text-[13px] text-accent mt-3">上传中...</p>}
+        </div>
 
-          {/* Document List */}
-          <Card>
-            <div className="p-6">
-              <h3 className="text-[15px] font-semibold text-text-primary mb-4">我的文档</h3>
-              {loading ? (
-                <div className="text-center py-8 text-text-tertiary">加载中...</div>
-              ) : documents.length === 0 ? (
-                <div className="text-center py-8 text-text-tertiary text-[13px]">暂无文档</div>
-              ) : (
-                <div className="space-y-3">
-                  {documents.map(doc => (
-                    <div key={doc.id} className="p-4 rounded-card border border-border/50">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <FileText className="w-5 h-5 text-text-tertiary flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-medium text-text-primary truncate">{doc.name}</p>
-                            {doc.errorMessage && (
-                              <p className="text-[12px] text-red mt-0.5">{doc.errorMessage}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {doc.status === 'completed' && (
-                            <Button variant="ghost" onClick={() => handleDownload(doc.id)} className="px-2 py-1">
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {(doc.status === 'pending' || doc.status === 'processing') && (
-                            <Button variant="ghost" onClick={() => handleCancel(doc.id)} className="px-2 py-1">
-                              <XCircle className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {doc.status === 'failed' && (
-                            <Button variant="ghost" onClick={() => handleRetry(doc.id)} className="px-2 py-1">
-                              <RefreshCw className="w-4 h-4" />
-                            </Button>
-                          )}
-                          <Button variant="ghost" onClick={() => handleDelete(doc.id)} className="px-2 py-1 text-red">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      {doc.status === 'pending' || doc.status === 'processing' ? (
-                        <div className="mt-3">
-                          <TaskProgress progress={doc.progress || 0} status={doc.status} />
-                        </div>
-                      ) : (
-                        <p className="text-[12px] text-text-tertiary mt-2">
-                          {statusLabel[doc.status] || doc.status}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+        {/* Document list */}
+        <div className="flex-1 overflow-auto">
+        {loading ? (
+          <div className="text-center py-12 text-text-tertiary text-[13px]">加载中...</div>
+        ) : documents.length === 0 ? (
+          <div className="text-center py-12 text-text-tertiary text-[13px]">暂无文档</div>
+        ) : (
+          <div className="divide-y divide-border/50">
+            {documents.map(doc => (
+              <div key={doc.id} className="px-5 py-4 flex items-center gap-4">
+                <FileText className="w-4 h-4 text-text-tertiary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-text-primary truncate">{doc.name}</p>
+                  {doc.errorMessage && <p className="text-[12px] text-red mt-0.5">{doc.errorMessage}</p>}
                 </div>
-              )}
-            </div>
-          </Card>
+                <div className="flex items-center gap-2 flex-shrink-0 text-[12px] text-text-tertiary">
+                  {(doc.status === 'pending' || doc.status === 'processing') && (
+                    <span className="px-2 py-0.5 bg-accent-bg text-accent rounded-full">{statusLabel[doc.status]}</span>
+                  )}
+                  {doc.status === 'completed' && (
+                    <span className="px-2 py-0.5 bg-green-bg text-green rounded-full">{statusLabel[doc.status]}</span>
+                  )}
+                  {doc.status === 'failed' && (
+                    <span className="px-2 py-0.5 bg-red-bg text-red rounded-full">{statusLabel[doc.status]}</span>
+                  )}
+                  <span className="text-text-placeholder">{doc.status === 'pending' || doc.status === 'processing' ? `${doc.progress || 0}%` : ''}</span>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {doc.status === 'completed' && (
+                    <button onClick={() => handleDownload(doc.id)} className="p-1 text-text-tertiary hover:text-accent"><Download className="w-4 h-4" /></button>
+                  )}
+                  {(doc.status === 'pending' || doc.status === 'processing') && (
+                    <button onClick={() => handleCancel(doc.id)} className="p-1 text-text-tertiary hover:text-red"><XCircle className="w-4 h-4" /></button>
+                  )}
+                  {doc.status === 'failed' && (
+                    <button onClick={() => handleRetry(doc.id)} className="p-1 text-text-tertiary hover:text-accent"><RefreshCw className="w-4 h-4" /></button>
+                  )}
+                  <button onClick={() => handleDelete(doc.id)} className="p-1 text-text-tertiary hover:text-red"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         </div>
 
-        {/* Settings Sidebar */}
-        <div className="space-y-4">
-          <Card>
-            <div className="p-6">
-              <h3 className="text-[15px] font-semibold text-text-primary mb-4">翻译设置</h3>
-              <LanguageSelector
-                sourceLang={sourceLang}
-                targetLang={targetLang}
-                onSourceChange={setSourceLang}
-                onTargetChange={setTargetLang}
-                onSwap={() => {
-                  if (sourceLang !== 'auto') {
-                    setSourceLang(targetLang);
-                    setTargetLang(sourceLang);
-                  }
-                }}
-              />
-            </div>
-          </Card>
+        {/* Bottom bar */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border/50 bg-surface-secondary">
+          <span className="text-[12px] text-text-tertiary">{documents.length} 个文档</span>
         </div>
       </div>
-    </PageLayout>
+    </div>
   );
 }
 

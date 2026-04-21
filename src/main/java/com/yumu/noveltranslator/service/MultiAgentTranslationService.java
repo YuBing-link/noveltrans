@@ -10,6 +10,7 @@ import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
@@ -73,6 +74,16 @@ public class MultiAgentTranslationService {
         }
 
         log.info("启动多 Agent 翻译: projectId={}, chapters={}", projectId, chapters.size());
+
+        // 更新关联文档状态为处理中
+        if (project.getDocumentId() != null) {
+            Document doc = documentMapper.selectById(project.getDocumentId());
+            if (doc != null) {
+                doc.setStatus(TranslationStatus.PROCESSING.getValue());
+                doc.setUpdateTime(LocalDateTime.now());
+                documentMapper.updateById(doc);
+            }
+        }
 
         CountDownLatch latch = new CountDownLatch(chapters.size());
         AtomicInteger completed = new AtomicInteger(0);
@@ -341,13 +352,10 @@ public class MultiAgentTranslationService {
 
         chapters.sort(Comparator.comparingInt(CollabChapterTask::getChapterNumber));
 
-        // 拼接完整译文
+        // 拼接完整译文（不添加合成章节标记，保留原文结构）
         StringBuilder fullText = new StringBuilder();
         for (CollabChapterTask chapter : chapters) {
             if (chapter.getTargetText() != null && !chapter.getTargetText().isEmpty()) {
-                if (chapter.getTitle() != null && !chapter.getTitle().isEmpty()) {
-                    fullText.append("\n\n=== ").append(chapter.getTitle()).append(" ===\n\n");
-                }
                 fullText.append(chapter.getTargetText());
                 if (!chapter.getTargetText().endsWith("\n")) {
                     fullText.append("\n");

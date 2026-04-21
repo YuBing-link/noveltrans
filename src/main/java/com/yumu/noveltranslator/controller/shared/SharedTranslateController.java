@@ -68,6 +68,22 @@ public class SharedTranslateController {
     }
 
     /**
+     * 删除翻译历史记录
+     * DELETE /v1/translate/history/{taskId}
+     */
+    @DeleteMapping("/history/{taskId}")
+    @PreAuthorize("isAuthenticated()")
+    public Result deleteHistory(@PathVariable String taskId) {
+        Long userId = SecurityUtil.getRequiredUserId();
+
+        if (translationTaskService.deleteHistory(taskId, userId)) {
+            return Result.ok(null);
+        } else {
+            return Result.error("记录不存在");
+        }
+    }
+
+    /**
      * 获取翻译结果
      * GET /v1/translate/task/{taskId}/result
      */

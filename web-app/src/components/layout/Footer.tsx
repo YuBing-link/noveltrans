@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 function Footer() {
   return (
     <footer className="bg-surface-secondary dark:bg-gray-50 border-t border-divider dark:border-border">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div style={{ width: '92%', maxWidth: '1440px', margin: '0 auto' }} className="px-6 py-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           <div>
             <h4 className="text-[12px] font-semibold text-text-primary mb-3">产品</h4>
@@ -30,7 +30,6 @@ function Footer() {
           <div>
             <h4 className="text-[12px] font-semibold text-text-primary mb-3">账户</h4>
             <ul className="space-y-2.5">
-              <li><Link to="/login" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">登录</Link></li>
               <li><Link to="/register" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">注册</Link></li>
             </ul>
           </div>

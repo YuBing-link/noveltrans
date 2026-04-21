@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../hooks/useAuth';
@@ -9,6 +9,8 @@ import { Eye, EyeOff } from 'lucide-react';
 function LoginForm() {
   const { login } = useAuth();
   const { error: toastError } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +21,8 @@ function LoginForm() {
     setLoading(true);
     try {
       await login(email, password);
+      const from = (location.state as any)?.from || '/';
+      navigate(from, { replace: true });
     } catch (err) {
       toastError(err instanceof Error ? err.message : '登录失败');
     } finally {
@@ -62,6 +66,11 @@ function LoginForm() {
         还没有账号？{' '}
         <Link to="/register" className="text-accent hover:underline">
           立即注册
+        </Link>
+      </p>
+      <p className="text-center text-[13px]">
+        <Link to="/forgot-password" className="text-accent hover:underline">
+          忘记密码？
         </Link>
       </p>
     </form>

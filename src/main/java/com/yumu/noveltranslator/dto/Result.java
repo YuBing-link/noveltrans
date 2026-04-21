@@ -34,7 +34,11 @@ public class Result<T> {
         return new Result<>(false, null, "B0001", message, null);
     }
 
-    public static <T> Result<T> error(String message, String code) {
+    public static <T> Result<T> error(String code, String message) {
         return new Result<>(false, null, code, message, null);
+    }
+
+    public static <T> Result<T> error(String message, int httpStatus) {
+        return new Result<>(false, null, String.valueOf(httpStatus), message, null);
     }
 }

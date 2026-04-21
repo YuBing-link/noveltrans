@@ -213,6 +213,8 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         resp.setId(task.getId());
         resp.setChapterNumber(task.getChapterNumber());
         resp.setTitle(task.getTitle());
+        resp.setSourceText(task.getSourceText());
+        resp.setTranslatedText(task.getTargetText());
         resp.setStatus(task.getStatus());
         resp.setProgress(task.getProgress());
         resp.setAssigneeId(task.getAssigneeId());

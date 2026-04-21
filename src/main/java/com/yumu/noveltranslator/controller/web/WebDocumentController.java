@@ -13,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -206,17 +207,58 @@ public class WebDocumentController {
         }
 
         try {
-            Path UPLOAD_BASE = Paths.get("uploads/documents/").normalize().toAbsolutePath();
-            Path targetPath = Paths.get(doc.getPath()).normalize().toAbsolutePath();
-            if (!targetPath.startsWith(UPLOAD_BASE)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            // 优先返回翻译后的文件
+            String downloadPath;
+            if (TranslationStatus.COMPLETED.getValue().equals(doc.getStatus())) {
+                int lastDot = doc.getPath().lastIndexOf('.');
+                String translatedPathStr = lastDot > 0
+                        ? doc.getPath().substring(0, lastDot) + "_translated" + doc.getPath().substring(lastDot)
+                        : doc.getPath() + "_translated";
+                Path translatedPath = Paths.get(translatedPathStr).normalize().toAbsolutePath();
+                if (Files.exists(translatedPath)) {
+                    downloadPath = translatedPathStr;
+                } else {
+                    downloadPath = doc.getPath();
+                }
+            } else {
+                downloadPath = doc.getPath();
+            }
+
+            Path targetPath = Paths.get(downloadPath).normalize().toAbsolutePath();
+            if (!Files.exists(targetPath)) {
+                return ResponseEntity.notFound().build();
             }
 
             byte[] fileContent = Files.readAllBytes(targetPath);
 
+            // Determine filename and content type from file extension
+            String downloadFileName = doc.getName();
+            if (TranslationStatus.COMPLETED.getValue().equals(doc.getStatus())) {
+                int dot = downloadFileName.lastIndexOf('.');
+                downloadFileName = (dot > 0 ? downloadFileName.substring(0, dot) : downloadFileName) + "_translated" + downloadFileName.substring(dot);
+            }
+
+            String ext = downloadFileName.substring(downloadFileName.lastIndexOf('.') + 1).toLowerCase();
+            MediaType mediaType = switch (ext) {
+                case "txt" -> MediaType.TEXT_PLAIN;
+                case "html", "htm" -> MediaType.TEXT_HTML;
+                case "xml" -> MediaType.APPLICATION_XML;
+                case "json" -> MediaType.APPLICATION_JSON;
+                case "pdf" -> MediaType.parseMediaType("application/pdf");
+                case "epub" -> MediaType.parseMediaType("application/epub+zip");
+                case "docx" -> MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                default -> MediaType.APPLICATION_OCTET_STREAM;
+            };
+
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            headers.setContentDispositionFormData("attachment", doc.getName());
+            headers.setContentType(mediaType);
+            // Use both ASCII fallback and RFC 5987 for UTF-8 filenames
+            String asciiName = downloadFileName.replaceAll("[^\\x20-\\x7E]", "_");
+            String encodedName = java.net.URLEncoder.encode(downloadFileName, java.nio.charset.StandardCharsets.UTF_8);
+            String contentDisposition = String.format(
+                    "attachment; filename=\"%s\"; filename*=UTF-8''%s",
+                    asciiName, encodedName);
+            headers.add("Content-Disposition", contentDisposition);
 
             return new ResponseEntity<>(fileContent, headers, HttpStatus.OK);
 

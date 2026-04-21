@@ -13,13 +13,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.scheduling.annotation.Scheduled;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,35 +39,19 @@ import java.util.UUID;
  * 翻译任务服务
  */
 @Service
+@RequiredArgsConstructor
 public class TranslationTaskService {
     private static final Logger log = LoggerFactory.getLogger(TranslationTaskService.class);
 
-    @Autowired
-    private TranslationTaskMapper translationTaskMapper;
-
-    @Autowired
-    private TranslationHistoryMapper translationHistoryMapper;
-
-    @Autowired
-    private DocumentMapper documentMapper;
-
-    @Autowired
-    private TranslationStateMachine stateMachine;
-
-    @Autowired
-    private UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
-
-    @Autowired
-    private TranslationCacheService cacheService;
-
-    @Autowired
-    private RagTranslationService ragTranslationService;
-
-    @Autowired
-    private EntityConsistencyService entityConsistencyService;
-
-    @Autowired
-    private TranslationPostProcessingService postProcessingService;
+    private final TranslationTaskMapper translationTaskMapper;
+    private final TranslationHistoryMapper translationHistoryMapper;
+    private final DocumentMapper documentMapper;
+    private final TranslationStateMachine stateMachine;
+    private final UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
+    private final TranslationCacheService cacheService;
+    private final RagTranslationService ragTranslationService;
+    private final EntityConsistencyService entityConsistencyService;
+    private final TranslationPostProcessingService postProcessingService;
 
     /**
      * 创建文档翻译任务
@@ -146,7 +130,7 @@ public class TranslationTaskService {
                 while (batchStart < total) {
                     StringBuilder batch = new StringBuilder();
                     int batchEnd = batchStart;
-                    while (batchEnd < total && batch.length() + paragraphs[batchEnd].length() <= 3000) {
+                    while (batchEnd < total && batch.length() + paragraphs[batchEnd].length() <= 1500) {
                         batch.append(paragraphs[batchEnd]);
                         batchEnd++;
                     }
@@ -157,8 +141,20 @@ public class TranslationTaskService {
                     }
 
                     String batchText = batch.toString();
-                    String translated = translateBatchWithCacheAndRag(batchText, targetLang, engine, userId, docId);
-                    translatedContent.append(translated);
+                    String translated;
+                    try {
+                        if ("fast".equals(doc.getMode())) {
+                            translated = translateBatchFastMode(batchText, targetLang);
+                        } else {
+                            translated = translateBatchWithCacheAndRag(batchText, targetLang, engine, userId, docId);
+                        }
+                    } catch (Exception e) {
+                        log.warn("翻译批次失败 [{}/{}]，保留原文: {}", batchStart, total, e.getMessage());
+                        translated = batchText; // fallback to original text
+                    }
+                    if (translated != null && !translated.isEmpty()) {
+                        translatedContent.append(translated);
+                    }
                     batchStart = batchEnd;
 
                     int progress = 20 + (int) ((batchStart * 80.0) / total);
@@ -245,6 +241,31 @@ public class TranslationTaskService {
         if (shouldCacheResult(text, translation)) {
             cacheService.putCache(cacheKey, text, translation, "auto", targetLang, engine);
             ragTranslationService.storeTranslationMemory(text, translation, targetLang, engine);
+        }
+        return translation;
+    }
+
+    /**
+     * 快速模式批量翻译（直连 MTranServer，跳过 RAG/一致性/轮询）
+     */
+    private String translateBatchFastMode(String text, String targetLang) {
+        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang, "mtran");
+        String cached = cacheService.getCache(cacheKey);
+        if (cached != null) {
+            log.info("[快速模式] 缓存命中");
+            return cached;
+        }
+
+        log.info("[快速模式] 直连 MTranServer, textLength={}", text.length());
+        String result = userLevelThrottledTranslationClient.translate(text, targetLang, "google", false, true);
+        String translation = extractTranslatedContent(result);
+        if (translation == null || translation.isBlank()) {
+            log.warn("[快速模式] 翻译结果为空，保留原文");
+            translation = text;
+        }
+        log.info("[快速模式] 翻译完成, translationLength={}", translation.length());
+        if (shouldCacheResult(text, translation)) {
+            cacheService.putCache(cacheKey, text, translation, "auto", targetLang, "mtran");
         }
         return translation;
     }
@@ -358,7 +379,7 @@ public class TranslationTaskService {
             }
         } catch (Exception e) {
             log.warn("解析翻译响应失败: {}", e.getMessage());
-            return null;
+            return response; // fallback to raw response instead of null
         }
         return response;
     }
@@ -399,6 +420,18 @@ public class TranslationTaskService {
                 }
                 return true;
             }
+        }
+        return false;
+    }
+
+    /**
+     * 删除翻译历史记录（逻辑删除）
+     */
+    public boolean deleteHistory(String taskId, Long userId) {
+        TranslationHistory history = translationHistoryMapper.findByTaskId(taskId);
+        if (history != null && history.getUserId().equals(userId)) {
+            translationHistoryMapper.deleteById(history.getId());
+            return true;
         }
         return false;
     }
@@ -455,8 +488,8 @@ public class TranslationTaskService {
                             try {
                                 Path path = Paths.get(translatedPath);
                                 if (Files.exists(path)) {
-                                    String rawContent = Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
-                                    response.setTranslatedText(extractTranslatedContent(rawContent));
+                                    // 文件内容已经是纯文本翻译结果，不要再次调用 extractTranslatedContent
+                                    response.setTranslatedText(Files.readString(path, java.nio.charset.StandardCharsets.UTF_8));
                                 }
                             } catch (Exception e) {
                                 log.warn("读取翻译文件失败: {}", e.getMessage());
@@ -710,8 +743,12 @@ public class TranslationTaskService {
                                     paragraph, targetLang, "google", false, true);
                         }
                         String translation = extractTranslatedContent(result);
+                        if (translation == null || translation.isEmpty()) {
+                            log.warn("翻译结果为空，保留原文");
+                            translation = paragraph;
+                        }
                         // 补回原文中的换行符以保持格式对齐
-                        if (translation != null && !translation.endsWith("\n") && !translation.endsWith("\r")) {
+                        if (!translation.endsWith("\n") && !translation.endsWith("\r")) {
                             if (paragraph.endsWith("\r\n")) {
                                 translation += "\r\n";
                             } else if (paragraph.endsWith("\n")) {
@@ -814,8 +851,12 @@ public class TranslationTaskService {
 
                         // 提取实际翻译内容
                         String translation = extractTranslatedContent(result);
+                        if (translation == null || translation.isEmpty()) {
+                            log.warn("翻译结果为空，保留原文");
+                            translation = paragraph;
+                        }
                         // 补回原文中的换行符以保持格式对齐
-                        if (translation != null && !translation.endsWith("\n") && !translation.endsWith("\r")) {
+                        if (!translation.endsWith("\n") && !translation.endsWith("\r")) {
                             if (paragraph.endsWith("\r\n")) {
                                 translation += "\r\n";
                             } else if (paragraph.endsWith("\n")) {

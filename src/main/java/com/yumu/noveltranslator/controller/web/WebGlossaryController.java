@@ -89,13 +89,13 @@ public class WebGlossaryController {
      * GET /user/glossaries/{id}/terms
      */
     @GetMapping("/{id}/terms")
-    public Result<List<GlossaryTermResponse>> getGlossaryTerms(@PathVariable Long id) {
+    public Result<List<GlossaryResponse>> getGlossaryTerms(@PathVariable Long id) {
         Long userId = SecurityUtil.getRequiredUserId();
         GlossaryResponse glossary = userService.getGlossaryDetail(userId, id);
         if (glossary == null) {
             return Result.error("术语库不存在");
         }
-        List<GlossaryTermResponse> terms = userService.getGlossaryTerms(userId);
+        List<GlossaryResponse> terms = userService.getGlossaryTerms(userId);
         return Result.ok(terms);
     }
 }

@@ -2,7 +2,7 @@ package com.yumu.noveltranslator.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.yumu.noveltranslator.config.TranslationLimitProperties;
+import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -88,12 +88,11 @@ public class UserLevelThrottledTranslationClient {
     private static final java.net.ProxySelector NO_PROXY_SELECTOR = new java.net.ProxySelector() {
         @Override
         public java.util.List<java.net.Proxy> select(java.net.URI uri) {
-            System.out.println("[直连] ProxySelector.select(" + uri + ") -> NO_PROXY");
             return java.util.List.of(java.net.Proxy.NO_PROXY);
         }
         @Override
         public void connectFailed(java.net.URI uri, java.net.SocketAddress sa, java.io.IOException ioe) {
-            System.out.println("[直连] connectFailed(" + uri + "): " + ioe.getMessage());
+            // 连接失败由上层 HttpClient 处理
         }
     };
 
@@ -142,6 +141,15 @@ public class UserLevelThrottledTranslationClient {
             if (userSemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 try {
                     return doTranslateRequest(text, targetLang, engine);
+                } catch (Exception e) {
+                    // Python 不可达，降级到 MTranServer
+                    log.warn("专家模式 Python 翻译失败，降级到 MTranServer: {}", e.getMessage());
+                    try {
+                        return doExternalTranslationRequest(text, targetLang, false);
+                    } catch (Exception e2) {
+                        log.error("MTranServer 也失败: {}", e2.getMessage());
+                        throw new RuntimeException("所有翻译引擎均失败: " + e.getMessage() + "; " + e2.getMessage(), e2);
+                    }
                 } finally {
                     userSemaphore.release();
                 }

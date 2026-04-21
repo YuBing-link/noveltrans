@@ -32,7 +32,7 @@ public class PluginAuthController {
         String deviceId = request.get("deviceId");
 
         if (deviceId == null || deviceId.trim().isEmpty()) {
-            return Result.error("设备 ID 不能为空", "400");
+            return Result.error("400", "设备 ID 不能为空");
         }
 
         CustomUserDetails userDetails = SecurityUtil.getRequiredUserDetails();
@@ -51,13 +51,13 @@ public class PluginAuthController {
     @GetMapping("/get-token/{deviceId}")
     public Result<Map<String, String>> getToken(@PathVariable String deviceId) {
         if (deviceId == null || deviceId.trim().isEmpty()) {
-            return Result.error("设备 ID 不能为空", "400");
+            return Result.error("400", "设备 ID 不能为空");
         }
 
         String token = deviceTokenService.getToken(deviceId);
 
         if (token == null) {
-            return Result.error("未找到登录信息，请先在网站登录", "404");
+            return Result.error("404", "未找到登录信息，请先在网站登录");
         }
 
         try {
@@ -67,7 +67,7 @@ public class PluginAuthController {
             return Result.ok(result, "200");
         } catch (Exception e) {
             deviceTokenService.removeToken(deviceId);
-            return Result.error("登录已过期，请重新登录", "401");
+            return Result.error("401", "登录已过期，请重新登录");
         }
     }
 }

@@ -1,14 +1,16 @@
-package com.yumu.noveltranslator.config;
+package com.yumu.noveltranslator.bootstrap;
 
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.util.PasswordUtil;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * 应用启动时自动创建测试账号（仅当不存在时）
+ * 开发环境自动创建测试账号（仅当不存在时）
  */
+@Profile("dev")
 @Component
 public class DataInitializer implements CommandLineRunner {
 

@@ -162,8 +162,8 @@ class DtoTest {
     }
 
     @Test
-    void glossaryTermResponse() {
-        GlossaryTermResponse resp = new GlossaryTermResponse();
+    void glossaryResponse_fields() {
+        GlossaryResponse resp = new GlossaryResponse();
         resp.setId(1L);
         resp.setSourceWord("hello");
         resp.setTargetWord("你好");

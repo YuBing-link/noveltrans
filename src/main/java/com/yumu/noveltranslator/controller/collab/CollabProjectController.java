@@ -59,13 +59,21 @@ public class CollabProjectController {
         return Result.ok(project);
     }
 
-    @PatchMapping("/projects/{projectId}/status")
+    @PostMapping("/projects/{projectId}/status")
     @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
     public Result<Void> changeProjectStatus(@PathVariable Long projectId,
                                              @RequestParam String targetStatus) {
         CollabProjectStatus target = CollabProjectStatus.fromValue(targetStatus);
         Long userId = SecurityUtil.getRequiredUserId();
         collabProjectService.changeProjectStatus(projectId, target, userId);
+        return Result.ok(null);
+    }
+
+    @DeleteMapping("/projects/{projectId}")
+    @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
+    public Result<Void> deleteProject(@PathVariable Long projectId) {
+        Long userId = SecurityUtil.getRequiredUserId();
+        collabProjectService.deleteProject(projectId, userId);
         return Result.ok(null);
     }
 

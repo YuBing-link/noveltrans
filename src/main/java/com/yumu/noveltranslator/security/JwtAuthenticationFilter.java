@@ -1,6 +1,5 @@
 package com.yumu.noveltranslator.security;
 
-import com.yumu.noveltranslator.config.SecurityPermitAllPaths;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.util.JwtUtils;

@@ -174,10 +174,17 @@ public class EntityConsistencyService {
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = sendWithRetry(request, 2);
+        HttpResponse<String> response;
+        try {
+            response = sendWithRetry(request, 2);
+        } catch (Exception e) {
+            log.warn("实体提取失败，跳过一致性处理: {}", e.getMessage());
+            return Collections.emptyList();
+        }
         String responseBody = response.body();
         if (responseBody == null || responseBody.isBlank()) {
-            throw new RuntimeException("Python服务返回空响应体, status=" + response.statusCode());
+            log.warn("Python服务返回空响应体, status={}, 跳过实体提取", response.statusCode());
+            return Collections.emptyList();
         }
 
         try {

@@ -9,7 +9,7 @@ import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
 import com.yumu.noveltranslator.service.state.TranslationStateMachine;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,19 +28,15 @@ import java.util.stream.Collectors;
  * 文档管理服务
  */
 @Service
+@RequiredArgsConstructor
 public class DocumentService {
 
     @Value("${translation.upload-dir:#{systemProperties['user.home']}/novel-translator/uploads}")
     private String uploadDir;
 
-    @Autowired
-    private DocumentMapper documentMapper;
-
-    @Autowired
-    private TranslationTaskMapper translationTaskMapper;
-
-    @Autowired
-    private TranslationStateMachine stateMachine;
+    private final DocumentMapper documentMapper;
+    private final TranslationTaskMapper translationTaskMapper;
+    private final TranslationStateMachine stateMachine;
 
     /**
      * 上传文档
@@ -162,7 +158,7 @@ public class DocumentService {
         response.setTargetLang(doc.getTargetLang());
         response.setTaskId(doc.getTaskId());
         response.setStatus(doc.getStatus());
-        response.setProgress(100); // 简化处理
+        response.setProgress(resolveProgress(doc));
         response.setCreateTime(doc.getCreateTime() != null
                 ? doc.getCreateTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                 : null);
@@ -171,5 +167,38 @@ public class DocumentService {
                 : null);
         response.setErrorMessage(doc.getErrorMessage());
         return response;
+    }
+
+    /**
+     * 从 Document 或关联的 TranslationTask 获取真实进度
+     */
+    private int resolveProgress(Document doc) {
+        if (TranslationStatus.COMPLETED.getValue().equals(doc.getStatus())) {
+            return 100;
+        }
+        if (TranslationStatus.PROCESSING.getValue().equals(doc.getStatus()) || TranslationStatus.PENDING.getValue().equals(doc.getStatus())) {
+            int realProgress = getRealProgress(doc);
+            if (realProgress > 0) {
+                return realProgress;
+            }
+            // 返回基于时间的平滑进度，提升用户体验
+            if (doc.getCreateTime() != null) {
+                long elapsedSeconds = java.time.Duration.between(doc.getCreateTime(), LocalDateTime.now()).getSeconds();
+                // 预估 3 分钟完成，每分钟约 33%，最多到 95%
+                int estimated = Math.min(95, (int) (elapsedSeconds * 100.0 / 180.0));
+                return Math.max(5, estimated); // 至少 5%
+            }
+        }
+        return 0;
+    }
+
+    private int getRealProgress(Document doc) {
+        if (doc.getTaskId() != null && translationTaskMapper != null) {
+            TranslationTask task = translationTaskMapper.findByTaskId(doc.getTaskId());
+            if (task != null) {
+                return task.getProgress() != null ? task.getProgress() : 0;
+            }
+        }
+        return 0;
     }
 }

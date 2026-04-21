@@ -18,6 +18,7 @@ interface AuthContextType {
   register: (email: string, password: string, code: string, username?: string) => Promise<void>;
   logout: () => Promise<void>;
   sendCode: (email: string) => Promise<void>;
+  sendResetCode: (email: string) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -84,8 +85,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authApi.sendCode(email);
   }, []);
 
+  const sendResetCode = useCallback(async (email: string) => {
+    await authApi.sendResetCode(email);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, register, logout, sendCode, refreshUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, register, logout, sendCode, sendResetCode, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

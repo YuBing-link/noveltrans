@@ -1,13 +1,9 @@
 import { useState } from 'react';
 import { useTheme } from '../hooks/useTheme';
-import { PageLayout } from '../components/layout/PageLayout';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { useToast } from '../components/ui/Toast';
 import { authApi } from '../api/auth';
 import { preferencesApi } from '../api/preferences';
-import { Moon, Sun, Bell, Mail, Volume2 } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 
 function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
@@ -23,132 +19,80 @@ function SettingsPage() {
     try {
       await authApi.changePassword({ oldPassword, newPassword });
       success('密码修改成功');
-      setOldPassword('');
-      setNewPassword('');
+      setOldPassword(''); setNewPassword('');
     } catch { toastError('密码修改失败'); }
     finally { setSaving(false); }
   };
 
-  const handleThemeToggle = async () => {
-    toggleTheme();
-    try {
-      const newTheme = theme === 'dark' ? 'light' : 'dark';
-      await preferencesApi.update({ themeMode: newTheme });
-    } catch { /* ignore - local toggle still works */ }
-  };
-
   return (
-    <PageLayout className="py-8 min-h-[calc(100vh-3.5rem)]">
-      <div className="mb-10 text-center">
-        <h1 className="text-[28px] sm:text-[32px] font-semibold text-text-primary tracking-display leading-[1.07] mb-2">
-          设置
-        </h1>
-        <p className="text-text-secondary text-[15px]">管理您的账号安全和外观偏好</p>
-      </div>
-
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="w-full" style={{ minHeight: 'calc(100vh - 200px)' }}>
+      <div className="border border-border/50 rounded-lg overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 200px)' }}>
         {/* Theme */}
-        <Card>
-          <div className="p-6">
-            <h2 className="text-[17px] font-semibold text-text-primary mb-4">外观</h2>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[13px] font-medium text-text-primary">深色模式</p>
-                <p className="text-[12px] text-text-tertiary mt-0.5">切换浅色/深色主题</p>
-              </div>
-              <button
-                onClick={handleThemeToggle}
-                className={`flex items-center gap-2 px-4 py-2 rounded-button text-[13px] font-medium transition-colors ${
-                  theme === 'dark'
-                    ? 'bg-text-primary text-white'
-                    : 'bg-surface-secondary text-text-primary'
-                }`}
-              >
-                {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                {theme === 'dark' ? '深色' : '浅色'}
-              </button>
-            </div>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
+          <div>
+            <p className="text-[14px] font-medium text-text-primary">深色模式</p>
+            <p className="text-[12px] text-text-tertiary mt-0.5">切换浅色/深色主题</p>
           </div>
-        </Card>
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-2 px-4 py-2 rounded-button text-[13px] font-medium transition-colors border border-border hover:bg-surface-secondary"
+          >
+            {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            {theme === 'dark' ? '深色' : '浅色'}
+          </button>
+        </div>
 
         {/* Password */}
-        <Card>
-          <div className="p-6">
-            <h2 className="text-[17px] font-semibold text-text-primary mb-4">修改密码</h2>
-            <div className="space-y-4">
-              <Input
-                label="当前密码"
-                type="password"
-                value={oldPassword}
-                onChange={e => setOldPassword(e.target.value)}
-                placeholder="输入当前密码"
-              />
-              <Input
-                label="新密码"
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                placeholder="输入新密码（至少6位）"
-              />
-              <Button onClick={handleChangePassword} loading={saving}>
-                修改密码
-              </Button>
+        <div className="px-5 py-4 border-b border-border/50">
+          <h2 className="text-[14px] font-semibold text-text-primary mb-3">修改密码</h2>
+          <div className="flex flex-col sm:flex-row gap-3 items-end">
+            <div className="flex-1">
+              <input type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} placeholder="当前密码" className="w-full px-3 py-2 text-[13px] bg-surface-secondary text-text-primary rounded-input border border-border focus:border-accent focus:outline-none" />
             </div>
+            <div className="flex-1">
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="新密码（至少6位）" className="w-full px-3 py-2 text-[13px] bg-surface-secondary text-text-primary rounded-input border border-border focus:border-accent focus:outline-none" />
+            </div>
+            <button
+              onClick={handleChangePassword}
+              disabled={saving}
+              className="px-5 py-2 text-[13px] font-medium text-white bg-accent rounded-button hover:bg-accent-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              {saving ? '保存中...' : '修改'}
+            </button>
           </div>
-        </Card>
+        </div>
 
         {/* Notifications */}
-        <Card>
-          <div className="p-6">
-            <h2 className="text-[17px] font-semibold text-text-primary mb-4">通知偏好</h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Bell className="w-4 h-4 text-text-tertiary" />
-                  <div>
-                    <p className="text-[13px] font-medium text-text-primary">翻译完成通知</p>
-                    <p className="text-[12px] text-text-tertiary mt-0.5">文档翻译完成时推送通知</p>
-                  </div>
-                </div>
-                <ToggleSwitch defaultOn />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Mail className="w-4 h-4 text-text-tertiary" />
-                  <div>
-                    <p className="text-[13px] font-medium text-text-primary">邮件通知</p>
-                    <p className="text-[12px] text-text-tertiary mt-0.5">接收翻译报告邮件</p>
-                  </div>
-                </div>
-                <ToggleSwitch />
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Volume2 className="w-4 h-4 text-text-tertiary" />
-                  <div>
-                    <p className="text-[13px] font-medium text-text-primary">系统更新通知</p>
-                    <p className="text-[12px] text-text-tertiary mt-0.5">新功能和维护通知</p>
-                  </div>
-                </div>
-                <ToggleSwitch defaultOn />
-              </div>
-            </div>
+        <div className="px-5 py-4 border-b border-border/50">
+          <h2 className="text-[14px] font-semibold text-text-primary mb-3">通知偏好</h2>
+          <div className="space-y-3">
+            <ToggleRow label="翻译完成通知" description="文档翻译完成时推送通知" defaultOn />
+            <ToggleRow label="邮件通知" description="接收翻译报告邮件" />
+            <ToggleRow label="系统更新通知" description="新功能和维护通知" defaultOn />
           </div>
-        </Card>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border/50 bg-surface-secondary">
+          <span className="text-[12px] text-text-tertiary">管理您的账号安全和外观偏好</span>
+        </div>
       </div>
-    </PageLayout>
+    </div>
   );
 }
 
-function ToggleSwitch({ defaultOn = false }: { defaultOn?: boolean }) {
+function ToggleRow({ label, description, defaultOn = false }: { label: string; description: string; defaultOn?: boolean }) {
   const [on, setOn] = useState(defaultOn);
   return (
-    <button
-      onClick={() => setOn(!on)}
-      className={`w-11 h-6 rounded-full transition-colors ${on ? 'bg-accent' : 'bg-surface-secondary'}`}
-    >
-      <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
-    </button>
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-[13px] font-medium text-text-primary">{label}</p>
+        <p className="text-[12px] text-text-tertiary mt-0.5">{description}</p>
+      </div>
+      <button onClick={() => setOn(!on)} className={`w-11 h-6 rounded-full transition-colors ${on ? 'bg-accent' : 'bg-surface-secondary'}`}>
+        <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : 'translate-x-0.5'}`} />
+      </button>
+    </div>
   );
 }
 

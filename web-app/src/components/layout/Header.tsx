@@ -18,13 +18,15 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-50/80 backdrop-blur-xl border-b border-divider dark:border-border">
-      <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div style={{ width: '92%', maxWidth: '1440px', margin: '0 auto' }} className="px-6 h-14 flex items-center justify-between">
         {/* Logo + Nav */}
         <div className="flex items-center gap-10">
           <Link to="/" className="text-[15px] font-semibold text-text-primary flex items-center gap-2">
-            <span className="w-7 h-7 bg-gradient-brand text-white rounded-lg flex items-center justify-center text-xs font-bold">
-              N
-            </span>
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+              <rect x="3" y="4" width="22" height="20" rx="3" stroke="currentColor" strokeWidth="2"/>
+              <path d="M10 10H18M10 14H18M10 18H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M20 10L24 7V23L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="var(--color-accent-bg)"/>
+            </svg>
             NovelTrans
           </Link>
           <nav className="hidden md:flex items-center gap-7">
@@ -41,9 +43,6 @@ function Header() {
                 </Link>
                 <Link to="/glossary" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
                   术语表
-                </Link>
-                <Link to="/collab" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
-                  协作
                 </Link>
               </>
             )}
@@ -65,7 +64,7 @@ function Header() {
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-gray-100 transition-button"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-button hover:bg-gray-100 transition-button"
               >
                 <div className="w-7 h-7 rounded-full bg-accent text-white flex items-center justify-center text-xs font-semibold">
                   {user?.username?.slice(0, 1).toUpperCase() || 'U'}

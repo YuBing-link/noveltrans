@@ -2,17 +2,23 @@ package com.yumu.noveltranslator.service;
 
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
+import com.yumu.noveltranslator.entity.CollabComment;
 import com.yumu.noveltranslator.entity.CollabProject;
 import com.yumu.noveltranslator.entity.CollabProjectMember;
+import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
+import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
+import com.yumu.noveltranslator.mapper.CollabCommentMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
+import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.service.state.CollabStateMachine;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +45,8 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     private final CollabProjectMapper collabProjectMapper;
     private final CollabProjectMemberMapper collabProjectMemberMapper;
     private final CollabChapterTaskMapper collabChapterTaskMapper;
+    private final CollabCommentMapper collabCommentMapper;
+    private final DocumentMapper documentMapper;
     private final UserMapper userMapper;
     private final CollabStateMachine collabStateMachine;
     private final com.yumu.noveltranslator.service.MultiAgentTranslationService multiAgentTranslationService;
@@ -159,6 +167,14 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         }
 
         log.info("团队模式创建项目: projectId={}, docName={}, chapters={}", project.getId(), documentName, chapters.size());
+
+        // 更新文档状态为处理中
+        Document doc = documentMapper.selectById(documentId);
+        if (doc != null) {
+            doc.setStatus(TranslationStatus.PROCESSING.getValue());
+            doc.setUpdateTime(java.time.LocalDateTime.now());
+            documentMapper.updateById(doc);
+        }
 
         return new TeamProjectCreateResult(project.getId(), documentName, chapters.size());
     }
@@ -321,6 +337,31 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
 
         member.setInviteStatus("REMOVED");
         collabProjectMemberMapper.updateById(member);
+    }
+
+    /**
+     * 删除项目（仅 OWNER 可操作，级联逻辑删除所有关联数据）
+     */
+    @Transactional
+    public void deleteProject(Long projectId, Long userId) {
+        CollabProject project = getById(projectId);
+        if (project == null) {
+            throw new IllegalArgumentException("项目不存在");
+        }
+        if (!project.getOwnerId().equals(userId)) {
+            throw new IllegalStateException("只有项目所有者可以删除项目");
+        }
+
+        // 级联逻辑删除：评论 → 章节 → 成员 → 项目
+        List<CollabChapterTask> chapters = collabChapterTaskMapper.selectByProjectId(projectId);
+        for (CollabChapterTask chapter : chapters) {
+            collabCommentMapper.delete(new QueryWrapper<CollabComment>().eq("chapter_task_id", chapter.getId()));
+        }
+        collabChapterTaskMapper.delete(new QueryWrapper<CollabChapterTask>().eq("project_id", projectId));
+        collabProjectMemberMapper.delete(new QueryWrapper<CollabProjectMember>().eq("project_id", projectId));
+        removeById(projectId);
+
+        log.info("删除协作项目: projectId={}, name={}, ownerId={}", projectId, project.getName(), userId);
     }
 
     /**

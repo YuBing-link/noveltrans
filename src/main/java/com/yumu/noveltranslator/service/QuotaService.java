@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.service;
 
-import com.yumu.noveltranslator.config.TranslationLimitProperties;
+import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.mapper.QuotaUsageMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

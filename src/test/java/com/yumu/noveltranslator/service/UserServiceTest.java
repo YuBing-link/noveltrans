@@ -4,14 +4,11 @@ import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.entity.UserPreference;
 import com.yumu.noveltranslator.entity.Glossary;
-import com.yumu.noveltranslator.config.TranslationLimitProperties;
+import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.UserPreferenceMapper;
-import com.yumu.noveltranslator.util.EmailVerificationCodeUtil;
-import com.yumu.noveltranslator.util.JwtUtils;
-import com.yumu.noveltranslator.util.PasswordUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -19,8 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.test.util.ReflectionTestUtils;
+import com.yumu.noveltranslator.util.PasswordUtil;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -29,276 +25,16 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
-    @Mock
-    private UserMapper userMapper;
-    @Mock
-    private JwtUtils jwtUtils;
-    @Mock
-    private EmailVerificationCodeUtil emailVerificationCodeUtil;
-    @Mock
-    private TranslationHistoryMapper translationHistoryMapper;
-    @Mock
-    private GlossaryMapper glossaryMapper;
-    @Mock
-    private UserPreferenceMapper userPreferenceMapper;
-    @Mock
-    private com.yumu.noveltranslator.service.DeviceTokenService deviceTokenService;
-    @Mock
-    private TranslationLimitProperties limitProperties;
-    @Mock
-    private QuotaService quotaService;
+    @Mock private UserMapper userMapper;
+    @Mock private TranslationHistoryMapper translationHistoryMapper;
+    @Mock private GlossaryMapper glossaryMapper;
+    @Mock private UserPreferenceMapper userPreferenceMapper;
+    @Mock private TranslationLimitProperties limitProperties;
+    @Mock private QuotaService quotaService;
 
     private UserService createUserService() {
-        UserService service = new UserService();
-        ReflectionTestUtils.setField(service, "userMapper", userMapper);
-        ReflectionTestUtils.setField(service, "jwtUtils", jwtUtils);
-        ReflectionTestUtils.setField(service, "emailVerificationCodeUtil", emailVerificationCodeUtil);
-        ReflectionTestUtils.setField(service, "translationHistoryMapper", translationHistoryMapper);
-        ReflectionTestUtils.setField(service, "glossaryMapper", glossaryMapper);
-        ReflectionTestUtils.setField(service, "userPreferenceMapper", userPreferenceMapper);
-        ReflectionTestUtils.setField(service, "deviceTokenService", deviceTokenService);
-        ReflectionTestUtils.setField(service, "limitProperties", limitProperties);
-        ReflectionTestUtils.setField(service, "quotaService", quotaService);
-        return service;
-    }
-
-    @Nested
-    @DisplayName("登录")
-    class LoginTests {
-
-        @Test
-        void 登录成功返回Token() {
-            UserService userService = createUserService();
-            User user = new User();
-            user.setId(1L);
-            user.setEmail("test@test.com");
-            user.setUsername("testuser");
-            user.setPassword("$2a$10$mockHash");
-            when(userMapper.findByEmail("test@test.com")).thenReturn(user);
-            when(jwtUtils.createToken(1L, "test@test.com")).thenReturn("mock-jwt-token");
-
-            LoginRequest req = new LoginRequest();
-            req.setEmail("test@test.com");
-            req.setPassword("password123");
-
-            try (MockedStatic<PasswordUtil> mocked = mockStatic(PasswordUtil.class)) {
-                mocked.when(() -> PasswordUtil.verifyPassword("password123", "$2a$10$mockHash")).thenReturn(true);
-                Result<User> result = userService.login(req);
-
-                assertTrue(result.isSuccess());
-                assertEquals("mock-jwt-token", result.getToken());
-                assertEquals("testuser", result.getData().getUsername());
-            }
-        }
-
-        @Test
-        void 密码错误返回失败() {
-            UserService userService = createUserService();
-            User user = new User();
-            user.setId(1L);
-            user.setEmail("test@test.com");
-            user.setPassword("$2a$10$mockHash");
-            when(userMapper.findByEmail("test@test.com")).thenReturn(user);
-
-            LoginRequest req = new LoginRequest();
-            req.setEmail("test@test.com");
-            req.setPassword("wrong");
-
-            try (MockedStatic<PasswordUtil> mocked = mockStatic(PasswordUtil.class)) {
-                mocked.when(() -> PasswordUtil.verifyPassword("wrong", "$2a$10$mockHash")).thenReturn(false);
-                Result<User> result = userService.login(req);
-                assertFalse(result.isSuccess());
-            }
-        }
-
-        @Test
-        void 用户不存在返回失败() {
-            UserService userService = createUserService();
-            when(userMapper.findByEmail("notfound@test.com")).thenReturn(null);
-
-            LoginRequest req = new LoginRequest();
-            req.setEmail("notfound@test.com");
-            req.setPassword("password");
-            Result<User> result = userService.login(req);
-
-            assertFalse(result.isSuccess());
-        }
-
-        @Test
-        void 空邮箱返回失败() {
-            UserService userService = createUserService();
-            LoginRequest req = new LoginRequest();
-            req.setEmail("");
-            req.setPassword("password");
-            Result<User> result = userService.login(req);
-
-            assertFalse(result.isSuccess());
-        }
-
-        @Test
-        void 无效邮箱格式返回失败() {
-            UserService userService = createUserService();
-            LoginRequest req = new LoginRequest();
-            req.setEmail("invalid-email");
-            req.setPassword("password");
-            Result<User> result = userService.login(req);
-
-            assertFalse(result.isSuccess());
-        }
-
-        @Test
-        void 空密码返回失败() {
-            UserService userService = createUserService();
-            LoginRequest req = new LoginRequest();
-            req.setEmail("test@test.com");
-            req.setPassword("");
-            Result<User> result = userService.login(req);
-
-            assertFalse(result.isSuccess());
-        }
-    }
-
-    @Nested
-    @DisplayName("注册")
-    class RegisterTests {
-
-        @Test
-        void 注册成功创建用户() {
-            UserService userService = createUserService();
-            when(userMapper.findByEmail("new@test.com")).thenReturn(null);
-            when(userMapper.insert(any(User.class))).thenReturn(1);
-            when(emailVerificationCodeUtil.verifyCode("new@test.com", "123456")).thenReturn(true);
-
-            RegisterRequest req = new RegisterRequest();
-            req.setEmail("new@test.com");
-            req.setPassword("password123");
-            req.setCode("123456");
-            req.setUsername("newuser");
-
-            try (MockedStatic<PasswordUtil> mocked = mockStatic(PasswordUtil.class)) {
-                mocked.when(() -> PasswordUtil.hashPassword("password123")).thenReturn("$2a$10$hashed");
-                Result<User> result = userService.register(req);
-
-                assertTrue(result.isSuccess());
-                assertEquals("newuser", result.getData().getUsername());
-                assertEquals("new@test.com", result.getData().getEmail());
-                verify(userMapper).insert(any(User.class));
-            }
-        }
-
-        @Test
-        void 验证码错误返回失败() {
-            UserService userService = createUserService();
-            when(emailVerificationCodeUtil.verifyCode("test@test.com", "wrong")).thenReturn(false);
-
-            RegisterRequest req = new RegisterRequest();
-            req.setEmail("test@test.com");
-            req.setPassword("password123");
-            req.setCode("wrong");
-            Result<User> result = userService.register(req);
-
-            assertFalse(result.isSuccess());
-        }
-
-        @Test
-        void 邮箱已存在返回失败() {
-            UserService userService = createUserService();
-            User existingUser = new User();
-            existingUser.setEmail("exists@test.com");
-            when(userMapper.findByEmail("exists@test.com")).thenReturn(existingUser);
-            // verifyCode 在 findByEmail 之前调用，必须 mock
-            when(emailVerificationCodeUtil.verifyCode("exists@test.com", "123456")).thenReturn(true);
-
-            RegisterRequest req = new RegisterRequest();
-            req.setEmail("exists@test.com");
-            req.setPassword("password123");
-            req.setCode("123456");
-            Result<User> result = userService.register(req);
-
-            assertFalse(result.isSuccess());
-        }
-
-        @Test
-        void 密码太短返回失败() {
-            UserService userService = createUserService();
-            RegisterRequest req = new RegisterRequest();
-            req.setEmail("test@test.com");
-            req.setPassword("123");
-            req.setCode("123456");
-            Result<User> result = userService.register(req);
-
-            assertFalse(result.isSuccess());
-        }
-    }
-
-    @Nested
-    @DisplayName("修改密码")
-    class ChangePasswordTests {
-
-        @Test
-        void 旧密码正确成功修改() {
-            UserService userService = createUserService();
-            User user = new User();
-            user.setId(1L);
-            user.setPassword("$2a$10$mockHash");
-            when(userMapper.selectById(1L)).thenReturn(user);
-
-            ChangePasswordRequest req = new ChangePasswordRequest();
-            req.setOldPassword("old123");
-            req.setNewPassword("new123");
-
-            try (MockedStatic<PasswordUtil> mocked = mockStatic(PasswordUtil.class)) {
-                mocked.when(() -> PasswordUtil.verifyPassword("old123", "$2a$10$mockHash")).thenReturn(true);
-                mocked.when(() -> PasswordUtil.hashPassword("new123")).thenReturn("$2a$10$newHash");
-
-                Result result = userService.changePassword(1L, req);
-                assertTrue(result.isSuccess());
-                verify(userMapper).updateById(any(User.class));
-            }
-        }
-
-        @Test
-        void 旧密码错误返回失败() {
-            UserService userService = createUserService();
-            User user = new User();
-            user.setId(1L);
-            user.setPassword("$2a$10$mockHash");
-            when(userMapper.selectById(1L)).thenReturn(user);
-
-            ChangePasswordRequest req = new ChangePasswordRequest();
-            req.setOldPassword("wrong");
-            req.setNewPassword("new123");
-
-            try (MockedStatic<PasswordUtil> mocked = mockStatic(PasswordUtil.class)) {
-                mocked.when(() -> PasswordUtil.verifyPassword("wrong", "$2a$10$mockHash")).thenReturn(false);
-                Result result = userService.changePassword(1L, req);
-                assertFalse(result.isSuccess());
-            }
-        }
-
-        @Test
-        void 用户不存在返回失败() {
-            UserService userService = createUserService();
-            when(userMapper.selectById(999L)).thenReturn(null);
-
-            ChangePasswordRequest req = new ChangePasswordRequest();
-            req.setOldPassword("old123");
-            req.setNewPassword("new123");
-            Result result = userService.changePassword(999L, req);
-
-            assertFalse(result.isSuccess());
-        }
-
-        @Test
-        void 新密码太短返回失败() {
-            UserService userService = createUserService();
-            ChangePasswordRequest req = new ChangePasswordRequest();
-            req.setOldPassword("old123");
-            req.setNewPassword("123");
-            Result result = userService.changePassword(1L, req);
-
-            assertFalse(result.isSuccess());
-        }
+        return new UserService(userMapper, translationHistoryMapper, glossaryMapper,
+                userPreferenceMapper, limitProperties, quotaService);
     }
 
     @Nested
@@ -460,35 +196,6 @@ class UserServiceTest {
             assertEquals(50000L, response.getTotalTranslations());
             assertEquals(1000000L, response.getTotalCharacters());
             assertEquals("normal", response.getSystemStatus());
-        }
-    }
-
-    @Nested
-    @DisplayName("UserDetailsService")
-    class UserDetailsServiceTests {
-
-        @Test
-        void 邮箱存在返回UserDetails() {
-            UserService userService = createUserService();
-            User user = new User();
-            user.setId(1L);
-            user.setEmail("test@test.com");
-            user.setPassword("$2a$10$hash");
-            when(userMapper.findByEmail("test@test.com")).thenReturn(user);
-
-            var userDetails = userService.loadUserByUsername("test@test.com");
-
-            assertNotNull(userDetails);
-            assertEquals("test@test.com", userDetails.getUsername());
-        }
-
-        @Test
-        void 邮箱不存在抛出异常() {
-            UserService userService = createUserService();
-            when(userMapper.findByEmail("notfound@test.com")).thenReturn(null);
-
-            assertThrows(UsernameNotFoundException.class,
-                    () -> userService.loadUserByUsername("notfound@test.com"));
         }
     }
 }

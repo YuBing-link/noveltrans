@@ -1,6 +1,8 @@
 import { api } from './client';
 import type { DocumentItem } from './types';
 
+const API_BASE = '';
+
 export const documentApi = {
   getList: (params?: { page?: number; pageSize?: number; status?: string }) => {
     const qs = new URLSearchParams();
@@ -24,10 +26,10 @@ export const documentApi = {
   },
   download: async (docId: number) => {
     const token = localStorage.getItem('authToken');
-    const res = await fetch(`/user/documents/${docId}/download`, {
+    const res = await fetch(`${API_BASE}/user/documents/${docId}/download`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!res.ok) throw new Error('Download failed');
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
     return res.blob();
   },
 };

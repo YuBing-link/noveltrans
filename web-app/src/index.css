@@ -81,13 +81,13 @@
 
   /* === Border Radius === */
   --radius-sm: 8px;
-  --radius-button: 10px;
-  --radius-card: 12px;
-  --radius-card-sm: 10px;
+  --radius-button: 6px;
+  --radius-card: 2px;
+  --radius-card-sm: 2px;
   --radius-pill: 9999px;
   --radius-image: 12px;
-  --radius-input: 10px;
-  --radius-modal: 16px;
+  --radius-input: 2px;
+  --radius-modal: 2px;
   --radius-language: 10px;
 
   /* === Shadows === */
@@ -190,12 +190,15 @@ html {
   text-rendering: optimizeLegibility;
   letter-spacing: -0.01em;
   scroll-behavior: smooth;
+  min-height: 100vh;
+  height: 100%;
 }
 
 body {
   background: var(--color-background);
   color: var(--color-text-primary);
   min-height: 100vh;
+  height: 100%;
   font-size: 16px;
   line-height: 1.5;
 }
@@ -360,24 +363,34 @@ html.dark .bg-gradient-hero {
   transform: scale(0.97);
 }
 
-/* ==================== Gradient Utilities ==================== */
+/* ==================== Brand Utilities ==================== */
 .bg-gradient-brand {
-  background: linear-gradient(135deg, #f97316 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #7c6cf0 0%, #6c5ce7 100%);
 }
 
 html.dark .bg-gradient-brand {
-  background: linear-gradient(135deg, #fb923c 0%, #a78bfa 100%);
+  background: linear-gradient(135deg, #9a8cf7 0%, #8b7cf7 100%);
 }
 
 .text-gradient-brand {
-  background: linear-gradient(135deg, #f97316 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #7c6cf0 0%, #6c5ce7 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
+html.dark .text-gradient-brand {
+  background: linear-gradient(135deg, #9a8cf7 0%, #8b7cf7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 .border-gradient-brand {
-  border-image: linear-gradient(90deg, #f97316, #8b5cf6) 1;
+  border-color: #6c5ce7;
+}
+
+html.dark .border-gradient-brand {
+  border-color: #8b7cf7;
 }
 
 /* gradient border-bottom trick (border-image doesn't work well with rounded corners) */
@@ -391,21 +404,25 @@ html.dark .bg-gradient-brand {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, #f97316 0%, #8b5cf6 100%);
+  background: #6c5ce7;
 }
 
 html.dark .border-gradient-b::after {
-  background: linear-gradient(90deg, #fb923c 0%, #a78bfa 100%);
+  background: #8b7cf7;
 }
 
 /* ==================== DeepL-style layout ==================== */
 .translate-gradient-bar {
-  background: linear-gradient(90deg, #f97316 0%, #8b5cf6 100%);
+  background: #6c5ce7;
   height: 3px;
   width: 40px;
   border-radius: 2px;
   margin: 0 auto;
   transition: width 0.3s ease;
+}
+
+html.dark .translate-gradient-bar {
+  background: #8b7cf7;
 }
 
 .translate-gradient-bar:hover {

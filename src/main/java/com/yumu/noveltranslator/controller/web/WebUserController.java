@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.controller.web;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.security.CustomUserDetails;
+import com.yumu.noveltranslator.service.AuthService;
 import com.yumu.noveltranslator.service.TranslationTaskService;
 import com.yumu.noveltranslator.service.UserService;
 import com.yumu.noveltranslator.util.SecurityUtil;
@@ -21,16 +22,26 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class WebUserController {
 
+    private final AuthService authService;
     private final UserService userService;
     private final TranslationTaskService translationTaskService;
 
     /**
-     * 发送验证码接口
+     * 发送注册验证码
      * POST /user/send-code
      */
     @PostMapping("/send-code")
     public Result sendVerificationCode(@RequestBody @Valid SendCodeRequest request) {
-        return userService.sendVerificationCode(request.getEmail());
+        return authService.sendVerificationCode(request.getEmail());
+    }
+
+    /**
+     * 发送重置密码验证码
+     * POST /user/send-reset-code
+     */
+    @PostMapping("/send-reset-code")
+    public Result sendResetCode(@RequestBody @Valid SendCodeRequest request) {
+        return authService.sendResetCode(request.getEmail());
     }
 
     /**
@@ -39,7 +50,7 @@ public class WebUserController {
      */
     @PostMapping("/login")
     public Result<User> login(@RequestBody @Valid LoginRequest req) {
-        return userService.login(req);
+        return authService.login(req);
     }
 
     /**
@@ -48,7 +59,7 @@ public class WebUserController {
      */
     @PostMapping("/register")
     public Result<User> register(@RequestBody @Valid RegisterRequest req) {
-        return userService.register(req);
+        return authService.register(req);
     }
 
     /**
@@ -107,7 +118,7 @@ public class WebUserController {
     @PostMapping("/change-password")
     public Result changePassword(@RequestBody @Valid ChangePasswordRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        return userService.changePassword(userId, request);
+        return authService.changePassword(userId, request);
     }
 
     /**
@@ -116,7 +127,7 @@ public class WebUserController {
      */
     @PostMapping("/reset-password")
     public Result resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
-        return userService.resetPassword(request);
+        return authService.resetPassword(request);
     }
 
     /**
@@ -125,7 +136,7 @@ public class WebUserController {
      */
     @PostMapping("/refresh-token")
     public Result refreshToken(@RequestBody @Valid RefreshTokenRequest request) {
-        return userService.refreshToken(request);
+        return authService.refreshToken(request);
     }
 
     /**
@@ -136,7 +147,7 @@ public class WebUserController {
     public Result logout(@RequestBody(required = false) Map<String, String> request) {
         Long userId = SecurityUtil.getRequiredUserId();
         String refreshToken = request != null ? request.get("refreshToken") : null;
-        return userService.logout(userId, refreshToken);
+        return authService.logout(userId, refreshToken);
     }
 
     /**
