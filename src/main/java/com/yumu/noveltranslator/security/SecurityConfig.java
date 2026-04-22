@@ -67,20 +67,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(SecurityPermitAllPaths.PERMIT_ALL_PATHS.toArray(new String[0])).permitAll()
-                .requestMatchers(
-                    "/swagger-ui/**", "/v3/api-docs/**",
-                    "/actuator/**",
-                    "/v1/translate/text",
-                    "/v1/translate/text/stream",
-                    "/v1/translate/selection",
-                    "/v1/translate/reader",
-                    "/v1/translate/webpage",
-                    "/v1/translate/document",
-                    "/v1/translate/document/stream",
-                    "/v1/translate/document/stream/**",
-                    "/v1/translate/task/**"
-                ).permitAll()
-                .requestMatchers("/user/profile").authenticated()
+                .requestMatchers("/v1/translate/**").authenticated()
                 .anyRequest().authenticated()
             );
 

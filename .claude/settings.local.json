@@ -165,7 +165,10 @@
       "Read(//d/Git-Submission-Files/noveltrans/novelTranslator/**)",
       "Bash(MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_PASSWORD=123456 JWT_SECRET=test-secret-key-for-development mvn spring-boot:run)",
       "Bash(git checkout *)",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Bash(wait)",
+      "Bash(docker cp *)",
+      "Bash(grep -aB 5 \"Errors: 1\")"
     ]
   }
 }

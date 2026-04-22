@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
-import { Spinner } from '../components/ui/Feedback';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../components/ui/Toast';
 import { userApi } from '../api/user';
@@ -15,28 +14,28 @@ function UserCenterPage() {
   const { user, refreshUser } = useAuth();
 
   return (
-    <div className="w-full" style={{ minHeight: 'calc(100vh - 200px)' }}>
-      <div className="border border-border/50 rounded-lg overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 200px)' }}>
+    <div className="w-full" style={{ minHeight: 'calc(100vh - 140px)' }}>
+      <div className="border border-border/50 rounded-lg overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 140px)' }}>
         {/* User header */}
-        <div className="flex items-center gap-4 px-5 py-4 border-b border-border/50">
-          <div className="w-10 h-10 rounded-full bg-accent text-white flex items-center justify-center text-sm font-semibold">
+        <div className="flex items-center gap-4 px-5 py-4 border-b border-border/50 bg-surface-secondary">
+          <div className="w-10 h-10 rounded-full bg-accent text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
             {user?.username?.slice(0, 1).toUpperCase() || 'U'}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[15px] font-semibold text-text-primary truncate">{user?.username || '用户'}</p>
             <p className="text-[12px] text-text-tertiary">{user?.email}</p>
           </div>
-          <span className="text-[12px] px-2 py-0.5 bg-surface-secondary rounded-full text-text-tertiary uppercase">{user?.userLevel || 'FREE'}</span>
+          <span className="text-[12px] px-2 py-0.5 bg-surface rounded-full text-text-tertiary uppercase flex-shrink-0">{user?.userLevel || 'FREE'}</span>
         </div>
 
-        <div className="flex flex-col lg:flex-row flex-1 min-h-0 lg:py-4">
+        <div className="flex flex-col lg:flex-row flex-1 min-h-0">
           {/* Sidebar */}
           <div className="lg:w-48 border-b lg:border-b-0 lg:border-r border-border/50">
             <Sidebar />
           </div>
 
           {/* Content */}
-          <div className="flex-1 min-w-0 px-5">
+          <div className="flex-1 min-w-0">
             <Routes>
               <Route index element={<ProfileTab user={user} refreshUser={refreshUser} />} />
               <Route path="stats" element={<StatsTab />} />
@@ -250,22 +249,45 @@ function PreferencesTab() {
 
   return (
     <div className="p-5 space-y-4">
-      <h2 className="text-[15px] font-semibold text-text-primary">偏好设置</h2>
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] text-text-primary">启用术语表</span>
-        <button onClick={() => setPrefs(p => p ? { ...p, enableGlossary: !p.enableGlossary } : null)} className={`w-11 h-6 rounded-full transition-colors ${prefs.enableGlossary ? 'bg-accent' : 'bg-gray-200'}`}>
-          <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${prefs.enableGlossary ? 'translate-x-5' : 'translate-x-0.5'}`} />
+      <div className="bg-surface-secondary rounded-lg p-4 mb-4">
+        <h2 className="text-[15px] font-semibold text-text-primary mb-3">偏好设置</h2>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <span className="text-[13px] font-medium text-text-primary block">启用术语表</span>
+              <span className="text-[12px] text-text-tertiary">在翻译时使用自定义术语表提高准确性</span>
+            </div>
+            <button 
+              onClick={() => setPrefs(p => p ? { ...p, enableGlossary: !p.enableGlossary } : null)} 
+              className={`w-11 h-6 rounded-full transition-colors relative ${prefs.enableGlossary ? 'bg-accent' : 'bg-surface-secondary border border-border'}`}
+            >
+              <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${prefs.enableGlossary ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+          <div className="border-t border-border/50"></div>
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <span className="text-[13px] font-medium text-text-primary block">启用缓存</span>
+              <span className="text-[12px] text-text-tertiary">缓存翻译结果以加快重复内容翻译速度</span>
+            </div>
+            <button 
+              onClick={() => setPrefs(p => p ? { ...p, enableCache: !p.enableCache } : null)} 
+              className={`w-11 h-6 rounded-full transition-colors relative ${prefs.enableCache ? 'bg-accent' : 'bg-surface-secondary border border-border'}`}
+            >
+              <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${prefs.enableCache ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <button 
+          onClick={handleSave} 
+          disabled={saving} 
+          className="px-6 py-2 text-[13px] font-medium text-white bg-accent rounded-button hover:bg-accent-hover disabled:opacity-30 transition-colors shadow-sm"
+        >
+          {saving ? '保存中...' : '保存设置'}
         </button>
       </div>
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] text-text-primary">启用缓存</span>
-        <button onClick={() => setPrefs(p => p ? { ...p, enableCache: !p.enableCache } : null)} className={`w-11 h-6 rounded-full transition-colors ${prefs.enableCache ? 'bg-accent' : 'bg-gray-200'}`}>
-          <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${prefs.enableCache ? 'translate-x-5' : 'translate-x-0.5'}`} />
-        </button>
-      </div>
-      <button onClick={handleSave} disabled={saving} className="px-5 py-1.5 text-[13px] font-medium text-white bg-accent rounded-button hover:bg-accent-hover disabled:opacity-30 transition-colors">
-        {saving ? '保存中...' : '保存设置'}
-      </button>
     </div>
   );
 }

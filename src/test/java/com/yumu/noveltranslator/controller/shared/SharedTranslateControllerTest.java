@@ -48,36 +48,8 @@ class SharedTranslateControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
-    @Nested
-    @DisplayName("文本翻译")
-    class TextTranslationTests {
-
-        @Test
-        void 文本翻译成功() throws Exception {
-            when(translationService.selectionTranslate(any()))
-                    .thenReturn(new SelectionTranslateResponse(true, "google", "你好世界"));
-
-            mockMvc.perform(post("/v1/translate/text")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"text\":\"Hello World\",\"sourceLang\":\"en\",\"targetLang\":\"zh\",\"engine\":\"google\"}"))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.success").value(true))
-                    .andExpect(jsonPath("$.data.translatedText").value("你好世界"))
-                    .andExpect(jsonPath("$.data.engine").value("google"));
-        }
-
-        @Test
-        void 文本翻译失败返回错误() throws Exception {
-            when(translationService.selectionTranslate(any()))
-                    .thenThrow(new RuntimeException("翻译引擎不可用"));
-
-            mockMvc.perform(post("/v1/translate/text")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"text\":\"Hello World\",\"sourceLang\":\"en\",\"targetLang\":\"zh\"}"))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.code").value("B0001"));
-        }
-    }
+    // 文本翻译端点 (/v1/translate/text) 在 PluginTranslateController 中定义
+    // 该控制器的测试请参见 PluginTranslateControllerTest
 
     @Nested
     @DisplayName("任务管理")

@@ -2,7 +2,7 @@
 const GlobalConfig = {
     // 后端基础路径
     // TODO: 生产环境部署时替换为实际的服务器地址
-    API_BASE_URL: 'http://127.0.0.1:7341',
+    API_BASE_URL: 'http://localhost:7341',
 
     // 三种翻译模式的不同 API 端点（参照 API_ENDPOINTS.md）
     TRANSLATION_MODES: {
@@ -219,7 +219,6 @@ const GlobalConfig = {
     },
 
     // 流式 API 调用函数 - 用于网页翻译模式（SSE Server-Sent Events）
-    // 优化版本：移除冗余日志，提升性能
     callBackendAPIStream: async function(mode, data, engine = null, apiKey = null, onTranslationChunk = null, onComplete = null, onError = null) {
         const apiUrl = this.getApiUrl(mode);
         const requestBody = this.buildTranslationRequestBody(mode, data, engine);

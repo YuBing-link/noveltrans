@@ -7,8 +7,8 @@ document.addEventListener('DOMContentLoaded', function() {
         loginBtn.addEventListener('click', function() {
             // 获取基础 URL 并跳转到登录页
             chrome.storage.local.get(['apiBaseUrl'], function(result) {
-                var baseUrl = result.apiBaseUrl || 'http://127.0.0.1:7341';
-                chrome.tabs.create({ url: baseUrl + '/pages/index.html' });
+                var baseUrl = result.apiBaseUrl || 'http://localhost:7341';
+                chrome.tabs.create({ url: baseUrl + '/login' });
             });
         });
     }

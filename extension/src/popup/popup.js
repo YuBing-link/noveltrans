@@ -517,7 +517,7 @@ function bindEvents() {
       const isLoggedIn = await checkLoginState();
       if (isLoggedIn) {
         // 已登录，跳转到用户中心
-        browser.tabs.create({ url: `${GlobalConfig.API_BASE_URL}/pages/user.html` });
+        browser.tabs.create({ url: `${GlobalConfig.API_BASE_URL}/user` });
         window.close();
       } else {
         openLoginPage();
@@ -601,7 +601,7 @@ async function checkLoginState() {
 
 // 打开登录页面
 function openLoginPage() {
-  browser.tabs.create({ url: `${GlobalConfig.API_BASE_URL}/pages/index.html` }).then((tab) => {
+  browser.tabs.create({ url: `${GlobalConfig.API_BASE_URL}/login` }).then((tab) => {
     // 监听标签页更新，检测登录成功后自动同步 token
     const tabUpdateHandler = async (tabId, changeInfo) => {
       if (tabId !== tab.id || changeInfo.status !== 'complete') return;
@@ -725,7 +725,7 @@ async function handleReader() {
     });
 
     console.log('✅ 阅读模式响应:', response);
-    console.log('✅ 响应类型:', typeof response, '值:', JSON.stringify(response));
+    console.log('✅ 响应类型:', typeof response, '값:', JSON.stringify(response));
 
     // 检查响应是否成功（兼容多种返回格式）
     const isSuccess = response === true ||

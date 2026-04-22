@@ -159,6 +159,20 @@ public class ExternalResponseUtil {
     }
 
     /**
+     * 构建翻译文件路径（在扩展名前插入 _translated）
+     * @param originalPath 原始文件路径
+     * @return 翻译后的文件路径
+     */
+    public static String buildTranslatedPath(String originalPath) {
+        if (originalPath == null) return null;
+        int lastDot = originalPath.lastIndexOf('.');
+        if (lastDot > 0) {
+            return originalPath.substring(0, lastDot) + "_translated" + originalPath.substring(lastDot);
+        }
+        return originalPath + "_translated";
+    }
+
+    /**
      * 使用枚举构建简单错误响应
      */
     public static String buildSimpleErrorResponse(ErrorCodeEnum errorCodeEnum) {

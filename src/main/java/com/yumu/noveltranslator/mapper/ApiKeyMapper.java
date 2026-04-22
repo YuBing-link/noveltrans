@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
+import java.util.List;
 
 @Mapper
 public interface ApiKeyMapper extends BaseMapper<ApiKey> {
@@ -14,7 +15,7 @@ public interface ApiKeyMapper extends BaseMapper<ApiKey> {
     ApiKey findByApiKey(@Param("apiKey") String apiKey);
 
     @Select("SELECT * FROM api_keys WHERE user_id = #{userId} AND is_active = 1 ORDER BY created_at DESC")
-    java.util.List<ApiKey> findByUserId(@Param("userId") Long userId);
+    List<ApiKey> findByUserId(@Param("userId") Long userId);
 
     @Update("UPDATE api_keys SET last_used_at = NOW(), total_usage = total_usage + #{usage} WHERE id = #{id}")
     void incrementUsage(@Param("id") Long id, @Param("usage") long usage);

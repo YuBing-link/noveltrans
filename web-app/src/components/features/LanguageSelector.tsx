@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Sparkles, Zap, Brain } from 'lucide-react';
+import { ArrowLeftRight, Zap, Brain } from 'lucide-react';
 import { SUPPORTED_LANGUAGES, TRANSLATION_ENGINES } from '../../api/types';
 
 interface LanguageSelectorProps {

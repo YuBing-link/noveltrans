@@ -66,7 +66,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (email == null || userId == null) {
                 logger.warn("JWT Token 缺少用户信息");
-                chain.doFilter(request, response);
+                sendUnauthorized(response, "Invalid token: missing user info");
                 return;
             }
 
@@ -74,7 +74,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             User user = userMapper.findByEmail(email);
             if (user == null || !user.getId().equals(userId)) {
                 logger.warn("JWT Token 对应的用户不存在: email={}, userId={}", email, userId);
-                chain.doFilter(request, response);
+                sendUnauthorized(response, "Invalid token: user not found");
                 return;
             }
 
@@ -85,14 +85,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(authToken);
 
         } catch (TokenExpiredException e) {
-            // Token 过期：对需要认证的接口由 Spring Security 统一处理返回 401
-            // 对公开接口直接放行（不在此处返回 401，避免误杀）
-            logger.debug("JWT Token 已过期，跳过认证: {}", e.getMessage());
+            logger.debug("JWT Token 已过期: {}", e.getMessage());
+            sendUnauthorized(response, "Token expired");
+            return;
         } catch (JWTVerificationException e) {
-            // Token 无效：同上
-            logger.debug("JWT Token 验证失败，跳过认证: {}", e.getMessage());
+            logger.debug("JWT Token 验证失败: {}", e.getMessage());
+            sendUnauthorized(response, "Invalid token");
+            return;
         }
 
+        // 认证成功，继续过滤器链
         chain.doFilter(request, response);
     }
 
@@ -106,5 +108,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return headerAuth.substring(7);
         }
         return null;
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"code\":401,\"message\":\"" + message + "\"}");
     }
 }

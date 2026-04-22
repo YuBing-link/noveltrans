@@ -8,7 +8,7 @@
 [![Redis Stack](https://img.shields.io/badge/Redis%20Stack-7-red.svg)](https://redis.io/docs/latest/develop/data-structures/search/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
 
-一套完整的双语小说翻译系统，包含 Chrome 浏览器扩展、Spring Boot 后端、LLM 翻译微服务和 Nginx 网关。支持三大翻译模式、四级缓存体系、RAG 语义检索翻译记忆、实体一致性翻译、协作翻译工作流和 SSE 流式响应。
+一套完整的双语小说翻译系统，包含 Chrome 浏览器扩展、React + TypeScript Web 管理端、Spring Boot 后端、LLM 翻译微服务和 Nginx 网关。支持三大翻译模式、四级缓存体系、RAG 语义检索翻译记忆、实体一致性翻译和 SSE 流式响应。
 
 [English README](README.md)
 
@@ -24,6 +24,11 @@
                     ▼             ▼              ▼
                 MySQL 8.0    Redis Stack 7    Caffeine
                 (持久存储)   (HNSW向量检索)   (进程内缓存)
+┌──────────────┐
+│ Web 管理端    │
+│ React+TS+Vite│
+│ 端口 7341    │
+└──────────────┘
 ```
 
 ## 核心特性
@@ -34,6 +39,12 @@
 - **质量筛选**：入库前自动过滤空译文、长度异常、广告关键词、特殊字符过多等低质量翻译
 - **双路降级策略**：Redis KNN 不可用时自动降级为 MySQL 余弦相似度计算
 - **用户隔离**：KNN 查询按 `user_id` + `target_lang` 过滤，避免数据串扰
+
+### 统一翻译管线
+- **单一管线组件**：`TranslationPipeline` 封装四级翻译管线逻辑（缓存 → RAG → 实体一致性 → 直译），消除三个 Service 类中的重复管线代码
+- **策略模式**：可配置管线阶段 — `execute()` 执行完整管线，`executeFast()` 仅缓存 + 直译
+- **后处理集成**：所有翻译路径均包含 `fixUntranslatedChinese()` 后处理，检测并修正残留中文字符
+- **质量校验**：静态 `isValidTranslation()` 和 `shouldCache()` 方法确保所有调用方执行一致的质量检查
 
 ### 翻译引擎架构
 - **OpenAI 兼容 API**：支持 OpenAI GPT、Claude（兼容层）、本地 Ollama、DeepSeek 等任意兼容端点
@@ -60,21 +71,17 @@
 - **异步文档翻译**：大文件异步任务 + 进度追踪
 - **Undertow 服务器**：高性能非阻塞 Web 服务器
 
-### 浏览器扩展
-- **网页翻译**：DOM 遍历分析 → 文本注册表 → SSE 流式回写 → 原位替换，保持页面布局不变
+### 前端
+- **Chrome 扩展**：DOM 遍历分析 → 文本注册表 → SSE 流式回写 → 原位替换，保持页面布局不变
+- **Web 管理端 (React + TypeScript + Vite)**：DeepL 风格翻译界面，支持文档管理、翻译历史和用户设置
 - **阅读模式**：集成 Mozilla Readability 提取正文，生成干净阅读视图
 - **划词翻译**：悬浮提示框即时翻译选中文本
 - **客户端缓存**：IndexedDB + 内存双级缓存 + 请求去重
 
-### 协作翻译
-- **项目状态机**：DRAFT → ACTIVE → COMPLETED → ARCHIVED，强制状态流转校验
-- **章节工作流**：创建章节 → 分配译者 → 提交翻译 → 审核通过/驳回
-- **角色权限**：OWNER / TRANSLATOR / REVIEWER，自定义 `@RequireProjectAccess` 注解
-- **评论系统**：支持层级回复 + 标记解决
-- **邀请机制**：UUID 邀请码加入项目
-
 ### 安全体系
 - **JWT + API Key 双重认证**：支持 Spring Security + JWT Token 和 `nt_sk_xxxx` 格式 API Key 两种认证方式，共享同一翻译管线
+- **翻译端点强制认证**：所有 `/v1/translate/**` 端点必须携带有效 JWT 或 API Key，防止未授权访问和配额滥用
+- **JWT Token 校验**：无效或过期的 Token 返回 401 JSON 响应，不再静默放行
 - **API Key 管理**：通过 `/user/api-keys` 接口生成、查看、重置、删除 API Key，前缀 `nt_sk_` + 32 位随机字符，列表展示掩码脱敏
 - **BCrypt 密码加密**：用户密码哈希存储
 - **邮箱验证**：注册/密码重置双重验证
@@ -163,6 +170,15 @@ python services/translate-engine/translate_server.py
 2. 开启"开发者模式"
 3. 点击"加载已解压的扩展程序"，选择 `extension/` 目录
 
+#### 5. 启动 Web 管理端（可选）
+
+```bash
+cd web-app
+npm install
+npm run dev
+# Web 管理端运行在 http://localhost:5173
+```
+
 ## 项目结构
 
 ```
@@ -175,16 +191,17 @@ novelTranslator/
 │       ├── popup/                #   弹出窗口 UI
 │       ├── options/              #   设置页面
 │       └── lib/                  #   第三方库（Readability、DOMPurify）
-├── frontend/                     # Web 管理端（原生 HTML/CSS/JS）
-│   ├── pages/                    #   页面（首页、翻译、用户中心、协作等）
-│   ├── js/                       #   业务逻辑（API 客户端、认证、翻译）
-│   ├── styles/                   #   样式（响应式、暗色模式、动画）
-│   ├── utils/                    #   工具函数
-│   └── config.js                 #   API 端点配置
+├── web-app/                      # Web 管理端（React + TypeScript + Vite）
+│   ├── src/
+│   │   ├── App.tsx               #   根组件
+│   │   └── main.tsx              #   入口文件
+│   ├── index.html
+│   └── vite.config.ts
 ├── src/main/java/                # Spring Boot 后端（Java 21）
 │   └── com/yumu/noveltranslator/
 │       ├── controller/           #   REST API 控制器
 │       ├── service/              #   业务逻辑层
+│       │   └── pipeline/         #     统一翻译管线
 │       ├── mapper/               #   MyBatis-Plus 数据访问
 │       ├── entity/               #   数据实体
 │       ├── dto/                  #   数据传输对象
@@ -209,10 +226,10 @@ novelTranslator/
 
 | 接口 | 方法 | 说明 | 认证 |
 |------|------|------|------|
-| `/v1/translate/webpage` | POST | 网页批量翻译（SSE 流式） | 否 |
-| `/v1/translate/reader` | POST | 阅读模式文章翻译 | 否 |
-| `/v1/translate/selection` | POST | 划词翻译 | 否 |
-| `/v1/translate/text` | POST | 纯文本翻译 | 否 |
+| `/v1/translate/webpage` | POST | 网页批量翻译（SSE 流式） | 是 |
+| `/v1/translate/reader` | POST | 阅读模式文章翻译 | 是 |
+| `/v1/translate/selection` | POST | 划词翻译 | 是 |
+| `/v1/translate/text` | POST | 纯文本翻译 | 是 |
 | `/v1/translate/document` | POST | 异步文档翻译 | 是 |
 | `/v1/translate/rag` | POST | RAG 语义检索翻译记忆 | 是 |
 | `/user/register` | POST | 用户注册 | 否 |
@@ -224,7 +241,6 @@ novelTranslator/
 | `/user/api-keys/{id}/reset` | POST | 重置（重新生成）API Key | 是 |
 | `/user/glossaries` | GET/POST | 术语库增删查 | 是 |
 | `/user/preferences` | GET/PUT | 获取/更新用户偏好设置 | 是 |
-| `/v1/collab/projects` | GET/POST | 协作项目管理 | 是 |
 
 ## 环境变量
 
@@ -251,7 +267,7 @@ novelTranslator/
 | **缓存** | Caffeine (L1), Redis Stack 7 / Lettuce (L2), MySQL (L3) |
 | **向量检索** | RediSearch HNSW, OpenAI text-embedding-3-small (1536 维) |
 | **微服务** | Python 3.11, FastAPI, OpenAI SDK, MTranServer |
-| **前端** | Chrome Extension (Manifest V3), 原生 JS, CSS3, Thymeleaf |
+| **前端** | Chrome Extension (Manifest V3), React + TypeScript + Vite, Thymeleaf |
 | **网关** | Nginx 1.28 |
 | **构建部署** | Maven, Docker Compose |
 

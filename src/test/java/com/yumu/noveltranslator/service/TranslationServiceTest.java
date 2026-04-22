@@ -3,6 +3,8 @@ package com.yumu.noveltranslator.service;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.mapper.UserMapper;
+import com.yumu.noveltranslator.security.CustomUserDetails;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -10,6 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Map;
 
@@ -18,6 +24,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class TranslationServiceTest {
 
     @Mock
@@ -33,6 +40,9 @@ class TranslationServiceTest {
     private EntityConsistencyService entityConsistencyService;
 
     @Mock
+    private TranslationPostProcessingService postProcessingService;
+
+    @Mock
     private QuotaService quotaService;
 
     @Mock
@@ -44,7 +54,28 @@ class TranslationServiceTest {
     void setUp() {
         translationService = new TranslationService(
                 translationClient, cacheService, ragTranslationService,
-                entityConsistencyService, quotaService, userMapper);
+                entityConsistencyService, postProcessingService, quotaService, userMapper);
+        // Pipeline 内部调用 fixUntranslatedChinese，mock 返回原文
+        when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+        SecurityContextHolder.clearContext();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    /**
+     * 设置认证用户上下文
+     */
+    private void setAuthenticatedUser(Long userId) {
+        User user = new User();
+        user.setId(userId);
+        user.setUserLevel("free");
+        CustomUserDetails userDetails = new CustomUserDetails(user);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
     }
 
     @Nested
@@ -239,6 +270,80 @@ class TranslationServiceTest {
 
             var stats = translationService.getCacheStats();
             assertEquals(expected, stats);
+        }
+    }
+
+    @Nested
+    @DisplayName("配额检查")
+    class QuotaCheckTests {
+
+        @Test
+        void 字符配额不足返回错误() {
+            setAuthenticatedUser(1L);
+            User user = new User();
+            user.setId(1L);
+            user.setUserLevel("free");
+            when(userMapper.selectById(1L)).thenReturn(user);
+            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
+
+            SelectionTranslationRequest req = new SelectionTranslationRequest();
+            req.setText("Hello World");
+            req.setContext("Hello World");
+            req.setSourceLang("en");
+            req.setTargetLang("zh");
+            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+
+            assertFalse(resp.getSuccess());
+            assertTrue(resp.getTranslation().contains("字符配额不足"));
+        }
+
+        @Test
+        void 用户不存在跳过配额检查() {
+            setAuthenticatedUser(999L);
+            when(userMapper.selectById(999L)).thenReturn(null);
+            when(cacheService.getCache(anyString())).thenReturn("cached");
+
+            SelectionTranslationRequest req = new SelectionTranslationRequest();
+            req.setText("Hello");
+            req.setContext("Hello");
+            req.setSourceLang("en");
+            req.setTargetLang("zh");
+            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+
+            assertTrue(resp.getSuccess());
+        }
+
+        @Test
+        void 阅读器翻译配额不足() {
+            setAuthenticatedUser(1L);
+            User user = new User();
+            user.setId(1L);
+            user.setUserLevel("free");
+            when(userMapper.selectById(1L)).thenReturn(user);
+            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
+
+            ReaderTranslateRequest req = new ReaderTranslateRequest();
+            req.setContent("<p>Hello</p>");
+            req.setTargetLang("zh");
+            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+
+            assertFalse(resp.getSuccess());
+            assertTrue(resp.getTranslatedContent().contains("字符配额不足"));
+        }
+
+        @Test
+        void 选中文本翻译异常兜底() {
+            when(cacheService.getCache(anyString())).thenThrow(new RuntimeException("cache error"));
+
+            SelectionTranslationRequest req = new SelectionTranslationRequest();
+            req.setText("Hello");
+            req.setContext("Hello");
+            req.setSourceLang("en");
+            req.setTargetLang("zh");
+            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+
+            assertFalse(resp.getSuccess());
+            assertTrue(resp.getTranslation().contains("翻译失败"));
         }
     }
 }

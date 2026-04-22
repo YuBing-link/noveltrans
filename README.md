@@ -8,7 +8,7 @@
 [![Redis Stack](https://img.shields.io/badge/Redis%20Stack-7-red.svg)](https://redis.io/docs/latest/develop/data-structures/search/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
 
-A full-stack bilingual novel translation system featuring a Chrome Extension, Spring Boot backend, LLM-powered translation microservice, and Nginx gateway. Supports three translation modes, four-tier caching, RAG semantic translation memory, entity-consistent translation, collaborative translation workflows, and SSE streaming responses.
+A full-stack bilingual novel translation system featuring a Chrome Extension, React + TypeScript Web Dashboard, Spring Boot backend, LLM-powered translation microservice, and Nginx gateway. Supports three translation modes, four-tier caching, RAG semantic translation memory, entity-consistent translation, and SSE streaming responses.
 
 [中文文档](README.zh.md)
 
@@ -24,6 +24,11 @@ A full-stack bilingual novel translation system featuring a Chrome Extension, Sp
                     ▼             ▼              ▼
                 MySQL 8.0    Redis Stack 7    Caffeine
                 (Persistent)  (HNSW Vectors)  (In-Process)
+┌──────────────┐
+│ Web App      │
+│ React+TS+Vite│
+│ Port 7341    │
+└──────────────┘
 ```
 
 ## Key Features
@@ -34,6 +39,12 @@ A full-stack bilingual novel translation system featuring a Chrome Extension, Sp
 - **Quality Filtering**: Auto-rejects empty translations, length anomalies, ad keywords, and excessive special characters before storage
 - **Dual Fallback Strategy**: When Redis KNN is unavailable, automatically degrades to MySQL cosine similarity calculation
 - **User Isolation**: KNN queries filter by `user_id` + `target_lang` to prevent data cross-contamination
+
+### Unified Translation Pipeline
+- **Single Pipeline Component**: `TranslationPipeline` encapsulates the four-tier translation logic (cache → RAG → entity consistency → direct translation), eliminating duplicate pipeline code across three Service classes
+- **Strategy Pattern**: Configurable pipeline stages — `execute()` for full pipeline, `executeFast()` for cache + direct translation only
+- **Post-Processing Integration**: All translation paths include `fixUntranslatedChinese()` post-processing for residual Chinese character detection and correction
+- **Quality Validation**: Static `isValidTranslation()` and `shouldCache()` methods enforce consistent quality checks across all callers
 
 ### Translation Engine
 - **OpenAI-Compatible API**: Works with OpenAI GPT, Claude (compatibility layer), local Ollama, DeepSeek, and any compatible endpoint
@@ -60,21 +71,17 @@ A full-stack bilingual novel translation system featuring a Chrome Extension, Sp
 - **Async Document Translation**: Large file async tasks + progress tracking
 - **Undertow Server**: High-performance non-blocking web server
 
-### Browser Extension
-- **Full-Page Translation**: DOM traversal analysis → text registry → SSE streaming write-back → in-place replacement, preserving page layout
+### Frontend
+- **Chrome Extension**: DOM traversal analysis → text registry → SSE streaming write-back → in-place replacement, preserving page layout
+- **Web Dashboard (React + TypeScript + Vite)**: DeepL-style translation interface with document management, translation history, and user settings
 - **Reader Mode**: Mozilla Readability integration extracts article body into a clean reading view
 - **Selection Translation**: Floating tooltip for instant translation of selected text
 - **Client-Side Cache**: IndexedDB + memory dual-tier cache + request deduplication
 
-### Collaborative Translation
-- **Project State Machine**: DRAFT → ACTIVE → COMPLETED → ARCHIVED, enforced state transition validation
-- **Chapter Workflow**: Create chapters → assign translator → submit translation → review approve/reject
-- **Role-Based Access**: OWNER / TRANSLATOR / REVIEWER, custom `@RequireProjectAccess` annotation
-- **Comment System**: Threaded replies + resolve marking
-- **Invitation System**: UUID-based invite codes for project joining
-
 ### Security
 - **JWT + API Key Authentication**: Dual auth methods — Spring Security + auth0-jwt for JWT, `ApiKeyAuthenticationFilter` for `nt_sk_xxxx` format API keys. Both auth methods share the same translation pipeline
+- **Translation Endpoints Require Authentication**: All `/v1/translate/**` endpoints require valid JWT or API Key, preventing unauthorized access and quota abuse
+- **JWT Token Validation**: Invalid or expired tokens return 401 JSON responses instead of silently passing through
 - **API Key Management**: Generate, list, reset, and delete API keys via `/user/api-keys` endpoints. Keys use `nt_sk_` prefix with 32 random alphanumeric characters, masked in list view
 - **BCrypt Password Hashing**: All user passwords hashed before storage
 - **Email Verification**: Double verification for registration and password reset
@@ -162,6 +169,15 @@ python services/translate-engine/translate_server.py
 2. Enable "Developer mode"
 3. Click "Load unpacked" and select the `extension/` directory
 
+#### 5. Start the Web Dashboard (Optional)
+
+```bash
+cd web-app
+npm install
+npm run dev
+# Web Dashboard runs at http://localhost:5173
+```
+
 ## Project Structure
 
 ```
@@ -174,16 +190,17 @@ novelTranslator/
 │       ├── popup/                #   Popup UI
 │       ├── options/              #   Settings pages
 │       └── lib/                  #   Third-party libs (Readability, DOMPurify)
-├── frontend/                     # Web Dashboard (Vanilla HTML/CSS/JS)
-│   ├── pages/                    #   Pages (home, translation, user center, collab)
-│   ├── js/                       #   Business logic (API client, auth, translation)
-│   ├── styles/                   #   Styles (responsive, dark mode, animations)
-│   ├── utils/                    #   Utility functions
-│   └── config.js                 #   API endpoint configuration
+├── web-app/                      # Web Dashboard (React + TypeScript + Vite)
+│   ├── src/
+│   │   ├── App.tsx               #   Root component
+│   │   └── main.tsx              #   Entry point
+│   ├── index.html
+│   └── vite.config.ts
 ├── src/main/java/                # Spring Boot Backend (Java 21)
 │   └── com/yumu/noveltranslator/
 │       ├── controller/           #   REST API Controllers
 │       ├── service/              #   Business Logic Layer
+│       │   └── pipeline/         #     Unified Translation Pipeline
 │       ├── mapper/               #   MyBatis-Plus Data Access
 │       ├── entity/               #   Domain Entities
 │       ├── dto/                  #   Data Transfer Objects
@@ -208,10 +225,10 @@ novelTranslator/
 
 | Endpoint | Method | Description | Auth |
 |----------|--------|-------------|------|
-| `/v1/translate/webpage` | POST | Batch webpage translation (SSE streaming) | No |
-| `/v1/translate/reader` | POST | Reader mode article translation | No |
-| `/v1/translate/selection` | POST | Selected text translation | No |
-| `/v1/translate/text` | POST | Plain text translation | No |
+| `/v1/translate/webpage` | POST | Batch webpage translation (SSE streaming) | Yes |
+| `/v1/translate/reader` | POST | Reader mode article translation | Yes |
+| `/v1/translate/selection` | POST | Selected text translation | Yes |
+| `/v1/translate/text` | POST | Plain text translation | Yes |
 | `/v1/translate/document` | POST | Async document translation | Yes |
 | `/v1/translate/rag` | POST | RAG semantic translation memory lookup | Yes |
 | `/user/register` | POST | User registration | No |
@@ -223,7 +240,6 @@ novelTranslator/
 | `/user/api-keys/{id}/reset` | POST | Reset (regenerate) API key | Yes |
 | `/user/glossaries` | GET/POST | List/Create glossary items | Yes |
 | `/user/preferences` | GET/PUT | Get/update user preferences | Yes |
-| `/v1/collab/projects` | GET/POST | Collaborative project management | Yes |
 
 ## Environment Variables
 
@@ -250,7 +266,7 @@ novelTranslator/
 | **Cache** | Caffeine (L1), Redis Stack 7 / Lettuce (L2), MySQL (L3) |
 | **Vector Retrieval** | RediSearch HNSW, OpenAI text-embedding-3-small (1536 dim) |
 | **Microservice** | Python 3.11, FastAPI, OpenAI SDK, MTranServer |
-| **Frontend** | Chrome Extension (Manifest V3), Vanilla JS, CSS3, Thymeleaf |
+| **Frontend** | Chrome Extension (Manifest V3), React + TypeScript + Vite, Thymeleaf |
 | **Gateway** | Nginx 1.28 |
 | **Build & Deploy** | Maven, Docker Compose |
 

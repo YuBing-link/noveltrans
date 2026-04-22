@@ -1,9 +1,5 @@
 package com.yumu.noveltranslator.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yumu.noveltranslator.dto.ConsistencyTranslationResult;
-import com.yumu.noveltranslator.dto.RagTranslationResponse;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabProject;
 import com.yumu.noveltranslator.entity.Document;
@@ -15,7 +11,8 @@ import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
-import com.yumu.noveltranslator.util.CacheKeyUtil;
+import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
+import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,7 +41,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MultiAgentTranslationService {
 
     private static final int MAX_CONCURRENT_AGENTS = 5;
-    private static final int ENTITY_CONSISTENCY_MIN_LENGTH = 500;
 
     private final CollabChapterTaskMapper chapterTaskMapper;
     private final CollabProjectMapper collabProjectMapper;
@@ -54,6 +50,7 @@ public class MultiAgentTranslationService {
     private final TranslationCacheService cacheService;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
+    private final TranslationPostProcessingService postProcessingService;
 
     /**
      * 启动多 Agent 协作翻译
@@ -160,16 +157,27 @@ public class MultiAgentTranslationService {
         String engine = "google";
 
         try {
-            String translated;
-
-            // 长文本（>=500字）使用实体一致性管线（含术语表、占位符保护）
-            if (sourceText.length() >= ENTITY_CONSISTENCY_MIN_LENGTH) {
-                log.info("章节长度超过阈值，启用实体一致性翻译: chapterId={}", chapterId);
-                translated = translateWithConsistencyPipeline(sourceText, targetLang, engine, chapter);
-            } else {
-                // 短文本：查缓存 → RAG → 直接翻译
-                translated = translateWithCacheAndRag(sourceText, targetLang, engine, chapter);
+            // 获取 userId：优先使用章节负责人，否则使用项目所有者
+            Long userId = chapter.getAssigneeId();
+            if (userId == null) {
+                CollabProject proj = collabProjectMapper.selectById(chapter.getProjectId());
+                if (proj != null) {
+                    userId = proj.getOwnerId();
+                }
             }
+            String docId = "project_" + chapter.getProjectId() + "_chapter_" + chapter.getId();
+
+            TranslationPipeline pipeline = new TranslationPipeline(
+                    cacheService,
+                    ragTranslationService,
+                    entityConsistencyService,
+                    translationClient,
+                    postProcessingService,
+                    userId,
+                    docId
+            );
+
+            String translated = pipeline.execute(sourceText, targetLang, engine);
 
             if (translated == null || translated.trim().isEmpty()) {
                 throw new RuntimeException("翻译返回结果为空");
@@ -194,129 +202,6 @@ public class MultiAgentTranslationService {
             chapterTaskMapper.updateById(chapter);
             return false;
         }
-    }
-
-    /**
-     * 带实体一致性的翻译管线（长文本）
-     */
-    private String translateWithConsistencyPipeline(String sourceText, String targetLang, String engine, CollabChapterTask chapter) {
-        // 1. 先尝试缓存
-        String cacheKey = CacheKeyUtil.buildCacheKey(sourceText, targetLang, engine);
-        String cached = cacheService.getCache(cacheKey);
-        if (cached != null) {
-            log.info("团队模式缓存命中: chapterId={}", chapter.getId());
-            return cached;
-        }
-
-        // 2. RAG 查询
-        RagTranslationResponse ragResult = ragTranslationService.searchSimilar(sourceText, targetLang, engine);
-        if (ragResult.isDirectHit()) {
-            log.info("团队模式 RAG 直接命中: chapterId={}, similarity={}", chapter.getId(), ragResult.getSimilarity());
-            cacheService.putCache(cacheKey, sourceText, ragResult.getTranslation(), "auto", targetLang, engine);
-            return ragResult.getTranslation();
-        }
-
-        // 3. 实体一致性翻译（加载用户术语表 + 占位符保护）
-        Long userId = chapter.getAssigneeId();
-        if (userId == null) {
-            CollabProject proj = collabProjectMapper.selectById(chapter.getProjectId());
-            if (proj != null) userId = proj.getOwnerId();
-        }
-
-        if (entityConsistencyService.shouldUseConsistency(sourceText) && userId != null) {
-            String docId = "project_" + chapter.getProjectId() + "_chapter_" + chapter.getId();
-            ConsistencyTranslationResult consistencyResult =
-                    entityConsistencyService.translateWithConsistency(sourceText, targetLang, engine, userId, docId);
-            if (consistencyResult.isConsistencyApplied() && consistencyResult.getTranslatedText() != null) {
-                String result = consistencyResult.getTranslatedText();
-                if (shouldCache(sourceText, result)) {
-                    cacheService.putCache(cacheKey, sourceText, result, "auto", targetLang, engine);
-                }
-                ragTranslationService.storeTranslationMemory(sourceText, result, targetLang, engine);
-                return result;
-            }
-        }
-
-        // 4. 兜底：直接调用 Python 翻译
-        return translateWithCacheAndRag(sourceText, targetLang, engine, chapter);
-    }
-
-    /**
-     * 带缓存和 RAG 的翻译（短文本）
-     */
-    private String translateWithCacheAndRag(String sourceText, String targetLang, String engine, CollabChapterTask chapter) {
-        String cacheKey = CacheKeyUtil.buildCacheKey(sourceText, targetLang, engine);
-
-        // 1. 缓存查询
-        String cached = cacheService.getCache(cacheKey);
-        if (cached != null) {
-            log.info("团队模式缓存命中: chapterId={}", chapter.getId());
-            return cached;
-        }
-
-        // 2. RAG 查询
-        RagTranslationResponse ragResult = ragTranslationService.searchSimilar(sourceText, targetLang, engine);
-        if (ragResult.isDirectHit()) {
-            log.info("团队模式 RAG 直接命中: chapterId={}", chapter.getId());
-            cacheService.putCache(cacheKey, sourceText, ragResult.getTranslation(), "auto", targetLang, engine);
-            return ragResult.getTranslation();
-        }
-
-        // 3. 直接调用 Python 翻译
-        String result = translationClient.translateWithPython(sourceText, targetLang, engine);
-        String translation = extractTranslatedContent(result);
-
-        if (translation != null && shouldCache(sourceText, translation)) {
-            cacheService.putCache(cacheKey, sourceText, translation, "auto", targetLang, engine);
-            ragTranslationService.storeTranslationMemory(sourceText, translation, targetLang, engine);
-        }
-
-        return translation != null ? translation : sourceText;
-    }
-
-    /**
-     * 判断是否应该缓存翻译结果
-     */
-    private boolean shouldCache(String original, String translated) {
-        if (original == null || translated == null) return false;
-        String cleanOriginal = original.trim();
-        String cleanTranslated = translated.trim();
-        if (cleanOriginal.equals(cleanTranslated)) return false;
-        if (cleanOriginal.equalsIgnoreCase(cleanTranslated)) return false;
-        return true;
-    }
-
-    /**
-     * 从翻译响应中提取实际内容
-     * 支持格式: {"translatedContent":"..."} 或 {"code":200,"data":"..."}
-     * 使用 JSON 解析自动处理 \n 等转义字符
-     */
-    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-
-    private String extractTranslatedContent(String response) {
-        if (response == null || response.isEmpty()) {
-            return response;
-        }
-        try {
-            if (response.startsWith("{")) {
-                JsonNode node = JSON_MAPPER.readTree(response);
-
-                // 优先提取 translatedContent（MTranServer 格式）
-                JsonNode contentNode = node.get("translatedContent");
-                if (contentNode != null && contentNode.isTextual()) {
-                    return contentNode.asText();
-                }
-
-                // 兜底提取 data 字段（Python 服务格式）
-                JsonNode dataNode = node.get("data");
-                if (dataNode != null && dataNode.isTextual()) {
-                    return dataNode.asText();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("解析翻译响应失败: {}", e.getMessage());
-        }
-        return response;
     }
 
     /**
@@ -379,7 +264,7 @@ public class MultiAgentTranslationService {
         }
 
         // 保存完整翻译文档到文件
-        String translatedPath = buildTranslatedPath(matchedDoc.getPath());
+        String translatedPath = ExternalResponseUtil.buildTranslatedPath(matchedDoc.getPath());
         try {
             Path path = Paths.get(translatedPath);
             Files.createDirectories(path.getParent());
@@ -413,13 +298,5 @@ public class MultiAgentTranslationService {
         matchedDoc.setTaskId(task.getTaskId());
         documentMapper.updateById(matchedDoc);
         log.info("团队模式文档状态已更新: documentId={}, status=completed, taskId={}", matchedDoc.getId(), task.getTaskId());
-    }
-
-    private String buildTranslatedPath(String originalPath) {
-        int lastDot = originalPath.lastIndexOf('.');
-        if (lastDot > 0) {
-            return originalPath.substring(0, lastDot) + "_translated" + originalPath.substring(lastDot);
-        }
-        return originalPath + "_translated";
     }
 }

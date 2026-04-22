@@ -4,10 +4,10 @@ import com.alibaba.fastjson2.JSON;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
-import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.TextCleaningUtil;
 import com.yumu.noveltranslator.util.TextSegmentationUtil;
+import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +41,7 @@ public class TranslationService {
     private final TranslationCacheService cacheService;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
+    private final TranslationPostProcessingService postProcessingService;
     private final QuotaService quotaService;
     private final com.yumu.noveltranslator.mapper.UserMapper userMapper;
 
@@ -83,71 +84,22 @@ public class TranslationService {
     }
 
     /**
-     * 带缓存的翻译方法（三级缓存查询）
+     * 带缓存的翻译方法（四级管线）
      * 支持引擎降级：远程引擎失败时自动降级到本地引擎
      *
      * 缓存策略：
      * - 仅当翻译成功完成且译文与原文不一致时才加入缓存
      */
     private String translateWithCache(String text, String target, String engine) {
-        // 生成 MD5 缓存 Key
-        String cacheKey = CacheKeyUtil.buildCacheKey(text, target, engine);
-
-        // 1. 尝试内存缓存
-        String cached = cacheService.getCache(cacheKey);
-        if (cached != null) {
-            log.debug("缓存命中 [{}]", cacheKey.substring(0, Math.min(16, cacheKey.length())));
-            return cached;
-        }
-
-        // 2. 缓存未命中，查询 RAG 翻译记忆（L4 语义匹配层）
-        com.yumu.noveltranslator.dto.RagTranslationResponse ragResult =
-                ragTranslationService.searchSimilar(text, target, engine);
-
-        if (ragResult.isDirectHit()) {
-            log.info("RAG L4 直接命中，相似度: {}", ragResult.getSimilarity());
-            cacheService.putCache(cacheKey, text, ragResult.getTranslation(), "auto", target, engine);
-            return ragResult.getTranslation();
-        }
-
-        // 3. RAG 未直接命中，检查是否需要实体一致性翻译
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
-        if (entityConsistencyService.shouldUseConsistency(text) && userId != null) {
-            log.info("文本长度超过阈值，启用实体一致性翻译");
-            com.yumu.noveltranslator.dto.ConsistencyTranslationResult consistencyResult =
-                    entityConsistencyService.translateWithConsistency(text, target, engine, userId, "default");
-            if (consistencyResult.isConsistencyApplied() && consistencyResult.getTranslatedText() != null) {
-                String result = consistencyResult.getTranslatedText();
-                if (isValidTranslation(text, result) && shouldCache(text, result)) {
-                    cacheService.putCache(cacheKey, text, result, "auto", target, engine);
-                }
-                // RAG L4：翻译完成后自动存储到翻译记忆
-                ragTranslationService.storeTranslationMemory(text, result, target, engine);
-                return result;
-            }
-        }
+        TranslationPipeline pipeline = new TranslationPipeline(
+                cacheService, ragTranslationService, entityConsistencyService,
+                userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
-        // 4. 调用翻译服务（支持降级）
-        String rawJson = userLevelThrottledTranslationClient.translate(text, target, engine, false);
-        String result = ExternalResponseUtil.extractDataField(rawJson);
+        String result = pipeline.execute(text, target, engine);
 
-        // 检查翻译是否失败：result 为 null 表示翻译服务返回错误或空数据
-        if (result == null) {
-            throw new RuntimeException("翻译服务返回错误：" + rawJson);
-        }
-
-        // 校验翻译结果是否有效（非广告文案、长度合理）
-        if (!isValidTranslation(text, result)) {
-            throw new RuntimeException("翻译结果无效：返回内容非翻译文本");
-        }
-
-        // 3. 仅当翻译成功且译文与原文不一致时才缓存
-        if (shouldCache(text, result)) {
-            cacheService.putCache(cacheKey, text, result, "auto", target, engine);
-            // RAG L4：翻译完成后自动存储到翻译记忆
-            ragTranslationService.storeTranslationMemory(text, result, target, engine);
-        } else {
-            log.debug("译文与原文一致，跳过缓存：{}", cacheKey.substring(0, Math.min(16, cacheKey.length())));
+        if (result == null || result.trim().isEmpty()) {
+            throw new RuntimeException("翻译服务返回错误或结果为空");
         }
 
         return result;
@@ -155,51 +107,20 @@ public class TranslationService {
 
     /**
      * 判断是否应该缓存翻译结果
-     * 仅当译文与原文不一致时才缓存
+     * @deprecated 使用 {@link TranslationPipeline#shouldCache(String, String)}
      */
+    @Deprecated
     private boolean shouldCache(String original, String translated) {
-        if (original == null || translated == null) {
-            return false;
-        }
-        // 去除首尾空白后比较，避免仅空格差异
-        String cleanOriginal = original.trim();
-        String cleanTranslated = translated.trim();
-
-        // 如果译文与原文相同，则不缓存
-        if (cleanOriginal.equals(cleanTranslated)) {
-            return false;
-        }
-
-        // 忽略大小写比较，避免仅大小写差异
-        if (cleanOriginal.equalsIgnoreCase(cleanTranslated)) {
-            return false;
-        }
-
-        return true;
+        return TranslationPipeline.shouldCache(original, translated);
     }
 
     /**
      * 校验翻译结果是否有效
-     * 检测非翻译内容（如广告文案、系统提示等）
+     * @deprecated 使用 {@link TranslationPipeline#isValidTranslation(String, String)}
      */
+    @Deprecated
     private boolean isValidTranslation(String text, String result) {
-        if (text == null || result == null) {
-            return false;
-        }
-        // 检测明显的广告/系统提示关键词
-        String[] adKeywords = {"人工智能助手", "生成式人工智能", "体验生成式", "获取写作", "Gemini", "Google AI"};
-        for (String keyword : adKeywords) {
-            if (result.contains(keyword)) {
-                log.warn("翻译结果包含广告关键词：{}", keyword);
-                return false;
-            }
-        }
-        // 检测译文长度异常（超过原文 10 倍）
-        if (result.length() > text.length() * 10) {
-            log.warn("翻译结果长度异常：原文 {} 字符，译文 {} 字符", text.length(), result.length());
-            return false;
-        }
-        return true;
+        return TranslationPipeline.isValidTranslation(text, result);
     }
 
     /**
@@ -278,13 +199,17 @@ public class TranslationService {
             }
         }
 
-        // 2. 使用虚拟线程并发翻译缓存未命中的段落
+        // 2. 使用 Pipeline 快速模式并发翻译缓存未命中的段落
         if (!indexesToTranslate.isEmpty()) {
+            Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+            TranslationPipeline pipeline = new TranslationPipeline(
+                    cacheService, ragTranslationService, entityConsistencyService,
+                    userLevelThrottledTranslationClient, postProcessingService, userId, null);
+
             List<Runnable> tasks = new ArrayList<>();
             List<String> tempResults = new ArrayList<>(indexesToTranslate.size());
 
-            for (int[] idx : indexesToTranslate) {
-                int i = idx[0];
+            for (int j = 0; j < indexesToTranslate.size(); j++) {
                 tempResults.add(null);
             }
 
@@ -296,29 +221,13 @@ public class TranslationService {
 
                 tasks.add(() -> {
                     try {
-                        // 阅读器模式使用 MTranServer 翻译
-                        String rawJson = userLevelThrottledTranslationClient.translate(segment, target, engine,  html);
-                        String translation = ExternalResponseUtil.extractDataField(rawJson);
-
+                        String translation = pipeline.executeFast(segment, target, engine, html);
                         if (translation != null && !translation.trim().isEmpty()) {
-                            // 校验翻译结果是否有效
-                            if (!isValidTranslation(segment, translation)) {
-                                log.warn("阅读器翻译结果无效，使用原文兜底：索引 {}", index);
-                                tempResults.set(taskIndex, segment);
-                            } else if (shouldCache(segment, translation)) {
-                                String cacheKey = CacheKeyUtil.buildCacheKey(segment, target, engine);
-                                cacheService.putCache(cacheKey, segment, translation, "auto", target, engine);
-                            } else {
-                                log.debug("阅读器译文与原文一致，跳过缓存：索引 {}", index);
-                            }
                             tempResults.set(taskIndex, translation);
                         } else {
-                            // 翻译返回为空或失败，使用原文兜底
-                            log.warn("翻译返回为空，使用原文兜底：索引 {}", index);
                             tempResults.set(taskIndex, segment);
                         }
                     } catch (Exception e) {
-                        // 所有引擎都失败，使用原文兜底
                         log.error("翻译段落失败（使用原文兜底）：索引 {}, 错误：{}", index, e.getMessage());
                         tempResults.set(taskIndex, segment);
                     }
@@ -352,10 +261,9 @@ public class TranslationService {
             }
         }
 
-        // 3. 清理 null 值（理论上不会出现，因为失败时已用原文兜底）
+        // 3. 清理 null 值
         for (int i = 0; i < results.size(); i++) {
             if (results.get(i) == null) {
-                // 兜底：如果还有 null 值，使用原文填充
                 results.set(i, segments.get(i));
                 log.warn("发现未处理的 null 值，使用原文填充：索引 {}", i);
             }
@@ -397,6 +305,10 @@ public class TranslationService {
                 String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
                 int totalCount = items.size();
 
+                TranslationPipeline pipeline = new TranslationPipeline(
+                        cacheService, ragTranslationService, entityConsistencyService,
+                        userLevelThrottledTranslationClient, postProcessingService, userId, null);
+
                 // 限制并发数，避免超过 DeepSeek 限流（10 req/s）和用户级别并发限制
                 int maxConcurrency = 5;
                 var semaphore = new java.util.concurrent.Semaphore(maxConcurrency);
@@ -410,27 +322,11 @@ public class TranslationService {
                             String original = item.getOriginal() == null ? "" : item.getOriginal();
                             String cleanText = TextCleaningUtil.cleanText(original);
 
-                            String cacheKey = CacheKeyUtil.buildCacheKey(cleanText, target, engine);
-                            String extracted = cacheService.getCache(cacheKey);
+                            // fastMode=true（默认）使用 MTranServer，fastMode=false（专家模式）使用 DeepSeek
+                            boolean fastMode = req.getFastMode() == null || req.getFastMode();
+                            String extracted = pipeline.executeFast(cleanText, target, engine, !fastMode);
 
-                            if (extracted == null) {
-                                // fastMode=true（默认）使用 MTranServer，fastMode=false（专家模式）使用 DeepSeek
-                                boolean fastMode = req.getFastMode() == null || req.getFastMode();
-                                String rawJson = userLevelThrottledTranslationClient.translate(cleanText, target, engine, false, fastMode);
-                                extracted = ExternalResponseUtil.extractDataField(rawJson);
-                                if (extracted != null && !extracted.trim().isEmpty()) {
-                                    if (isValidTranslation(cleanText, extracted) && shouldCache(cleanText, extracted)) {
-                                        cacheService.putCache(cacheKey, cleanText, extracted, "auto", target, engine);
-                                    } else if (!isValidTranslation(cleanText, extracted)) {
-                                        log.warn("网页翻译结果无效，使用原文兜底：ID={}", id);
-                                        extracted = original;
-                                    }
-                                }
-                            } else {
-                                log.debug("网页翻译缓存命中：ID={}", id);
-                            }
-
-                            if (extracted == null) {
+                            if (extracted == null || extracted.trim().isEmpty()) {
                                 log.warn("翻译失败，使用原文兜底：ID={}", id);
                                 extracted = original;
                             }
@@ -508,25 +404,15 @@ public class TranslationService {
                     segments = List.of(text);
                 }
 
+                TranslationPipeline pipeline = new TranslationPipeline(
+                        cacheService, ragTranslationService, entityConsistencyService,
+                        userLevelThrottledTranslationClient, postProcessingService, userId, null);
+
                 for (int i = 0; i < segments.size(); i++) {
                     String segment = segments.get(i);
-                    String cacheKey = CacheKeyUtil.buildCacheKey(segment, target, engine);
-                    String extracted = cacheService.getCache(cacheKey);
+                    String extracted = pipeline.execute(segment, target, engine);
 
-                    if (extracted == null) {
-                        String rawJson = userLevelThrottledTranslationClient.translate(segment, target, engine, false);
-                        extracted = ExternalResponseUtil.extractDataField(rawJson);
-                        if (extracted != null && !extracted.trim().isEmpty()) {
-                            if (isValidTranslation(segment, extracted) && shouldCache(segment, extracted)) {
-                                cacheService.putCache(cacheKey, segment, extracted, "auto", target, engine);
-                            } else if (!isValidTranslation(segment, extracted)) {
-                                log.warn("流式翻译结果无效，使用原文兜底：索引 {}", i);
-                                extracted = segment;
-                            }
-                        }
-                    }
-
-                    if (extracted == null) {
+                    if (extracted == null || extracted.trim().isEmpty()) {
                         log.warn("流式翻译失败，使用原文兜底：索引 {}", i);
                         extracted = segment;
                     }
