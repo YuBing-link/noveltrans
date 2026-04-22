@@ -1,0 +1,207 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - text: NovelTrans
+        - navigation [ref=e12]:
+          - link "翻译" [ref=e13] [cursor=pointer]:
+            - /url: /
+          - link "文档" [ref=e106] [cursor=pointer]:
+            - /url: /documents
+          - link "历史" [active] [ref=e107] [cursor=pointer]:
+            - /url: /history
+          - link "术语表" [ref=e108] [cursor=pointer]:
+            - /url: /glossary
+      - generic [ref=e14]:
+        - button "切换主题" [ref=e15]:
+          - img [ref=e16]
+        - button "W wang" [ref=e110]:
+          - generic [ref=e111]: W
+          - generic [ref=e112]: wang
+          - img [ref=e113]
+  - main [ref=e19]:
+    - generic [ref=e178]:
+      - generic [ref=e179]:
+        - button "全部" [ref=e180]
+        - button "已完成" [ref=e181]
+        - button "进行中" [ref=e182]
+        - button "失败" [ref=e183]
+      - generic [ref=e185]:
+        - generic [ref=e186]:
+          - generic [ref=e187]:
+            - paragraph [ref=e188]: task_fa12e003c18b429c
+            - paragraph [ref=e189]: ...
+            - paragraph [ref=e190]: 2026/4/20 06:56:01
+          - button [ref=e192]:
+            - img [ref=e193]
+        - generic [ref=e196]:
+          - generic [ref=e197]:
+            - paragraph [ref=e198]: task_3c29705b65904b35
+            - paragraph [ref=e199]: ...
+            - paragraph [ref=e200]: 2026/4/19 08:32:54
+          - button [ref=e202]:
+            - img [ref=e203]
+        - generic [ref=e206]:
+          - generic [ref=e207]:
+            - paragraph [ref=e208]: task_50e604f8502c4eb1
+            - paragraph [ref=e209]: ...
+            - paragraph [ref=e210]: 2026/4/19 07:56:32
+          - button [ref=e212]:
+            - img [ref=e213]
+        - generic [ref=e216]:
+          - generic [ref=e217]:
+            - paragraph [ref=e218]: task_86778e22d3ee429a
+            - paragraph [ref=e219]: This is a test document for translation. Hello world, this i...
+            - paragraph [ref=e220]: 2026/4/19 07:55:52
+          - button [ref=e222]:
+            - img [ref=e223]
+        - generic [ref=e226]:
+          - generic [ref=e227]:
+            - paragraph [ref=e228]: task_75cae2bba2bb4af1
+            - paragraph [ref=e229]: ...
+            - paragraph [ref=e230]: 2026/4/19 07:55:04
+          - button [ref=e232]:
+            - img [ref=e233]
+        - generic [ref=e236]:
+          - generic [ref=e237]:
+            - paragraph [ref=e238]: task_7174089674b84d84
+            - paragraph [ref=e239]: ...
+            - paragraph [ref=e240]: 2026/4/19 07:11:36
+          - button [ref=e242]:
+            - img [ref=e243]
+        - generic [ref=e246]:
+          - generic [ref=e247]:
+            - paragraph [ref=e248]: task_88cee217f5e145ea
+            - paragraph [ref=e249]: 这是一个测试文本，用来测试翻译模式。...
+            - paragraph [ref=e250]: 2026/4/19 07:09:36
+          - button [ref=e252]:
+            - img [ref=e253]
+        - generic [ref=e256]:
+          - generic [ref=e257]:
+            - paragraph [ref=e258]: task_fea43715b28e446b
+            - paragraph [ref=e259]: ...
+            - paragraph [ref=e260]: 2026/4/19 07:09:19
+          - button [ref=e262]:
+            - img [ref=e263]
+        - generic [ref=e266]:
+          - generic [ref=e267]:
+            - paragraph [ref=e268]: task_43a5398eb9d04d8d
+            - paragraph [ref=e269]: 这是一个测试文本，用来测试翻译模式。...
+            - paragraph [ref=e270]: 2026/4/19 07:05:42
+          - button [ref=e272]:
+            - img [ref=e273]
+        - generic [ref=e276]:
+          - generic [ref=e277]:
+            - paragraph [ref=e278]: task_06b5b97b329848f4
+            - paragraph [ref=e279]: ...
+            - paragraph [ref=e280]: 2026/4/19 07:05:07
+          - button [ref=e282]:
+            - img [ref=e283]
+        - generic [ref=e286]:
+          - generic [ref=e287]:
+            - paragraph [ref=e288]: task_345f7132d9334b07
+            - paragraph [ref=e289]: ...
+            - paragraph [ref=e290]: 2026/4/19 06:44:18
+          - button [ref=e292]:
+            - img [ref=e293]
+        - generic [ref=e296]:
+          - generic [ref=e297]:
+            - paragraph [ref=e298]: task_a49a016b0c2246d2
+            - paragraph [ref=e299]: ...
+            - paragraph [ref=e300]: 2026/4/19 06:30:14
+          - button [ref=e302]:
+            - img [ref=e303]
+        - generic [ref=e306]:
+          - generic [ref=e307]:
+            - paragraph [ref=e308]: task_4afdca2aab594180
+            - paragraph [ref=e309]: ...
+            - paragraph [ref=e310]: 2026/4/19 06:27:55
+          - button [ref=e312]:
+            - img [ref=e313]
+        - generic [ref=e316]:
+          - generic [ref=e317]:
+            - paragraph [ref=e318]: task_c90a7eaf2742432d
+            - paragraph [ref=e319]: ...
+            - paragraph [ref=e320]: 2026/4/19 06:20:45
+          - button [ref=e322]:
+            - img [ref=e323]
+        - generic [ref=e326]:
+          - generic [ref=e327]:
+            - paragraph [ref=e328]: task_c61cf12bf87547ae
+            - paragraph [ref=e329]: ...
+            - paragraph [ref=e330]: 2026/4/19 06:15:08
+          - button [ref=e332]:
+            - img [ref=e333]
+        - generic [ref=e336]:
+          - generic [ref=e337]:
+            - paragraph [ref=e338]: task_1c577dd9835343c9
+            - paragraph [ref=e339]: ...
+            - paragraph [ref=e340]: 2026/4/19 06:06:29
+          - button [ref=e342]:
+            - img [ref=e343]
+        - generic [ref=e346]:
+          - generic [ref=e347]:
+            - paragraph [ref=e348]: task_bafb2ac8331e4359
+            - paragraph [ref=e349]: ...
+            - paragraph [ref=e350]: 2026/4/19 06:00:33
+          - button [ref=e352]:
+            - img [ref=e353]
+        - generic [ref=e356]:
+          - generic [ref=e357]:
+            - paragraph [ref=e358]: task_080b14bdf68e4508
+            - paragraph [ref=e359]: ...
+            - paragraph [ref=e360]: 2026/4/19 05:52:48
+          - button [ref=e362]:
+            - img [ref=e363]
+        - generic [ref=e366]:
+          - generic [ref=e367]:
+            - paragraph [ref=e368]: task_3126011402d54be4
+            - paragraph [ref=e369]: ...
+            - paragraph [ref=e370]: 2026/4/19 05:49:24
+          - button [ref=e372]:
+            - img [ref=e373]
+  - contentinfo [ref=e48]:
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - heading "产品" [level=4] [ref=e52]
+          - list [ref=e53]:
+            - listitem [ref=e54]:
+              - link "文本翻译" [ref=e55] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e56]:
+              - link "文档翻译" [ref=e57] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e58]:
+              - link "术语管理" [ref=e59] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e60]:
+          - heading "支持" [level=4] [ref=e61]
+          - list [ref=e62]:
+            - listitem [ref=e63]:
+              - link "帮助中心" [ref=e64] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e65]:
+              - link "关于我们" [ref=e66] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e67]:
+          - heading "法律" [level=4] [ref=e68]
+          - list [ref=e69]:
+            - listitem [ref=e70]:
+              - link "隐私政策" [ref=e71] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e72]:
+              - link "服务条款" [ref=e73] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e74]:
+          - heading "账户" [level=4] [ref=e75]
+          - list [ref=e76]:
+            - listitem [ref=e77]:
+              - link "注册" [ref=e78] [cursor=pointer]:
+                - /url: /register
+      - generic [ref=e79]:
+        - paragraph [ref=e80]: © 2026 NovelTrans. All rights reserved.
+        - paragraph [ref=e81]: 智能翻译，让语言不再是障碍

@@ -1,0 +1,81 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - text: NovelTrans
+        - navigation [ref=e12]:
+          - link "翻译" [ref=e13] [cursor=pointer]:
+            - /url: /
+      - generic [ref=e14]:
+        - button "切换主题" [ref=e15]:
+          - img [ref=e16]
+        - link "登录" [active] [ref=e18] [cursor=pointer]:
+          - /url: /login
+  - main [ref=e19]:
+    - generic [ref=e118]:
+      - generic [ref=e119]:
+        - heading "欢迎回来" [level=1] [ref=e120]
+        - paragraph [ref=e121]: 登录您的账号继续使用
+      - generic [ref=e124]:
+        - generic [ref=e125]:
+          - generic [ref=e126]: 邮箱
+          - textbox "请输入邮箱" [ref=e127]
+        - generic [ref=e128]:
+          - generic [ref=e129]:
+            - generic [ref=e130]: 密码
+            - textbox "请输入密码" [ref=e131]
+          - button [ref=e132]:
+            - img [ref=e133]
+        - button "登录" [ref=e136]
+        - paragraph [ref=e137]:
+          - text: 还没有账号？
+          - link "立即注册" [ref=e138] [cursor=pointer]:
+            - /url: /register
+        - paragraph [ref=e139]:
+          - link "忘记密码？" [ref=e140] [cursor=pointer]:
+            - /url: /forgot-password
+  - contentinfo [ref=e66]:
+    - generic [ref=e67]:
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - heading "产品" [level=4] [ref=e70]
+          - list [ref=e71]:
+            - listitem [ref=e72]:
+              - link "文本翻译" [ref=e73] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e74]:
+              - link "文档翻译" [ref=e75] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e76]:
+              - link "术语管理" [ref=e77] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e78]:
+          - heading "支持" [level=4] [ref=e79]
+          - list [ref=e80]:
+            - listitem [ref=e81]:
+              - link "帮助中心" [ref=e82] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e83]:
+              - link "关于我们" [ref=e84] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e85]:
+          - heading "法律" [level=4] [ref=e86]
+          - list [ref=e87]:
+            - listitem [ref=e88]:
+              - link "隐私政策" [ref=e89] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e90]:
+              - link "服务条款" [ref=e91] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e92]:
+          - heading "账户" [level=4] [ref=e93]
+          - list [ref=e94]:
+            - listitem [ref=e95]:
+              - link "注册" [ref=e96] [cursor=pointer]:
+                - /url: /register
+      - generic [ref=e97]:
+        - paragraph [ref=e98]: © 2026 NovelTrans. All rights reserved.
+        - paragraph [ref=e99]: 智能翻译，让语言不再是障碍

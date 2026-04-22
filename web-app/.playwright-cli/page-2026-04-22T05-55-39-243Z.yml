@@ -1,0 +1,100 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - text: NovelTrans
+        - navigation [ref=e12]:
+          - link "翻译" [ref=e13] [cursor=pointer]:
+            - /url: /
+          - link "文档" [ref=e14] [cursor=pointer]:
+            - /url: /documents
+          - link "历史" [ref=e15] [cursor=pointer]:
+            - /url: /history
+          - link "术语表" [ref=e16] [cursor=pointer]:
+            - /url: /glossary
+      - generic [ref=e17]:
+        - button "切换主题" [ref=e18]:
+          - img [ref=e19]
+        - button "W wang" [ref=e22]:
+          - generic [ref=e23]: W
+          - generic [ref=e24]: wang
+          - img [ref=e25]
+  - main [ref=e27]:
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - paragraph [ref=e33]: 深色模式
+          - paragraph [ref=e34]: 切换浅色/深色主题
+        - button "浅色" [ref=e35]:
+          - img [ref=e36]
+          - text: 浅色
+      - generic [ref=e42]:
+        - heading "修改密码" [level=2] [ref=e43]
+        - generic [ref=e44]:
+          - textbox "当前密码" [ref=e46]
+          - textbox "新密码（至少6位）" [ref=e48]
+          - button "修改" [ref=e49]
+      - generic [ref=e50]:
+        - heading "通知偏好" [level=2] [ref=e51]
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - generic [ref=e54]:
+              - paragraph [ref=e55]: 翻译完成通知
+              - paragraph [ref=e56]: 文档翻译完成时推送通知
+            - button [ref=e57]
+          - generic [ref=e59]:
+            - generic [ref=e60]:
+              - paragraph [ref=e61]: 邮件通知
+              - paragraph [ref=e62]: 接收翻译报告邮件
+            - button [ref=e63]
+          - generic [ref=e65]:
+            - generic [ref=e66]:
+              - paragraph [ref=e67]: 系统更新通知
+              - paragraph [ref=e68]: 新功能和维护通知
+            - button [ref=e69]
+      - generic [ref=e72]: 管理您的账号安全和外观偏好
+  - contentinfo [ref=e73]:
+    - generic [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - heading "产品" [level=4] [ref=e77]
+          - list [ref=e78]:
+            - listitem [ref=e79]:
+              - link "文本翻译" [ref=e80] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e81]:
+              - link "文档翻译" [ref=e82] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e83]:
+              - link "术语管理" [ref=e84] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e85]:
+          - heading "支持" [level=4] [ref=e86]
+          - list [ref=e87]:
+            - listitem [ref=e88]:
+              - link "帮助中心" [ref=e89] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e90]:
+              - link "关于我们" [ref=e91] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e92]:
+          - heading "法律" [level=4] [ref=e93]
+          - list [ref=e94]:
+            - listitem [ref=e95]:
+              - link "隐私政策" [ref=e96] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e97]:
+              - link "服务条款" [ref=e98] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e99]:
+          - heading "账户" [level=4] [ref=e100]
+          - list [ref=e101]:
+            - listitem [ref=e102]:
+              - link "注册" [ref=e103] [cursor=pointer]:
+                - /url: /register
+      - generic [ref=e104]:
+        - paragraph [ref=e105]: © 2026 NovelTrans. All rights reserved.
+        - paragraph [ref=e106]: 智能翻译，让语言不再是障碍

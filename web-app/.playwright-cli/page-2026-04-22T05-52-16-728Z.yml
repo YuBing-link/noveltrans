@@ -1,0 +1,107 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - text: NovelTrans
+        - navigation [ref=e12]:
+          - link "翻译" [ref=e13] [cursor=pointer]:
+            - /url: /
+      - generic [ref=e14]:
+        - button "切换主题" [ref=e15]:
+          - img [ref=e16]
+        - link "登录" [ref=e18] [cursor=pointer]:
+          - /url: /login
+  - main [ref=e19]:
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]:
+              - combobox [ref=e27] [cursor=pointer]:
+                - option "自动检测" [selected]
+                - option "中文"
+                - option "英语"
+                - option "日语"
+                - option "韩语"
+                - option "法语"
+                - option "德语"
+                - option "西班牙语"
+                - option "俄语"
+                - option "葡萄牙语"
+                - option "意大利语"
+                - option "泰语"
+                - option "越南语"
+              - img
+            - button [disabled] [ref=e28]:
+              - img [ref=e29]
+            - generic [ref=e32]:
+              - combobox [ref=e33] [cursor=pointer]:
+                - option "中文" [selected]
+                - option "英语"
+                - option "日语"
+                - option "韩语"
+                - option "法语"
+                - option "德语"
+                - option "西班牙语"
+                - option "俄语"
+                - option "葡萄牙语"
+                - option "意大利语"
+                - option "泰语"
+                - option "越南语"
+              - img
+          - generic [ref=e34]:
+            - textbox "请输入要翻译的文本..." [ref=e35]
+            - generic [ref=e37]: 0 字符
+        - generic [ref=e39]:
+          - generic [ref=e41]:
+            - combobox [ref=e42] [cursor=pointer]:
+              - option "AI 大模型翻译" [selected]
+              - option "快速翻译"
+            - img
+          - paragraph [ref=e45]: 翻译结果将显示在这里
+      - button "开始翻译" [disabled] [ref=e47]
+  - contentinfo [ref=e48]:
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - heading "产品" [level=4] [ref=e52]
+          - list [ref=e53]:
+            - listitem [ref=e54]:
+              - link "文本翻译" [ref=e55] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e56]:
+              - link "文档翻译" [ref=e57] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e58]:
+              - link "术语管理" [ref=e59] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e60]:
+          - heading "支持" [level=4] [ref=e61]
+          - list [ref=e62]:
+            - listitem [ref=e63]:
+              - link "帮助中心" [ref=e64] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e65]:
+              - link "关于我们" [ref=e66] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e67]:
+          - heading "法律" [level=4] [ref=e68]
+          - list [ref=e69]:
+            - listitem [ref=e70]:
+              - link "隐私政策" [ref=e71] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e72]:
+              - link "服务条款" [ref=e73] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e74]:
+          - heading "账户" [level=4] [ref=e75]
+          - list [ref=e76]:
+            - listitem [ref=e77]:
+              - link "注册" [ref=e78] [cursor=pointer]:
+                - /url: /register
+      - generic [ref=e79]:
+        - paragraph [ref=e80]: © 2026 NovelTrans. All rights reserved.
+        - paragraph [ref=e81]: 智能翻译，让语言不再是障碍

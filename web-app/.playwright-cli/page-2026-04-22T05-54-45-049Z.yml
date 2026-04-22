@@ -1,0 +1,77 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - text: NovelTrans
+        - navigation [ref=e12]:
+          - link "翻译" [ref=e13] [cursor=pointer]:
+            - /url: /
+          - link "文档" [ref=e106] [cursor=pointer]:
+            - /url: /documents
+          - link "历史" [ref=e107] [cursor=pointer]:
+            - /url: /history
+          - link "术语表" [active] [ref=e108] [cursor=pointer]:
+            - /url: /glossary
+      - generic [ref=e14]:
+        - button "切换主题" [ref=e15]:
+          - img [ref=e16]
+        - button "W wang" [ref=e110]:
+          - generic [ref=e111]: W
+          - generic [ref=e112]: wang
+          - img [ref=e113]
+  - main [ref=e19]:
+    - generic [ref=e377]:
+      - generic [ref=e378]:
+        - generic [ref=e379]:
+          - img [ref=e380]
+          - textbox "搜索术语..." [ref=e383]
+        - button "添加术语" [ref=e384]:
+          - img [ref=e385]
+          - text: 添加术语
+      - generic [ref=e387]: 暂无术语，点击"添加术语"开始创建
+      - generic [ref=e389]: 0 个术语
+  - contentinfo [ref=e48]:
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - heading "产品" [level=4] [ref=e52]
+          - list [ref=e53]:
+            - listitem [ref=e54]:
+              - link "文本翻译" [ref=e55] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e56]:
+              - link "文档翻译" [ref=e57] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e58]:
+              - link "术语管理" [ref=e59] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e60]:
+          - heading "支持" [level=4] [ref=e61]
+          - list [ref=e62]:
+            - listitem [ref=e63]:
+              - link "帮助中心" [ref=e64] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e65]:
+              - link "关于我们" [ref=e66] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e67]:
+          - heading "法律" [level=4] [ref=e68]
+          - list [ref=e69]:
+            - listitem [ref=e70]:
+              - link "隐私政策" [ref=e71] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e72]:
+              - link "服务条款" [ref=e73] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e74]:
+          - heading "账户" [level=4] [ref=e75]
+          - list [ref=e76]:
+            - listitem [ref=e77]:
+              - link "注册" [ref=e78] [cursor=pointer]:
+                - /url: /register
+      - generic [ref=e79]:
+        - paragraph [ref=e80]: © 2026 NovelTrans. All rights reserved.
+        - paragraph [ref=e81]: 智能翻译，让语言不再是障碍

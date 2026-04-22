@@ -1,0 +1,106 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "NovelTrans" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - text: NovelTrans
+        - navigation [ref=e12]:
+          - link "翻译" [ref=e13] [cursor=pointer]:
+            - /url: /
+          - link "文档" [ref=e106] [cursor=pointer]:
+            - /url: /documents
+          - link "历史" [ref=e107] [cursor=pointer]:
+            - /url: /history
+          - link "术语表" [ref=e108] [cursor=pointer]:
+            - /url: /glossary
+      - generic [ref=e14]:
+        - button "切换主题" [ref=e15]:
+          - img [ref=e16]
+        - button "W wang" [ref=e110]:
+          - generic [ref=e111]: W
+          - generic [ref=e112]: wang
+          - img [ref=e113]
+  - main [ref=e19]:
+    - generic [ref=e406]:
+      - generic [ref=e407]:
+        - generic [ref=e408]: W
+        - generic [ref=e409]:
+          - paragraph [ref=e410]: wang
+          - paragraph [ref=e411]: 2175183649@qq.com
+        - generic [ref=e412]: free
+      - generic [ref=e413]:
+        - navigation [ref=e415]:
+          - link "个人信息" [ref=e416] [cursor=pointer]:
+            - /url: /user
+            - img [ref=e417]
+            - text: 个人信息
+          - link "统计数据" [ref=e420] [cursor=pointer]:
+            - /url: /user/stats
+            - img [ref=e421]
+            - text: 统计数据
+          - link "配额用量" [ref=e423] [cursor=pointer]:
+            - /url: /user/quota
+            - img [ref=e424]
+            - text: 配额用量
+          - link "API Keys" [ref=e427] [cursor=pointer]:
+            - /url: /user/api-keys
+            - img [ref=e428]
+            - text: API Keys
+          - link "偏好设置" [ref=e432] [cursor=pointer]:
+            - /url: /user/preferences
+            - img [ref=e433]
+            - text: 偏好设置
+        - generic [ref=e437]:
+          - heading "个人信息" [level=2] [ref=e438]
+          - generic [ref=e439]:
+            - generic [ref=e440]:
+              - generic [ref=e441]: 用户名
+              - textbox [ref=e442]: wang
+            - generic [ref=e443]:
+              - generic [ref=e444]: 邮箱
+              - textbox [disabled] [ref=e445]: 2175183649@qq.com
+            - button "保存修改" [ref=e446]
+  - contentinfo [ref=e48]:
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - heading "产品" [level=4] [ref=e52]
+          - list [ref=e53]:
+            - listitem [ref=e54]:
+              - link "文本翻译" [ref=e55] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e56]:
+              - link "文档翻译" [ref=e57] [cursor=pointer]:
+                - /url: /documents
+            - listitem [ref=e58]:
+              - link "术语管理" [ref=e59] [cursor=pointer]:
+                - /url: /glossary
+        - generic [ref=e60]:
+          - heading "支持" [level=4] [ref=e61]
+          - list [ref=e62]:
+            - listitem [ref=e63]:
+              - link "帮助中心" [ref=e64] [cursor=pointer]:
+                - /url: /help
+            - listitem [ref=e65]:
+              - link "关于我们" [ref=e66] [cursor=pointer]:
+                - /url: /about
+        - generic [ref=e67]:
+          - heading "法律" [level=4] [ref=e68]
+          - list [ref=e69]:
+            - listitem [ref=e70]:
+              - link "隐私政策" [ref=e71] [cursor=pointer]:
+                - /url: /privacy
+            - listitem [ref=e72]:
+              - link "服务条款" [ref=e73] [cursor=pointer]:
+                - /url: /terms
+        - generic [ref=e74]:
+          - heading "账户" [level=4] [ref=e75]
+          - list [ref=e76]:
+            - listitem [ref=e77]:
+              - link "注册" [ref=e78] [cursor=pointer]:
+                - /url: /register
+      - generic [ref=e79]:
+        - paragraph [ref=e80]: © 2026 NovelTrans. All rights reserved.
+        - paragraph [ref=e81]: 智能翻译，让语言不再是障碍
