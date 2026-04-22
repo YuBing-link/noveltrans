@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '../components/ui/Toast';
 import { glossaryApi } from '../api/glossaries';
 import type { GlossaryItem } from '../api/types';
@@ -14,6 +14,8 @@ function GlossaryPage() {
   const [sourceWord, setSourceWord] = useState('');
   const [targetWord, setTargetWord] = useState('');
   const [remark, setRemark] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadTerms(); }, []);
 
@@ -45,8 +47,25 @@ function GlossaryPage() {
   };
 
   const handleDelete = async (term: GlossaryItem) => {
-    try { await glossaryApi.delete(term.id); success('已删除'); loadTerms(); }
+    try { await glossaryApi.delete(term.id); success('已删除'); setSearch(''); loadTerms(); }
     catch { toastError('删除失败'); }
+  };
+
+  const handleExport = async () => {
+    try { await glossaryApi.exportGlossary(); success('导出成功'); }
+    catch { toastError('导出失败'); }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const { data } = await glossaryApi.importGlossary(file);
+      success(`导入成功 ${data} 条术语`);
+      setSearch(''); loadTerms();
+    } catch (err) { toastError(err instanceof Error ? err.message : '导入失败'); }
+    finally { setImporting(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
   };
 
   const filtered = terms.filter(t =>
@@ -75,23 +94,32 @@ function GlossaryPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="搜索术语..."
-              className="w-full pl-9 pr-3 py-2 text-[13px] bg-surface text-text-primary rounded-lg border border-border focus:border-accent focus:outline-none transition-colors"
+              style={{ paddingLeft: '3rem' }}
+              className="w-full pr-3 py-2 text-[13px] bg-surface text-text-primary rounded-lg border border-border focus:border-accent focus:outline-none transition-colors"
             />
           </div>
           
           <div className="flex items-center gap-2 w-full sm:w-auto">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleImport}
+              className="hidden"
+            />
             <button
-              onClick={() => { /* TODO: 实现导入功能 */ }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-text-secondary bg-surface border border-border rounded-lg hover:bg-surface-secondary transition-colors"
-              title="即将推出"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-text-secondary bg-surface border border-border rounded-lg hover:bg-surface-secondary transition-colors disabled:opacity-30"
+              title="导入 CSV 文件"
             >
-              <Upload className="w-4 h-4" /> 
-              <span className="hidden sm:inline">导入</span>
+              <Upload className="w-4 h-4" />
+              <span className="hidden sm:inline">{importing ? '导入中...' : '导入'}</span>
             </button>
             <button
-              onClick={() => { /* TODO: 实现导出功能 */ }}
+              onClick={handleExport}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-text-secondary bg-surface border border-border rounded-lg hover:bg-surface-secondary transition-colors"
-              title="即将推出"
+              title="导出为 CSV"
             >
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">导出</span>

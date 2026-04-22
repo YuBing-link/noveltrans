@@ -12,6 +12,8 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { DocumentPage } from './pages/DocumentPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { GlossaryPage } from './pages/GlossaryPage';
+import { CollabPage } from './pages/CollabPage';
+import { CollabWorkspace } from './pages/CollabWorkspace';
 import { UserCenterPage } from './pages/UserCenterPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AboutPage, HelpPage, PrivacyPage, TermsPage, NotFoundPage } from './pages/StaticPages';
@@ -35,6 +37,8 @@ function AppRoutes() {
       <Route path="/documents" element={<ProtectedRoute><DocumentPage /></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
       <Route path="/glossary" element={<ProtectedRoute><GlossaryPage /></ProtectedRoute>} />
+      <Route path="/collab" element={<ProtectedRoute><CollabPage /></ProtectedRoute>} />
+      <Route path="/collab/workspace" element={<ProtectedRoute><CollabWorkspace /></ProtectedRoute>} />
       <Route path="/user/*" element={<ProtectedRoute><UserCenterPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="/about" element={<AboutPage />} />
@@ -55,7 +59,7 @@ function App() {
             <div className="flex flex-col min-h-screen bg-background" style={{ width: '100%' }}>
               <Header />
               <main style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                <div style={{ width: '92%', maxWidth: '1440px' }}>
+                <div style={{ width: '80%', maxWidth: '1280px', margin: '0 auto' }}>
                   <AppRoutes />
                 </div>
               </main>

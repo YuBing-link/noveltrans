@@ -12,6 +12,8 @@
   "dependencies": {
     "@fontsource/geist": "^5.2.8",
     "@fontsource/geist-mono": "^5.2.7",
+    "@fontsource/noto-sans-sc": "^5.2.9",
+    "@fontsource/noto-serif-sc": "^5.2.8",
     "lucide-react": "^1.8.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

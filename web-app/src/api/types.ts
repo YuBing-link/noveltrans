@@ -247,3 +247,99 @@ export const TRANSLATION_ENGINES = [
 
 export const SUPPORTED_FILE_TYPES = ['.txt', '.epub', '.docx', '.pdf'];
 export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+// ==================== Collaboration ====================
+export interface CollabProjectResponse {
+  id: number;
+  name: string;
+  description: string;
+  ownerId: number;
+  ownerName: string;
+  sourceLang: string;
+  targetLang: string;
+  status: string;
+  progress: number;
+  memberCount: number;
+  totalChapters: number;
+  completedChapters: number;
+  createTime: string;
+  updateTime: string;
+}
+
+export interface ChapterTaskResponse {
+  id: number;
+  chapterNumber: number;
+  title: string;
+  status: string;
+  progress: number;
+  assigneeId: number | null;
+  assigneeName: string | null;
+  reviewerId: number | null;
+  reviewerName: string | null;
+  reviewComment: string | null;
+  sourceWordCount: number;
+  targetWordCount: number;
+  assignedTime: string | null;
+  submittedTime: string | null;
+  reviewedTime: string | null;
+  completedTime: string | null;
+  sourceText: string | null;
+  translatedText: string | null;
+}
+
+export interface ProjectMemberResponse {
+  id: number;
+  userId: number;
+  username: string;
+  email: string;
+  avatar: string;
+  role: string;
+  inviteStatus: string;
+  joinedTime: string | null;
+}
+
+export interface CommentResponse {
+  id: number;
+  userId: number;
+  username: string;
+  avatar: string;
+  sourceText: string | null;
+  targetText: string | null;
+  content: string;
+  resolved: boolean;
+  createTime: string;
+  replies: CommentResponse[];
+}
+
+export interface CreateCollabProjectRequest {
+  name: string;
+  description: string;
+  sourceLang: string;
+  targetLang: string;
+}
+
+export interface AssignChapterRequest {
+  assigneeId: number;
+  reviewerId?: number;
+}
+
+export interface SubmitChapterRequest {
+  translatedText: string;
+}
+
+export interface ReviewChapterRequest {
+  approved: boolean;
+  comment?: string;
+}
+
+export interface InviteMemberRequest {
+  email: string;
+  role: 'OWNER' | 'REVIEWER' | 'TRANSLATOR';
+}
+
+export interface CreateCommentRequest {
+  sourceText?: string;
+  targetText?: string;
+  content: string;
+  parentId?: number;
+}

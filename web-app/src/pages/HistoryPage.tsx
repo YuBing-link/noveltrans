@@ -3,7 +3,7 @@ import { useToast } from '../components/ui/Toast';
 import { userApi } from '../api/user';
 import { translateApi } from '../api/translate';
 import type { TranslationHistoryItem } from '../api/types';
-import { Trash2, ChevronLeft, ChevronRight, Clock, Languages, FileText, Zap } from 'lucide-react';
+import { Trash2, ChevronLeft, ChevronRight, Clock, Languages, FileText } from 'lucide-react';
 import { SUPPORTED_LANGUAGES } from '../api/types';
 
 const filterTabs = [
@@ -70,7 +70,7 @@ function HistoryPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
       {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-[28px] font-bold text-text-primary mb-2 tracking-tight">
@@ -180,14 +180,15 @@ function HistoryPage() {
             </button>
             
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const p = i + 1;
+              const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
+              if (p > totalPages) return null;
               return (
                 <button
-                  key={p}
+                  key={`page-${p}`}
                   onClick={() => setPage(p)}
                   className={`min-w-[32px] h-8 px-2 text-[13px] font-medium rounded-lg transition-all ${
-                    p === page 
-                      ? 'bg-accent text-white shadow-sm' 
+                    p === page
+                      ? 'bg-accent text-white shadow-sm'
                       : 'text-text-tertiary hover:text-text-primary hover:bg-surface-secondary'
                   }`}
                 >

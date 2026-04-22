@@ -1,107 +1,113 @@
 @import "tailwindcss";
-@import "@fontsource/geist";
+@import "@fontsource/noto-serif-sc/400.css";
+@import "@fontsource/noto-serif-sc/500.css";
+@import "@fontsource/noto-serif-sc/600.css";
+@import "@fontsource/noto-sans-sc/400.css";
+@import "@fontsource/noto-sans-sc/500.css";
+@import "@fontsource/noto-sans-sc/600.css";
 @import "@fontsource/geist-mono";
 
 @theme {
-  /* === Brand Colors === */
-  --color-brand: #1e1e3f;
-  --color-brand-hover: #2d2d5c;
-  --color-accent: #6c5ce7;
-  --color-accent-hover: #5a4bd6;
-  --color-accent-light: #a29bfe;
-  --color-accent-bg: rgba(108, 92, 231, 0.08);
+  /* === Brand Colors (Terracotta) === */
+  --color-brand: #c96442;
+  --color-brand-hover: #b55a3a;
+  --color-accent: #c96442;
+  --color-accent-hover: #b55a3a;
+  --color-accent-light: #d97757;
+  --color-accent-bg: rgba(201, 100, 66, 0.08);
 
-  /* === Canvas & Surfaces === */
+  /* === Canvas & Surfaces (Light) === */
   --color-white: #ffffff;
-  --color-black: #0a0a12;
-  --color-background: #fafafa;
-  --color-surface: #ffffff;
-  --color-surface-elevated: #ffffff;
-  --color-surface-secondary: #f3f3f5;
-  --color-surface-panel: #eeeef0;
+  --color-black: #141413;
+  --color-background: #f5f4ed;
+  --color-surface: #faf9f5;
+  --color-surface-elevated: #faf9f5;
+  --color-surface-secondary: #f0eee6;
+  --color-surface-panel: #e8e6dc;
 
-  /* === Neutral Scale === */
-  --color-gray-50: #fafafa;
-  --color-gray-100: #f3f3f5;
-  --color-gray-200: #e8e8ec;
-  --color-gray-300: #d1d1d6;
-  --color-gray-400: #9393a3;
-  --color-gray-500: #6b6b7b;
-  --color-gray-600: #4a4a5a;
+  /* === Neutral Scale (Light - warm-toned) === */
+  --color-gray-50: #faf9f5;
+  --color-gray-100: #f0eee6;
+  --color-gray-200: #e8e6dc;
+  --color-gray-300: #d1cfc5;
+  --color-gray-400: #87867f;
+  --color-gray-500: #5e5d59;
+  --color-gray-600: #4d4c48;
 
-  /* === Text Colors === */
-  --color-text-primary: #2d2d3a;
-  --color-text-secondary: #6b6b7b;
-  --color-text-tertiary: #9393a3;
-  --color-text-placeholder: #9393a3;
-  --color-text-inverse: #ffffff;
+  /* === Text Colors (Light) === */
+  --color-text-primary: #141413;
+  --color-text-secondary: #5e5d59;
+  --color-text-tertiary: #87867f;
+  --color-text-placeholder: #87867f;
+  --color-text-inverse: #faf9f5;
 
-  /* === Semantic Colors === */
-  --color-green: #22c55e;
-  --color-green-bg: rgba(34, 197, 94, 0.10);
-  --color-red: #ef4444;
-  --color-red-bg: rgba(239, 68, 68, 0.10);
-  --color-yellow: #f59e0b;
-  --color-yellow-bg: rgba(245, 158, 11, 0.10);
-  --color-purple: #6c5ce7;
-  --color-purple-bg: rgba(108, 92, 231, 0.10);
-  --color-orange: #f97316;
-  --color-orange-bg: rgba(249, 115, 22, 0.10);
+  /* === Semantic Colors (Light) === */
+  --color-green: #4a7c59;
+  --color-green-bg: rgba(74, 124, 89, 0.10);
+  --color-red: #b53333;
+  --color-red-bg: rgba(181, 51, 51, 0.10);
+  --color-yellow: #c49a3c;
+  --color-yellow-bg: rgba(196, 154, 60, 0.10);
+  --color-purple: #87867f;
+  --color-purple-bg: rgba(135, 134, 127, 0.10);
+  --color-orange: #c96442;
+  --color-orange-bg: rgba(201, 100, 66, 0.10);
 
-  /* === Borders & Dividers === */
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-light: rgba(0, 0, 0, 0.04);
-  --color-divider: rgba(0, 0, 0, 0.06);
+  /* === Borders & Dividers (Light) === */
+  --color-border: #f0eee6;
+  --color-border-light: #faf9f5;
+  --color-divider: #e8e6dc;
 
-  /* === Badge Tokens === */
-  --color-badge-blue-bg: rgba(108, 92, 231, 0.10);
-  --color-badge-blue-text: #6c5ce7;
-  --color-badge-green-bg: rgba(34, 197, 94, 0.10);
-  --color-badge-green-text: #16a34a;
-  --color-badge-red-bg: rgba(239, 68, 68, 0.10);
-  --color-badge-red-text: #ef4444;
-  --color-badge-gray-bg: rgba(0, 0, 0, 0.06);
-  --color-badge-gray-text: #6b6b7b;
-  --color-badge-yellow-bg: rgba(245, 158, 11, 0.10);
-  --color-badge-yellow-text: #b45309;
-  --color-badge-purple-bg: rgba(108, 92, 231, 0.10);
-  --color-badge-purple-text: #6c5ce7;
-  --color-badge-orange-bg: rgba(249, 115, 22, 0.10);
-  --color-badge-orange-text: #c2410c;
+  /* === Badge Tokens (Light) === */
+  --color-badge-blue-bg: rgba(201, 100, 66, 0.10);
+  --color-badge-blue-text: #c96442;
+  --color-badge-green-bg: rgba(74, 124, 89, 0.10);
+  --color-badge-green-text: #4a7c59;
+  --color-badge-red-bg: rgba(181, 51, 51, 0.10);
+  --color-badge-red-text: #b53333;
+  --color-badge-gray-bg: rgba(135, 134, 127, 0.10);
+  --color-badge-gray-text: #5e5d59;
+  --color-badge-yellow-bg: rgba(196, 154, 60, 0.10);
+  --color-badge-yellow-text: #9e7a2e;
+  --color-badge-purple-bg: rgba(135, 134, 127, 0.10);
+  --color-badge-purple-text: #87867f;
+  --color-badge-orange-bg: rgba(201, 100, 66, 0.10);
+  --color-badge-orange-text: #c96442;
 
   /* === Interactive === */
-  --color-focus: rgba(108, 92, 231, 0.35);
-  --color-ring: rgba(108, 92, 231, 0.15);
-  --color-overlay-backdrop: rgba(0, 0, 0, 0.45);
-  --color-selection-text: #ffffff;
+  --color-focus: rgba(56, 152, 236, 0.35);
+  --color-ring: rgba(209, 207, 197, 0.5);
+  --color-overlay-backdrop: rgba(20, 20, 19, 0.45);
+  --color-selection-text: #faf9f5;
 
   /* === Fonts === */
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  --font-serif: 'Noto Serif SC', Georgia, 'Noto Serif', serif;
+  --font-sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'Geist Mono', 'SF Mono', 'Cascadia Code', ui-monospace, monospace;
 
   /* === Border Radius === */
-  --radius-sm: 8px;
-  --radius-button: 6px;
-  --radius-card: 2px;
-  --radius-card-sm: 2px;
+  --radius-sm: 6px;
+  --radius-button: 8px;
+  --radius-card: 8px;
+  --radius-card-sm: 6px;
   --radius-pill: 9999px;
-  --radius-image: 12px;
-  --radius-input: 2px;
-  --radius-modal: 2px;
-  --radius-language: 10px;
+  --radius-image: 16px;
+  --radius-input: 12px;
+  --radius-modal: 12px;
+  --radius-language: 8px;
 
-  /* === Shadows === */
-  --shadow-subtle: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
-  --shadow-card-hover: 0 2px 6px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
-  --shadow-panel: 0 2px 8px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
-  --shadow-subtle: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-elevated: 0 4px 12px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.1);
-  --shadow-modal: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
-  --shadow-button: 0 1px 2px rgba(0,0,0,0.06);
-  --shadow-button-hover: 0 2px 4px rgba(0,0,0,0.08), 0 4px 12px rgba(108, 92, 231, 0.12);
-  --shadow-focus: 0 0 0 3px rgba(108, 92, 231, 0.3);
-  --shadow-ring: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  /* === Shadows (Warm Ring System) === */
+  --shadow-subtle: 0 0 0 1px #e8e6dc;
+  --shadow-card: 0 0 0 1px #f0eee6;
+  --shadow-card-hover: 0 0 0 1px #e8e6dc, rgba(0, 0, 0, 0.05) 0px 4px 24px;
+  --shadow-panel: 0 0 0 1px #f0eee6;
+  --shadow-elevated: rgba(0, 0, 0, 0.05) 0px 4px 24px, 0 0 0 1px #f0eee6;
+  --shadow-modal: rgba(0, 0, 0, 0.08) 0px 8px 32px, 0 0 0 1px #e8e6dc;
+  --shadow-button: 0 0 0 0px #d1cfc5, 0 0 0 1px #e8e6dc;
+  --shadow-button-hover: 0 0 0 0px #d1cfc5, 0 0 0 1px #d1cfc5;
+  --shadow-focus: 0 0 0 3px rgba(56, 152, 236, 0.3);
+  --shadow-ring: 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-whisper: rgba(0, 0, 0, 0.05) 0px 4px 24px;
 
   /* === Typography Tracking === */
   --tracking-display: -0.035em;
@@ -110,68 +116,82 @@
   --tracking-normal: 0;
 }
 
-/* ==================== Dark Mode ==================== */
+/* ==================== Dark Mode (Warm Charcoal) ==================== */
 html.dark {
-  --color-white: #000000;
-  --color-black: #f3f3f5;
-  --color-background: #0a0a12;
-  --color-surface: #14141f;
-  --color-surface-elevated: #1c1c2a;
-  --color-surface-secondary: #1e1e2e;
-  --color-surface-panel: #252535;
-  --color-brand: #3a3a6e;
-  --color-brand-hover: #4a4a7e;
-  --color-accent: #8b7cf7;
-  --color-accent-hover: #a29bfe;
-  --color-accent-light: #c4b5fd;
-  --color-accent-bg: rgba(139, 124, 247, 0.15);
+  --color-white: #141413;
+  --color-black: #faf9f5;
+  --color-background: #141413;
+  --color-surface: #30302e;
+  --color-surface-elevated: #30302e;
+  --color-surface-secondary: #3d3d3a;
+  --color-surface-panel: #30302e;
 
-  --color-gray-50: #14141f;
-  --color-gray-100: #1e1e2e;
-  --color-gray-200: #2d2d3a;
-  --color-gray-300: #3a3a4a;
-  --color-gray-400: #6b6b7b;
-  --color-gray-500: #9393a3;
-  --color-gray-600: #c7c7cc;
+  --color-brand: #c96442;
+  --color-brand-hover: #b55a3a;
+  --color-accent: #c96442;
+  --color-accent-hover: #b55a3a;
+  --color-accent-light: #d97757;
+  --color-accent-bg: rgba(201, 100, 66, 0.12);
 
-  --color-text-primary: #e8e8ed;
-  --color-text-secondary: #9393a3;
-  --color-text-tertiary: #6b6b7b;
-  --color-text-placeholder: #4a4a5a;
-  --color-text-inverse: #0a0a12;
+  --color-gray-50: #141413;
+  --color-gray-100: #30302e;
+  --color-gray-200: #3d3d3a;
+  --color-gray-300: #4d4c48;
+  --color-gray-400: #87867f;
+  --color-gray-500: #b0aea5;
+  --color-gray-600: #d1cfc5;
 
-  --color-green: #4ade80;
-  --color-green-bg: rgba(74, 222, 128, 0.15);
-  --color-red: #f87171;
-  --color-red-bg: rgba(248, 113, 113, 0.15);
-  --color-yellow: #fbbf24;
-  --color-yellow-bg: rgba(251, 191, 36, 0.15);
-  --color-purple: #8b7cf7;
-  --color-purple-bg: rgba(139, 124, 247, 0.15);
-  --color-orange: #fb923c;
-  --color-orange-bg: rgba(251, 146, 60, 0.15);
+  --color-text-primary: #faf9f5;
+  --color-text-secondary: #b0aea5;
+  --color-text-tertiary: #87867f;
+  --color-text-placeholder: #5e5d59;
+  --color-text-inverse: #141413;
 
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-light: rgba(255, 255, 255, 0.05);
-  --color-divider: rgba(255, 255, 255, 0.06);
+  --color-green: #6b9e7a;
+  --color-green-bg: rgba(107, 158, 122, 0.15);
+  --color-red: #d45555;
+  --color-red-bg: rgba(212, 85, 85, 0.15);
+  --color-yellow: #d4a84b;
+  --color-yellow-bg: rgba(212, 168, 75, 0.15);
+  --color-purple: #87867f;
+  --color-purple-bg: rgba(135, 134, 127, 0.15);
+  --color-orange: #c96442;
+  --color-orange-bg: rgba(201, 100, 66, 0.15);
 
-  --color-badge-blue-bg: rgba(139, 124, 247, 0.15);
-  --color-badge-blue-text: #8b7cf7;
-  --color-badge-green-bg: rgba(74, 222, 128, 0.15);
-  --color-badge-green-text: #4ade80;
-  --color-badge-red-bg: rgba(248, 113, 113, 0.15);
-  --color-badge-red-text: #f87171;
-  --color-badge-gray-bg: rgba(255, 255, 255, 0.08);
-  --color-badge-gray-text: #9393a3;
-  --color-badge-yellow-bg: rgba(251, 191, 36, 0.15);
-  --color-badge-yellow-text: #fbbf24;
-  --color-badge-purple-bg: rgba(139, 124, 247, 0.15);
-  --color-badge-purple-text: #8b7cf7;
-  --color-badge-orange-bg: rgba(251, 146, 60, 0.15);
-  --color-badge-orange-text: #fb923c;
+  --color-border: #30302e;
+  --color-border-light: #3d3d3a;
+  --color-divider: #30302e;
 
-  --color-focus: rgba(139, 124, 247, 0.4);
-  --color-overlay-backdrop: rgba(0, 0, 0, 0.6);
+  --color-badge-blue-bg: rgba(201, 100, 66, 0.15);
+  --color-badge-blue-text: #c96442;
+  --color-badge-green-bg: rgba(107, 158, 122, 0.15);
+  --color-badge-green-text: #6b9e7a;
+  --color-badge-red-bg: rgba(212, 85, 85, 0.15);
+  --color-badge-red-text: #d45555;
+  --color-badge-gray-bg: rgba(135, 134, 127, 0.15);
+  --color-badge-gray-text: #87867f;
+  --color-badge-yellow-bg: rgba(212, 168, 75, 0.15);
+  --color-badge-yellow-text: #d4a84b;
+  --color-badge-purple-bg: rgba(135, 134, 127, 0.15);
+  --color-badge-purple-text: #87867f;
+  --color-badge-orange-bg: rgba(201, 100, 66, 0.15);
+  --color-badge-orange-text: #c96442;
+
+  --color-focus: rgba(56, 152, 236, 0.4);
+  --color-ring: rgba(176, 174, 165, 0.3);
+  --color-overlay-backdrop: rgba(0, 0, 0, 0.65);
+
+  --shadow-subtle: 0 0 0 1px #30302e;
+  --shadow-card: 0 0 0 1px #30302e;
+  --shadow-card-hover: 0 0 0 1px #3d3d3a;
+  --shadow-panel: 0 0 0 1px #30302e;
+  --shadow-elevated: 0 0 0 1px #30302e;
+  --shadow-modal: 0 0 0 1px #30302e;
+  --shadow-button: 0 0 0 0px #30302e, 0 0 0 1px #30302e;
+  --shadow-button-hover: 0 0 0 0px #30302e, 0 0 0 1px #4d4c48;
+  --shadow-focus: 0 0 0 3px rgba(56, 152, 236, 0.4);
+  --shadow-ring: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-whisper: rgba(0, 0, 0, 0.2) 0px 4px 24px;
 }
 
 /* ==================== Global Reset ==================== */
@@ -200,7 +220,7 @@ body {
   min-height: 100vh;
   height: 100%;
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 html.dark body {
@@ -215,67 +235,79 @@ html.dark body {
 
 /* ==================== Typography Utilities ==================== */
 .text-display {
+  font-family: var(--font-serif);
   font-size: 48px;
-  line-height: 1.08;
-  font-weight: 700;
+  line-height: 1.10;
+  font-weight: 500;
   letter-spacing: var(--tracking-display);
 }
 
 .text-hero {
+  font-family: var(--font-serif);
   font-size: 36px;
-  line-height: 1.12;
-  font-weight: 700;
+  line-height: 1.20;
+  font-weight: 500;
   letter-spacing: var(--tracking-heading);
 }
 
 .text-heading {
+  font-family: var(--font-serif);
   font-size: 24px;
-  line-height: 1.2;
-  font-weight: 600;
+  line-height: 1.20;
+  font-weight: 500;
   letter-spacing: var(--tracking-heading);
 }
 
 .text-title {
+  font-family: var(--font-serif);
   font-size: 20px;
-  line-height: 1.25;
-  font-weight: 600;
+  line-height: 1.20;
+  font-weight: 500;
   letter-spacing: var(--tracking-title);
 }
 
 .text-body-lg {
+  font-family: var(--font-sans);
   font-size: 17px;
-  line-height: 1.55;
+  line-height: 1.60;
   font-weight: 400;
 }
 
 .text-body {
+  font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.60;
   font-weight: 400;
 }
 
 .text-body-sm {
+  font-family: var(--font-sans);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.50;
   font-weight: 400;
 }
 
 .text-caption {
+  font-family: var(--font-sans);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.43;
   font-weight: 400;
 }
 
 .text-label {
+  font-family: var(--font-sans);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.43;
   font-weight: 500;
+  letter-spacing: 0.12px;
 }
 
 .text-micro {
+  font-family: var(--font-sans);
   font-size: 12px;
-  line-height: 1.38;
+  line-height: 1.60;
   font-weight: 400;
+  letter-spacing: 0.096px;
 }
 
 /* ==================== Scrollbar ==================== */
@@ -365,32 +397,32 @@ html.dark .bg-gradient-hero {
 
 /* ==================== Brand Utilities ==================== */
 .bg-gradient-brand {
-  background: linear-gradient(135deg, #7c6cf0 0%, #6c5ce7 100%);
+  background: linear-gradient(135deg, #c96442 0%, #b55a3a 100%);
 }
 
 html.dark .bg-gradient-brand {
-  background: linear-gradient(135deg, #9a8cf7 0%, #8b7cf7 100%);
+  background: linear-gradient(135deg, #d97757 0%, #c96442 100%);
 }
 
 .text-gradient-brand {
-  background: linear-gradient(135deg, #7c6cf0 0%, #6c5ce7 100%);
+  background: linear-gradient(135deg, #c96442 0%, #d97757 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 html.dark .text-gradient-brand {
-  background: linear-gradient(135deg, #9a8cf7 0%, #8b7cf7 100%);
+  background: linear-gradient(135deg, #d97757 0%, #c96442 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .border-gradient-brand {
-  border-color: #6c5ce7;
+  border-color: #c96442;
 }
 
 html.dark .border-gradient-brand {
-  border-color: #8b7cf7;
+  border-color: #d97757;
 }
 
 /* gradient border-bottom trick (border-image doesn't work well with rounded corners) */
@@ -404,16 +436,16 @@ html.dark .border-gradient-brand {
   left: 0;
   right: 0;
   height: 2px;
-  background: #6c5ce7;
+  background: #c96442;
 }
 
 html.dark .border-gradient-b::after {
-  background: #8b7cf7;
+  background: #d97757;
 }
 
 /* ==================== DeepL-style layout ==================== */
 .translate-gradient-bar {
-  background: #6c5ce7;
+  background: #c96442;
   height: 3px;
   width: 40px;
   border-radius: 2px;
@@ -422,7 +454,7 @@ html.dark .border-gradient-b::after {
 }
 
 html.dark .translate-gradient-bar {
-  background: #8b7cf7;
+  background: #d97757;
 }
 
 .translate-gradient-bar:hover {
@@ -431,19 +463,19 @@ html.dark .translate-gradient-bar {
 
 /* Glow effect for translate button */
 .translate-btn-glow {
-  box-shadow: 0 4px 20px rgba(108, 92, 231, 0.3), 0 0 0 0 rgba(108, 92, 231, 0.2);
+  box-shadow: 0 4px 20px rgba(201, 100, 66, 0.25), 0 0 0 0 rgba(201, 100, 66, 0.15);
 }
 
 html.dark .translate-btn-glow {
-  box-shadow: 0 4px 20px rgba(139, 124, 247, 0.4), 0 0 0 0 rgba(139, 124, 247, 0.2);
+  box-shadow: 0 4px 20px rgba(201, 100, 66, 0.3), 0 0 0 0 rgba(201, 100, 66, 0.15);
 }
 
 .translate-btn-glow:hover {
-  box-shadow: 0 6px 28px rgba(108, 92, 231, 0.4), 0 0 0 4px rgba(108, 92, 231, 0.1);
+  box-shadow: 0 6px 28px rgba(201, 100, 66, 0.35), 0 0 0 4px rgba(201, 100, 66, 0.1);
 }
 
 html.dark .translate-btn-glow:hover {
-  box-shadow: 0 6px 28px rgba(139, 124, 247, 0.5), 0 0 0 4px rgba(139, 124, 247, 0.15);
+  box-shadow: 0 6px 28px rgba(201, 100, 66, 0.4), 0 0 0 4px rgba(201, 100, 66, 0.15);
 }
 
 /* Streaming cursor blink */

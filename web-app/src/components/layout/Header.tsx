@@ -18,7 +18,7 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-50/80 backdrop-blur-xl border-b border-divider dark:border-border">
-      <div style={{ width: '92%', maxWidth: '1440px', margin: '0 auto' }} className="px-6 h-14 flex items-center justify-between">
+      <div style={{ width: '80%', maxWidth: '1280px', margin: '0 auto' }} className="px-6 h-14 flex items-center justify-between">
         {/* Logo + Nav */}
         <div className="flex items-center gap-10">
           <Link to="/" className="text-[15px] font-semibold text-text-primary flex items-center gap-2">
@@ -43,6 +43,9 @@ function Header() {
                 </Link>
                 <Link to="/glossary" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
                   术语表
+                </Link>
+                <Link to="/collab" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
+                  协作
                 </Link>
               </>
             )}

@@ -56,6 +56,7 @@ function ProfileTab({ user, refreshUser }: { user: any; refreshUser: () => void 
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    if (!username.trim()) { toastError('用户名不能为空'); return; }
     setSaving(true);
     try { await authApi.updateProfile({ username }); success('保存成功'); refreshUser(); }
     catch { toastError('保存失败'); }

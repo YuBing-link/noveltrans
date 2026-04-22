@@ -161,7 +161,6 @@ function DocumentPage() {
             >
               <option value="fast">快速翻译</option>
               <option value="expert">专家翻译</option>
-              <option value="team">团队协作</option>
             </select>
           </div>
         </div>

@@ -33,14 +33,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const info = localStorage.getItem('userInfo');
     if (token && info) {
       try {
-        setUser(JSON.parse(info));
+        const parsed = JSON.parse(info);
+        setUser(parsed);
+        // 验证 token 是否仍然有效
+        refreshUser().finally(() => setLoading(false));
       } catch {
         localStorage.removeItem('authToken');
         localStorage.removeItem('userInfo');
+        setLoading(false);
       }
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshUser = useCallback(async () => {
     try {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ArrowLeftRight, Copy, Trash2, Volume2, Sparkles, History, Zap, Cpu } from 'lucide-react';
+import { ArrowLeftRight, Copy, Trash2, Volume2, Sparkles, History, Zap } from 'lucide-react';
 import { useToast } from '../components/ui/Toast';
 import { translateApi } from '../api/translate';
 import { userApi } from '../api/user';
@@ -34,7 +34,10 @@ function HomePage() {
     }
   }, []);
 
+  const sameLangDisabled = sourceLang !== 'auto' && sourceLang === targetLang;
+
   const handleTranslate = useCallback(async () => {
+    if (sameLangDisabled) { info('源语言和目标语言不能相同'); return; }
     if (!sourceText.trim()) { info('请输入要翻译的文本'); return; }
     streamAbortRef.current = false;
     setLoading(true);
@@ -48,7 +51,7 @@ function HomePage() {
       () => { setCostTime(Date.now() - startTime); setLoading(false); },
       (err) => { toastError(err); setLoading(false); },
     );
-  }, [sourceText, sourceLang, targetLang, engine]);
+  }, [sourceText, sourceLang, targetLang, engine, sameLangDisabled]);
 
   const handleSwap = useCallback(() => {
     if (sourceLang === 'auto') return;
@@ -176,7 +179,7 @@ function HomePage() {
                 className="bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors focus:outline-none whitespace-nowrap border-none"
                 title="选择翻译引擎"
               >
-                <option value="ai">AI 大模型翻译</option>
+                <option value="ai">专家模式</option>
                 <option value="fast">快速翻译</option>
               </select>
               
@@ -244,7 +247,7 @@ function HomePage() {
                     {engine === 'ai' ? (
                       <>
                         <Sparkles className="w-3.5 h-3.5 text-accent" />
-                        <span>AI 大模型翻译 · 更精准自然</span>
+                        <span>专家模式 · 更精准自然</span>
                       </>
                     ) : (
                       <>
@@ -313,7 +316,8 @@ function HomePage() {
           </div>
           <button
             onClick={handleTranslate}
-            disabled={!sourceText.trim() || loading}
+            disabled={!sourceText.trim() || loading || sameLangDisabled}
+            title={sameLangDisabled ? '源语言和目标语言不能相同' : ''}
             className={`
               px-8 py-2 text-[14px] font-semibold text-white rounded-lg
               bg-gradient-brand transition-all duration-200 shadow-sm
