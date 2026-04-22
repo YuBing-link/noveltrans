@@ -11,6 +11,9 @@ import com.yumu.noveltranslator.util.CacheKeyUtil;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 统一翻译管线组件
  *
@@ -30,6 +33,11 @@ public class TranslationPipeline {
     private static final String[] AD_KEYWORDS = {
             "人工智能助手", "生成式人工智能", "体验生成式", "获取写作", "Gemini", "Google AI"
     };
+
+    /** 文本超过此字符数时启用分段翻译 */
+    private static final int SEGMENT_TRANSLATION_THRESHOLD = 5000;
+    /** 分段翻译的目标段大小（字符数） */
+    private static final int TRANSLATION_SEGMENT_SIZE = 3000;
 
     private final TranslationCacheService cacheService;
     private final RagTranslationService ragTranslationService;
@@ -76,6 +84,40 @@ public class TranslationPipeline {
      * @return 翻译结果，失败返回 null
      */
     public String execute(String text, String targetLang, String engine) {
+        // Check if segmentation is needed
+        List<String> segments = splitTextForTranslation(text);
+
+        if (segments.size() == 1) {
+            // Short text: original single-pass flow
+            return executeSegment(text, targetLang, engine);
+        }
+
+        // Long text: translate each segment and merge
+        log.info("分段翻译: 原文{}字, 分为{}段", text.length(), segments.size());
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < segments.size(); i++) {
+            String segment = segments.get(i);
+            String translated = executeSegment(segment, targetLang, engine);
+            if (translated != null && !translated.isBlank()) {
+                result.append(translated);
+            } else {
+                // Translation failed, keep original segment
+                result.append(segment);
+            }
+            // Add paragraph separator between segments (but not after the last one)
+            if (i < segments.size() - 1 && !result.toString().endsWith("\n")) {
+                result.append("\n");
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * 执行单段翻译流程
+     */
+    private String executeSegment(String text, String targetLang, String engine) {
         String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang, engine);
 
         // L1: 三级缓存查询
@@ -90,7 +132,7 @@ public class TranslationPipeline {
         if (ragResult.isDirectHit()) {
             log.info("Pipeline RAG 直接命中，相似度: {}", ragResult.getSimilarity());
             String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, engine);
-            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine);
+            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
             return result;
         }
 
@@ -102,7 +144,7 @@ public class TranslationPipeline {
             if (consistencyResult.isConsistencyApplied() && consistencyResult.getTranslatedText() != null) {
                 String result = postProcessingService.fixUntranslatedChinese(text, consistencyResult.getTranslatedText(), targetLang, engine);
                 if (shouldCache(text, result)) {
-                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine);
+                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
                 }
                 ragTranslationService.storeTranslationMemory(text, result, targetLang, engine);
                 return result;
@@ -126,7 +168,7 @@ public class TranslationPipeline {
         // 后处理 + 缓存
         result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, engine);
         if (shouldCache(text, result)) {
-            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine);
+            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
             ragTranslationService.storeTranslationMemory(text, result, targetLang, engine);
         } else {
             log.debug("Pipeline 译文与原文一致，跳过缓存");
@@ -179,7 +221,7 @@ public class TranslationPipeline {
                 }
                 result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, engine);
                 if (shouldCache(text, result)) {
-                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine);
+                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
                 }
                 return result;
             }
@@ -190,6 +232,77 @@ public class TranslationPipeline {
         // 失败时返回原文
         log.warn("Pipeline 快速模式翻译结果为空，返回原文");
         return text;
+    }
+
+    /**
+     * 将长文本按段落边界切分为多个片段，用于分段翻译
+     *
+     * 规则：
+     * - 文本 <= 5000 字：不分段，返回单片段
+     * - 文本 > 5000 字：按 3000 字分段
+     * - 切分点在段落边界（\n\n）或句子边界（。！？\n）
+     * - 不破坏原有文字完整性
+     */
+    private static List<String> splitTextForTranslation(String text) {
+        if (text == null || text.length() <= SEGMENT_TRANSLATION_THRESHOLD) {
+            return List.of(text != null ? text : "");
+        }
+
+        List<String> segments = new ArrayList<>();
+        // Split at paragraph boundaries
+        String[] paragraphs = text.split("(?<=\n\n)");
+        StringBuilder current = new StringBuilder();
+
+        for (String para : paragraphs) {
+            if (current.length() + para.length() > TRANSLATION_SEGMENT_SIZE && current.length() > 0) {
+                String segment = current.toString();
+                if (segment.length() > TRANSLATION_SEGMENT_SIZE * 1.5) {
+                    segments.addAll(splitAtSentenceBoundaryForTranslation(segment));
+                } else {
+                    segments.add(segment);
+                }
+                current = new StringBuilder();
+            }
+            current.append(para);
+        }
+
+        if (current.length() > 0) {
+            String remaining = current.toString();
+            if (remaining.length() > TRANSLATION_SEGMENT_SIZE * 1.5) {
+                segments.addAll(splitAtSentenceBoundaryForTranslation(remaining));
+            } else {
+                segments.add(remaining);
+            }
+        }
+
+        if (segments.isEmpty()) {
+            return List.of(text);
+        }
+
+        return segments;
+    }
+
+    /**
+     * 在句子边界切分超长片段
+     */
+    private static List<String> splitAtSentenceBoundaryForTranslation(String text) {
+        List<String> parts = new ArrayList<>();
+        String[] sentences = text.split("(?<=[。！？\n])");
+        StringBuilder current = new StringBuilder();
+
+        for (String sentence : sentences) {
+            if (current.length() + sentence.length() > TRANSLATION_SEGMENT_SIZE && current.length() > 0) {
+                parts.add(current.toString());
+                current = new StringBuilder();
+            }
+            current.append(sentence);
+        }
+
+        if (current.length() > 0) {
+            parts.add(current.toString());
+        }
+
+        return parts.isEmpty() ? List.of(text) : parts;
     }
 
     /**

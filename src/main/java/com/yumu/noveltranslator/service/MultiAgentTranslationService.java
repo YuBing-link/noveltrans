@@ -1,8 +1,11 @@
 package com.yumu.noveltranslator.service;
 
+import com.yumu.noveltranslator.dto.RagTranslationResponse;
+import com.yumu.noveltranslator.entity.AiGlossary;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabProject;
 import com.yumu.noveltranslator.entity.Document;
+import com.yumu.noveltranslator.entity.Glossary;
 import com.yumu.noveltranslator.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
@@ -10,8 +13,8 @@ import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
+import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
-import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,18 +25,24 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * 多 Agent 协作翻译服务
- * 使用 AgentScope 框架协调多个 Agent 并行翻译不同章节
+ * 使用 AI 翻译团队（Agentscope 多 Agent）进行章节翻译
  *
- * 接入能力：三级缓存 + RAG + 实体一致性 + 术语表 + 自动审核 + 章节拼接
+ * 架构：Java = 编排器（缓存 + 实体一致性 + 占位符保护），Python = AI 翻译外包
+ * 接入能力：三级缓存 + 实体一致性 + 术语表 + 占位符保护 + 章节拼接
  */
 @Service
 @RequiredArgsConstructor
@@ -41,21 +50,31 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MultiAgentTranslationService {
 
     private static final int MAX_CONCURRENT_AGENTS = 5;
+    private static final int MAX_RETRY_COUNT = 3;
+
+    /**
+     * 内存映射跟踪章节重试次数（服务重启后重置）
+     */
+    private static final Map<Long, Integer> retryCounterMap = new ConcurrentHashMap<>();
 
     private final CollabChapterTaskMapper chapterTaskMapper;
     private final CollabProjectMapper collabProjectMapper;
     private final DocumentMapper documentMapper;
     private final TranslationTaskMapper translationTaskMapper;
-    private final UserLevelThrottledTranslationClient translationClient;
+    private final TeamTranslationService teamTranslationService;
     private final TranslationCacheService cacheService;
-    private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
-    private final TranslationPostProcessingService postProcessingService;
+    private final GlossaryMapper glossaryMapper;
+    private final RagTranslationService ragTranslationService;
+    private final AiGlossaryService aiGlossaryService;
 
     /**
      * 启动多 Agent 协作翻译
      */
     public void startMultiAgentTranslation(Long projectId) {
+        // 恢复上次中断的翻译（TRANSLATING 状态的章节回退到 UNASSIGNED）
+        recoverStuckChapters(projectId);
+
         List<CollabChapterTask> chapters = chapterTaskMapper.selectByProjectIdAndStatus(
                 projectId, ChapterTaskStatus.UNASSIGNED.getValue());
 
@@ -133,8 +152,8 @@ public class MultiAgentTranslationService {
 
     /**
      * 单个 Agent 翻译一个章节
-     * 接入三级缓存 → RAG → 实体一致性 → Python 翻译
-     * 翻译完成直接标记 COMPLETED
+     * 新流程：三级缓存 → 实体提取 → 占位符保护 → AI 翻译团队 → 还原占位符 → 缓存
+     * 翻译完成标记为 SUBMITTED（待审校状态）
      *
      * @return true 翻译成功, false 翻译失败
      */
@@ -153,11 +172,21 @@ public class MultiAgentTranslationService {
         chapter.setProgress(50);
         chapterTaskMapper.updateById(chapter);
 
+        String sourceLang = project.getSourceLang();
         String targetLang = project.getTargetLang();
-        String engine = "google";
 
         try {
-            // 获取 userId：优先使用章节负责人，否则使用项目所有者
+            // ========== a. 检查 L1 缓存（按模式层级搜索） ==========
+            String baseCacheKey = buildBaseCacheKey(sourceText, targetLang);
+            String cachedTranslation = cacheService.getCacheByMode(baseCacheKey, "team");
+            if (cachedTranslation != null) {
+                log.info("L1/L2/L3 缓存命中: chapterId={}, baseCacheKey={}", chapterId, baseCacheKey);
+                applyTranslationResult(chapter, sourceText, cachedTranslation, true);
+                return true;
+            }
+
+            // ========== a.1. RAG 语义匹配 ==========
+            // 先获取 userId，RAG 需要用户上下文来过滤翻译记忆
             Long userId = chapter.getAssigneeId();
             if (userId == null) {
                 CollabProject proj = collabProjectMapper.selectById(chapter.getProjectId());
@@ -165,43 +194,309 @@ public class MultiAgentTranslationService {
                     userId = proj.getOwnerId();
                 }
             }
-            String docId = "project_" + chapter.getProjectId() + "_chapter_" + chapter.getId();
 
-            TranslationPipeline pipeline = new TranslationPipeline(
-                    cacheService,
-                    ragTranslationService,
-                    entityConsistencyService,
-                    translationClient,
-                    postProcessingService,
-                    userId,
-                    docId
-            );
+            RagTranslationResponse ragResponse = ragTranslationService.searchSimilarWithUser(
+                    sourceText, targetLang, "ai-team", userId);
 
-            String translated = pipeline.execute(sourceText, targetLang, engine);
-
-            if (translated == null || translated.trim().isEmpty()) {
-                throw new RuntimeException("翻译返回结果为空");
+            if (ragResponse.isDirectHit() && ragResponse.getTranslation() != null) {
+                log.info("RAG 直接命中: chapterId={}, similarity={}", chapterId, ragResponse.getSimilarity());
+                applyTranslationResult(chapter, sourceText, ragResponse.getTranslation(), true);
+                return true;
             }
 
-            // 直接标记完成
-            chapter.setTargetText(translated);
-            chapter.setTargetWordCount(translated.length());
-            chapter.setProgress(100);
-            chapter.setStatus(ChapterTaskStatus.COMPLETED.getValue());
-            chapter.setCompletedTime(LocalDateTime.now());
-            chapterTaskMapper.updateById(chapter);
+            // ========== 加载术语表和推导小说类型 ==========
 
-            log.info("章节翻译完成: chapterId={}, 原文{}字, 译文{}字",
+            // 加载用户术语表中在原文中出现的词条
+            List<Glossary> glossaryTerms = loadGlossaryTermsForProject(userId, sourceText);
+
+            // 加载 AI 术语表（仅已确认的术语，优先级低于用户术语表）
+            List<AiGlossary> aiGlossaryTerms = aiGlossaryService.getProjectGlossary(project.getId());
+            List<Glossary> aiGlossaryGlossaryTerms = aiGlossaryTerms.stream()
+                    .filter(t -> sourceText.contains(t.getSourceWord()))
+                    .map(t -> {
+                        Glossary g = new Glossary();
+                        g.setSourceWord(t.getSourceWord());
+                        g.setTargetWord(t.getTargetWord());
+                        return g;
+                    })
+                    .toList();
+
+            // 合并：用户术语表优先，AI 术语表补充（不覆盖同名用户术语）
+            if (!aiGlossaryGlossaryTerms.isEmpty()) {
+                Set<String> userTermKeys = glossaryTerms.stream()
+                        .map(Glossary::getSourceWord)
+                        .collect(java.util.stream.Collectors.toSet());
+                for (Glossary aiTerm : aiGlossaryGlossaryTerms) {
+                    if (!userTermKeys.contains(aiTerm.getSourceWord())) {
+                        glossaryTerms.add(aiTerm);
+                    }
+                }
+                log.info("AI 术语表注入: {} 个术语（过滤后）", aiGlossaryGlossaryTerms.size());
+            }
+
+            // 推导小说类型（从项目描述/名称，默认 daily）
+            String novelType = deriveNovelType(project);
+
+            // ========== b~e. 实体一致性 + 占位符保护 + AI 翻译 ==========
+            boolean usePlaceholders = entityConsistencyService.shouldUseConsistency(sourceText);
+            String translated;
+
+            if (usePlaceholders) {
+                try {
+                    // b. 提取实体（按章节隔离，章节超长时自动分段）
+                    List<String> extractedEntities = entityConsistencyService.extractEntitiesSegmented(sourceText, targetLang);
+
+                    if (!extractedEntities.isEmpty()) {
+                        // c. 翻译实体
+                        Map<String, String> entityTranslations = entityConsistencyService.translateEntities(
+                                extractedEntities, targetLang);
+
+                        // d. 构建占位符映射
+                        EntityConsistencyService.EntityMappingContext context = entityConsistencyService.buildMapping(
+                                entityTranslations);
+
+                        // e. 替换占位符
+                        String placeholderText = entityConsistencyService.replaceEntitiesWithPlaceholders(
+                                sourceText, context);
+
+                        // 调用 AI 翻译团队（带占位符保护的文本）
+                        log.info("调用 AI 翻译团队（占位符模式）: chapterId={}, 实体数={}, 原文{}字",
+                                chapterId, entityTranslations.size(), sourceText.length());
+                        translated = teamTranslationService.translateChapter(
+                                placeholderText, novelType, sourceLang, targetLang, glossaryTerms);
+
+                        if (translated != null && !translated.trim().isEmpty()) {
+                            // f. 还原占位符
+                            translated = entityConsistencyService.restorePlaceholders(translated, context);
+                        }
+                    } else {
+                        // 未提取到实体，直接调用 AI 翻译
+                        log.info("未提取到实体，直接调用 AI 翻译: chapterId={}", chapterId);
+                        translated = teamTranslationService.translateChapter(
+                                sourceText, novelType, sourceLang, targetLang, glossaryTerms);
+                    }
+                } catch (Exception e) {
+                    // 实体一致性失败，降级为普通 AI 翻译
+                    log.warn("实体一致性处理失败，降级为普通 AI 翻译: chapterId={}, error={}", chapterId, e.getMessage());
+                    translated = teamTranslationService.translateChapter(
+                            sourceText, novelType, sourceLang, targetLang, glossaryTerms);
+                }
+            } else {
+                // 短文本，不启用实体一致性
+                log.info("短文本，直接调用 AI 翻译: chapterId={}", chapterId);
+                translated = teamTranslationService.translateChapter(
+                        sourceText, novelType, sourceLang, targetLang, glossaryTerms);
+            }
+
+            if (translated == null || translated.trim().isEmpty()) {
+                throw new RuntimeException("AI 翻译团队返回结果为空");
+            }
+
+            // ========== g. 保存到缓存 ==========
+            cacheService.putCache(baseCacheKey, sourceText, translated, sourceLang, targetLang, "ai-team", "team");
+            log.info("翻译结果已写入缓存: baseCacheKey={}", baseCacheKey);
+
+            // ========== g.1. 存储到 RAG 翻译记忆 ==========
+            ragTranslationService.storeTranslationMemory(
+                    sourceText, translated, targetLang, "ai-team", userId);
+
+            // ========== g.2. 维护 AI 术语表：提取实体并保存 ==========
+            try {
+                List<String> entities = entityConsistencyService.extractEntitiesSegmented(sourceText, targetLang);
+                if (!entities.isEmpty()) {
+                    Map<String, String> entityTranslations = entityConsistencyService.translateEntities(entities, targetLang);
+                    String contextExcerpt = sourceText.length() > 200 ? sourceText.substring(0, 200) : sourceText;
+                    for (Map.Entry<String, String> entry : entityTranslations.entrySet()) {
+                        aiGlossaryService.addTerm(
+                                project.getId(),
+                                entry.getKey(),
+                                entry.getValue(),
+                                contextExcerpt,
+                                null, // entity type unknown
+                                chapter.getId()
+                        );
+                    }
+                    log.info("AI 术语表维护完成: chapterId={}, 提取{}个实体", chapterId, entityTranslations.size());
+                }
+            } catch (Exception e) {
+                log.warn("AI 术语表维护失败: {}", e.getMessage());
+            }
+
+            // ========== h. 标记为 SUBMITTED（待审校） ==========
+            applyTranslationResult(chapter, sourceText, translated, false);
+
+            log.info("章节翻译完成（待审校）: chapterId={}, 原文{}字, 译文{}字",
                     chapterId, sourceText.length(), translated.length());
             return true;
 
         } catch (Exception e) {
             log.error("章节翻译异常: chapterId={}, error={}", chapterId, e.getMessage(), e);
-            chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
-            chapter.setReviewComment("翻译异常: " + e.getMessage());
+            int retryCount = getRetryCount(chapter);
+            if (retryCount >= MAX_RETRY_COUNT) {
+                log.error("章节 {} 已达到最大重试次数 {}，停止自动重试", chapterId, MAX_RETRY_COUNT);
+                chapter.setStatus(ChapterTaskStatus.REJECTED.getValue());
+                chapter.setReviewComment("翻译异常（已重试 " + retryCount + " 次）: " + e.getMessage());
+            } else {
+                chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+                chapter.setReviewComment("翻译异常，等待重试（第 " + (retryCount + 1) + " 次）: " + e.getMessage());
+            }
             chapterTaskMapper.updateById(chapter);
             return false;
         }
+    }
+
+    /**
+     * 恢复上次中断的翻译：将 TRANSLATING 状态的章节回退到 UNASSIGNED
+     */
+    private void recoverStuckChapters(Long projectId) {
+        List<CollabChapterTask> stuckChapters = chapterTaskMapper.selectByProjectIdAndStatus(
+                projectId, ChapterTaskStatus.TRANSLATING.getValue());
+
+        if (stuckChapters.isEmpty()) {
+            return;
+        }
+
+        log.info("发现 {} 个翻译中断的章节，回退到待翻译状态", stuckChapters.size());
+        for (CollabChapterTask chapter : stuckChapters) {
+            // 检查重试次数
+            int retryCount = getRetryCount(chapter);
+            if (retryCount >= MAX_RETRY_COUNT) {
+                log.warn("章节 {} 已重试 {} 次，跳过自动翻译", chapter.getId(), retryCount);
+                continue;
+            }
+            // 增加重试计数并回退状态
+            incrementRetryCount(chapter);
+            chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+            chapter.setReviewComment("翻译中断，自动重试（第 " + (retryCount + 1) + " 次）");
+            chapterTaskMapper.updateById(chapter);
+            log.info("章节 {} 回退到 UNASSIGNED，准备重试", chapter.getId());
+        }
+    }
+
+    /**
+     * 获取章节重试次数
+     */
+    private int getRetryCount(CollabChapterTask chapter) {
+        return retryCounterMap.getOrDefault(chapter.getId(), 0);
+    }
+
+    /**
+     * 增加章节重试次数
+     */
+    private void incrementRetryCount(CollabChapterTask chapter) {
+        retryCounterMap.merge(chapter.getId(), 1, Integer::sum);
+    }
+
+    /**
+     * 构建基础缓存键：SHA256(sourceText)[:16] + "_" + targetLang（不含模式标签）
+     */
+    private String buildBaseCacheKey(String sourceText, String targetLang) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(sourceText.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 8; i++) { // 8 bytes = 16 hex chars
+                hex.append(String.format("%02x", hash[i]));
+            }
+            return hex.toString() + "_" + targetLang;
+        } catch (Exception e) {
+            // fallback: 使用 hashCode
+            log.warn("SHA-256 计算失败，使用 fallback cacheKey: {}", e.getMessage());
+            return Math.abs(sourceText.hashCode()) + "_" + targetLang;
+        }
+    }
+
+    /**
+     * 构建缓存键：SHA256(sourceText)[:16] + "_" + targetLang
+     * @deprecated 使用 {@link #buildBaseCacheKey(String, String)} 替代
+     */
+    @Deprecated
+    private String buildCacheKey(String sourceText, String targetLang) {
+        return buildBaseCacheKey(sourceText, targetLang);
+    }
+
+    /**
+     * 加载项目所有者的术语表中在原文中出现的词条
+     */
+    private List<Glossary> loadGlossaryTermsForProject(Long userId, String sourceText) {
+        if (userId == null) {
+            return List.of();
+        }
+
+        try {
+            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Glossary> query =
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+            query.eq(Glossary::getUserId, userId);
+            List<Glossary> allTerms = glossaryMapper.selectList(query);
+
+            // 过滤只保留在原文中出现的术语
+            return allTerms.stream()
+                    .filter(term -> term.getSourceWord() != null && sourceText.contains(term.getSourceWord()))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("加载术语表失败: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 从项目信息推导小说类型
+     */
+    private String deriveNovelType(CollabProject project) {
+        if (project == null) {
+            return "daily";
+        }
+
+        String description = project.getDescription();
+        if (description == null || description.isBlank()) {
+            return "daily";
+        }
+
+        // 简单的关键词匹配推导类型
+        String lower = description.toLowerCase();
+        if (lower.contains("fantasy") || lower.contains("奇幻") || lower.contains("玄幻")) {
+            return "fantasy";
+        }
+        if (lower.contains("romance") || lower.contains("言情") || lower.contains("恋爱")) {
+            return "romance";
+        }
+        if (lower.contains("scifi") || lower.contains("科幻")) {
+            return "scifi";
+        }
+        if (lower.contains("mystery") || lower.contains("悬疑") || lower.contains("推理")) {
+            return "mystery";
+        }
+        if (lower.contains("horror") || lower.contains("恐怖")) {
+            return "horror";
+        }
+        if (lower.contains("daily") || lower.contains("日常") || lower.contains("生活")) {
+            return "daily";
+        }
+
+        return "daily";
+    }
+
+    /**
+     * 应用翻译结果到章节实体
+     */
+    private void applyTranslationResult(CollabChapterTask chapter, String sourceText, String translated, boolean fromCache) {
+        chapter.setTargetText(translated);
+        chapter.setTargetWordCount(translated.length());
+        chapter.setSourceWordCount(sourceText.length());
+
+        if (fromCache) {
+            // 缓存命中直接标记为已完成（跳过审校流程）
+            chapter.setProgress(100);
+            chapter.setStatus(ChapterTaskStatus.COMPLETED.getValue());
+            chapter.setCompletedTime(LocalDateTime.now());
+        } else {
+            // AI 新翻译：标记为 SUBMITTED（待审校）
+            chapter.setProgress(80);
+            chapter.setStatus(ChapterTaskStatus.SUBMITTED.getValue());
+            chapter.setSubmittedTime(LocalDateTime.now());
+        }
+
+        chapterTaskMapper.updateById(chapter);
     }
 
     /**

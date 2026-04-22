@@ -35,6 +35,11 @@ public class EntityConsistencyService {
     /** 文本超过此字符数才启用实体一致性 */
     private static final int MIN_TEXT_LENGTH = 500;
 
+    /** 文本超过此字符数时分段提取实体 */
+    private static final int SEGMENT_EXTRACTION_THRESHOLD = 5000;
+    /** 分段提取的目标段大小（字符数） */
+    private static final int ENTITY_SEGMENT_SIZE = 3000;
+
     /** 禁用代理的 ProxySelector，确保内部 Docker 服务直连 */
     private static final java.net.ProxySelector NO_PROXY_SELECTOR = new java.net.ProxySelector() {
         @Override
@@ -78,8 +83,8 @@ public class EntityConsistencyService {
             // 1. 先从文档缓存获取已有的实体映射
             Map<String, String> cachedEntities = documentEntityCache.getEntityMap(userId, documentId);
 
-            // 2. 调用 Python 服务提取实体
-            List<String> extractedEntities = extractEntities(sourceText, targetLang);
+            // 2. 分段提取实体（长文本自动分段）
+            List<String> extractedEntities = extractEntitiesSegmented(sourceText, targetLang);
 
             // 3. 合并术语库：如果用户启用了术语库，提取术语库中的译法
             Map<String, String> glossaryTerms = loadGlossaryTerms(userId, sourceText);
@@ -154,10 +159,135 @@ public class EntityConsistencyService {
         }
     }
 
+    // ==================== 文本分段与分段实体提取 ====================
+
     /**
-     * 调用 Python /extract-entities 提取实体
+     * 将长文本按段落边界切分为多个片段，用于分段实体提取
+     *
+     * 规则：
+     * - 文本 <= SEGMENT_EXTRACTION_THRESHOLD (5000) 字：不分段，返回单片段
+     * - 文本 > 5000 字：按 ENTITY_SEGMENT_SIZE (3000) 字分段
+     * - 切分点在段落边界（\n\n）或句子边界（。！？\n）
+     * - 不破坏原有文字完整性
+     *
+     * @param text 原文
+     * @return 分段后的文本列表
      */
-    private List<String> extractEntities(String text, String targetLang) throws Exception {
+    public List<String> splitTextForEntityExtraction(String text) {
+        if (text == null || text.length() <= SEGMENT_EXTRACTION_THRESHOLD) {
+            return List.of(text != null ? text : "");
+        }
+
+        List<String> segments = new ArrayList<>();
+        String[] paragraphs = text.split("(?<=\n\n)");  // 保留分隔符
+        StringBuilder current = new StringBuilder();
+
+        for (String para : paragraphs) {
+            if (current.length() + para.length() > ENTITY_SEGMENT_SIZE && current.length() > 0) {
+                // 当前段已满，检查是否能在句子边界切分
+                String segment = current.toString();
+                if (segment.length() > ENTITY_SEGMENT_SIZE * 1.5) {
+                    // 如果当前段远超目标大小，尝试在句子边界回退切分
+                    segments.addAll(splitAtSentenceBoundary(segment));
+                } else {
+                    segments.add(segment);
+                }
+                current = new StringBuilder();
+            }
+            current.append(para);
+        }
+
+        // 处理剩余内容
+        if (current.length() > 0) {
+            String remaining = current.toString();
+            if (remaining.length() > ENTITY_SEGMENT_SIZE * 1.5) {
+                segments.addAll(splitAtSentenceBoundary(remaining));
+            } else {
+                segments.add(remaining);
+            }
+        }
+
+        // 如果分段后只剩一个空段，返回原文
+        if (segments.isEmpty()) {
+            return List.of(text);
+        }
+
+        log.info("文本分段: 原文{}字, 分为{}段", text.length(), segments.size());
+        return segments;
+    }
+
+    /**
+     * 在句子边界切分超长片段
+     * 句子边界：。！？\n
+     */
+    private List<String> splitAtSentenceBoundary(String text) {
+        List<String> parts = new ArrayList<>();
+        // 按句子边界切分
+        String[] sentences = text.split("(?<=[。！？\n])");
+        StringBuilder current = new StringBuilder();
+
+        for (String sentence : sentences) {
+            if (current.length() + sentence.length() > ENTITY_SEGMENT_SIZE && current.length() > 0) {
+                parts.add(current.toString());
+                current = new StringBuilder();
+            }
+            current.append(sentence);
+        }
+
+        if (current.length() > 0) {
+            parts.add(current.toString());
+        }
+
+        return parts.isEmpty() ? List.of(text) : parts;
+    }
+
+    /**
+     * 分段提取实体（适用于长文本）
+     *
+     * 逻辑：
+     * 1. 先调用 splitTextForEntityExtraction 分段
+     * 2. 对每个分段调用 Python /extract-entities
+     * 3. 合并所有分段的实体结果（去重）
+     *
+     * @param text       原文
+     * @param targetLang 目标语言
+     * @return 去重后的实体列表
+     */
+    public List<String> extractEntitiesSegmented(String text, String targetLang) {
+        List<String> segments = splitTextForEntityExtraction(text);
+
+        if (segments.size() == 1) {
+            // 不分段，直接提取
+            try {
+                return extractEntities(segments.get(0), targetLang);
+            } catch (Exception e) {
+                log.warn("实体提取失败: {}", e.getMessage());
+                return Collections.emptyList();
+            }
+        }
+
+        Set<String> allEntities = new LinkedHashSet<>();
+        for (int i = 0; i < segments.size(); i++) {
+            try {
+                List<String> segmentEntities = extractEntities(segments.get(i), targetLang);
+                allEntities.addAll(segmentEntities);
+                log.debug("实体提取: 第{}/{}段, 提取{}个实体", i + 1, segments.size(), segmentEntities.size());
+            } catch (Exception e) {
+                log.warn("实体提取: 第{}/{}段失败: {}", i + 1, segments.size(), e.getMessage());
+            }
+        }
+
+        List<String> result = new ArrayList<>(allEntities);
+        log.info("分段实体提取完成: 原文{}字, {}段, 共{}个实体", text.length(), segments.size(), result.size());
+        return result;
+    }
+
+    // ==================== 原有方法 ====================
+
+    /**
+     * 调用 Python /extract-entities 提取实体（公开方法，供外部调用）
+     */
+    public List<String> extractEntities(String text, String targetLang) throws Exception {
         String baseUrl = pythonTranslateUrl.replace("/translate", "");
         String url = baseUrl + "/extract-entities";
 
@@ -197,9 +327,9 @@ public class EntityConsistencyService {
     }
 
     /**
-     * 调用 Python /translate-entities 批量翻译实体
+     * 调用 Python /translate-entities 批量翻译实体（公开方法，供外部调用）
      */
-    private Map<String, String> translateEntities(List<String> entities, String targetLang) throws Exception {
+    public Map<String, String> translateEntities(List<String> entities, String targetLang) throws Exception {
         String baseUrl = pythonTranslateUrl.replace("/translate", "");
         String url = baseUrl + "/translate-entities";
 
@@ -299,9 +429,9 @@ public class EntityConsistencyService {
     }
 
     /**
-     * 构建占位符映射上下文
+     * 构建占位符映射上下文（公开方法，供外部调用）
      */
-    private EntityMappingContext buildMapping(Map<String, String> entityTranslations) {
+    public EntityMappingContext buildMapping(Map<String, String> entityTranslations) {
         List<EntityMapping> mappings = new ArrayList<>();
         Map<String, String> entityToPlaceholder = new LinkedHashMap<>();
         int index = 1;
@@ -323,10 +453,10 @@ public class EntityConsistencyService {
     }
 
     /**
-     * 原文中替换实体为占位符
+     * 原文中替换实体为占位符（公开方法，供外部调用）
      * 注意：按实体长度降序替换，避免短实体先替换导致长实体无法匹配
      */
-    private String replaceEntitiesWithPlaceholders(String text, EntityMappingContext context) {
+    public String replaceEntitiesWithPlaceholders(String text, EntityMappingContext context) {
         String result = text;
         // 按实体长度降序
         List<String> sortedEntities = context.entityToPlaceholder.keySet().stream()
@@ -369,7 +499,7 @@ public class EntityConsistencyService {
             query.eq(Glossary::getUserId, userId);
             List<Glossary> allTerms = glossaryMapper.selectList(query);
 
-            // 只保留在原文中实际出现的术语
+            // 只在原文中实际出现的术语
             for (Glossary term : allTerms) {
                 if (term.getSourceWord() != null && sourceText.contains(term.getSourceWord())) {
                     terms.put(term.getSourceWord(), term.getTargetWord());
@@ -383,9 +513,9 @@ public class EntityConsistencyService {
     }
 
     /**
-     * 译文中将占位符替换为翻译后的实体名
+     * 译文中将占位符替换为翻译后的实体名（公开方法，供外部调用）
      */
-    private String restorePlaceholders(String text, EntityMappingContext context) {
+    public String restorePlaceholders(String text, EntityMappingContext context) {
         String result = text;
         for (EntityMapping mapping : context.mappings) {
             result = result.replace(mapping.getPlaceholder(), mapping.getTranslatedText());
@@ -419,9 +549,9 @@ public class EntityConsistencyService {
     }
 
     /**
-     * 占位符映射上下文
+     * 占位符映射上下文（公开静态类，供外部使用）
      */
-    private record EntityMappingContext(
+    public record EntityMappingContext(
             List<EntityMapping> mappings,
             Map<String, String> entityToPlaceholder
     ) {}

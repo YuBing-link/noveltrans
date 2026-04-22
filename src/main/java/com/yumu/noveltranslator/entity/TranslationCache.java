@@ -45,6 +45,11 @@ public class TranslationCache {
     private String engine;
 
     /**
+     * 翻译模式（fast / expert / team）
+     */
+    private String mode;
+
+    /**
      * 过期时间
      */
     private LocalDateTime expireTime;

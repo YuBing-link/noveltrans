@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,6 +71,17 @@ public class TranslationCacheService {
 
     private static final long REDIS_JITTER_SECONDS = 60;              // Redis 过期时间抖动 ±60 秒
     private static final long DB_JITTER_HOURS = 2;                    // 数据库过期时间抖动 ±2 小时
+
+    // ==================== 模式缓存层级 ====================
+
+    /**
+     * 模式缓存层级：查询顺序
+     */
+    private static final Map<String, List<String>> MODE_CACHE_HIERARCHY = Map.of(
+        "fast", List.of("team", "expert", "fast"),
+        "expert", List.of("team", "expert"),
+        "team", List.of("team")
+    );
 
     // ==================== 缓存击穿防护 ====================
 
@@ -165,6 +177,31 @@ public class TranslationCacheService {
     }
 
     /**
+     * 根据翻译模式获取缓存
+     * 按模式层级依次搜索：fast→expert→team, expert→team, team
+     *
+     * @param cacheKey    基础缓存键（不含模式标签）
+     * @param currentMode 当前翻译模式（fast/expert/team）
+     * @return 缓存的翻译结果，null 表示无缓存
+     */
+    public String getCacheByMode(String cacheKey, String currentMode) {
+        List<String> modesToSearch = MODE_CACHE_HIERARCHY.getOrDefault(
+            currentMode != null ? currentMode : "fast", List.of("fast"));
+
+        for (String mode : modesToSearch) {
+            String modeKey = cacheKey + "_" + mode;
+            String result = getCache(modeKey);
+            if (result != null) {
+                log.debug("模式缓存命中: mode={}, key={}", mode, modeKey);
+                return result;
+            }
+        }
+
+        log.debug("模式缓存未命中: currentMode={}, 搜索模式={}", currentMode, modesToSearch);
+        return null;
+    }
+
+    /**
      * 对同一 key 加锁，防止缓存击穿
      */
     private String loadWithLock(String cacheKey, String redisKey, java.util.function.Supplier<String> loader) {
@@ -220,6 +257,23 @@ public class TranslationCacheService {
 
         // 3. 异步写入 L3 数据库（带随机抖动防雪崩）
         saveToDatabaseAsync(cacheKey, sourceText, targetText, sourceLang, targetLang, engine);
+    }
+
+    /**
+     * 保存翻译缓存到 L1 + L2 + L3（带模式标签）
+     *
+     * @param cacheKey   基础缓存键（不含模式标签）
+     * @param sourceText 源文本
+     * @param targetText 目标文本
+     * @param sourceLang 源语言
+     * @param targetLang 目标语言
+     * @param engine     翻译引擎
+     * @param mode       翻译模式（fast/expert/team），为空则不附加模式标签
+     */
+    public void putCache(String cacheKey, String sourceText, String targetText,
+                         String sourceLang, String targetLang, String engine, String mode) {
+        String finalKey = (mode != null && !mode.isBlank()) ? cacheKey + "_" + mode : cacheKey;
+        putCache(finalKey, sourceText, targetText, sourceLang, targetLang, engine);
     }
 
     /**

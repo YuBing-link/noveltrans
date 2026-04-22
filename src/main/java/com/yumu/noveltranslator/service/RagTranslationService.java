@@ -102,6 +102,84 @@ public class RagTranslationService {
     }
 
     /**
+     * 查询相似翻译记忆（指定 userId，用于后台任务等非 HTTP 上下文场景）
+     */
+    public RagTranslationResponse searchSimilarWithUser(
+            String sourceText, String targetLang, String engine, Long userId) {
+        if (sourceText == null || sourceText.isBlank() || userId == null) {
+            return buildEmptyResponse();
+        }
+
+        try {
+            // 1. 生成向量
+            float[] queryVector = embeddingService.embed(sourceText);
+            if (queryVector.length == 0) {
+                return buildEmptyResponse();
+            }
+
+            // 2. Redis KNN 查询
+            List<RagTranslationResponse.RagMatch> matches = searchInRedis(queryVector, userId, targetLang);
+
+            if (matches.isEmpty()) {
+                matches = searchFallback(queryVector, userId, targetLang);
+            }
+
+            if (matches.isEmpty()) {
+                return buildEmptyResponse();
+            }
+
+            RagTranslationResponse response = new RagTranslationResponse();
+            response.setMatches(matches);
+
+            RagTranslationResponse.RagMatch best = matches.get(0);
+            if (best.getSimilarity() >= directHitThreshold) {
+                response.setDirectHit(true);
+                response.setTranslation(best.getTargetText());
+                response.setSimilarity(best.getSimilarity());
+                translationMemoryService.incrementUsage(best.getMemoryId());
+                log.info("RAG 直接命中: similarity={}, memoryId={}", best.getSimilarity(), best.getMemoryId());
+            } else if (best.getSimilarity() >= referenceThreshold) {
+                response.setDirectHit(false);
+                response.setSimilarity(best.getSimilarity());
+                log.info("RAG 提供参考: similarity={}", best.getSimilarity());
+            }
+
+            return response;
+        } catch (Exception e) {
+            log.error("RAG 查询失败: {}", e.getMessage(), e);
+            return buildEmptyResponse();
+        }
+    }
+
+    /**
+     * 翻译完成后存储到翻译记忆（带质量筛选，指定 userId，用于后台任务等非 HTTP 上下文场景）
+     */
+    public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine, Long userId) {
+        if (userId == null || sourceText == null || sourceText.isBlank()) {
+            return;
+        }
+
+        // 质量筛选：拒绝低质量翻译
+        String rejectionReason = rejectQuality(sourceText, targetText);
+        if (rejectionReason != null) {
+            log.debug("RAG 质量筛选拦截: reason={}, engine={}, sourceLen={}", rejectionReason, engine, sourceText.length());
+            return;
+        }
+
+        try {
+            translationMemoryService.storeTranslation(sourceText, targetText, "auto", targetLang,
+                    userId, null, engine);
+
+            // 注册到 Redis 向量索引（传入 MySQL 返回的自增 ID）
+            storeToRedisVector(sourceText, targetText, targetLang, userId, engine);
+
+            log.debug("RAG 存储翻译记忆: sourceLen={}, targetLen={}", sourceText.length(), targetText.length());
+        } catch (Exception e) {
+            log.error("RAG 存储翻译记忆失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
      * 翻译完成后存储到翻译记忆（带质量筛选）
      */
     public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine) {

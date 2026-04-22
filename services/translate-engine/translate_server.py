@@ -612,6 +612,81 @@ async def translate_api(req: TranslateRequest):
     )
 
 # =============================================================================
+# 6. AI 翻译团队端点 (Agentscope 多 Agent 协作)
+# =============================================================================
+class TeamTranslateRequest(BaseModel):
+    """AI 翻译团队请求体"""
+
+    text: str = Field(..., description="章节原文")
+    novel_type: str = Field(default="daily", description="小说类型：battle/mystery/daily")
+    source_lang: str = Field(default="Japanese", description="源语言")
+    target_lang: str = Field(default="Chinese", description="目标语言")
+    glossary_terms: list[dict[str, str]] | None = Field(
+        default=None,
+        description="术语表 [{source: '', target: '', note: ''}]",
+    )
+    placeholders: dict[str, str] | None = Field(
+        default=None,
+        description="占位符映射，如 {'[{1}]': '已翻译的专有名词'}",
+    )
+
+
+class TeamTranslateResponse(BaseModel):
+    """AI 翻译团队响应体"""
+
+    code: int = Field(200, description="状态码")
+    data: str = Field("", description="翻译后的文本")
+    cost_ms: float = Field(0, description="耗时（毫秒）")
+    novel_type: str = Field("", description="使用的提示词风格")
+    chunk_count: int = Field(0, description="分段数量")
+
+
+@app.post("/translate-team")
+async def translate_team(req: TeamTranslateRequest):
+    """
+    AI 翻译团队端点：使用 agentscope 多 Agent 协作翻译。
+
+    Java 端传入章节原文、小说类型、术语表，Python 端通过 MsgHub 群聊协作
+    完成翻译、审校、润色，返回最终译文。
+    """
+    start_time = time.perf_counter()
+
+    try:
+        from agents.pipeline import translate_chapter
+
+        result = translate_chapter(
+            text=req.text,
+            novel_type=req.novel_type,
+            glossary_terms=req.glossary_terms,
+            source_lang=req.source_lang,
+            target_lang=req.target_lang,
+            placeholders=req.placeholders,
+        )
+
+        cost_ms = (time.perf_counter() - start_time) * 1000
+        # 估算分段数量（pipeline 内部 chunk_size=4000）
+        chunk_count = max(1, len(req.text) // 4000 + (1 if len(req.text) % 4000 else 0))
+
+        return TeamTranslateResponse(
+            code=200,
+            data=result,
+            cost_ms=round(cost_ms, 2),
+            novel_type=req.novel_type,
+            chunk_count=chunk_count,
+        )
+
+    except ImportError:
+        logger.error("agentscope 模块未安装或 agents 目录不存在")
+        raise HTTPException(status_code=500, detail="AI 翻译团队模块未就绪")
+    except Exception as e:
+        cost_ms = (time.perf_counter() - start_time) * 1000
+        logger.error(f"AI 翻译团队翻译失败: {e}")
+        raise HTTPException(
+            status_code=503, detail=f"AI 翻译团队翻译失败: {str(e)}"
+        )
+
+
+# =============================================================================
 # 7. 启动入口
 # =============================================================================
 if __name__ == "__main__":
