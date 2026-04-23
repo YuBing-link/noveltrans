@@ -197,6 +197,12 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new IllegalArgumentException("项目不存在: " + projectId);
         }
 
+        // 权限校验：只有项目所有者或成员才能添加章节
+        CollabProjectMember member = collabProjectMemberMapper.selectByProjectAndUser(projectId, userId);
+        if (member == null && !project.getOwnerId().equals(userId)) {
+            throw new IllegalStateException("无权向该项目添加章节");
+        }
+
         // 读取文档内容
         String content;
         try {
@@ -369,7 +375,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      */
     private String generateRandomInviteCode() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去除易混淆字符 I/O/0/1
-        java.util.Random random = new java.util.Random();
+        java.security.SecureRandom random = new java.security.SecureRandom();
         StringBuilder code = new StringBuilder(8);
         for (int i = 0; i < 8; i++) {
             code.append(chars.charAt(random.nextInt(chars.length())));
