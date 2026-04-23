@@ -77,6 +77,14 @@ public class CollabProjectController {
         return Result.ok(null);
     }
 
+    @PostMapping("/projects/{projectId}/invite-code")
+    @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
+    public Result<com.yumu.noveltranslator.service.CollabProjectService.InviteCodeResult> generateInviteCode(@PathVariable Long projectId) {
+        Long userId = SecurityUtil.getRequiredUserId();
+        com.yumu.noveltranslator.service.CollabProjectService.InviteCodeResult result = collabProjectService.generateInviteCode(projectId, userId);
+        return Result.ok(result);
+    }
+
     // ==================== 章节管理 ====================
 
     @PostMapping("/projects/{projectId}/chapters")

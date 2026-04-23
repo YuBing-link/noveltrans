@@ -163,6 +163,22 @@ CREATE TABLE IF NOT EXISTS `translation_cache` (
     INDEX `idx_cache_expire` (`expire_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ==================== 协作邀请码表 ====================
+CREATE TABLE IF NOT EXISTS `collab_invite_code` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `project_id` BIGINT NOT NULL,
+    `code` VARCHAR(20) NOT NULL,
+    `expires_at` DATETIME NOT NULL,
+    `used` TINYINT DEFAULT 0,
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `deleted` TINYINT DEFAULT 0,
+    PRIMARY KEY (`id`),
+    UNIQUE INDEX `idx_invite_code` (`code`),
+    INDEX `idx_invite_project` (`project_id`),
+    INDEX `idx_invite_expire` (`expires_at`),
+    INDEX `idx_invite_deleted` (`deleted`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ==================== 用户偏好设置 ====================
 CREATE TABLE IF NOT EXISTS `user_preference` (
     `id` BIGINT NOT NULL AUTO_INCREMENT,

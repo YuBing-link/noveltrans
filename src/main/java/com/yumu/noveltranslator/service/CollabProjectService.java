@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.service;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabComment;
+import com.yumu.noveltranslator.entity.CollabInviteCode;
 import com.yumu.noveltranslator.entity.CollabProject;
 import com.yumu.noveltranslator.entity.CollabProjectMember;
 import com.yumu.noveltranslator.entity.Document;
@@ -13,6 +14,7 @@ import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabCommentMapper;
+import com.yumu.noveltranslator.mapper.CollabInviteCodeMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
@@ -46,6 +48,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     private final CollabProjectMemberMapper collabProjectMemberMapper;
     private final CollabChapterTaskMapper collabChapterTaskMapper;
     private final CollabCommentMapper collabCommentMapper;
+    private final CollabInviteCodeMapper collabInviteCodeMapper;
     private final DocumentMapper documentMapper;
     private final UserMapper userMapper;
     private final CollabStateMachine collabStateMachine;
@@ -180,6 +183,85 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     }
 
     /**
+     * 将文档章节添加到已有协作项目
+     *
+     * @param userId 用户ID
+     * @param projectId 目标项目ID
+     * @param document 上传的文档
+     * @return 添加的章节数量
+     */
+    @Transactional
+    public int addChaptersToProject(Long userId, Long projectId, Document document) {
+        CollabProject project = getById(projectId);
+        if (project == null) {
+            throw new IllegalArgumentException("项目不存在: " + projectId);
+        }
+
+        // 读取文档内容
+        String content;
+        try {
+            content = Files.readString(Paths.get(document.getPath()), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new RuntimeException("读取文档失败: " + e.getMessage());
+        }
+
+        if (content == null || content.trim().isEmpty()) {
+            throw new RuntimeException("文档内容为空");
+        }
+
+        // 按段落分割
+        String[] paragraphs = content.split("\n+");
+        List<String> chapters = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+
+        for (String p : paragraphs) {
+            String trimmed = p.trim();
+            if (trimmed.isEmpty()) continue;
+            if (current.length() + trimmed.length() > 500 && current.length() > 0) {
+                chapters.add(current.toString().trim());
+                current = new StringBuilder();
+            }
+            current.append(trimmed).append("\n");
+        }
+        if (current.length() > 0) {
+            chapters.add(current.toString().trim());
+        }
+
+        if (chapters.isEmpty()) {
+            chapters.add(content.trim());
+        }
+
+        // 获取当前最大章节号
+        List<CollabChapterTask> existingChapters = collabChapterTaskMapper.selectByProjectId(projectId);
+        int nextChapterNumber = existingChapters.stream()
+                .mapToInt(CollabChapterTask::getChapterNumber)
+                .max()
+                .orElse(0) + 1;
+
+        // 创建章节
+        for (String chapterText : chapters) {
+            CollabChapterTask chapter = new CollabChapterTask();
+            chapter.setProjectId(projectId);
+            chapter.setChapterNumber(nextChapterNumber++);
+            chapter.setTitle("第 " + chapter.getChapterNumber() + " 章");
+            chapter.setSourceText(chapterText);
+            chapter.setTargetText(null);
+            chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+            chapter.setProgress(0);
+            chapter.setSourceWordCount(chapterText.length());
+            collabChapterTaskMapper.insert(chapter);
+        }
+
+        // 更新文档状态
+        document.setStatus(TranslationStatus.PROCESSING.getValue());
+        document.setUpdateTime(java.time.LocalDateTime.now());
+        documentMapper.updateById(document);
+
+        log.info("添加章节到项目: projectId={}, docName={}, chapters={}", projectId, document.getName(), chapters.size());
+        return chapters.size();
+    }
+
+    /**
      * 启动多 Agent 翻译（在事务外调用，确保数据已提交）
      */
     public void startMultiAgentTranslation(Long projectId) {
@@ -259,6 +341,47 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     }
 
     /**
+     * 生成项目邀请码（8位随机码，有效期72小时）
+     */
+    @Transactional
+    public InviteCodeResult generateInviteCode(Long projectId, Long operatorId) {
+        CollabProject project = getById(projectId);
+        if (project == null) {
+            throw new IllegalArgumentException("项目不存在: " + projectId);
+        }
+
+        String code = generateRandomInviteCode();
+        LocalDateTime expiresAt = LocalDateTime.now().plusHours(72);
+
+        CollabInviteCode inviteCode = new CollabInviteCode();
+        inviteCode.setProjectId(projectId);
+        inviteCode.setCode(code);
+        inviteCode.setExpiresAt(expiresAt);
+        inviteCode.setUsed(0);
+        collabInviteCodeMapper.insert(inviteCode);
+
+        log.info("生成邀请码: projectId={}, code={}, expiresAt={}", projectId, code, expiresAt);
+        return new InviteCodeResult(code, expiresAt);
+    }
+
+    /**
+     * 生成8位随机邀请码（大写字母+数字）
+     */
+    private String generateRandomInviteCode() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去除易混淆字符 I/O/0/1
+        java.util.Random random = new java.util.Random();
+        StringBuilder code = new StringBuilder(8);
+        for (int i = 0; i < 8; i++) {
+            code.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        // 确保唯一性，如果重复则重试
+        if (collabInviteCodeMapper.selectByCode(code.toString()) != null) {
+            return generateRandomInviteCode();
+        }
+        return code.toString();
+    }
+
+    /**
      * 邀请成员
      */
     @Transactional
@@ -293,17 +416,53 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      */
     @Transactional
     public ProjectMemberResponse joinByInviteCode(String inviteCode, Long userId) {
-        CollabProjectMember member = collabProjectMemberMapper.selectByInviteCode(inviteCode);
-        if (member == null) {
-            throw new IllegalArgumentException("邀请码无效");
+        // 查询有效邀请码（未过期、未使用）
+        CollabInviteCode codeRecord = collabInviteCodeMapper.selectByValidCode(inviteCode);
+        if (codeRecord == null) {
+            // 进一步检查是否是已过期或已使用
+            CollabInviteCode anyCode = collabInviteCodeMapper.selectByCode(inviteCode);
+            if (anyCode == null) {
+                throw new IllegalArgumentException("邀请码无效");
+            }
+            if (anyCode.getUsed() == 1) {
+                throw new IllegalArgumentException("邀请码已被使用");
+            }
+            if (anyCode.getExpiresAt().isBefore(LocalDateTime.now())) {
+                throw new IllegalArgumentException("邀请码已过期");
+            }
+            throw new IllegalArgumentException("邀请码不可用");
         }
 
+        // 标记为已使用
+        collabInviteCodeMapper.markAsUsed(codeRecord.getId());
+
+        // 检查项目是否存在且为 ACTIVE
+        CollabProject project = getById(codeRecord.getProjectId());
+        if (project == null) {
+            throw new IllegalArgumentException("关联项目不存在");
+        }
+        if (!CollabProjectStatus.ACTIVE.getValue().equals(project.getStatus())) {
+            throw new IllegalStateException("项目当前不可加入");
+        }
+
+        // 检查是否已是成员
+        CollabProjectMember existing = collabProjectMemberMapper.selectByProjectAndUser(codeRecord.getProjectId(), userId);
+        if (existing != null) {
+            throw new IllegalStateException("您已是该项目成员");
+        }
+
+        // 创建成员记录
+        CollabProjectMember member = new CollabProjectMember();
+        member.setProjectId(codeRecord.getProjectId());
+        member.setUserId(userId);
+        member.setRole(ProjectMemberRole.TRANSLATOR.getValue());
+        member.setInviteCode(inviteCode);
         member.setInviteStatus("ACTIVE");
         member.setJoinedTime(LocalDateTime.now());
-        collabProjectMemberMapper.updateById(member);
+        collabProjectMemberMapper.insert(member);
 
-        User user = userMapper.selectById(member.getUserId());
-        log.info("加入项目: userId={}, projectId={}", userId, member.getProjectId());
+        User user = userMapper.selectById(userId);
+        log.info("加入项目: userId={}, projectId={}, inviteCode={}", userId, codeRecord.getProjectId(), inviteCode);
         return toMemberResponse(member, user);
     }
 
@@ -417,4 +576,9 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      * 团队模式创建项目返回结果
      */
     public record TeamProjectCreateResult(Long projectId, String documentName, int chapterCount) {}
+
+    /**
+     * 邀请码生成结果
+     */
+    public record InviteCodeResult(String code, LocalDateTime expiresAt) {}
 }

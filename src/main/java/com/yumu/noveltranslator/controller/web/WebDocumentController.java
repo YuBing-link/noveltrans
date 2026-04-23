@@ -142,7 +142,8 @@ public class WebDocumentController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "sourceLang", defaultValue = "auto") String sourceLang,
             @RequestParam(value = "targetLang") String targetLang,
-            @RequestParam(value = "mode", defaultValue = "fast") String mode) {
+            @RequestParam(value = "mode", defaultValue = "fast") String mode,
+            @RequestParam(value = "projectId", required = false) Long projectId) {
 
         Long userId = SecurityUtil.getRequiredUserId();
 
@@ -154,24 +155,44 @@ public class WebDocumentController {
 
             Document doc = documentService.uploadDocument(userId, file, request);
 
-            // 团队模式：自动创建协作项目并拆分章节
+            // 团队模式：指定已有项目 or 自动创建新项目
             if ("team".equals(mode)) {
-                CollabProjectService.TeamProjectCreateResult result =
-                        collabProjectService.createProjectFromDocument(
-                                userId, doc.getId(), doc.getName(), doc.getPath(), doc.getFileType(),
-                                sourceLang, targetLang);
+                Long targetProjectId;
+                int chapterCount;
 
-                // 事务已提交，启动多 Agent 翻译
-                collabProjectService.startMultiAgentTranslation(result.projectId());
+                if (projectId != null) {
+                    // 关联到已有项目
+                    chapterCount = collabProjectService.addChaptersToProject(userId, projectId, doc);
+                    targetProjectId = projectId;
+                    collabProjectService.startMultiAgentTranslation(targetProjectId);
 
-                DocumentTranslationResponse response = new DocumentTranslationResponse();
-                response.setTaskId(null);
-                response.setDocumentId(doc.getId());
-                response.setDocumentName(doc.getName());
-                response.setStatus(TranslationStatus.PENDING.getValue());
-                response.setProjectId(result.projectId());
-                response.setMessage("团队模式已创建项目，共 " + result.chapterCount() + " 个章节");
-                return Result.ok(response);
+                    DocumentTranslationResponse response = new DocumentTranslationResponse();
+                    response.setTaskId(null);
+                    response.setDocumentId(doc.getId());
+                    response.setDocumentName(doc.getName());
+                    response.setStatus(TranslationStatus.PENDING.getValue());
+                    response.setProjectId(targetProjectId);
+                    response.setMessage("已添加 " + chapterCount + " 个章节到协作项目");
+                    return Result.ok(response);
+                } else {
+                    // 自动创建新项目（原有逻辑）
+                    CollabProjectService.TeamProjectCreateResult result =
+                            collabProjectService.createProjectFromDocument(
+                                    userId, doc.getId(), doc.getName(), doc.getPath(), doc.getFileType(),
+                                    sourceLang, targetLang);
+
+                    // 事务已提交，启动多 Agent 翻译
+                    collabProjectService.startMultiAgentTranslation(result.projectId());
+
+                    DocumentTranslationResponse response = new DocumentTranslationResponse();
+                    response.setTaskId(null);
+                    response.setDocumentId(doc.getId());
+                    response.setDocumentName(doc.getName());
+                    response.setStatus(TranslationStatus.PENDING.getValue());
+                    response.setProjectId(result.projectId());
+                    response.setMessage("团队模式已创建项目，共 " + result.chapterCount() + " 个章节");
+                    return Result.ok(response);
+                }
             }
 
             // fast/expert 模式：创建任务后直接异步启动翻译
