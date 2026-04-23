@@ -78,6 +78,7 @@ function CollabWorkspace() {
   const { success, error: toastError } = useToast();
 
   const chapterId = Number(searchParams.get('chapterId'));
+  const targetLang = searchParams.get('targetLang') || 'zh';
   const [chapter, setChapter] = useState<ChapterTaskResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -205,7 +206,7 @@ function CollabWorkspace() {
         {
           text: sourceText,
           sourceLang: 'auto',
-          targetLang: 'zh',
+          targetLang: targetLang,
           mode: 'ai',
         },
         (chunk) => {
@@ -390,7 +391,7 @@ function CollabWorkspace() {
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 text-xs text-text-tertiary">
             <Languages className="w-3.5 h-3.5" />
-            <span>自动检测 → {getLangName('zh')}</span>
+            <span>自动检测 → {getLangName(targetLang)}</span>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-xs text-text-tertiary">
             <span>原文: {sourceText.length.toLocaleString()} 字符</span>
@@ -650,7 +651,7 @@ function CollabWorkspace() {
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-text-tertiary">目标语言</span>
-                      <span className="text-text-primary">{getLangName('zh')}</span>
+                      <span className="text-text-primary">{getLangName(targetLang)}</span>
                     </div>
                   </div>
                 </div>
@@ -780,7 +781,7 @@ function CollabWorkspace() {
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-text-tertiary">目标语言</span>
-              <span className="text-text-primary">{getLangName('zh')}</span>
+              <span className="text-text-primary">{getLangName(targetLang)}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-text-tertiary">状态</span>

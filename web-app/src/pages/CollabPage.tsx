@@ -601,7 +601,7 @@ function CollabPage() {
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                     {chapter.status === 'TRANSLATING' && chapter.assigneeId === user?.id && (
                       <button
-                        onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}`)}
+                        onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}&targetLang=${project.targetLang}`)}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-accent rounded-button hover:bg-accent-hover transition-button"
                       >
                         <BookOpen className="w-3 h-3" /> 翻译
@@ -609,7 +609,7 @@ function CollabPage() {
                     )}
                     {chapter.status !== 'TRANSLATING' && (
                       <button
-                        onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}`)}
+                        onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}&targetLang=${project.targetLang}`)}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-text-primary border border-border rounded-button hover:bg-surface-secondary transition-button"
                       >
                         <BookOpen className="w-3 h-3" /> 工作台
@@ -1316,14 +1316,14 @@ function ProjectDetailView({
                             </button>
                           )}
                           <button
-                            onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}`)}
+                            onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}&targetLang=${project.targetLang}`)}
                             className="flex items-center gap-1 px-2 py-1 text-xs text-white bg-accent rounded hover:bg-accent-hover transition-button"
                           >
                             <BookOpen className="w-3 h-3" /> 工作台
                           </button>
                           {chapter.status === 'TRANSLATING' && chapter.assigneeId && (
                             <button
-                              onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}`)}
+                              onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}&targetLang=${project.targetLang}`)}
                               className="flex items-center gap-1 px-2 py-1 text-xs text-white bg-accent rounded hover:bg-accent-hover transition-button"
                             >
                               <BookOpen className="w-3 h-3" /> 翻译

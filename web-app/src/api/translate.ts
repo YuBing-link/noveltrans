@@ -47,11 +47,4 @@ export const translateApi = {
     if (params?.mode) formData.append('mode', params.mode);
     return api.upload<{ taskId: string }>('/v1/translate/document/stream', formData);
   },
-  streamDocumentById: (docId: number, params?: { targetLang?: string; mode?: string }) => {
-    const qs = new URLSearchParams();
-    if (params?.targetLang) qs.set('targetLang', params.targetLang);
-    if (params?.mode) qs.set('mode', params.mode);
-    return streamFetch(`/v1/translate/document/stream/${docId}`, {},
-      () => {}, () => {}, () => {});
-  },
 };

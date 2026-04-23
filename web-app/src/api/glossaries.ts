@@ -27,16 +27,9 @@ export const glossaryApi = {
   },
 
   // 导入术语表 CSV
-  importGlossary: async (file: File) => {
-    const token = localStorage.getItem('authToken');
+  importGlossary: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch('/user/glossaries/import', {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData,
-    });
-    if (!res.ok) throw new Error('导入失败');
-    return res.json();
+    return api.upload<null>('/user/glossaries/import', formData);
   },
 };

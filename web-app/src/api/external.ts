@@ -11,7 +11,7 @@ export const externalApi = {
   downloadTask: async (taskId: string) => {
     const token = localStorage.getItem('authToken');
     const res = await fetch(`/v1/external/task/${taskId}/download`, {
-      headers: token ? { 'X-API-Key': token } : {},
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) throw new Error('Download failed');
     return res.blob();

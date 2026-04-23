@@ -50,7 +50,9 @@ function UserCenterPage() {
   );
 }
 
-function ProfileTab({ user, refreshUser }: { user: any; refreshUser: () => void }) {
+import type { AuthUser } from '../context/AuthContext';
+
+function ProfileTab({ user, refreshUser }: { user: AuthUser; refreshUser: () => void }) {
   const { success, error: toastError } = useToast();
   const [username, setUsername] = useState(user?.username || '');
   const [saving, setSaving] = useState(false);

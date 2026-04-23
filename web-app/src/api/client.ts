@@ -72,6 +72,9 @@ export const api = {
       throw new ApiError(body?.code || String(res.status), body?.message || '上传失败', res.status);
     }
     const data: ApiResult<T> = await res.json();
+    if (!data.success) {
+      throw new ApiError(data.code || 'ERROR', data.message || '上传失败');
+    }
     if (data.token) localStorage.setItem('authToken', data.token);
     return data;
   },
