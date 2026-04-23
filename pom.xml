@@ -184,16 +184,14 @@
                         <exclude>com/yumu/noveltranslator/config/**</exclude>
                         <!-- 启动类 -->
                         <exclude>com/yumu/noveltranslator/NovelTranslatorApplication*</exclude>
-                        <!-- MyBatis Mapper 接口（无实现逻辑） -->
-                        <exclude>com/yumu/noveltranslator/mapper/*Mapper*</exclude>
+                        <!-- MyBatis Mapper 接口（无实现逻辑，仅注解/XML SQL） -->
+                        <exclude>com/yumu/noveltranslator/mapper/**</exclude>
                         <!-- 枚举类（仅包含常量定义） -->
                         <exclude>com/yumu/noveltranslator/enums/**</exclude>
                         <!-- 属性配置类 -->
                         <exclude>com/yumu/noveltranslator/properties/**</exclude>
                         <!-- 开发环境数据初始化（仅 dev profile） -->
                         <exclude>com/yumu/noveltranslator/bootstrap/**</exclude>
-                        <!-- 协作模块控制器（未完成开发） -->
-                        <exclude>com/yumu/noveltranslator/controller/collab/**</exclude>
                     </excludes>
                 </configuration>
                 <executions>

@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.security;
 
+import com.yumu.noveltranslator.config.tenant.TenantCleanupInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +29,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
+    private final TenantCleanupInterceptor tenantCleanupInterceptor;
 
     @Bean
     public JwtAuthenticationFilter authenticationTokenFilter() {
@@ -73,6 +75,7 @@ public class SecurityConfig {
 
         http.addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(authenticationTokenFilter(), ApiKeyAuthenticationFilter.class);
+        http.addFilterAfter(tenantCleanupInterceptor, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

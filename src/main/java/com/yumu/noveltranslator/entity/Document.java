@@ -65,6 +65,12 @@ public class Document {
     private String mode;
 
     /**
+     * 租户 ID
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private Long tenantId;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)

@@ -35,6 +35,12 @@ public class ChapterEntityMap {
      */
     private String entityType;
 
+    /**
+     * 租户 ID
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private Long tenantId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

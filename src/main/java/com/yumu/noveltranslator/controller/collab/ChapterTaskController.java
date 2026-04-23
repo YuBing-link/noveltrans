@@ -25,7 +25,6 @@ public class ChapterTaskController {
     private final ChapterTaskService chapterTaskService;
 
     @PutMapping("/chapters/{chapterId}/assign")
-    @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
     public Result<ChapterTaskResponse> assignChapter(@PathVariable Long chapterId,
                                                        @Valid @RequestBody AssignChapterRequest request) {
         Long assignerId = SecurityUtil.getRequiredUserId();
@@ -34,7 +33,6 @@ public class ChapterTaskController {
     }
 
     @PutMapping("/chapters/{chapterId}/submit")
-    @RequireProjectAccess(roles = {ProjectMemberRole.TRANSLATOR, ProjectMemberRole.OWNER})
     public Result<ChapterTaskResponse> submitChapter(@PathVariable Long chapterId,
                                                        @Valid @RequestBody SubmitChapterRequest request) {
         ChapterTaskResponse chapter = chapterTaskService.submitChapter(chapterId, request.getTranslatedText());
@@ -42,7 +40,6 @@ public class ChapterTaskController {
     }
 
     @PutMapping("/chapters/{chapterId}/review")
-    @RequireProjectAccess(roles = {ProjectMemberRole.REVIEWER, ProjectMemberRole.OWNER})
     public Result<ChapterTaskResponse> reviewChapter(@PathVariable Long chapterId,
                                                        @Valid @RequestBody ReviewChapterRequest request) {
         Long reviewerId = SecurityUtil.getRequiredUserId();
@@ -51,9 +48,9 @@ public class ChapterTaskController {
     }
 
     @GetMapping("/chapters/{chapterId}")
-    @RequireProjectAccess
     public Result<ChapterTaskResponse> getChapter(@PathVariable Long chapterId) {
-        ChapterTaskResponse chapter = chapterTaskService.getChapterById(chapterId);
+        Long userId = SecurityUtil.getRequiredUserId();
+        ChapterTaskResponse chapter = chapterTaskService.getChapterById(chapterId, userId);
         return Result.ok(chapter);
     }
 

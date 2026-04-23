@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Glossary;
 import com.yumu.noveltranslator.entity.User;
@@ -247,27 +248,33 @@ public class UserService {
     }
 
     /**
-     * 获取平台统计信息
+     * 获取平台统计信息（跨租户全局统计）
      */
     public PlatformStatsResponse getPlatformStats() {
         PlatformStatsResponse response = new PlatformStatsResponse();
 
-        response.setTotalUsers(userMapper.countActiveUsers());
+        try {
+            TenantContext.setBypassTenant(true);
 
-        LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
-        LocalDateTime monthAgo = LocalDateTime.now().minusMonths(1);
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        response.setActiveUsersWeek(translationHistoryMapper.countActiveUsersAfter(weekAgo));
-        response.setActiveUsersMonth(translationHistoryMapper.countActiveUsersAfter(monthAgo));
-        response.setActiveUsersToday(translationHistoryMapper.countActiveUsersAfter(todayStart));
+            response.setTotalUsers(userMapper.countActiveUsers());
 
-        response.setTotalTranslations(translationHistoryMapper.countAll());
-        response.setTranslationsToday(translationHistoryMapper.countAfter(todayStart));
-        response.setTotalCharacters(translationHistoryMapper.sumAllSourceTextLength());
-        response.setTotalDocumentTranslations(translationHistoryMapper.countDocumentTranslations());
-        response.setTotalGlossaries(glossaryMapper.selectCount(new LambdaQueryWrapper<>()).intValue());
+            LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
+            LocalDateTime monthAgo = LocalDateTime.now().minusMonths(1);
+            LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+            response.setActiveUsersWeek(translationHistoryMapper.countActiveUsersAfter(weekAgo));
+            response.setActiveUsersMonth(translationHistoryMapper.countActiveUsersAfter(monthAgo));
+            response.setActiveUsersToday(translationHistoryMapper.countActiveUsersAfter(todayStart));
 
-        response.setSystemStatus("normal");
+            response.setTotalTranslations(translationHistoryMapper.countAll());
+            response.setTranslationsToday(translationHistoryMapper.countAfter(todayStart));
+            response.setTotalCharacters(translationHistoryMapper.sumAllSourceTextLength());
+            response.setTotalDocumentTranslations(translationHistoryMapper.countDocumentTranslations());
+            response.setTotalGlossaries(glossaryMapper.selectCount(new LambdaQueryWrapper<>()).intValue());
+
+            response.setSystemStatus("normal");
+        } finally {
+            TenantContext.setBypassTenant(false);
+        }
 
         return response;
     }

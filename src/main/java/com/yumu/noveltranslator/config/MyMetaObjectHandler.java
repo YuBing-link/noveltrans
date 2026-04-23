@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.config;
 
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
+import com.yumu.noveltranslator.config.tenant.TenantContext;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.reflection.MetaObject;
 import org.springframework.stereotype.Component;
@@ -16,9 +17,13 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
      */
     @Override
     public void insertFill(MetaObject metaObject) {
-        log.info("开始插入自动填充 createTime...");
         this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
         this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+
+        Long tenantId = TenantContext.getTenantId();
+        if (tenantId != null) {
+            this.strictInsertFill(metaObject, "tenantId", Long.class, tenantId);
+        }
     }
 
     /**
@@ -26,7 +31,6 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
      */
     @Override
     public void updateFill(MetaObject metaObject) {
-        log.info("开始更新自动填充 updateTime...");
         this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
     }
 }

@@ -28,6 +28,12 @@ public class CollabComment {
 
     private Boolean resolved;
 
+    /**
+     * 租户 ID
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private Long tenantId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

@@ -1,8 +1,10 @@
 package com.yumu.noveltranslator.service;
 
 import com.yumu.noveltranslator.dto.*;
+import com.yumu.noveltranslator.entity.Tenant;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.mapper.TenantMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import com.yumu.noveltranslator.util.EmailVerificationCodeUtil;
@@ -27,6 +29,7 @@ import java.util.regex.Pattern;
 public class AuthService implements UserDetailsService {
 
     private final UserMapper userMapper;
+    private final TenantMapper tenantMapper;
     private final JwtUtils jwtUtils;
     private final EmailVerificationCodeUtil emailVerificationCodeUtil;
     private final DeviceTokenService deviceTokenService;
@@ -55,7 +58,7 @@ public class AuthService implements UserDetailsService {
 
             if (user != null) {
                 if (PasswordUtil.verifyPassword(req.getPassword(), user.getPassword())) {
-                    String token = jwtUtils.createToken((long) user.getId(), user.getEmail());
+                    String token = jwtUtils.createToken(user.getId(), user.getEmail(), user.getTenantId());
 
                     User userInfo = new User();
                     userInfo.setId(user.getId());
@@ -180,6 +183,15 @@ public class AuthService implements UserDetailsService {
         newUser.setAvatar(req.getAvatar());
 
         try {
+            // 创建租户
+            Tenant tenant = new Tenant();
+            tenant.setName(req.getUsername() != null ? req.getUsername() + " 的租户" : "Tenant-" + System.currentTimeMillis());
+            tenant.setStatus("ACTIVE");
+            tenant.setMaxUsers(1);
+            tenantMapper.insert(tenant);
+
+            newUser.setTenantId(tenant.getId());
+
             int result = userMapper.insert(newUser);
             if (result > 0) {
                 User registeredUser = new User();
@@ -211,12 +223,19 @@ public class AuthService implements UserDetailsService {
 
         try {
             var decoded = jwtUtils.verifyToken(request.getRefreshToken());
-            Map<String, String> userInfo = jwtUtils.getUserInfoFromToken(request.getRefreshToken());
+            Long userId = decoded.getClaim("userId").asLong();
+            String email = decoded.getClaim("email").asString();
+            Long tenantId = decoded.getClaim("tenantId").asLong();
 
-            String newToken = jwtUtils.createToken(
-                    Long.parseLong(userInfo.get("userId")),
-                    userInfo.get("email")
-            );
+            // Fallback: old tokens without tenantId
+            if (tenantId == null) {
+                User user = userMapper.findByEmail(email);
+                if (user != null) {
+                    tenantId = user.getTenantId();
+                }
+            }
+
+            String newToken = jwtUtils.createToken(userId, email, tenantId);
 
             return Result.okWithToken(null, newToken);
         } catch (Exception e) {

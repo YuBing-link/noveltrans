@@ -8,6 +8,7 @@ import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
+import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.service.state.CollabStateMachine;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,9 @@ class ChapterTaskServiceTest {
     private UserMapper userMapper;
 
     @Mock
+    private CollabProjectMemberMapper projectMemberMapper;
+
+    @Mock
     private CollabStateMachine collabStateMachine;
 
     private ChapterTaskService chapterTaskService;
@@ -48,7 +52,7 @@ class ChapterTaskServiceTest {
     @BeforeEach
     void setUp() {
         chapterTaskService = new ChapterTaskService(
-                chapterTaskMapper, collabProjectMapper, userMapper, collabStateMachine);
+                chapterTaskMapper, collabProjectMapper, userMapper, projectMemberMapper, collabStateMachine);
         // ServiceImpl 需要 baseMapper 才能调用 getById/save/updateById 等方法
         ReflectionTestUtils.setField(chapterTaskService, "baseMapper", chapterTaskMapper);
     }
@@ -147,7 +151,7 @@ class ChapterTaskServiceTest {
             task.setProgress(0);
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
 
-            ChapterTaskResponse resp = chapterTaskService.getChapterById(1L);
+            ChapterTaskResponse resp = chapterTaskService.getChapterById(1L, 1L);
 
             assertNotNull(resp);
             assertEquals(1L, resp.getId());
@@ -159,7 +163,7 @@ class ChapterTaskServiceTest {
             when(chapterTaskMapper.selectById(999L)).thenReturn(null);
 
             assertThrows(IllegalArgumentException.class, () ->
-                    chapterTaskService.getChapterById(999L));
+                    chapterTaskService.getChapterById(999L, 1L));
         }
     }
 

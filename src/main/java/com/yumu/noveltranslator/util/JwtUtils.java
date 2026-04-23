@@ -31,18 +31,27 @@ public class JwtUtils {
      * 生成 Token
      * @param userId   用户 ID
      * @param email   用户邮箱
+     * @param tenantId 租户 ID
      * @return String
      */
-    public String createToken(Long userId, String email) {
+    public String createToken(Long userId, String email, Long tenantId) {
         Date date = new Date(System.currentTimeMillis() + expireTime);
         Algorithm algorithm = Algorithm.HMAC256(secret);
 
         return JWT.create()
-                .withClaim("userId", userId)      // 将用户 ID 存入载荷
-                .withClaim("email", email)        // 将用户邮箱存入载荷
-                .withIssuedAt(new Date())         // 签发时间
-                .withExpiresAt(date)              // 过期时间
-                .sign(algorithm);                 // 签名
+                .withClaim("userId", userId)
+                .withClaim("email", email)
+                .withClaim("tenantId", tenantId)
+                .withIssuedAt(new Date())
+                .withExpiresAt(date)
+                .sign(algorithm);
+    }
+
+    /**
+     * 生成 Token（向后兼容，使用 userId 作为 tenantId）
+     */
+    public String createToken(Long userId, String email) {
+        return createToken(userId, email, userId);
     }
 
     /**
@@ -81,5 +90,13 @@ public class JwtUtils {
     public String getEmailFromToken(String token) {
         DecodedJWT jwt = verifyToken(token);
         return jwt.getClaim("email").asString();
+    }
+
+    /**
+     * 从 Token 中获取租户 ID
+     */
+    public Long getTenantIdFromToken(String token) {
+        DecodedJWT jwt = verifyToken(token);
+        return jwt.getClaim("tenantId").asLong();
     }
 }

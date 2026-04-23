@@ -4,6 +4,7 @@ import com.auth0.jwt.interfaces.DecodedJWT;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.mapper.TenantMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import com.yumu.noveltranslator.util.EmailVerificationCodeUtil;
@@ -35,6 +36,9 @@ class AuthServiceTest {
     private UserMapper userMapper;
 
     @Mock
+    private TenantMapper tenantMapper;
+
+    @Mock
     private JwtUtils jwtUtils;
 
     @Mock
@@ -47,7 +51,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userMapper, jwtUtils, emailVerificationCodeUtil, deviceTokenService);
+        authService = new AuthService(userMapper, tenantMapper, jwtUtils, emailVerificationCodeUtil, deviceTokenService);
     }
 
     @Nested

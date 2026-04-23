@@ -21,6 +21,12 @@ public class QuotaUsage {
 
     private Long charactersUsed;
 
+    /**
+     * 租户 ID
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private Long tenantId;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

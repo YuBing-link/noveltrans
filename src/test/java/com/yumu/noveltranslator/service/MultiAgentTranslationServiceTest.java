@@ -8,6 +8,7 @@ import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
+import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,19 +49,22 @@ class MultiAgentTranslationServiceTest {
     private TranslationTaskMapper translationTaskMapper;
 
     @Mock
-    private UserLevelThrottledTranslationClient translationClient;
+    private TeamTranslationService teamTranslationService;
 
     @Mock
     private TranslationCacheService cacheService;
 
     @Mock
-    private RagTranslationService ragTranslationService;
-
-    @Mock
     private EntityConsistencyService entityConsistencyService;
 
     @Mock
-    private TranslationPostProcessingService postProcessingService;
+    private GlossaryMapper glossaryMapper;
+
+    @Mock
+    private RagTranslationService ragTranslationService;
+
+    @Mock
+    private AiGlossaryService aiGlossaryService;
 
     private MultiAgentTranslationService service;
 
@@ -68,8 +72,8 @@ class MultiAgentTranslationServiceTest {
     void setUp() {
         service = new MultiAgentTranslationService(
                 chapterTaskMapper, collabProjectMapper, documentMapper, translationTaskMapper,
-                translationClient, cacheService, ragTranslationService,
-                entityConsistencyService, postProcessingService);
+                teamTranslationService, cacheService, entityConsistencyService,
+                glossaryMapper, ragTranslationService, aiGlossaryService);
     }
 
     @Nested

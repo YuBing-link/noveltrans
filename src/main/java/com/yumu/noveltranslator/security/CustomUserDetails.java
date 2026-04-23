@@ -72,4 +72,8 @@ public class CustomUserDetails implements UserDetails {
     public String getUserLevel() {
         return user.getUserLevel();
     }
+
+    public Long getTenantId() {
+        return user.getTenantId();
+    }
 }

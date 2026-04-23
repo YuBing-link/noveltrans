@@ -59,6 +59,12 @@ public class User {
     private String status;
 
     /**
+     * 租户 ID
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private Long tenantId;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)

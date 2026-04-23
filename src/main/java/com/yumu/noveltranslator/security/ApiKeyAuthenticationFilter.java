@@ -1,7 +1,9 @@
 package com.yumu.noveltranslator.security;
 
+import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.entity.ApiKey;
 import com.yumu.noveltranslator.mapper.ApiKeyMapper;
+import com.yumu.noveltranslator.mapper.UserMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,6 +34,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     @Autowired
     private ApiKeyMapper apiKeyMapper;
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -74,6 +79,12 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         // 在 request attribute 中标记这是 API Key 认证
         request.setAttribute("apiKeyId", apiKey.getId());
         request.setAttribute("authenticatedUserId", apiKey.getUserId());
+
+        // Set tenant context for API Key auth
+        var apiUser = userMapper.selectById(apiKey.getUserId());
+        if (apiUser != null && apiUser.getTenantId() != null) {
+            TenantContext.setTenantId(apiUser.getTenantId());
+        }
 
         chain.doFilter(request, response);
     }

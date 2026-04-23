@@ -23,6 +23,12 @@ public class CollabInviteCode {
     /** 是否已使用: 0-未使用, 1-已使用 */
     private Integer used;
 
+    /**
+     * 租户 ID
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private Long tenantId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

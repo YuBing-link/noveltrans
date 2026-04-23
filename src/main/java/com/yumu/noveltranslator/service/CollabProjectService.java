@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.service;
 
+import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabComment;
@@ -296,13 +297,18 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     }
 
     /**
-     * 获取用户参与的项目列表（包括作为成员）
+     * 获取用户参与的项目列表（包括作为成员，可能跨租户）
      */
     public List<CollabProjectResponse> listByUserId(Long userId) {
-        return collabProjectMapper.selectByMemberUserId(userId)
-                .stream()
-                .map(this::toProjectResponse)
-                .collect(Collectors.toList());
+        try {
+            TenantContext.setBypassTenant(true);
+            return collabProjectMapper.selectByMemberUserId(userId)
+                    .stream()
+                    .map(this::toProjectResponse)
+                    .collect(Collectors.toList());
+        } finally {
+            TenantContext.setBypassTenant(false);
+        }
     }
 
     /**
@@ -418,7 +424,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     }
 
     /**
-     * 通过邀请码加入项目
+     * 通过邀请码加入项目（跨租户操作，需要绕过租户过滤）
      */
     @Transactional
     public ProjectMemberResponse joinByInviteCode(String inviteCode, Long userId) {
@@ -442,34 +448,42 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         // 标记为已使用
         collabInviteCodeMapper.markAsUsed(codeRecord.getId());
 
-        // 检查项目是否存在且为 ACTIVE
-        CollabProject project = getById(codeRecord.getProjectId());
-        if (project == null) {
-            throw new IllegalArgumentException("关联项目不存在");
-        }
-        if (!CollabProjectStatus.ACTIVE.getValue().equals(project.getStatus())) {
-            throw new IllegalStateException("项目当前不可加入");
-        }
+        // 跨租户查询项目和创建成员（邀请码允许不同租户的用户加入同一项目）
+        try {
+            TenantContext.setBypassTenant(true);
 
-        // 检查是否已是成员
-        CollabProjectMember existing = collabProjectMemberMapper.selectByProjectAndUser(codeRecord.getProjectId(), userId);
-        if (existing != null) {
-            throw new IllegalStateException("您已是该项目成员");
+            // 检查项目是否存在且为 ACTIVE
+            CollabProject project = getById(codeRecord.getProjectId());
+            if (project == null) {
+                throw new IllegalArgumentException("关联项目不存在");
+            }
+            if (!CollabProjectStatus.ACTIVE.getValue().equals(project.getStatus())) {
+                throw new IllegalStateException("项目当前不可加入");
+            }
+
+            // 检查是否已是成员
+            CollabProjectMember existing = collabProjectMemberMapper.selectByProjectAndUser(codeRecord.getProjectId(), userId);
+            if (existing != null) {
+                throw new IllegalStateException("您已是该项目成员");
+            }
+
+            // 创建成员记录（成员的 tenant_id 与项目一致）
+            CollabProjectMember member = new CollabProjectMember();
+            member.setProjectId(codeRecord.getProjectId());
+            member.setUserId(userId);
+            member.setRole(ProjectMemberRole.TRANSLATOR.getValue());
+            member.setInviteCode(inviteCode);
+            member.setInviteStatus("ACTIVE");
+            member.setJoinedTime(LocalDateTime.now());
+            member.setTenantId(project.getTenantId()); // 成员的租户与项目一致
+            collabProjectMemberMapper.insert(member);
+
+            User user = userMapper.selectById(userId);
+            log.info("加入项目: userId={}, projectId={}, inviteCode={}", userId, codeRecord.getProjectId(), inviteCode);
+            return toMemberResponse(member, user);
+        } finally {
+            TenantContext.setBypassTenant(false);
         }
-
-        // 创建成员记录
-        CollabProjectMember member = new CollabProjectMember();
-        member.setProjectId(codeRecord.getProjectId());
-        member.setUserId(userId);
-        member.setRole(ProjectMemberRole.TRANSLATOR.getValue());
-        member.setInviteCode(inviteCode);
-        member.setInviteStatus("ACTIVE");
-        member.setJoinedTime(LocalDateTime.now());
-        collabProjectMemberMapper.insert(member);
-
-        User user = userMapper.selectById(userId);
-        log.info("加入项目: userId={}, projectId={}, inviteCode={}", userId, codeRecord.getProjectId(), inviteCode);
-        return toMemberResponse(member, user);
     }
 
     /**

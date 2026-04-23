@@ -3,11 +3,14 @@ package com.yumu.noveltranslator.service;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabProject;
+import com.yumu.noveltranslator.entity.CollabProjectMember;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
+import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
+import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.service.state.CollabStateMachine;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -31,6 +34,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     private final CollabChapterTaskMapper chapterTaskMapper;
     private final CollabProjectMapper collabProjectMapper;
     private final UserMapper userMapper;
+    private final CollabProjectMemberMapper projectMemberMapper;
     private final CollabStateMachine collabStateMachine;
 
     /**
@@ -70,12 +74,16 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     }
 
     /**
-     * 获取章节详情
+     * 获取章节详情（含权限检查）
      */
-    public ChapterTaskResponse getChapterById(Long chapterId) {
+    public ChapterTaskResponse getChapterById(Long chapterId, Long userId) {
         CollabChapterTask task = getById(chapterId);
         if (task == null) {
             throw new IllegalArgumentException("章节不存在: " + chapterId);
+        }
+        com.yumu.noveltranslator.entity.CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
+        if (member == null) {
+            throw new SecurityException("无权访问该章节");
         }
         return toChapterResponse(task);
     }
@@ -88,6 +96,11 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         CollabChapterTask task = getById(chapterId);
         if (task == null) {
             throw new IllegalArgumentException("章节不存在: " + chapterId);
+        }
+        // 权限校验：分配者必须是项目OWNER
+        CollabProjectMember assigner = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), assignerId);
+        if (assigner == null || !ProjectMemberRole.OWNER.getValue().equals(assigner.getRole())) {
+            throw new SecurityException("无权分配章节，只有项目所有者可以分配");
         }
 
         ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());
@@ -137,6 +150,15 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         CollabChapterTask task = getById(chapterId);
         if (task == null) {
             throw new IllegalArgumentException("章节不存在: " + chapterId);
+        }
+        // 权限校验：审核者必须是项目REVIEWER或OWNER
+        CollabProjectMember reviewer = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), reviewerId);
+        if (reviewer == null) {
+            throw new SecurityException("无权访问该项目");
+        }
+        if (!ProjectMemberRole.REVIEWER.getValue().equals(reviewer.getRole())
+                && !ProjectMemberRole.OWNER.getValue().equals(reviewer.getRole())) {
+            throw new SecurityException("无权审核该章节，只有审校或项目所有者可以审核");
         }
 
         ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());

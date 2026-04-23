@@ -2,7 +2,6 @@ package com.yumu.noveltranslator.controller.collab;
 
 import com.yumu.noveltranslator.dto.CommentResponse;
 import com.yumu.noveltranslator.dto.CreateCommentRequest;
-import com.yumu.noveltranslator.security.annotation.RequireProjectAccess;
 import com.yumu.noveltranslator.service.CollabCommentService;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
@@ -25,7 +24,6 @@ public class CollabCommentController {
     private final CollabCommentService collabCommentService;
 
     @PostMapping("/chapters/{chapterTaskId}/comments")
-    @RequireProjectAccess
     public Result<CommentResponse> createComment(@PathVariable Long chapterTaskId,
                                                    @Valid @RequestBody CreateCommentRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
@@ -34,14 +32,13 @@ public class CollabCommentController {
     }
 
     @GetMapping("/chapters/{chapterTaskId}/comments")
-    @RequireProjectAccess
     public Result<List<CommentResponse>> listComments(@PathVariable Long chapterTaskId) {
-        List<CommentResponse> comments = collabCommentService.getCommentsByChapter(chapterTaskId);
+        Long userId = SecurityUtil.getRequiredUserId();
+        List<CommentResponse> comments = collabCommentService.getCommentsByChapter(chapterTaskId, userId);
         return Result.ok(comments, "200");
     }
 
     @PutMapping("/comments/{commentId}/resolve")
-    @RequireProjectAccess
     public Result<Void> resolveComment(@PathVariable Long commentId) {
         Long userId = SecurityUtil.getRequiredUserId();
         collabCommentService.resolveComment(commentId, userId);
@@ -49,7 +46,6 @@ public class CollabCommentController {
     }
 
     @DeleteMapping("/comments/{commentId}")
-    @RequireProjectAccess
     public Result<Void> deleteComment(@PathVariable Long commentId) {
         Long userId = SecurityUtil.getRequiredUserId();
         collabCommentService.deleteComment(commentId, userId);

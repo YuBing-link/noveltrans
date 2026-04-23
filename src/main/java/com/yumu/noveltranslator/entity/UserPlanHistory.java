@@ -20,6 +20,12 @@ public class UserPlanHistory {
 
     private String newPlan;
 
+    /**
+     * 租户 ID
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private Long tenantId;
+
     private LocalDateTime changedAt;
 
     private String note;

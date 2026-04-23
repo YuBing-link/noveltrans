@@ -126,11 +126,11 @@ public class DocumentService {
             doc.setErrorMessage(null);
             doc.setUpdateTime(LocalDateTime.now());
             documentMapper.updateById(doc);
-            // 同时重置关联的翻译任务状态
-            TranslationTask task = translationTaskMapper.selectOne(
+            // 同时重置关联的所有翻译任务状态（避免多任务时 TooManyResultsException）
+            List<TranslationTask> tasks = translationTaskMapper.selectList(
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<TranslationTask>()
                             .eq(TranslationTask::getDocumentId, docId));
-            if (task != null) {
+            for (TranslationTask task : tasks) {
                 task.setStatus("pending");
                 task.setErrorMessage(null);
                 task.setProgress(0);

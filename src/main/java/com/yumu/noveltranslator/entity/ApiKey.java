@@ -27,5 +27,11 @@ public class ApiKey {
 
     private Long totalUsage;
 
+    /**
+     * 租户 ID
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private Long tenantId;
+
     private LocalDateTime createdAt;
 }

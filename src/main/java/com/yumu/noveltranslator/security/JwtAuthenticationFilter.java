@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.security;
 
+import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.util.JwtUtils;
@@ -83,6 +84,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authToken);
+
+            // Set tenant context
+            Long tenantId = decodedJWT.getClaim("tenantId").asLong();
+            if (tenantId == null) {
+                tenantId = user.getTenantId();
+            }
+            if (tenantId != null) {
+                TenantContext.setTenantId(tenantId);
+            }
 
         } catch (TokenExpiredException e) {
             logger.debug("JWT Token 已过期: {}", e.getMessage());

@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.controller.web;
 
 import com.yumu.noveltranslator.dto.*;
+import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import com.yumu.noveltranslator.service.UserService;
 import org.junit.jupiter.api.AfterEach;
@@ -32,11 +33,14 @@ class WebGlossaryControllerTest {
     @org.mockito.Mock
     private UserService userService;
 
+    @org.mockito.Mock
+    private GlossaryMapper glossaryMapper;
+
     private WebGlossaryController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new WebGlossaryController(userService);
+        controller = new WebGlossaryController(userService, glossaryMapper);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

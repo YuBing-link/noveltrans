@@ -1,0 +1,69 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3307/novel_translator?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: "123456"
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: "123456"
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 4
+          max-idle: 2
+          min-idle: 0
+  sql:
+    init:
+      mode: never
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username: test@test.com
+    password: test
+    default-encoding: UTF-8
+  thymeleaf:
+    cache: false
+
+server:
+  port: 18080
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    use-generated-keys: false
+  global-config:
+    db-config:
+      id-type: assign_id
+
+jwt:
+  secret: test-jwt-secret-key-for-integration-tests-only-32chars
+
+mtran:
+  server:
+    host: localhost
+    port: 8989
+
+translation:
+  python:
+    url: http://localhost:8000/translate
+  limit:
+    free-daily-limit: 100
+    pro-daily-limit: 1000
+    free-concurrency-limit: 5
+    pro-concurrency-limit: 20
+    anonymous-concurrency-limit: 3
+  verification:
+    code:
+      validity: 5
+      length: 6
+
+embedding:
+  provider: openai
+  openai:
+    api-key: test-key
+    base-url: https://api.openai.com
+    model: text-embedding-3-small
