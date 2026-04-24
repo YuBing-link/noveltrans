@@ -84,6 +84,7 @@ function CollabPage() {
   // My tasks (top-level)
   const [myChapters, setMyChapters] = useState<ChapterTaskResponse[]>([]);
   const [myChaptersLoading, setMyChaptersLoading] = useState(false);
+  const selectedProject = projects.find(p => p.id === selectedProjectId);
 
   // Modal states
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
@@ -601,7 +602,7 @@ function CollabPage() {
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                     {chapter.status === 'TRANSLATING' && chapter.assigneeId === user?.id && (
                       <button
-                        onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}&targetLang=${project.targetLang}`)}
+                        onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}&targetLang=${selectedProject?.targetLang}`)}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-accent rounded-button hover:bg-accent-hover transition-button"
                       >
                         <BookOpen className="w-3 h-3" /> 翻译
@@ -609,7 +610,7 @@ function CollabPage() {
                     )}
                     {chapter.status !== 'TRANSLATING' && (
                       <button
-                        onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}&targetLang=${project.targetLang}`)}
+                        onClick={() => navigate(`/collab/workspace?chapterId=${chapter.id}&targetLang=${selectedProject?.targetLang}`)}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-text-primary border border-border rounded-button hover:bg-surface-secondary transition-button"
                       >
                         <BookOpen className="w-3 h-3" /> 工作台

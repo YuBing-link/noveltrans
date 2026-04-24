@@ -130,7 +130,7 @@ class TranslationPipelineTest {
             String result = pipeline.execute("Hello", "zh", "google");
 
             assertEquals("RAG翻译结果", result);
-            verify(cacheService).putCache(anyString(), eq("Hello"), eq("RAG翻译结果"), eq("auto"), eq("zh"), eq("google"));
+            verify(cacheService).putCache(anyString(), eq("Hello"), eq("RAG翻译结果"), eq("auto"), eq("zh"), eq("google"), eq(""));
         }
 
         @Test
@@ -149,7 +149,7 @@ class TranslationPipelineTest {
             String result = pipeline.execute("Hello World this is a long text", "zh", "google");
 
             assertEquals("一致性翻译结果", result);
-            verify(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+            verify(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), eq(""));
         }
 
         @Test
@@ -183,7 +183,7 @@ class TranslationPipelineTest {
             String result = pipeline.execute("Hello", "zh", "google");
 
             assertEquals("你好", result);
-            verify(cacheService).putCache(anyString(), eq("Hello"), eq("你好"), eq("auto"), eq("zh"), eq("google"));
+            verify(cacheService).putCache(anyString(), eq("Hello"), eq("你好"), eq("auto"), eq("zh"), eq("google"), eq(""));
         }
 
         @Test

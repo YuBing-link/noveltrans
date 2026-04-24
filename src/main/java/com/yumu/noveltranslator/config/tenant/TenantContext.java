@@ -2,8 +2,9 @@ package com.yumu.noveltranslator.config.tenant;
 
 public final class TenantContext {
 
-    private static final ThreadLocal<Long> CURRENT_TENANT = new ThreadLocal<>();
-    private static final ThreadLocal<Boolean> BYPASS_TENANT = new ThreadLocal<>();
+    // 使用 InheritableThreadLocal 以便虚拟线程继承父线程的租户上下文
+    private static final InheritableThreadLocal<Long> CURRENT_TENANT = new InheritableThreadLocal<>();
+    private static final InheritableThreadLocal<Boolean> BYPASS_TENANT = new InheritableThreadLocal<>();
 
     private TenantContext() {}
 

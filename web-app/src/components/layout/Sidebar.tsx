@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { User, BarChart3, Gauge, Key, Settings } from 'lucide-react';
+import { User, BarChart3, Gauge, Key, Settings, CreditCard } from 'lucide-react';
 
 const navItems = [
   { path: '/user', icon: User, label: '个人信息' },
   { path: '/user/stats', icon: BarChart3, label: '统计数据' },
   { path: '/user/quota', icon: Gauge, label: '配额用量' },
+  { path: '/user/subscription', icon: CreditCard, label: '订阅管理' },
   { path: '/user/api-keys', icon: Key, label: 'API Keys' },
   { path: '/user/preferences', icon: Settings, label: '偏好设置' },
 ];

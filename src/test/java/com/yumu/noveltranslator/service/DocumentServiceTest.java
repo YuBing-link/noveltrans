@@ -178,7 +178,8 @@ class DocumentServiceTest {
             task.setId(1L);
             task.setDocumentId(1L);
             task.setStatus("failed");
-            when(translationTaskMapper.selectOne(any())).thenReturn(task);
+            when(translationTaskMapper.selectList(any())).thenReturn(List.of(task));
+            when(translationTaskMapper.updateById(any())).thenReturn(1);
 
             boolean result = documentService.retryTranslation(1L, 1L);
 

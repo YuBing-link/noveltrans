@@ -141,3 +141,17 @@ management:
     health:
       show-details: always
       show-components: always
+
+# Stripe 支付配置（Test 模式）
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
+  success-url: ${STRIPE_SUCCESS_URL:http://localhost:5173/subscription/result}
+  cancel-url: ${STRIPE_CANCEL_URL:http://localhost:5173/subscription/result?canceled=true}
+  prices:
+    pro:
+      monthly-price-id: ${STRIPE_PRO_MONTHLY_PRICE_ID:price_pro_monthly}
+      yearly-price-id: ${STRIPE_PRO_YEARLY_PRICE_ID:price_pro_yearly}
+    max:
+      monthly-price-id: ${STRIPE_MAX_MONTHLY_PRICE_ID:price_max_monthly}
+      yearly-price-id: ${STRIPE_MAX_YEARLY_PRICE_ID:price_max_yearly}

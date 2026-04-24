@@ -40,7 +40,16 @@ public enum ErrorCodeEnum {
     // Token 相关错误码
     TOKEN_INVALID("T101", "令牌无效或已过期"),
     TOKEN_EXPIRED("T102", "令牌已过期"),
-    TOKEN_MISSING("T103", "缺少令牌");
+    TOKEN_MISSING("T103", "缺少令牌"),
+
+    // 订阅/支付相关错误码
+    SUBSCRIPTION_NOT_FOUND("P001", "订阅不存在"),
+    SUBSCRIPTION_INVALID_PLAN("P002", "无效的套餐类型"),
+    SUBSCRIPTION_ALREADY_ACTIVE("P003", "当前已有活跃订阅"),
+    SUBSCRIPTION_CREATE_CUSTOMER_FAILED("P004", "Stripe 创建客户失败"),
+    SUBSCRIPTION_CREATE_SESSION_FAILED("P005", "创建支付会话失败"),
+    SUBSCRIPTION_CREATE_PORTAL_FAILED("P006", "创建账单管理链接失败"),
+    SUBSCRIPTION_INVALID_BILLING_CYCLE("P007", "无效的计费周期");
 
     private final String code;
     private final String message;

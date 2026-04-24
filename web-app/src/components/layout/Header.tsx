@@ -33,6 +33,9 @@ function Header() {
             <Link to="/" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
               翻译
             </Link>
+            <Link to="/pricing" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
+              定价
+            </Link>
             {isAuthenticated && (
               <>
                 <Link to="/documents" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">

@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.controller.web;
 
 import com.yumu.noveltranslator.dto.*;
+import com.yumu.noveltranslator.entity.Glossary;
 import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import com.yumu.noveltranslator.service.UserService;
@@ -12,11 +13,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -234,6 +237,123 @@ class WebGlossaryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("术语库不存在"));
+        }
+    }
+
+    @Nested
+    @DisplayName("导出术语表为 CSV")
+    class ExportGlossaryTests {
+
+        @Test
+        void 导出CSV成功() throws Exception {
+            setupSecurityContext();
+            GlossaryResponse glossary = createTestGlossary();
+            when(userService.getGlossaryList(1L)).thenReturn(List.of(glossary));
+
+            mockMvc.perform(get("/user/glossaries/export"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"glossary.csv\""))
+                .andExpect(content().contentTypeCompatibleWith("text/csv"));
+        }
+
+        @Test
+        void 导出空列表也返回CSV() throws Exception {
+            setupSecurityContext();
+            when(userService.getGlossaryList(1L)).thenReturn(List.of());
+
+            mockMvc.perform(get("/user/glossaries/export"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"glossary.csv\""));
+        }
+
+        @Test
+        void 导出CSV包含BOM头() throws Exception {
+            setupSecurityContext();
+            GlossaryResponse glossary = createTestGlossary();
+            when(userService.getGlossaryList(1L)).thenReturn(List.of(glossary));
+
+            mockMvc.perform(get("/user/glossaries/export"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.startsWith("﻿")));
+        }
+    }
+
+    @Nested
+    @DisplayName("导入术语表（CSV 上传）")
+    class ImportGlossaryTests {
+
+        @Test
+        void 导入CSV文件成功() throws Exception {
+            setupSecurityContext();
+            String csvContent = "source_word,target_word,remark\nHello,你好,问候词";
+            MockMultipartFile file = new MockMultipartFile(
+                    "file", "glossary.csv", "text/csv", csvContent.getBytes(StandardCharsets.UTF_8));
+
+            when(glossaryMapper.insert(any(Glossary.class))).thenReturn(1);
+
+            mockMvc.perform(multipart("/user/glossaries/import")
+                    .file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value(1));
+        }
+
+        @Test
+        void 空文件返回错误() throws Exception {
+            setupSecurityContext();
+            MockMultipartFile file = new MockMultipartFile(
+                    "file", "glossary.csv", "text/csv", new byte[0]);
+
+            mockMvc.perform(multipart("/user/glossaries/import")
+                    .file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        void 非CSV文件返回错误() throws Exception {
+            setupSecurityContext();
+            MockMultipartFile file = new MockMultipartFile(
+                    "file", "glossary.txt", "text/plain", "not a csv".getBytes(StandardCharsets.UTF_8));
+
+            mockMvc.perform(multipart("/user/glossaries/import")
+                    .file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("仅支持 CSV 文件"));
+        }
+
+        @Test
+        void 导入多行CSV成功() throws Exception {
+            setupSecurityContext();
+            String csvContent = "source_word,target_word,remark\n"
+                    + "Hello,你好,问候词\n"
+                    + "World,世界,名词";
+            MockMultipartFile file = new MockMultipartFile(
+                    "file", "glossary.csv", "text/csv", csvContent.getBytes(StandardCharsets.UTF_8));
+
+            when(glossaryMapper.insert(any(Glossary.class))).thenReturn(1);
+
+            mockMvc.perform(multipart("/user/glossaries/import")
+                    .file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value(2));
+        }
+
+        @Test
+        void 跳过空行() throws Exception {
+            setupSecurityContext();
+            String csvContent = "source_word,target_word,remark\nHello,你好,\n";
+            MockMultipartFile file = new MockMultipartFile(
+                    "file", "glossary.csv", "text/csv", csvContent.getBytes(StandardCharsets.UTF_8));
+
+            when(glossaryMapper.insert(any(Glossary.class))).thenReturn(1);
+
+            mockMvc.perform(multipart("/user/glossaries/import")
+                    .file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
         }
     }
 }

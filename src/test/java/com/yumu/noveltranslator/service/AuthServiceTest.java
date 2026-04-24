@@ -96,7 +96,7 @@ class AuthServiceTest {
             user.setUsername("testuser");
             user.setUserLevel("free");
             when(userMapper.findByEmail("test@test.com")).thenReturn(user);
-            when(jwtUtils.createToken(1L, "test@test.com")).thenReturn("jwt-token");
+            when(jwtUtils.createToken(eq(1L), eq("test@test.com"), any())).thenReturn("jwt-token");
 
             LoginRequest req = new LoginRequest();
             req.setEmail("test@test.com");
@@ -393,10 +393,21 @@ class AuthServiceTest {
             req.setRefreshToken("valid-refresh-token");
             DecodedJWT decodedJwt = mock(DecodedJWT.class);
             doReturn(decodedJwt).when(jwtUtils).verifyToken("valid-refresh-token");
+
+            com.auth0.jwt.interfaces.Claim userIdClaim = mock(com.auth0.jwt.interfaces.Claim.class);
+            com.auth0.jwt.interfaces.Claim emailClaim = mock(com.auth0.jwt.interfaces.Claim.class);
+            com.auth0.jwt.interfaces.Claim tenantIdClaim = mock(com.auth0.jwt.interfaces.Claim.class);
+            when(decodedJwt.getClaim("userId")).thenReturn(userIdClaim);
+            when(decodedJwt.getClaim("email")).thenReturn(emailClaim);
+            when(decodedJwt.getClaim("tenantId")).thenReturn(tenantIdClaim);
+            when(userIdClaim.asLong()).thenReturn(1L);
+            when(emailClaim.asString()).thenReturn("test@test.com");
+            when(tenantIdClaim.asLong()).thenReturn(null);
+
             @SuppressWarnings("unchecked")
             Map<String, String> userInfo = Map.of("userId", "1", "email", "test@test.com");
             when(jwtUtils.getUserInfoFromToken("valid-refresh-token")).thenReturn(userInfo);
-            when(jwtUtils.createToken(1L, "test@test.com")).thenReturn("new-jwt-token");
+            when(jwtUtils.createToken(eq(1L), eq("test@test.com"), any())).thenReturn("new-jwt-token");
 
             Result result = authService.refreshToken(req);
 

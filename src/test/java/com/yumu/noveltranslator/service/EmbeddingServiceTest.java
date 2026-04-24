@@ -7,6 +7,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Mono;
 
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -16,6 +20,10 @@ import static org.mockito.Mockito.*;
 
 import org.springframework.web.reactive.function.client.WebClient;
 
+/**
+ * EmbeddingService 单元测试
+ * 使用 Mockito 模拟 WebClient 及其链式调用
+ */
 class EmbeddingServiceTest {
 
     private EmbeddingService service;
@@ -26,40 +34,20 @@ class EmbeddingServiceTest {
     }
 
     @Nested
-    @DisplayName("文本向量化")
-    class EmbedTests {
+    @DisplayName("toFloatArray 转换")
+    class ToFloatArrayTests {
 
         @Test
-        void 空文本返回空数组() {
-            float[] result = service.embed(null);
-            assertEquals(0, result.length);
-        }
+        @DisplayName("将 List<Double> 转换为 float 数组")
+        void toFloatArray_convertsListToFloatArray() throws Exception {
+            // 通过反射调用私有方法 toFloatArray
+            Method method = EmbeddingService.class.getDeclaredMethod("toFloatArray", List.class);
+            method.setAccessible(true);
 
-        @Test
-        void 空白文本返回空数组() {
-            float[] result = service.embed("   ");
-            assertEquals(0, result.length);
-        }
+            List<Double> input = Arrays.asList(0.1, 0.2, 0.3);
+            float[] result = (float[]) method.invoke(service, input);
 
-        @Test
-        void 无APIKey返回空数组() {
-            ReflectionTestUtils.setField(service, "openaiApiKey", null);
-            float[] result = service.embed("hello");
-            assertEquals(0, result.length);
-        }
-
-        @Test
-        void 空白APIKey返回空数组() {
-            ReflectionTestUtils.setField(service, "openaiApiKey", "   ");
-            float[] result = service.embed("hello");
-            assertEquals(0, result.length);
-        }
-
-        @Test
-        void 调用失败返回空数组() {
-            mockWebClient(Mono.error(new RuntimeException("API error")));
-            float[] result = service.embed("hello world");
-            assertEquals(0, result.length);
+            assertArrayEquals(new float[]{0.1f, 0.2f, 0.3f}, result, 0.0001f);
         }
     }
 
@@ -68,48 +56,200 @@ class EmbeddingServiceTest {
     class DimensionTests {
 
         @Test
-        void openai返回1536() {
+        @DisplayName("openai 提供商返回 1536 维")
+        void getDimension_openai_returns1536() {
             ReflectionTestUtils.setField(service, "provider", "openai");
             assertEquals(1536, service.getDimension());
         }
 
         @Test
-        void ollama返回1024() {
+        @DisplayName("ollama 提供商返回 1024 维")
+        void getDimension_ollama_returns1024() {
             ReflectionTestUtils.setField(service, "provider", "ollama");
             assertEquals(1024, service.getDimension());
+        }
+
+        @Test
+        @DisplayName("默认提供商返回 1536 维")
+        void getDimension_default_returns1536() {
+            ReflectionTestUtils.setField(service, "provider", null);
+            assertEquals(1536, service.getDimension());
         }
     }
 
     @Nested
-    @DisplayName("Ollama模式")
-    class OllamaTests {
+    @DisplayName("空文本处理")
+    class NullBlankTests {
 
         @Test
-        void 连接失败返回空数组() {
-            ReflectionTestUtils.setField(service, "provider", "ollama");
-            ReflectionTestUtils.setField(service, "ollamaBaseUrl", "http://localhost:11434");
-            ReflectionTestUtils.setField(service, "ollamaModel", "bge-m3");
-            mockWebClient(Mono.error(new RuntimeException("connection refused")));
-            float[] result = service.embed("hello");
-            assertEquals(0, result.length);
+        @DisplayName("null 文本返回空数组")
+        void embed_null_returnsEmptyArray() {
+            float[] result = service.embed(null);
+            assertArrayEquals(new float[0], result);
+        }
+
+        @Test
+        @DisplayName("空白文本返回空数组")
+        void embed_blank_returnsEmptyArray() {
+            float[] result = service.embed("   ");
+            assertArrayEquals(new float[0], result);
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private void mockWebClient(Mono<Map> responseMono) {
-        WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
-        WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
-        WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
-        WebClient mockClient = mock(WebClient.class);
+    @Nested
+    @DisplayName("OpenAI 向量化")
+    class OpenAIEmbedTests {
 
-        lenient().doReturn(uriSpec).when(mockClient).post();
-        lenient().doReturn(bodySpec).when(uriSpec).uri(anyString());
-        lenient().doReturn(bodySpec).when(bodySpec).contentType(any());
-        lenient().doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
-        lenient().doReturn(bodySpec).when(bodySpec).bodyValue(any());
-        lenient().doReturn(respSpec).when(bodySpec).retrieve();
-        lenient().doReturn(responseMono).when(respSpec).bodyToMono(Map.class);
+        @Test
+        @DisplayName("成功调用 OpenAI API 并解析结果")
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        void embedWithOpenAI_success() {
+            ReflectionTestUtils.setField(service, "provider", "openai");
+            ReflectionTestUtils.setField(service, "openaiApiKey", "sk-test-key");
+            ReflectionTestUtils.setField(service, "openaiBaseUrl", "https://api.openai.com");
+            ReflectionTestUtils.setField(service, "openaiModel", "text-embedding-3-small");
 
-        ReflectionTestUtils.setField(service, "webClient", mockClient);
+            // 构造模拟响应
+            Map<String, Object> responseData = Map.of(
+                    "embedding", (Object) Arrays.asList(0.1, 0.2, 0.3, -0.5)
+            );
+            Map<String, Object> mockResponse = Map.of("data", List.of(responseData));
+
+            WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
+            WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
+            WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
+            WebClient mockClient = mock(WebClient.class);
+
+            lenient().doReturn(uriSpec).when(mockClient).post();
+            lenient().doReturn(bodySpec).when(uriSpec).uri(anyString());
+            lenient().doReturn(bodySpec).when(bodySpec).contentType(any());
+            lenient().doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
+            lenient().doReturn(bodySpec).when(bodySpec).bodyValue(any());
+            lenient().doReturn(respSpec).when(bodySpec).retrieve();
+            lenient().doReturn(Mono.just(mockResponse)).when(respSpec).bodyToMono(Map.class);
+
+            ReflectionTestUtils.setField(service, "webClient", mockClient);
+
+            float[] result = service.embed("Hello world");
+
+            assertEquals(4, result.length);
+            assertEquals(0.1f, result[0], 0.0001f);
+            assertEquals(0.2f, result[1], 0.0001f);
+            assertEquals(0.3f, result[2], 0.0001f);
+            assertEquals(-0.5f, result[3], 0.0001f);
+        }
+
+        @Test
+        @DisplayName("API Key 未配置时返回空数组")
+        void embedWithOpenAI_noApiKey_returnsEmptyArray() {
+            ReflectionTestUtils.setField(service, "provider", "openai");
+            ReflectionTestUtils.setField(service, "openaiApiKey", "");
+
+            float[] result = service.embed("test");
+
+            assertArrayEquals(new float[0], result);
+        }
+    }
+
+    @Nested
+    @DisplayName("Ollama 向量化")
+    class OllamaEmbedTests {
+
+        @Test
+        @DisplayName("成功调用 Ollama API 并解析结果")
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        void embedWithOllama_success() {
+            ReflectionTestUtils.setField(service, "provider", "ollama");
+            ReflectionTestUtils.setField(service, "ollamaBaseUrl", "http://localhost:11434");
+            ReflectionTestUtils.setField(service, "ollamaModel", "bge-m3");
+
+            // 构造模拟响应
+            Map<String, Object> mockResponse = Map.of(
+                    "embedding", (Object) Arrays.asList(1.0, 2.0, -3.0, 4.5)
+            );
+
+            WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
+            WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
+            WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
+            WebClient mockClient = mock(WebClient.class);
+
+            lenient().doReturn(uriSpec).when(mockClient).post();
+            lenient().doReturn(bodySpec).when(uriSpec).uri(anyString());
+            lenient().doReturn(bodySpec).when(bodySpec).contentType(any());
+            lenient().doReturn(bodySpec).when(bodySpec).bodyValue(any());
+            lenient().doReturn(respSpec).when(bodySpec).retrieve();
+            lenient().doReturn(Mono.just(mockResponse)).when(respSpec).bodyToMono(Map.class);
+
+            ReflectionTestUtils.setField(service, "webClient", mockClient);
+
+            float[] result = service.embed("测试文本");
+
+            assertEquals(4, result.length);
+            assertEquals(1.0f, result[0], 0.0001f);
+            assertEquals(2.0f, result[1], 0.0001f);
+            assertEquals(-3.0f, result[2], 0.0001f);
+            assertEquals(4.5f, result[3], 0.0001f);
+        }
+
+        @Test
+        @DisplayName("Ollama 响应为空时返回空数组")
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        void embedWithOllama_nullResponse_returnsEmptyArray() {
+            ReflectionTestUtils.setField(service, "provider", "ollama");
+            ReflectionTestUtils.setField(service, "ollamaBaseUrl", "http://localhost:11434");
+            ReflectionTestUtils.setField(service, "ollamaModel", "bge-m3");
+
+            WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
+            WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
+            WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
+            WebClient mockClient = mock(WebClient.class);
+
+            lenient().doReturn(uriSpec).when(mockClient).post();
+            lenient().doReturn(bodySpec).when(uriSpec).uri(anyString());
+            lenient().doReturn(bodySpec).when(bodySpec).contentType(any());
+            lenient().doReturn(bodySpec).when(bodySpec).bodyValue(any());
+            lenient().doReturn(respSpec).when(bodySpec).retrieve();
+            lenient().doReturn(Mono.empty()).when(respSpec).bodyToMono(Map.class);
+
+            ReflectionTestUtils.setField(service, "webClient", mockClient);
+
+            float[] result = service.embed("test");
+
+            assertArrayEquals(new float[0], result);
+        }
+    }
+
+    @Nested
+    @DisplayName("异常处理")
+    class ExceptionTests {
+
+        @Test
+        @DisplayName("WebClient 异常时返回空数组")
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        void embed_exception_returnsEmptyArray() {
+            ReflectionTestUtils.setField(service, "provider", "openai");
+            ReflectionTestUtils.setField(service, "openaiApiKey", "sk-test-key");
+            ReflectionTestUtils.setField(service, "openaiBaseUrl", "https://api.openai.com");
+            ReflectionTestUtils.setField(service, "openaiModel", "text-embedding-3-small");
+
+            WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
+            WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
+            WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
+            WebClient mockClient = mock(WebClient.class);
+
+            lenient().doReturn(uriSpec).when(mockClient).post();
+            lenient().doReturn(bodySpec).when(uriSpec).uri(anyString());
+            lenient().doReturn(bodySpec).when(bodySpec).contentType(any());
+            lenient().doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
+            lenient().doReturn(bodySpec).when(bodySpec).bodyValue(any());
+            lenient().doReturn(respSpec).when(bodySpec).retrieve();
+            lenient().doReturn(Mono.error(new RuntimeException("连接超时"))).when(respSpec).bodyToMono(Map.class);
+
+            ReflectionTestUtils.setField(service, "webClient", mockClient);
+
+            float[] result = service.embed("hello");
+
+            assertArrayEquals(new float[0], result);
+        }
     }
 }

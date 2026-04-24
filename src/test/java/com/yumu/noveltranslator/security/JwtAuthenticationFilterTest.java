@@ -58,6 +58,9 @@ class JwtAuthenticationFilterTest {
     @Mock
     private Claim userIdClaim;
 
+    @Mock
+    private Claim tenantIdClaim;
+
     private JwtAuthenticationFilter filter;
 
     @BeforeEach
@@ -170,8 +173,10 @@ class JwtAuthenticationFilterTest {
             when(jwtUtils.verifyToken("valid-token")).thenReturn(decodedJWT);
             when(decodedJWT.getClaim("email")).thenReturn(emailClaim);
             when(decodedJWT.getClaim("userId")).thenReturn(userIdClaim);
+            when(decodedJWT.getClaim("tenantId")).thenReturn(tenantIdClaim);
             when(emailClaim.asString()).thenReturn("test@example.com");
             when(userIdClaim.asLong()).thenReturn(1L);
+            when(tenantIdClaim.asLong()).thenReturn(null);
 
             User user = new User();
             user.setId(1L);

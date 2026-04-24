@@ -40,7 +40,7 @@ services:
       - http_proxy=
       - https_proxy=
 
-  # Python 翻译微服务（调用 DeepSeek 大模型）
+  # Python 翻译微服务
   llm-engine:
     image: python:3.11-slim
     working_dir: /app
@@ -56,19 +56,32 @@ services:
     ports:
       - "8000:8000"
 
-  # Ollama Embedding 服务（可选，profiles: [optional] 默认不启动）
+  # Ollama Embedding 服务（本地向量模型 + GPU 加速）
   ollama:
     image: ollama/ollama:latest
-    profiles:
-      - optional
     ports:
       - "11434:11434"
     volumes:
       - ollama-data:/root/.ollama
+    # GPU 加速向量计算（需 NVIDIA GPU + Container Toolkit）
     deploy:
       resources:
         reservations:
-          memory: 4G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # 启动时自动拉取 bge-m3 Q8 量化向量模型（635MB，轻量版）
+    entrypoint: >
+      sh -c "ollama serve &
+             sleep 5 &&
+             ollama pull bge-m3:latest 2>/dev/null || true &&
+             wait"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   # Spring Boot 后端
   backend:
@@ -100,23 +113,37 @@ services:
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - PYTHON_TRANSLATE_URL=http://llm-engine:8000/translate
       - TRANSLATION_UPLOAD_DIR=/app/uploads
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
       - EMBEDDING_OPENAI_API_KEY=${EMBEDDING_OPENAI_API_KEY}
       - EMBEDDING_OPENAI_BASE_URL=${EMBEDDING_OPENAI_BASE_URL}
+      - EMBEDDING_OLLAMA_BASE_URL=http://ollama:11434
+      - EMBEDDING_OLLAMA_MODEL=bge-m3
+      # Stripe 支付
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_SUCCESS_URL=${STRIPE_SUCCESS_URL}
+      - STRIPE_CANCEL_URL=${STRIPE_CANCEL_URL}
+      - STRIPE_PRO_MONTHLY_PRICE_ID=${STRIPE_PRO_MONTHLY_PRICE_ID}
+      - STRIPE_PRO_YEARLY_PRICE_ID=${STRIPE_PRO_YEARLY_PRICE_ID}
+      - STRIPE_MAX_MONTHLY_PRICE_ID=${STRIPE_MAX_MONTHLY_PRICE_ID}
+      - STRIPE_MAX_YEARLY_PRICE_ID=${STRIPE_MAX_YEARLY_PRICE_ID}
+      # 代理
       - HTTP_PROXY=http://host.docker.internal:7890
       - HTTPS_PROXY=http://host.docker.internal:7890
       - http_proxy=http://host.docker.internal:7890
       - https_proxy=http://host.docker.internal:7890
-      - NO_PROXY=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis
-      - no_proxy=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis
-      - MAVEN_OPTS=-Dhttp.proxyHost=host.docker.internal -Dhttp.proxyPort=7890 -Dhttps.proxyHost=host.docker.internal -Dhttps.proxyPort=7890
-      - JAVA_TOOL_OPTIONS=-Dhttp.nonProxyHosts=localhost|127.0.0.1|llm-engine|mtran-server|mysql|redis -Djava.net.useSystemProxies=false
+      - NO_PROXY=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,api.stripe.com,checkout.stripe.com
+      - no_proxy=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,api.stripe.com,checkout.stripe.com
+      - MAVEN_OPTS=-Dhttp.proxyHost=host.docker.internal -Dhttp.proxyPort=7890 -Dhttps.proxyHost=host.docker.internal -Dhttps.proxyPort=7890 -Dhttp.nonProxyHosts=api.stripe.com\|checkout.stripe.com\|localhost\|127.0.0.1
+      - JAVA_TOOL_OPTIONS=-Dhttp.nonProxyHosts=localhost\|127.0.0.1\|llm-engine\|mtran-server\|mysql\|redis\|api.stripe.com\|checkout.stripe.com -Djava.net.useSystemProxies=false
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
       mtran-server:
+        condition: service_started
+      ollama:
         condition: service_started
 
   # Nginx 网关

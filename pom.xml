@@ -132,6 +132,18 @@
             <version>1.0.1</version> <!-- 建议使用最新版本 -->
         </dependency>
 
+        <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>24.20.0</version>
+        </dependency>
+
         <!-- 测试依赖-->
         <dependency>
             <groupId>org.springframework.boot</groupId>

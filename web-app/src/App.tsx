@@ -15,6 +15,8 @@ import { GlossaryPage } from './pages/GlossaryPage';
 import { CollabPage } from './pages/CollabPage';
 import { CollabWorkspace } from './pages/CollabWorkspace';
 import { UserCenterPage } from './pages/UserCenterPage';
+import { PricingPage } from './pages/PricingPage';
+import { PaymentResultPage } from './pages/PaymentResultPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AboutPage, HelpPage, PrivacyPage, TermsPage, NotFoundPage } from './pages/StaticPages';
 
@@ -37,10 +39,12 @@ function AppRoutes() {
       <Route path="/documents" element={<ProtectedRoute><DocumentPage /></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
       <Route path="/glossary" element={<ProtectedRoute><GlossaryPage /></ProtectedRoute>} />
-      <Route path="/collab" element={<ProtectedRoute><CollabPage /></ProtectedRoute>} />
       <Route path="/collab/workspace" element={<ProtectedRoute><CollabWorkspace /></ProtectedRoute>} />
+      <Route path="/collab" element={<ProtectedRoute><CollabPage /></ProtectedRoute>} />
       <Route path="/user/*" element={<ProtectedRoute><UserCenterPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/subscription/result" element={<PaymentResultPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/help" element={<HelpPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />

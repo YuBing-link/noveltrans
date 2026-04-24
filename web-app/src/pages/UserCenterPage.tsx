@@ -7,6 +7,7 @@ import { userApi } from '../api/user';
 import { authApi } from '../api/auth';
 import { apiKeyApi } from '../api/apiKeys';
 import { preferencesApi } from '../api/preferences';
+import { SubscriptionStatusPage } from './SubscriptionStatusPage';
 import type { UserStatistics, UserQuota, ApiKeyItem, UserPreferences } from '../api/types';
 import { Copy, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 
@@ -37,11 +38,12 @@ function UserCenterPage() {
           {/* Content */}
           <div className="flex-1 min-w-0">
             <Routes>
-              <Route index element={<ProfileTab user={user} refreshUser={refreshUser} />} />
+              <Route index element={<ProfileTab user={user!} refreshUser={refreshUser} />} />
               <Route path="stats" element={<StatsTab />} />
               <Route path="quota" element={<QuotaTab />} />
               <Route path="api-keys" element={<ApiKeysTab />} />
               <Route path="preferences" element={<PreferencesTab />} />
+              <Route path="subscription" element={<SubscriptionStatusPage />} />
             </Routes>
           </div>
         </div>

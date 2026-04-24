@@ -4,8 +4,10 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.yumu.noveltranslator.dto.ChapterTaskResponse;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabProject;
+import com.yumu.noveltranslator.entity.CollabProjectMember;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
+import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
@@ -145,11 +147,13 @@ class ChapterTaskServiceTest {
         void 找到章节返回详情() {
             CollabChapterTask task = new CollabChapterTask();
             task.setId(1L);
+            task.setProjectId(1L);
             task.setChapterNumber(1);
             task.setTitle("第一章");
             task.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
             task.setProgress(0);
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
+            when(projectMemberMapper.selectByProjectAndUser(1L, 1L)).thenReturn(new CollabProjectMember());
 
             ChapterTaskResponse resp = chapterTaskService.getChapterById(1L, 1L);
 
@@ -180,6 +184,10 @@ class ChapterTaskServiceTest {
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
             when(chapterTaskMapper.updateById(any())).thenReturn(1);
 
+            CollabProjectMember owner = new CollabProjectMember();
+            owner.setRole(ProjectMemberRole.OWNER.getValue());
+            when(projectMemberMapper.selectByProjectAndUser(1L, 1L)).thenReturn(owner);
+
             ChapterTaskResponse resp = chapterTaskService.assignChapter(1L, 2L, 1L);
 
             assertNotNull(resp);
@@ -201,8 +209,14 @@ class ChapterTaskServiceTest {
         void 无效状态转换抛出异常() {
             CollabChapterTask task = new CollabChapterTask();
             task.setId(1L);
+            task.setProjectId(1L);
             task.setStatus(ChapterTaskStatus.COMPLETED.getValue());
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
+
+            CollabProjectMember owner = new CollabProjectMember();
+            owner.setRole(ProjectMemberRole.OWNER.getValue());
+            when(projectMemberMapper.selectByProjectAndUser(1L, 1L)).thenReturn(owner);
+
             doThrow(new IllegalStateException("Invalid transition"))
                     .when(collabStateMachine).validateChapterTransition(
                             ChapterTaskStatus.COMPLETED, ChapterTaskStatus.TRANSLATING);
@@ -257,7 +271,11 @@ class ChapterTaskServiceTest {
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
             when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(List.of(task));
             when(chapterTaskMapper.updateById(any())).thenReturn(1);
-            when(collabProjectMapper.selectById(1L)).thenReturn(null);
+            when(collabProjectMapper.selectById(1L)).thenReturn(new CollabProject());
+
+            CollabProjectMember reviewer = new CollabProjectMember();
+            reviewer.setRole(ProjectMemberRole.REVIEWER.getValue());
+            when(projectMemberMapper.selectByProjectAndUser(1L, 3L)).thenReturn(reviewer);
 
             ChapterTaskResponse resp = chapterTaskService.reviewChapter(1L, true, "很好", 3L);
 
@@ -277,6 +295,10 @@ class ChapterTaskServiceTest {
             task.setStatus(ChapterTaskStatus.SUBMITTED.getValue());
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
             when(chapterTaskMapper.updateById(any())).thenReturn(1);
+
+            CollabProjectMember reviewer = new CollabProjectMember();
+            reviewer.setRole(ProjectMemberRole.REVIEWER.getValue());
+            when(projectMemberMapper.selectByProjectAndUser(1L, 3L)).thenReturn(reviewer);
 
             ChapterTaskResponse resp = chapterTaskService.reviewChapter(1L, false, "需要修改", 3L);
 

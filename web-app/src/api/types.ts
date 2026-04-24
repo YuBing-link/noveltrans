@@ -343,3 +343,85 @@ export interface CreateCommentRequest {
   content: string;
   parentId?: number;
 }
+
+// ==================== Subscription ====================
+export interface CheckoutSessionRequest {
+  plan: string;
+  billingCycle: string;
+}
+
+export interface CheckoutSessionResponse {
+  checkoutUrl: string;
+}
+
+export interface SubscriptionStatusResponse {
+  plan: string;
+  status: string;
+  periodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+}
+
+export interface PortalSessionResponse {
+  portalUrl: string;
+}
+
+export interface PaymentVerificationResponse {
+  paid: boolean;
+  sessionId: string;
+  plan: string;
+  status: string;
+  message: string;
+}
+
+export const PLAN_CONFIGS = {
+  FREE: {
+    name: '免费版',
+    price: '¥0',
+    features: [
+      '每日 100 次翻译',
+      '5 并发翻译',
+      '月 10,000 字符',
+      '基础翻译引擎',
+      '术语表管理',
+    ],
+    cta: '当前方案',
+    highlighted: false,
+  },
+  PRO: {
+    name: '专业版',
+    price: '¥49/月',
+    priceMonthly: '¥49/月',
+    priceYearly: '¥39/月',
+    yearlyTotal: '¥468/年',
+    features: [
+      '每日 1,000 次翻译',
+      '20 并发翻译',
+      '月 50,000 字符',
+      'AI 翻译 + 神经网络',
+      '翻译记忆库',
+      '协作项目 3 个',
+      '优先客服',
+    ],
+    cta: '订阅专业版',
+    highlighted: true,
+  },
+  MAX: {
+    name: '旗舰版',
+    price: '¥99/月',
+    priceMonthly: '¥99/月',
+    priceYearly: '¥79/月',
+    yearlyTotal: '¥948/年',
+    features: [
+      '无限翻译次数',
+      '50 并发翻译',
+      '月 200,000 字符',
+      '全部翻译引擎',
+      '翻译记忆库',
+      '无限协作项目',
+      '专属客服',
+      'API 访问权限',
+    ],
+    cta: '订阅旗舰版',
+    highlighted: false,
+  },
+};
