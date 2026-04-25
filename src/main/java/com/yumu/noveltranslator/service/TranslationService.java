@@ -36,12 +36,46 @@ public class TranslationService {
     private static final String DEFAULT_TARGET_LANG = "zh";
     private static final String DEFAULT_ENGINE = "auto";
 
+    /**
+     * 语言代码 → 语言名称映射（用于团队翻译 prompt）
+     * Python 侧 prompt 使用自然语言名称（如 "请将以下中文文本翻译为日文"）
+     */
+    private static final Map<String, String> LANGUAGE_NAME_MAP = Map.ofEntries(
+            Map.entry("zh", "中文"),
+            Map.entry("cn", "中文"),
+            Map.entry("en", "英文"),
+            Map.entry("ja", "日文"),
+            Map.entry("jp", "日文"),
+            Map.entry("ko", "韩文"),
+            Map.entry("fr", "法文"),
+            Map.entry("de", "德文"),
+            Map.entry("es", "西班牙文"),
+            Map.entry("pt", "葡萄牙文"),
+            Map.entry("ru", "俄文"),
+            Map.entry("it", "意大利文"),
+            Map.entry("ar", "阿拉伯文"),
+            Map.entry("th", "泰文"),
+            Map.entry("vi", "越南文")
+    );
+
+    /**
+     * 将语言代码转换为自然语言名称
+     * 例如 "zh" → "中文", "ja" → "日文"
+     */
+    private static String toLanguageName(String code) {
+        if (code == null || "auto".equalsIgnoreCase(code)) {
+            return "未知";
+        }
+        return LANGUAGE_NAME_MAP.getOrDefault(code.toLowerCase(), code);
+    }
+
     // 依赖注入
     private final UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
     private final TranslationCacheService cacheService;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
     private final TranslationPostProcessingService postProcessingService;
+    private final TeamTranslationService teamTranslationService;
     private final QuotaService quotaService;
     private final com.yumu.noveltranslator.mapper.UserMapper userMapper;
 
@@ -51,7 +85,7 @@ public class TranslationService {
      * @return 翻译响应
      */
     public SelectionTranslateResponse selectionTranslate(SelectionTranslationRequest req) {
-        String combined = req.getContext() != null ? req.getContext() : req.getText();
+        String combined = req.getText();
         if (combined == null || combined.trim().isEmpty()) {
             return new SelectionTranslateResponse(false, req.getEngine(), "内容为空");
         }
@@ -72,7 +106,23 @@ public class TranslationService {
         }
 
         try {
-            String result = translateWithCache(combined, target, engine);
+            String mode = req.getMode() != null ? req.getMode() : "fast";
+            String result;
+            if ("fast".equalsIgnoreCase(mode)) {
+                // 快速模式：跳过 RAG 和实体一致性，仅缓存 + 直译
+                TranslationPipeline pipeline = new TranslationPipeline(
+                        cacheService, ragTranslationService, entityConsistencyService,
+                        userLevelThrottledTranslationClient, postProcessingService, userId, null);
+                result = pipeline.executeFast(combined, target, engine);
+            } else if ("team".equalsIgnoreCase(mode)) {
+                // 团队模式：调用 AI 多角色协作翻译
+                String source = req.getSourceLang() != null ? req.getSourceLang() : "auto";
+                result = teamTranslationService.translateChapter(
+                        combined, "general", toLanguageName(source), toLanguageName(target), null);
+            } else {
+                // 专家模式：完整管线（RAG + 实体一致性 + 缓存）
+                result = translateWithCache(combined, target, engine);
+            }
             if (result == null || result.trim().isEmpty()) {
                 return new SelectionTranslateResponse(false, engine, "翻译失败：返回结果为空");
             }
