@@ -57,8 +57,11 @@ function HomePage() {
     if (sourceLang === 'auto') return;
     setSourceLang(targetLang);
     setTargetLang(sourceLang);
-    setSourceText(translatedText);
-    setTranslatedText(sourceText);
+    // 只有当译文存在时才交换文本
+    if (translatedText) {
+      setSourceText(translatedText);
+      setTranslatedText(sourceText);
+    }
   }, [sourceLang, targetLang, sourceText, translatedText]);
 
   const handleCopy = async () => {
@@ -84,25 +87,26 @@ function HomePage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [sourceText, loading, handleTranslate]);
 
-  const maxChars = quota ? Math.max(0, quota.remainingChars + sourceText.length) : undefined;
-  const progressPercent = sourceText.length > 0 && translatedText.length > 0 
-    ? Math.min(100, Math.round((translatedText.length / sourceText.length) * 100))
+  const maxChars = quota ? quota.remainingChars : undefined;
+  const progressPercent = loading && translatedText.length > 0 
+    ? Math.min(100, Math.round((translatedText.length / Math.max(1, sourceText.length)) * 100))
     : 0;
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Page Header */}
-      <div className="mb-8 text-center">
-        <h1 className="text-[32px] font-bold text-text-primary mb-2 tracking-tight">
-          AI 智能翻译
-        </h1>
-        <p className="text-[15px] text-text-secondary">
-          支持多语言实时互译，精准理解上下文语境
-        </p>
-      </div>
+    <div className="w-full flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12 pb-20">
+      <div className="w-full" style={{ maxWidth: '80rem' }}>
+        {/* Page Header */}
+        <div className="mb-8 text-center">
+          <h1 className="text-[32px] font-bold text-text-primary mb-2 tracking-tight">
+            AI 智能翻译
+          </h1>
+          <p className="text-[15px] text-text-secondary">
+            支持多语言实时互译，精准理解上下文语境
+          </p>
+        </div>
 
-      {/* Translation Panel */}
-      <div className="border border-border rounded-xl shadow-sm bg-surface overflow-hidden">
+        {/* Translation Panel */}
+        <div className="border border-border rounded-xl shadow-sm bg-surface overflow-hidden">
         <div className="flex flex-col lg:flex-row">
           {/* Source Panel */}
           <div className="flex-1 min-h-[480px] flex flex-col">
@@ -112,6 +116,7 @@ function HomePage() {
                 value={sourceLang}
                 onChange={(e) => setSourceLang(e.target.value)}
                 className="bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors focus:outline-none whitespace-nowrap border-none"
+                title="选择源语言"
               >
                 {SUPPORTED_LANGUAGES.map(lang => (
                   <option key={lang.code} value={lang.code}>{lang.name}</option>
@@ -135,6 +140,7 @@ function HomePage() {
                 value={targetLang}
                 onChange={(e) => setTargetLang(e.target.value)}
                 className="bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors focus:outline-none whitespace-nowrap border-none"
+                title="选择目标语言"
               >
                 {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => (
                   <option key={lang.code} value={lang.code}>{lang.name}</option>
@@ -328,6 +334,7 @@ function HomePage() {
           >
             {loading ? '翻译中...' : '开始翻译'}
           </button>
+        </div>
         </div>
       </div>
     </div>

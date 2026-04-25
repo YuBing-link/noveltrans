@@ -3,34 +3,36 @@ import { Link } from 'react-router-dom';
 function Footer() {
   return (
     <footer className="bg-surface-secondary dark:bg-gray-50 border-t border-divider dark:border-border">
-      <div style={{ width: '80%', maxWidth: '1280px', margin: '0 auto' }} className="px-6 py-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          <div>
+      <div className="w-full max-w-[88rem] mx-auto px-6 py-12">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-16 gap-y-8">
+          <div className="text-center">
             <h4 className="text-[12px] font-semibold text-text-primary mb-3">产品</h4>
             <ul className="space-y-2.5">
               <li><Link to="/" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">文本翻译</Link></li>
               <li><Link to="/documents" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">文档翻译</Link></li>
               <li><Link to="/glossary" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">术语管理</Link></li>
+              <li><Link to="/pricing" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">定价</Link></li>
             </ul>
           </div>
-          <div>
+          <div className="text-center">
             <h4 className="text-[12px] font-semibold text-text-primary mb-3">支持</h4>
             <ul className="space-y-2.5">
               <li><Link to="/help" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">帮助中心</Link></li>
               <li><Link to="/about" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">关于我们</Link></li>
             </ul>
           </div>
-          <div>
+          <div className="text-center">
             <h4 className="text-[12px] font-semibold text-text-primary mb-3">法律</h4>
             <ul className="space-y-2.5">
               <li><Link to="/privacy" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">隐私政策</Link></li>
               <li><Link to="/terms" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">服务条款</Link></li>
             </ul>
           </div>
-          <div>
+          <div className="text-center">
             <h4 className="text-[12px] font-semibold text-text-primary mb-3">账户</h4>
             <ul className="space-y-2.5">
               <li><Link to="/register" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">注册</Link></li>
+              <li><Link to="/login" className="text-[12px] text-text-tertiary hover:text-text-primary transition-colors">登录</Link></li>
             </ul>
           </div>
         </div>

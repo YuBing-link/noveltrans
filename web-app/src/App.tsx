@@ -60,12 +60,10 @@ function App() {
       <AuthProvider>
         <ThemeProvider>
           <ToastProvider>
-            <div className="flex flex-col min-h-screen bg-background" style={{ width: '100%' }}>
+            <div className="flex flex-col min-h-screen bg-background">
               <Header />
-              <main style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                <div style={{ width: '80%', maxWidth: '1280px', margin: '0 auto' }}>
-                  <AppRoutes />
-                </div>
+              <main className="flex-1 w-full">
+                <AppRoutes />
               </main>
               <Footer />
             </div>
