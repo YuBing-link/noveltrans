@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 function Footer() {
   return (
     <footer className="bg-surface-secondary dark:bg-gray-50 border-t border-divider dark:border-border">
-      <div className="max-w-7xl mx-auto w-full px-6 py-12">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-16 gap-y-8">
+      <div className="max-w-7xl mx-auto w-full px-6 py-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-6">
           <div className="text-center">
             <h4 className="text-[12px] font-semibold text-text-primary mb-3">产品</h4>
             <ul className="space-y-2.5">
@@ -36,7 +36,9 @@ function Footer() {
             </ul>
           </div>
         </div>
-        <div className="mt-8 pt-6 border-t border-divider dark:border-border flex flex-col sm:flex-row items-center justify-between gap-2">
+      </div>
+      <div className="px-6 py-4 border-t border-divider dark:border-border">
+        <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-[12px] text-text-tertiary">&copy; {new Date().getFullYear()} NovelTrans. All rights reserved.</p>
           <p className="text-[12px] text-text-tertiary">智能翻译，让语言不再是障碍</p>
         </div>
