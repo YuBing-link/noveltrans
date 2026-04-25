@@ -1,18 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/ui/Toast';
 import { Badge } from '../components/ui/Badge';
 import { Tabs } from '../components/ui/Tabs';
 import type { Tab } from '../components/ui/Tabs';
 import { collabApi } from '../api/collab';
-import { translateApi } from '../api/translate';
-import type { ChapterTaskResponse, CommentResponse } from '../api/types';
+import type { ChapterTaskResponse, CommentResponse, PageResult } from '../api/types';
 import { SUPPORTED_LANGUAGES } from '../api/types';
 import {
   ArrowLeft,
   BookOpen,
   Send,
-  Sparkles,
   MessageSquare,
   BookMarked,
   Settings,
@@ -78,7 +76,7 @@ function CollabWorkspace() {
   const { success, error: toastError } = useToast();
 
   const chapterId = Number(searchParams.get('chapterId'));
-  const targetLang = searchParams.get('targetLang') || 'zh';
+  const [targetLang, setTargetLang] = useState(searchParams.get('targetLang') || 'zh');
   const [chapter, setChapter] = useState<ChapterTaskResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -89,14 +87,12 @@ function CollabWorkspace() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // AI translation state
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamBuffer, setStreamBuffer] = useState('');
-  const streamAbortRef = useRef(false);
-
   // Sidebar state
   const [sidebarTab, setSidebarTab] = useState<'comments' | 'reference' | 'settings'>('comments');
   const [comments, setComments] = useState<CommentResponse[]>([]);
+  const [commentPage, setCommentPage] = useState(1);
+  const [commentTotal, setCommentTotal] = useState(0);
+  const [hasMoreComments, setHasMoreComments] = useState(true);
   const [commentInput, setCommentInput] = useState('');
   const [anchoredSourceText, setAnchoredSourceText] = useState<string | null>(null);
 
@@ -136,13 +132,26 @@ function CollabWorkspace() {
     }
   };
 
-  const loadComments = async () => {
+  const loadComments = async (page = 1, append = false) => {
     try {
-      const res = await collabApi.listComments(chapterId);
-      setComments(res.data);
+      const res = await collabApi.listComments(chapterId, page);
+      const pageData = res.data as unknown as PageResult<CommentResponse>;
+      const newComments = pageData.records || [];
+      if (append) {
+        setComments(prev => [...prev, ...newComments]);
+      } else {
+        setComments(newComments);
+      }
+      setCommentTotal(pageData.total || 0);
+      setCommentPage(page);
+      setHasMoreComments(page < pageData.pages);
     } catch {
       // Silent fail — comments may not exist yet
     }
+  };
+
+  const loadMoreComments = () => {
+    loadComments(commentPage + 1, true);
   };
 
   // Draft auto-save (every 30 seconds)
@@ -176,81 +185,11 @@ function CollabWorkspace() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [chapterId, isDirty, editorText]);
 
-  // Ctrl+Enter shortcut for AI translation
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleAiTranslate();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [chapter, editorText, isStreaming]);
-
   // ==================== Handlers ====================
-
-  const handleAiTranslate = async () => {
-    if (!sourceText.trim()) {
-      toastError('原文内容为空，请先粘贴原文');
-      return;
-    }
-    if (isStreaming) return;
-
-    setIsStreaming(true);
-    setStreamBuffer('');
-    streamAbortRef.current = false;
-
-    try {
-      await translateApi.streamTranslate(
-        {
-          text: sourceText,
-          sourceLang: 'auto',
-          targetLang: targetLang,
-          mode: 'ai',
-        },
-        (chunk) => {
-          if (!streamAbortRef.current) {
-            setStreamBuffer(prev => prev + chunk);
-          }
-        },
-        () => {
-          setIsStreaming(false);
-          // Merge stream buffer into editor text
-          setEditorText(prev => prev + streamBuffer);
-          setStreamBuffer('');
-          setIsDirty(true);
-        },
-        (err) => {
-          setIsStreaming(false);
-          setStreamBuffer('');
-          toastError(err || '翻译失败');
-        }
-      );
-    } catch {
-      setIsStreaming(false);
-      setStreamBuffer('');
-      toastError('翻译请求失败');
-    }
-  };
-
-  const handleStopStreaming = () => {
-    streamAbortRef.current = true;
-    setIsStreaming(false);
-    if (streamBuffer) {
-      setEditorText(prev => prev + streamBuffer);
-      setStreamBuffer('');
-      setIsDirty(true);
-    }
-  };
 
   const handleEditorChange = (value: string) => {
     setEditorText(value);
     setIsDirty(true);
-    // If user edits during streaming, stop streaming and merge
-    if (isStreaming) {
-      handleStopStreaming();
-    }
   };
 
   const handleSaveDraft = () => {
@@ -314,12 +253,15 @@ function CollabWorkspace() {
   const handleSendComment = async () => {
     if (!commentInput.trim() || !chapter) return;
     try {
-      await collabApi.createComment(chapter.id, {
+      const res = await collabApi.createComment(chapter.id, {
         content: commentInput,
         sourceText: anchoredSourceText || undefined,
       });
+      // 立即追加到列表头部，确保用户能看到新评论
+      setComments(prev => [res.data, ...prev]);
       setCommentInput('');
       setAnchoredSourceText(null);
+      // 从服务端刷新以获取准确的分页数据
       loadComments();
       success('评论已发送');
     } catch (e) {
@@ -338,7 +280,6 @@ function CollabWorkspace() {
   };
 
   // ==================== Derived values ====================
-  const displayText = editorText + streamBuffer;
   const sourceChars = sourceText.length;
   const translatedChars = editorText.length;
   const progressPercent = sourceChars > 0
@@ -362,7 +303,8 @@ function CollabWorkspace() {
   }
 
   return (
-    <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 140px)' }}>
+    <div className="py-8">
+      <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 140px)' }}>
       {/* ==================== Top Toolbar ==================== */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface-secondary">
         <div className="flex items-center gap-3">
@@ -391,7 +333,16 @@ function CollabWorkspace() {
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 text-xs text-text-tertiary">
             <Languages className="w-3.5 h-3.5" />
-            <span>自动检测 → {getLangName(targetLang)}</span>
+            <span className="text-text-placeholder">自动检测 →</span>
+            <select
+              value={targetLang}
+              onChange={e => setTargetLang(e.target.value)}
+              className="bg-transparent text-text-primary text-xs border-none focus:outline-none cursor-pointer"
+            >
+              {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => (
+                <option key={lang.code} value={lang.code}>{lang.name}</option>
+              ))}
+            </select>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-xs text-text-tertiary">
             <span>原文: {sourceText.length.toLocaleString()} 字符</span>
@@ -446,34 +397,9 @@ function CollabWorkspace() {
 
           {/* Source panel footer */}
           <div className="px-4 py-2 border-t border-border bg-surface-secondary/50">
-            <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
+            <div className="flex items-center justify-between text-xs text-text-tertiary">
               <span>{sourceText.length.toLocaleString()} 字符 · {sourceText.split(/\s+/).filter(Boolean).length.toLocaleString()} 词</span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleAiTranslate}
-                disabled={isStreaming || !sourceText.trim()}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-accent rounded-button hover:bg-accent-hover transition-button disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isStreaming ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    翻译中...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" /> AI 翻译
-                  </>
-                )}
-              </button>
-              {isStreaming && (
-                <button
-                  onClick={handleStopStreaming}
-                  className="px-3 py-1.5 text-xs font-medium text-text-primary border border-border rounded-button hover:bg-surface-secondary transition-button"
-                >
-                  停止
-                </button>
-              )}
+              <span className="text-text-placeholder">翻译由团队模式自动完成</span>
             </div>
           </div>
         </div>
@@ -515,39 +441,22 @@ function CollabWorkspace() {
           {/* Editor textarea */}
           <div className="flex-1 relative overflow-hidden">
             <textarea
-              value={displayText}
+              value={editorText}
               onChange={e => handleEditorChange(e.target.value)}
-              placeholder="输入翻译结果，或使用 AI 翻译辅助..."
+              placeholder="输入翻译结果，或等待团队模式自动翻译..."
               className="w-full h-full resize-none bg-transparent text-text-primary text-[15px] leading-relaxed placeholder:text-text-placeholder focus:outline-none px-4 py-3"
               style={{ fontFamily: 'var(--font-sans)' }}
             />
-            {/* Streaming cursor overlay */}
-            {isStreaming && (
-              <div className="absolute bottom-3 right-4 flex items-center gap-2 text-xs text-accent">
-                <span className="streaming-cursor" />
-                <span>AI 正在翻译...</span>
-              </div>
-            )}
           </div>
 
           {/* Editor footer */}
           <div className="px-4 py-2 border-t border-border bg-surface-secondary/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 text-xs text-text-tertiary">
+            <div className="flex items-center justify-between text-xs text-text-tertiary">
+              <div className="flex items-center gap-4">
                 <span>{translatedChars.toLocaleString()} 字符 · {translatedWords.toLocaleString()} 词</span>
                 {sourceChars > 0 && (
                   <span>进度 {progressPercent}%</span>
                 )}
-              </div>
-              <div className="flex items-center gap-2 text-xs text-text-tertiary">
-                <span className="hidden sm:inline">Ctrl+Enter AI 翻译</span>
-                <button
-                  onClick={handleAiTranslate}
-                  disabled={isStreaming || !chapter.sourceText}
-                  className="sm:hidden flex items-center gap-1 px-2 py-1 text-xs text-accent hover:text-accent-hover transition-button disabled:opacity-50"
-                >
-                  <Sparkles className="w-3 h-3" /> AI 翻译
-                </button>
               </div>
             </div>
             {/* Progress bar */}
@@ -595,9 +504,19 @@ function CollabWorkspace() {
                       <p className="text-xs mt-1">选中原文可锚定评论</p>
                     </div>
                   ) : (
-                    comments.map(comment => (
-                      <CommentItem key={comment.id} comment={comment} depth={0} />
-                    ))
+                    <>
+                      {comments.map(comment => (
+                        <CommentItem key={comment.id} comment={comment} depth={0} />
+                      ))}
+                      {hasMoreComments && (
+                        <button
+                          onClick={loadMoreComments}
+                          className="w-full py-2 text-xs text-accent hover:text-accent-hover transition-colors border border-border rounded-button"
+                        >
+                          加载更多评论 ({comments.length}/{commentTotal})
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
                 {/* Comment input */}
@@ -726,9 +645,7 @@ function CollabWorkspace() {
       </div>
 
       {/* ==================== Mobile Sidebar Overlay ==================== */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-border"
-        style={{ display: sidebarTab ? 'block' : 'none' }}
-      >
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-border">
         {/* Mobile comment input area shown when comments tab is active */}
         {sidebarTab === 'comments' && (
           <div className="px-3 py-2">
@@ -796,6 +713,7 @@ function CollabWorkspace() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

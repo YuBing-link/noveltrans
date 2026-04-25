@@ -118,7 +118,7 @@ function DocumentPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="py-8">
       <div className="mb-6">
         <h1 className="text-[28px] font-bold text-text-primary mb-2 tracking-tight">
           文档翻译

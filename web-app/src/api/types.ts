@@ -15,6 +15,15 @@ export interface PaginatedList<T> {
   list: T[];
 }
 
+/** MyBatis-Plus IPage response wrapper */
+export interface PageResult<T> {
+  records: T[];
+  current: number;
+  size: number;
+  total: number;
+  pages: number;
+}
+
 // ==================== Auth ====================
 export interface LoginRequest {
   email: string;
@@ -351,7 +360,7 @@ export interface CheckoutSessionRequest {
 }
 
 export interface CheckoutSessionResponse {
-  checkoutUrl: string;
+  checkoutUrl: string | null;
 }
 
 export interface SubscriptionStatusResponse {

@@ -1,6 +1,6 @@
 function PageWrapper({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="w-full">
+    <div className="px-0" style={{ maxWidth: '80rem' }}>
       <div className="border border-border/50 rounded-lg overflow-hidden">
         <div className="px-5 py-4 border-b border-border/50">
           <h1 className="text-[18px] font-semibold text-text-primary">{title}</h1>

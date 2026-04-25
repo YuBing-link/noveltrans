@@ -11,6 +11,7 @@ import type {
   ChapterTaskResponse,
   ProjectMemberResponse,
   CommentResponse,
+  PageResult,
 } from '../api/types';
 import { SUPPORTED_LANGUAGES } from '../api/types';
 import {
@@ -181,7 +182,8 @@ function CollabPage() {
   const loadComments = async (chapterId: number) => {
     try {
       const res = await collabApi.listComments(chapterId);
-      setComments(res.data);
+      const pageData = res.data as unknown as PageResult<CommentResponse>;
+      setComments(pageData.records || []);
     } catch {
       toastError('加载评论失败');
     }

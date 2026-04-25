@@ -42,7 +42,7 @@ function SettingsPage() {
   };
 
   return (
-    <div className="p-5 space-y-6">
+    <div className="py-8">
       <h2 className="text-[15px] font-semibold text-text-primary">设置</h2>
       
       <div className="space-y-4">

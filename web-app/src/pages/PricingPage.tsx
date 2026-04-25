@@ -10,7 +10,7 @@ export { PricingPage };
 
 function PricingPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState<string | null>(null);
@@ -24,7 +24,9 @@ function PricingPage() {
     setLoading(plan);
     try {
       const result = await subscriptionApi.checkout({ plan, billingCycle });
-      window.location.href = result.data.checkoutUrl;
+      const url = result.data.checkoutUrl;
+      if (url) window.location.href = url;
+      else toast('error', '获取支付链接失败，请稍后重试');
     } catch {
       toast('error', '创建支付会话失败，请稍后重试');
     } finally {
@@ -32,65 +34,57 @@ function PricingPage() {
     }
   };
 
-  const currentLevel = user?.userLevel?.toUpperCase() || 'FREE';
-
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-b from-surface to-surface-secondary">
+    <div className="mx-auto" style={{ maxWidth: '80rem', padding: '0 0 0' }}>
       {/* Hero */}
-      <div className="text-center pt-16 pb-10">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-accent/10 text-accent text-[13px] font-medium mb-6">
+      <div style={{ textAlign: 'center', paddingTop: '64px', paddingBottom: '40px' }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: '8px',
+          padding: '6px 16px', borderRadius: '9999px',
+          background: 'rgba(201,100,66,0.10)', color: '#c96442',
+          fontSize: '13px', fontWeight: 500, marginBottom: '24px',
+        }}>
           <Sparkles className="w-3.5 h-3.5" />
           升级到专业版，解锁全部能力
         </div>
-        <h1 className="text-hero font-bold text-text-primary mb-4">
+        <h1 style={{
+          fontFamily: 'var(--font-serif)', fontSize: '36px', lineHeight: 1.2,
+          fontWeight: 500, letterSpacing: '-0.025em', margin: '0 0 16px',
+          color: '#141413',
+        }}>
           选择适合你的方案
         </h1>
-        <p className="text-body-lg text-text-secondary max-w-xl mx-auto">
+        <p style={{ fontSize: '17px', lineHeight: 1.6, color: '#5e5d59', maxWidth: '640px', margin: '0 auto' }}>
           免费方案即可满足日常需求，升级方案获得更多翻译额度与高级功能
         </p>
       </div>
 
       {/* Billing toggle */}
-      <div className="flex items-center justify-center gap-3 mb-12">
-        <span className={`text-[14px] ${billingCycle === 'monthly' ? 'text-text-primary font-medium' : 'text-text-tertiary'}`}>月付</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '48px' }}>
+        <span style={{ fontSize: '14px', color: billingCycle === 'monthly' ? '#141413' : '#87867f', fontWeight: billingCycle === 'monthly' ? 500 : 400 }}>月付</span>
         <button
           onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'yearly' : 'monthly')}
-          className={`relative w-12 h-6 rounded-full transition-colors ${billingCycle === 'yearly' ? 'bg-accent' : 'bg-gray-300 dark:bg-gray-600'}`}
+          style={{
+            position: 'relative', width: '48px', height: '24px', borderRadius: '9999px',
+            background: billingCycle === 'yearly' ? '#c96442' : '#d1cfc5',
+            border: 'none', cursor: 'pointer', padding: 0, transition: 'background 0.2s',
+          }}
         >
-          <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${billingCycle === 'yearly' ? 'translate-x-6' : ''}`} />
+          <div style={{
+            position: 'absolute', top: '2px', left: billingCycle === 'yearly' ? '26px' : '2px',
+            width: '20px', height: '20px', borderRadius: '50%', background: '#fff',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.15)', transition: 'left 0.2s',
+          }} />
         </button>
-        <span className={`text-[14px] ${billingCycle === 'yearly' ? 'text-text-primary font-medium' : 'text-text-tertiary'}`}>年付</span>
-        <span className="text-[12px] text-green font-medium bg-green/10 px-2.5 py-1 rounded-full">省 20%</span>
+        <span style={{ fontSize: '14px', color: billingCycle === 'yearly' ? '#141413' : '#87867f', fontWeight: billingCycle === 'yearly' ? 500 : 400 }}>年付</span>
+        <span style={{ fontSize: '12px', color: '#4a7c59', fontWeight: 500, background: 'rgba(74,124,89,0.10)', padding: '2px 10px', borderRadius: '9999px' }}>省 20%</span>
       </div>
 
       {/* Plan cards */}
-      <div className="max-w-5xl mx-auto px-4 pb-20 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* FREE */}
-        <PlanCard
-          config={PLAN_CONFIGS.FREE}
-          isCurrent={currentLevel === 'FREE'}
-          onSubscribe={null}
-          loading={false}
-          billingCycle="monthly"
-        />
-
-        {/* PRO */}
-        <PlanCard
-          config={PLAN_CONFIGS.PRO}
-          isCurrent={currentLevel === 'PRO'}
-          onSubscribe={() => handleSubscribe('PRO')}
-          loading={loading === 'PRO'}
-          billingCycle={billingCycle}
-        />
-
-        {/* MAX */}
-        <PlanCard
-          config={PLAN_CONFIGS.MAX}
-          isCurrent={currentLevel === 'MAX'}
-          onSubscribe={() => handleSubscribe('MAX')}
-          loading={loading === 'MAX'}
-          billingCycle={billingCycle}
-        />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '32px', marginBottom: '80px', padding: '0 16px' }}>
+        <PlanCard config={PLAN_CONFIGS.FREE} isCurrent={false} onSubscribe={null} loading={false} billingCycle={billingCycle} />
+        <PlanCard config={PLAN_CONFIGS.PRO} isCurrent={false} onSubscribe={() => handleSubscribe('PRO')} loading={loading === 'PRO'} billingCycle={billingCycle} />
+        <PlanCard config={PLAN_CONFIGS.MAX} isCurrent={false} onSubscribe={() => handleSubscribe('MAX')} loading={loading === 'MAX'} billingCycle={billingCycle} />
       </div>
     </div>
   );
@@ -108,55 +102,72 @@ function PlanCard({ config, isCurrent, onSubscribe, loading, billingCycle }: {
     : config.price;
 
   return (
-    <div
-      className={`relative rounded-card border p-6 flex flex-col transition-card ${
-        config.highlighted
-          ? 'border-accent bg-accent/5 shadow-lg'
-          : 'border-border bg-white dark:bg-surface'
-      }`}
-    >
+    <div style={{
+      position: 'relative', borderRadius: '8px',
+      border: config.highlighted ? '1px solid #c96442' : '1px solid #f0eee6',
+      padding: '24px', display: 'flex', flexDirection: 'column',
+      background: config.highlighted ? 'rgba(201,100,66,0.05)' : '#fff',
+      boxShadow: config.highlighted ? '0 4px 24px rgba(0,0,0,0.08)' : 'none',
+      transition: 'transform 0.2s, box-shadow 0.2s',
+    }}>
       {config.highlighted && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-accent text-white text-[11px] font-semibold">
+        <div style={{
+          position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)',
+          padding: '2px 12px', borderRadius: '9999px', background: '#c96442',
+          color: '#fff', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
+        }}>
           最受欢迎
         </div>
       )}
 
-      <h3 className="text-heading font-semibold text-text-primary">{config.name}</h3>
+      <h3 style={{
+        fontFamily: 'var(--font-serif)', fontSize: '24px', lineHeight: 1.2,
+        fontWeight: 500, letterSpacing: '-0.025em', color: '#141413', margin: 0,
+      }}>{config.name}</h3>
 
-      <div className="mt-4 mb-6">
-        <span className="text-hero font-bold text-text-primary">{price}</span>
+      <div style={{ marginTop: '16px', marginBottom: '24px' }}>
+        <span style={{ fontFamily: 'var(--font-serif)', fontSize: '36px', lineHeight: 1.2, fontWeight: 500, color: '#141413' }}>{price}</span>
         {billingCycle === 'yearly' && (config as any).yearlyTotal && (
-          <span className="ml-2 text-[13px] text-text-tertiary">{(config as any).yearlyTotal}</span>
+          <span style={{ marginLeft: '8px', fontSize: '13px', color: '#87867f' }}>{(config as any).yearlyTotal}</span>
         )}
       </div>
 
-      <ul className="space-y-3 mb-8 flex-1">
+      <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', flex: 1 }}>
         {config.features.map((f) => (
-          <li key={f} className="flex items-start gap-2 text-[14px] text-text-secondary">
-            <Check className="w-4 h-4 text-green mt-0.5 flex-shrink-0" />
+          <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '14px', color: '#5e5d59', marginBottom: '12px' }}>
+            <Check className="w-4 h-4" style={{ color: '#4a7c59', marginTop: '2px', flexShrink: 0 }} />
             {f}
           </li>
         ))}
       </ul>
 
       {isCurrent ? (
-        <div className="w-full py-2.5 rounded-button border border-border text-[14px] font-medium text-text-secondary cursor-default text-center">
+        <div style={{
+          width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #f0eee6',
+          fontSize: '14px', fontWeight: 500, color: '#5e5d59', cursor: 'default', textAlign: 'center',
+        }}>
           当前方案
         </div>
       ) : onSubscribe ? (
         <button
           onClick={onSubscribe}
           disabled={loading}
-          className={`w-full py-2.5 rounded-button text-[14px] font-medium transition-button ${
-            config.highlighted
-              ? 'bg-accent text-white hover:bg-accent-hover disabled:bg-accent/60'
-              : 'bg-accent/10 text-accent hover:bg-accent/20 disabled:bg-accent/5'
-          }`}
+          style={{
+            width: '100%', padding: '10px', borderRadius: '8px', fontSize: '14px', fontWeight: 500,
+            border: config.highlighted ? 'none' : 'none',
+            background: config.highlighted ? '#c96442' : 'rgba(201,100,66,0.10)',
+            color: config.highlighted ? '#fff' : '#c96442',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1, transition: 'all 0.15s',
+          }}
         >
           {loading ? '跳转中...' : config.cta}
         </button>
       ) : (
-        <div className="w-full py-2.5 rounded-button border border-border text-[14px] font-medium text-text-tertiary text-center">
+        <div style={{
+          width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #f0eee6',
+          fontSize: '14px', fontWeight: 500, color: '#5e5d59', textAlign: 'center',
+        }}>
           {config.cta}
         </div>
       )}

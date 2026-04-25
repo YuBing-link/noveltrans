@@ -2,8 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './components/ui/Toast';
-import { Header } from './components/layout/Header';
-import { Footer } from './components/layout/Footer';
+import { Layout } from './components/layout/Layout';
 import { useAuth } from './hooks/useAuth';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
@@ -60,13 +59,9 @@ function App() {
       <AuthProvider>
         <ThemeProvider>
           <ToastProvider>
-            <div className="flex flex-col min-h-screen bg-background">
-              <Header />
-              <main className="flex-1 w-full">
-                <AppRoutes />
-              </main>
-              <Footer />
-            </div>
+            <Layout>
+              <AppRoutes />
+            </Layout>
           </ToastProvider>
         </ThemeProvider>
       </AuthProvider>

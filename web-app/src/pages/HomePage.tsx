@@ -93,9 +93,8 @@ function HomePage() {
     : 0;
 
   return (
-    <div className="w-full flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12 pb-20">
-      <div className="w-full" style={{ maxWidth: '80rem' }}>
-        {/* Page Header */}
+    <div className="py-12 pb-20">
+      {/* Page Header */}
         <div className="mb-8 text-center">
           <h1 className="text-[32px] font-bold text-text-primary mb-2 tracking-tight">
             AI 智能翻译
@@ -336,7 +335,6 @@ function HomePage() {
           </button>
         </div>
         </div>
-      </div>
     </div>
   );
 }

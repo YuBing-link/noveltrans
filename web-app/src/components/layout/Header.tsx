@@ -18,7 +18,7 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-50/80 backdrop-blur-xl border-b border-divider dark:border-border">
-      <div className="w-full pl-6 h-14 flex items-center relative">
+      <div className="max-w-7xl mx-auto w-full px-6 h-14 flex items-center relative">
         {/* Logo + Nav */}
         <div className="flex items-center gap-10">
           <Link to="/" className="text-[15px] font-semibold text-text-primary flex items-center gap-2">

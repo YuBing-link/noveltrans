@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 function Footer() {
   return (
     <footer className="bg-surface-secondary dark:bg-gray-50 border-t border-divider dark:border-border">
-      <div className="w-full max-w-[88rem] mx-auto px-6 py-12">
+      <div className="max-w-7xl mx-auto w-full px-6 py-12">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-16 gap-y-8">
           <div className="text-center">
             <h4 className="text-[12px] font-semibold text-text-primary mb-3">产品</h4>
