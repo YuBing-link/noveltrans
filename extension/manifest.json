@@ -32,7 +32,8 @@
         "src/content/content.js"
       ],
       "css": [
-        "src/content/selection-styles.css"
+        "src/content/selection-styles.css",
+        "src/content/reader-styles.css"
       ]
     }
   ],

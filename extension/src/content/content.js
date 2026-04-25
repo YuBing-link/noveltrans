@@ -1884,22 +1884,33 @@ class TranslationApplier {
     style.id = 'extreme-bilingual-styles';
     style.textContent = `
       .extreme-bilingual-text {
-        display: block !important;
+        display: flex !important;
+        flex-direction: column !important;
         padding: 4px 0 !important;
+        margin: 0 !important;
+        clear: both !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
       }
       .extreme-bilingual-text .ext-bilingual-original {
         display: block !important;
         color: rgba(128, 128, 128, 0.75) !important;
         font-size: 0.88em !important;
         line-height: 1.4 !important;
-        margin-bottom: 3px !important;
-        padding-bottom: 3px !important;
+        margin: 0 0 3px 0 !important;
+        padding: 0 0 3px 0 !important;
         border-bottom: 1px dashed rgba(128, 128, 128, 0.2) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
       }
       .extreme-bilingual-text .ext-bilingual-translated {
         display: block !important;
         font-size: 1em !important;
         line-height: 1.5 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
       }
     `;
     document.head.appendChild(style);
@@ -2133,6 +2144,9 @@ class TranslationApplier {
       this.applyDirectTranslation(textNode, translatedText);
       return;
     }
+
+    // 确保双语样式已注入
+    this.injectBilingualStyles();
 
     const formattedTranslation = this.protectFormat(originalText, translatedText);
 
@@ -4615,3 +4629,29 @@ globalThis.mainTranslationService = translationService;
 window.addEventListener('beforeunload', () => {
     translationService.cleanupTranslations();
 });
+
+// ===== Web 登录态桥接 =====
+// 当用户在 web 端已登录时，自动同步登录态到扩展
+(function syncAuthToExtension() {
+    try {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            const userInfo = localStorage.getItem('userInfo');
+            browser.runtime.sendMessage({
+                action: 'setAuthToken',
+                token: token,
+                userInfo: userInfo ? JSON.parse(userInfo) : {}
+            }).catch(() => {
+                // background 未就绪时忽略
+            });
+            console.log('[NovelTrans] 登录态已同步到扩展');
+        } else {
+            // web 端未登录，清除扩展登录态
+            browser.runtime.sendMessage({
+                action: 'clearAuthToken'
+            }).catch(() => {});
+        }
+    } catch (e) {
+        // 非 web 页面（无 authToken）时静默跳过
+    }
+})();

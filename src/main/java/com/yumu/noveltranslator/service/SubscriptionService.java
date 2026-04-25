@@ -94,20 +94,34 @@ public class SubscriptionService {
     }
 
     /**
-     * 创建 Stripe Checkout Session
+     * 创建订阅支付会话
+     * - 无活跃订阅 → 创建新订阅 Checkout Session（走 Stripe 支付流程）
+     * - 有活跃订阅 + 升级套餐 → 直接调用 Subscription.update 变更价格，Stripe 自动按比例结算差价
      */
     @Transactional
     public CheckoutSessionResponse createCheckoutSession(Long userId, CheckoutSessionRequest request) {
         SubscriptionPlan plan = validatePlan(request.getPlan());
         BillingCycle billingCycle = validateBillingCycle(request.getBillingCycle());
+        String priceId = getPriceId(plan, billingCycle);
 
         // 1. 获取或创建 Stripe Customer
         StripeCustomer customer = getOrCreateCustomer(userId);
 
-        // 2. 获取 priceId
-        String priceId = getPriceId(plan, billingCycle);
+        // 2. 检查是否已有活跃订阅
+        StripeSubscription existingSub = stripeSubscriptionMapper.selectOne(
+            new LambdaQueryWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getUserId, userId)
+                .eq(StripeSubscription::getDeleted, 0)
+                .in(StripeSubscription::getStatus, "active", "trialing")
+                .last("LIMIT 1")
+        );
 
-        // 3. 创建 Checkout Session
+        // 3. 已有活跃订阅 → 升级现有订阅（不创建新 session）
+        if (existingSub != null) {
+            return upgradeSubscription(existingSub, priceId, plan, billingCycle);
+        }
+
+        // 4. 无活跃订阅 → 创建新 Checkout Session
         try {
             SessionCreateParams params = SessionCreateParams.builder()
                 .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
@@ -130,6 +144,71 @@ public class SubscriptionService {
         } catch (StripeException e) {
             log.error("Failed to create Stripe Checkout Session for user {}: {}", userId, e.getMessage(), e);
             throw new RuntimeException("创建支付会话失败", e);
+        }
+    }
+
+    /**
+     * 升级现有订阅：替换 price，Stripe 自动按比例结算差价
+     */
+    private CheckoutSessionResponse upgradeSubscription(StripeSubscription existingSub,
+                                                         String newPriceId,
+                                                         SubscriptionPlan newPlan,
+                                                         BillingCycle billingCycle) {
+        try {
+            Subscription stripeSub = Subscription.retrieve(existingSub.getStripeSubscriptionId());
+
+            // 删除旧的价格项
+            String oldItemId = stripeSub.getItems().getData().get(0).getId();
+            SubscriptionUpdateParams.Item removeItem = SubscriptionUpdateParams.Item.builder()
+                .setId(oldItemId)
+                .setDeleted(true)
+                .setClearUsage(true)
+                .build();
+
+            // 添加新的价格项
+            SubscriptionUpdateParams.Item newItem = SubscriptionUpdateParams.Item.builder()
+                .setPrice(newPriceId)
+                .setQuantity(1L)
+                .build();
+
+            SubscriptionUpdateParams updateParams = SubscriptionUpdateParams.builder()
+                .addItem(removeItem)
+                .addItem(newItem)
+                .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE)
+                .build();
+
+            Subscription updated = stripeSub.update(updateParams);
+
+            // 更新本地记录
+            existingSub.setPlan(newPlan.getValue());
+            existingSub.setBillingCycle(billingCycle.getValue());
+            existingSub.setStripePriceId(updated.getItems().getData().get(0).getPrice().getId());
+            existingSub.setStatus(updated.getStatus());
+            existingSub.setCancelAtPeriodEnd(updated.getCancelAtPeriodEnd());
+
+            if (updated.getCurrentPeriodStart() != null) {
+                existingSub.setCurrentPeriodStart(
+                    LocalDateTime.ofInstant(Instant.ofEpochSecond(updated.getCurrentPeriodStart()), ZoneId.systemDefault()));
+            }
+            if (updated.getCurrentPeriodEnd() != null) {
+                existingSub.setCurrentPeriodEnd(
+                    LocalDateTime.ofInstant(Instant.ofEpochSecond(updated.getCurrentPeriodEnd()), ZoneId.systemDefault()));
+            }
+
+            existingSub.setLastWebhookEventId("upgrade_" + System.currentTimeMillis());
+            stripeSubscriptionMapper.updateById(existingSub);
+
+            // 更新用户等级
+            updateUserLevel(existingSub.getUserId(), newPlan.getValue(), "subscription_upgrade");
+
+            log.info("Upgraded subscription {} for user {}: {} -> {}, priceId {}",
+                existingSub.getStripeSubscriptionId(), existingSub.getUserId(),
+                existingSub.getPlan(), newPlan, newPriceId);
+
+            return new CheckoutSessionResponse(null);
+        } catch (StripeException e) {
+            log.error("Failed to upgrade subscription for user {}: {}", existingSub.getUserId(), e.getMessage(), e);
+            throw new RuntimeException("升级订阅失败", e);
         }
     }
 

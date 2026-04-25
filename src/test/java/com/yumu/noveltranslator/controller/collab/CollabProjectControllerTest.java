@@ -100,12 +100,14 @@ class CollabProjectControllerTest {
             resp.setId(1L);
             resp.setName("测试项目");
 
-            when(collabProjectService.listByUserId(1L)).thenReturn(List.of(resp));
+            PageResponse<CollabProjectResponse> pageResp = PageResponse.of(1, 20, 1L, List.of(resp));
+
+            when(collabProjectService.listByUserId(1L, 1, 20)).thenReturn(pageResp);
 
             mockMvc.perform(get("/v1/collab/projects"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].id").value(1));
+                .andExpect(jsonPath("$.data.list[0].id").value(1));
         }
     }
 
@@ -120,12 +122,13 @@ class CollabProjectControllerTest {
             chapter.setId(1L);
             chapter.setTitle("第一章");
 
-            when(chapterTaskService.listByProjectId(1L)).thenReturn(List.of(chapter));
+            PageResponse<ChapterTaskResponse> pageResp = PageResponse.of(1, 20, 1L, List.of(chapter));
+            when(chapterTaskService.listByProjectId(1L, 1, 20)).thenReturn(pageResp);
 
             mockMvc.perform(get("/v1/collab/projects/1/chapters"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].title").value("第一章"));
+                .andExpect(jsonPath("$.data.list[0].title").value("第一章"));
         }
     }
 

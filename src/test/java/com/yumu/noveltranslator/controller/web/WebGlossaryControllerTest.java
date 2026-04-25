@@ -79,7 +79,7 @@ class WebGlossaryControllerTest {
         void 获取术语库列表成功() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.getGlossaryList(1L)).thenReturn(List.of(glossary));
+            when(userService.getGlossaryTerms(1L)).thenReturn(List.of(glossary));
 
             mockMvc.perform(get("/user/glossaries"))
                 .andExpect(status().isOk())
@@ -248,7 +248,7 @@ class WebGlossaryControllerTest {
         void 导出CSV成功() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.getGlossaryList(1L)).thenReturn(List.of(glossary));
+            when(userService.getGlossaryTerms(1L)).thenReturn(List.of(glossary));
 
             mockMvc.perform(get("/user/glossaries/export"))
                 .andExpect(status().isOk())
@@ -259,7 +259,7 @@ class WebGlossaryControllerTest {
         @Test
         void 导出空列表也返回CSV() throws Exception {
             setupSecurityContext();
-            when(userService.getGlossaryList(1L)).thenReturn(List.of());
+            when(userService.getGlossaryTerms(1L)).thenReturn(List.of());
 
             mockMvc.perform(get("/user/glossaries/export"))
                 .andExpect(status().isOk())
@@ -270,7 +270,7 @@ class WebGlossaryControllerTest {
         void 导出CSV包含BOM头() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.getGlossaryList(1L)).thenReturn(List.of(glossary));
+            when(userService.getGlossaryTerms(1L)).thenReturn(List.of(glossary));
 
             mockMvc.perform(get("/user/glossaries/export"))
                 .andExpect(status().isOk())

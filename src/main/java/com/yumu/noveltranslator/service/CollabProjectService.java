@@ -2,6 +2,7 @@ package com.yumu.noveltranslator.service;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.dto.*;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabComment;
 import com.yumu.noveltranslator.entity.CollabInviteCode;
@@ -299,13 +300,20 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     /**
      * 获取用户参与的项目列表（包括作为成员，可能跨租户）
      */
-    public List<CollabProjectResponse> listByUserId(Long userId) {
+    public PageResponse<CollabProjectResponse> listByUserId(Long userId, int page, int pageSize) {
         try {
             TenantContext.setBypassTenant(true);
-            return collabProjectMapper.selectByMemberUserId(userId)
-                    .stream()
+            List<CollabProject> allProjects = collabProjectMapper.selectByMemberUserId(userId);
+            long total = allProjects.size();
+            int fromIndex = Math.min((page - 1) * pageSize, (int) total);
+            int toIndex = Math.min(fromIndex + pageSize, (int) total);
+            List<CollabProject> pagedProjects = fromIndex < total
+                    ? allProjects.subList(fromIndex, toIndex)
+                    : List.of();
+            List<CollabProjectResponse> responseList = pagedProjects.stream()
                     .map(this::toProjectResponse)
                     .collect(Collectors.toList());
+            return PageResponse.of(page, pageSize, total, responseList);
         } finally {
             TenantContext.setBypassTenant(false);
         }
@@ -487,16 +495,29 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     }
 
     /**
-     * 获取项目成员列表
+     * 获取项目成员列表（分页）
      */
-    public List<ProjectMemberResponse> getMembers(Long projectId) {
-        List<CollabProjectMember> members = collabProjectMemberMapper.selectByProjectId(projectId);
-        return members.stream()
+    public PageResponse<ProjectMemberResponse> getMembers(Long projectId, int page, int pageSize) {
+        List<CollabProjectMember> allMembers;
+        try {
+            TenantContext.setBypassTenant(true);
+            allMembers = collabProjectMemberMapper.selectByProjectId(projectId);
+        } finally {
+            TenantContext.setBypassTenant(false);
+        }
+        long total = allMembers.size();
+        int fromIndex = Math.min((page - 1) * pageSize, (int) total);
+        int toIndex = Math.min(fromIndex + pageSize, (int) total);
+        List<CollabProjectMember> pagedMembers = fromIndex < total
+                ? allMembers.subList(fromIndex, toIndex)
+                : List.of();
+        List<ProjectMemberResponse> responseList = pagedMembers.stream()
                 .map(m -> {
                     User user = userMapper.selectById(m.getUserId());
                     return toMemberResponse(m, user);
                 })
                 .collect(Collectors.toList());
+        return PageResponse.of(page, pageSize, total, responseList);
     }
 
     /**

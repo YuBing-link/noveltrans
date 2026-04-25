@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * 章节任务状态枚举
  * 状态转移矩阵：
- *   UNASSIGNED  → {TRANSLATING}
+ *   UNASSIGNED  → {TRANSLATING, SUBMITTED}
  *   TRANSLATING → {SUBMITTED, UNASSIGNED}
  *   SUBMITTED   → {REVIEWING}
  *   REVIEWING   → {APPROVED, REJECTED}
@@ -27,7 +27,7 @@ public enum ChapterTaskStatus {
     COMPLETED("COMPLETED");
 
     private static final Map<ChapterTaskStatus, Set<ChapterTaskStatus>> VALID_TRANSITIONS = Map.of(
-            UNASSIGNED, Set.of(TRANSLATING),
+            UNASSIGNED, Set.of(TRANSLATING, SUBMITTED),
             TRANSLATING, Set.of(SUBMITTED, UNASSIGNED),
             SUBMITTED, Set.of(REVIEWING),
             REVIEWING, Set.of(APPROVED, REJECTED),

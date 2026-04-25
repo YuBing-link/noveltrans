@@ -171,10 +171,10 @@ class CollabProjectServiceIntegrationTest {
     void listByUserId() {
         try {
             TenantContext.setBypassTenant(true);
-            List<CollabProjectResponse> projects = collabProjectService.listByUserId(1L);
-            assertNotNull(projects);
-            assertFalse(projects.isEmpty());
-            boolean found = projects.stream().anyMatch(p -> p.getId().equals(createdProjectId));
+            PageResponse<CollabProjectResponse> result = collabProjectService.listByUserId(1L, 1, 20);
+            assertNotNull(result);
+            assertFalse(result.getList().isEmpty());
+            boolean found = result.getList().stream().anyMatch(p -> p.getId().equals(createdProjectId));
             assertTrue(found);
         } finally {
             TenantContext.setBypassTenant(false);
@@ -226,9 +226,9 @@ class CollabProjectServiceIntegrationTest {
         assertNotNull(createdProjectId);
         TenantContext.setTenantId(103L);
         try {
-            List<ProjectMemberResponse> members = collabProjectService.getMembers(createdProjectId);
+            PageResponse<ProjectMemberResponse> members = collabProjectService.getMembers(createdProjectId, 1, 20);
             assertNotNull(members);
-            assertTrue(members.size() >= 2);
+            assertTrue(members.getList().size() >= 2);
         } finally {
             TenantContext.setTenantId(null);
         }

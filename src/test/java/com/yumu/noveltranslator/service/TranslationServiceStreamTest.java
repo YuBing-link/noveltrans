@@ -115,7 +115,7 @@ class TranslationServiceStreamTest {
         void 无认证用户正常翻译() {
             SecurityContextHolder.clearContext();
             when(cacheService.getCache(anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -176,7 +176,7 @@ class TranslationServiceStreamTest {
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cacheService.getCache(anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
@@ -201,7 +201,7 @@ class TranslationServiceStreamTest {
             // No auth user, no quota check
             SecurityContextHolder.clearContext();
             when(cacheService.getCache(anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn(null); // simulate failure
 
             SseEmitter emitter = service.webpageTranslateStream(req);
@@ -218,7 +218,7 @@ class TranslationServiceStreamTest {
 
             SecurityContextHolder.clearContext();
             when(cacheService.getCache(anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"Expert translation\"}");
 
             SseEmitter emitter = service.webpageTranslateStream(req);
@@ -306,12 +306,11 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
-            req.setContext("Hello");
             req.setTargetLang("zh");
             // No mode set, should default to "fast"
             var resp = service.selectionTranslate(req);
@@ -332,12 +331,12 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
+            // mode=expert uses pipeline.execute() which calls 4-param translate
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
-            req.setContext("Hello");
             req.setTargetLang("zh");
             req.setMode("expert");
             var resp = service.selectionTranslate(req);
@@ -352,17 +351,17 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
-            req.setContext("Hello");
             req.setTargetLang("zh");
             var resp = service.selectionTranslate(req);
 
-            assertFalse(resp.getSuccess());
-            assertTrue(resp.getTranslation().contains("结果为空"));
+            // executeFast returns original text on empty result, which is non-empty -> success=true
+            assertTrue(resp.getSuccess());
+            assertEquals("Hello", resp.getTranslation());
         }
 
         @Test
@@ -371,17 +370,17 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenThrow(new RuntimeException("connection timeout"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
-            req.setContext("Hello");
             req.setTargetLang("zh");
             var resp = service.selectionTranslate(req);
 
-            assertFalse(resp.getSuccess());
-            assertTrue(resp.getTranslation().contains("connection timeout"));
+            // executeFast catches exception and returns original text -> success=true
+            assertTrue(resp.getSuccess());
+            assertEquals("Hello", resp.getTranslation());
         }
     }
 

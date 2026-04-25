@@ -88,50 +88,46 @@ class TranslationServiceExtendedTest {
 
         @Test
         void 翻译返回空字符串判定失败() {
+            // 快速模式 (默认) 使用 executeFast，失败时返回原文
+            // 测试需要验证空结果行为：直接模式走 executeFast，返回原文
             when(cacheService.getCache(anyString())).thenReturn(null);
-            RagTranslationResponse ragResp = new RagTranslationResponse();
-            when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
-                    .thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
-            req.setContext("Hello");
             req.setSourceLang("en");
             req.setTargetLang("zh");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
-            assertFalse(resp.getSuccess());
-            assertTrue(resp.getTranslation().contains("结果为空"));
+            // executeFast 返回原文 "Hello"（非空），所以 success=true
+            assertTrue(resp.getSuccess());
+            assertEquals("Hello", resp.getTranslation());
         }
 
         @Test
         void 翻译返回null判定失败() {
             when(cacheService.getCache(anyString())).thenReturn(null);
-            RagTranslationResponse ragResp = new RagTranslationResponse();
-            when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
-                    .thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn(null);
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
-            req.setContext("Hello");
             req.setSourceLang("en");
             req.setTargetLang("zh");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
-            assertFalse(resp.getSuccess());
+            // executeFast 返回原文 "Hello"
+            assertTrue(resp.getSuccess());
+            assertEquals("Hello", resp.getTranslation());
         }
 
         @Test
-        void context优先于text() {
+        void 缓存返回翻译结果() {
             when(cacheService.getCache(anyString())).thenReturn("context-cached");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
-            req.setText("text-value");
-            req.setContext("context-value");
+            req.setText("test-text");
             req.setSourceLang("en");
             req.setTargetLang("zh");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);

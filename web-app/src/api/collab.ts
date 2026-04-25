@@ -10,11 +10,18 @@ import type {
   ReviewChapterRequest,
   InviteMemberRequest,
   CreateCommentRequest,
+  PaginatedList,
 } from './types';
 
 export const collabApi = {
   // Projects
-  listProjects: () => api.get<CollabProjectResponse[]>('/v1/collab/projects'),
+  listProjects: (params?: { page?: number; pageSize?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+    const query = qs.toString();
+    return api.get<PaginatedList<CollabProjectResponse>>(`/v1/collab/projects${query ? `?${query}` : ''}`);
+  },
   createProject: (data: CreateCollabProjectRequest) =>
     api.post<CollabProjectResponse>('/v1/collab/projects', data),
   getProject: (projectId: number) =>
@@ -27,8 +34,13 @@ export const collabApi = {
     api.post<null>(`/v1/collab/projects/${projectId}/status?targetStatus=${targetStatus}`),
 
   // Chapters
-  listChapters: (projectId: number) =>
-    api.get<ChapterTaskResponse[]>(`/v1/collab/projects/${projectId}/chapters`),
+  listChapters: (projectId: number, params?: { page?: number; pageSize?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+    const query = qs.toString();
+    return api.get<PaginatedList<ChapterTaskResponse>>(`/v1/collab/projects/${projectId}/chapters${query ? `?${query}` : ''}`);
+  },
   createChapter: (projectId: number, chapterNumber: number, title?: string, sourceText?: string) => {
     const qs = new URLSearchParams();
     qs.set('chapterNumber', String(chapterNumber));
@@ -38,8 +50,13 @@ export const collabApi = {
   },
   getChapter: (chapterId: number) =>
     api.get<ChapterTaskResponse>(`/v1/collab/chapters/${chapterId}`),
-  listMyChapters: () =>
-    api.get<ChapterTaskResponse[]>('/v1/collab/chapters/my'),
+  listMyChapters: (params?: { page?: number; pageSize?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+    const query = qs.toString();
+    return api.get<PaginatedList<ChapterTaskResponse>>(`/v1/collab/chapters/my${query ? `?${query}` : ''}`);
+  },
 
   // Chapter workflow
   assignChapter: (chapterId: number, data: AssignChapterRequest) =>
@@ -50,8 +67,13 @@ export const collabApi = {
     api.put<ChapterTaskResponse>(`/v1/collab/chapters/${chapterId}/review`, data),
 
   // Members
-  listMembers: (projectId: number) =>
-    api.get<ProjectMemberResponse[]>(`/v1/collab/projects/${projectId}/members`),
+  listMembers: (projectId: number, params?: { page?: number; pageSize?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+    const query = qs.toString();
+    return api.get<PaginatedList<ProjectMemberResponse>>(`/v1/collab/projects/${projectId}/members${query ? `?${query}` : ''}`);
+  },
   inviteMember: (projectId: number, data: InviteMemberRequest) =>
     api.post<ProjectMemberResponse>(`/v1/collab/projects/${projectId}/invite`, data),
   generateInviteCode: (projectId: number) =>
@@ -63,7 +85,7 @@ export const collabApi = {
 
   // Comments
   listComments: (chapterTaskId: number, page = 1, size = 20) =>
-    api.get<CommentResponse[]>(`/v1/collab/chapters/${chapterTaskId}/comments?page=${page}&size=${size}`),
+    api.get<PaginatedList<CommentResponse>>(`/v1/collab/chapters/${chapterTaskId}/comments?page=${page}&size=${size}`),
   createComment: (chapterTaskId: number, data: CreateCommentRequest) =>
     api.post<CommentResponse>(`/v1/collab/chapters/${chapterTaskId}/comments`, data),
   resolveComment: (commentId: number) =>

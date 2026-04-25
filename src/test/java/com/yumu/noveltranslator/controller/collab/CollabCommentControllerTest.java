@@ -1,8 +1,10 @@
 package com.yumu.noveltranslator.controller.collab;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.dto.CommentResponse;
 import com.yumu.noveltranslator.dto.CreateCommentRequest;
+import com.yumu.noveltranslator.dto.PageResponse;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import com.yumu.noveltranslator.service.CollabCommentService;
@@ -103,12 +105,17 @@ class CollabCommentControllerTest {
             setupSecurityContext();
             CommentResponse resp = createCommentResponse();
 
-            when(collabCommentService.getCommentsByChapter(1L, 1L)).thenReturn(List.of(resp));
+            Page<CommentResponse> iPage = new Page<>();
+            iPage.setCurrent(1);
+            iPage.setSize(20);
+            iPage.setTotal(1);
+            iPage.setRecords(List.of(resp));
+            when(collabCommentService.getCommentsByChapterPage(1L, 1L, 1, 20)).thenReturn(iPage);
 
             mockMvc.perform(get("/v1/collab/chapters/1/comments"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].content").value("评论内容"));
+                .andExpect(jsonPath("$.data.list[0].content").value("评论内容"));
         }
     }
 

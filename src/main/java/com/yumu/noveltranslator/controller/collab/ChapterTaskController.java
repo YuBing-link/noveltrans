@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import com.yumu.noveltranslator.dto.Result;
+import com.yumu.noveltranslator.dto.PageResponse;
 import java.util.List;
 
 /**
@@ -55,9 +56,11 @@ public class ChapterTaskController {
     }
 
     @GetMapping("/chapters/my")
-    public Result<List<ChapterTaskResponse>> listMyChapters() {
+    public Result<PageResponse<ChapterTaskResponse>> listMyChapters(
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
         Long userId = SecurityUtil.getRequiredUserId();
-        List<ChapterTaskResponse> chapters = chapterTaskService.listByAssigneeId(userId);
-        return Result.ok(chapters, "200");
+        PageResponse<ChapterTaskResponse> chapters = chapterTaskService.listByAssigneeId(userId, page, pageSize);
+        return Result.ok(chapters);
     }
 }

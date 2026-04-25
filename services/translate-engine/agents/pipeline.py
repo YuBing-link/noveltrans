@@ -22,18 +22,21 @@ DEFAULT_CHUNK_SIZE = 4000
 def _split_text(text: str, chunk_size: int = DEFAULT_CHUNK_SIZE) -> list[str]:
     """Split long text into chunks at paragraph boundaries.
 
-    Tries to split at double newlines first; falls back to hard chunking.
+    Respects both double newlines (paragraph breaks) and single newlines
+    (dialogue/line breaks). Single newlines are preserved within chunks.
     """
+    # First split by double newlines to get major paragraphs
     paragraphs = text.split("\n\n")
     chunks: list[str] = []
     current: list[str] = []
     current_len = 0
 
     for para in paragraphs:
-        para = para.strip()
-        if not para:
+        # Don't strip here — preserve internal single newlines for dialogue
+        if not para.strip():
             continue
         if current_len + len(para) > chunk_size and current:
+            # Join with double newline between major paragraphs
             chunks.append("\n\n".join(current))
             current = []
             current_len = 0

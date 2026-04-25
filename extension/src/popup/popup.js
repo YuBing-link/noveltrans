@@ -601,39 +601,51 @@ async function checkLoginState() {
 
 // 打开登录页面
 function openLoginPage() {
-  browser.tabs.create({ url: `${GlobalConfig.API_BASE_URL}/login` }).then((tab) => {
-    // 监听标签页更新，检测登录成功后自动同步 token
-    const tabUpdateHandler = async (tabId, changeInfo) => {
-      if (tabId !== tab.id || changeInfo.status !== 'complete') return;
+  const loginUrl = `${GlobalConfig.API_BASE_URL}/login`;
+  browser.tabs.create({ url: loginUrl }).then((tab) => {
+    // 使用轮询方式检测登录成功：每隔 1 秒检查一次 localStorage
+    let pollCount = 0;
+    const maxPolls = 60; // 最多轮询 60 秒
+
+    const pollForToken = async () => {
+      pollCount++;
+      if (pollCount > maxPolls) {
+        console.log('⏰ 登录检测超时，停止轮询');
+        return;
+      }
+
       try {
         const results = await browser.scripting.executeScript({
-          target: { tabId },
+          target: { tabId: tab.id },
           func: () => {
             const token = localStorage.getItem('authToken');
             const userInfo = localStorage.getItem('userInfo');
             return { token, userInfo };
           }
         });
+
         if (results && results[0] && results[0].result && results[0].result.token) {
           const { token, userInfo } = results[0].result;
           await browser.storage.local.set({
             auth_token: token,
-            user_info: userInfo ? JSON.parse(userInfo) : {}
+            auth_user: userInfo ? JSON.parse(userInfo) : {}
           });
           console.log('✅ 登录状态已同步到插件');
-          browser.tabs.onUpdated.removeListener(tabUpdateHandler);
           await updateLoginButtonState();
+          // 登录成功后停止轮询
+          return;
         }
       } catch (e) {
-        // 跨域或脚本注入失败，忽略（用户可能还未登录）
+        // 跨域或脚本注入失败，忽略
+        console.log('⚠️ 轮询检测失败:', e.message);
       }
-    };
-    browser.tabs.onUpdated.addListener(tabUpdateHandler);
 
-    // 30 秒后自动移除监听器
-    setTimeout(() => {
-      browser.tabs.onUpdated.removeListener(tabUpdateHandler);
-    }, 30000);
+      // 1 秒后继续轮询
+      setTimeout(pollForToken, 1000);
+    };
+
+    // 等待页面初始加载完成后开始轮询
+    setTimeout(pollForToken, 2000);
   });
   window.close();
 }

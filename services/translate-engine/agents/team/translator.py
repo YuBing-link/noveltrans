@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -9,7 +10,6 @@ from typing import Any
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
 from agentscope.message import Msg
-from agentscope.pipeline import msghub
 
 from ..config import get_model
 from ..prompts import battle, mystery, daily
@@ -49,11 +49,34 @@ _LLM_CLEAN_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
+def _extract_text(content) -> str:
+    """Extract text from agent response content.
+
+    agentscope 1.x may return content as a string or as a list of
+    content blocks (e.g., thinking + text).  Handle both cases.
+    """
+    if isinstance(content, list):
+        # Extract 'text' fields from content blocks, skip 'thinking'
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(block.get("text", ""))
+                elif "content" in block:
+                    parts.append(block["content"])
+                elif "text" in block:
+                    parts.append(block["text"])
+            elif isinstance(block, str):
+                parts.append(block)
+        return "\n".join(parts)
+    return str(content) if content else ""
+
+
 def _clean_llm_output(raw: str) -> str:
     """Strip common LLM preamble/postamble and markdown wrappers.
 
-    Returns the core content. If no pattern matches, returns the input
-    unchanged.
+    Preserves internal newlines and paragraph structure of the translation.
+    Only removes outer preamble phrases and markdown code block fences.
     """
     text = raw.strip()
 
@@ -64,6 +87,7 @@ def _clean_llm_output(raw: str) -> str:
             text = match.group(1) if match.lastindex else text
             break
 
+    # Only strip outer whitespace, preserve internal newlines
     return text.strip()
 
 
@@ -244,17 +268,33 @@ class TranslationTeam:
     # Public API
     # ------------------------------------------------------------------
     def translate(self, text: str) -> str:
-        """Run the full team translation pipeline.
+        """Run the full team translation pipeline (sync wrapper).
+
+        Delegates to :meth:`_async_translate` via a dedicated event loop
+        to properly handle agentscope 1.x async agent calls.
+        """
+        if not text.strip():
+            return ""
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(self._async_translate(text))
+        finally:
+            loop.close()
+
+    async def _async_translate(self, text: str) -> str:
+        """Async implementation of the translation pipeline.
 
         1. Translator produces initial translation.
         2. Terminologist reviews terminology consistency (graceful fallback).
         3. Polisher produces the final polished version (graceful fallback).
 
         This method is safe to call multiple times on the same instance.
-        """
-        if not text.strip():
-            return ""
 
+        Note: agents are called directly without msghub since agentscope 1.x
+        MsgHub is async and cannot be nested within a running event loop.
+        """
         logger.info(
             "TranslationTeam: starting translation (%d chars, src=%s, tgt=%s)",
             len(text),
@@ -267,22 +307,24 @@ class TranslationTeam:
             raise RuntimeError("Agents not initialized. Call _build_agents() first.")
 
         # ---------- Step 1: Translator produces initial translation -----
+        translation_text = ""
         try:
-            with msghub(participants=self._agents) as hub:
-                msg_translate = Msg(
-                    name="User",
-                    role="user",
-                    content=(
-                        f"请将以下{self.source_lang}文本翻译为{self.target_lang}：\n\n"
-                        f"---\n{text}\n---"
-                    ),
-                )
-                hub.broadcast(msg_translate)
-                resp_translator = self.translator(msg_translate)
-                translation_text = resp_translator.content or ""
-                logger.debug(
-                    "Translator output length: %d", len(str(translation_text))
-                )
+            msg_translate = Msg(
+                name="User",
+                role="user",
+                content=(
+                    f"请将以下{self.source_lang}文本翻译为{self.target_lang}：\n\n"
+                    f"---\n{text}\n---"
+                ),
+            )
+            # Broadcast to all agents' memory
+            for agent in self._agents:
+                await agent.observe(msg_translate)
+            resp_translator = await self.translator(msg_translate)
+            translation_text = _extract_text(resp_translator.content)
+            logger.debug(
+                "Translator output length: %d", len(str(translation_text))
+            )
         except Exception:
             logger.exception("Step 1 (Translator) failed")
             # Fall through: attempt remaining steps with empty translation
@@ -290,16 +332,16 @@ class TranslationTeam:
         # ---------- Step 2: Terminologist reviews terminology -----------
         term_feedback = "无需修改"
         try:
-            with msghub(participants=self._agents) as hub:
-                msg_review = Msg(
-                    name="User",
-                    role="user",
-                    content=f"以下是初步译文，请检查术语一致性：\n\n{translation_text}",
-                )
-                hub.broadcast(msg_review)
-                resp_terminologist = self.terminologist(msg_review)
-                term_feedback = resp_terminologist.content or "无需修改"
-                logger.debug("Terminologist feedback: %s", term_feedback[:200])
+            msg_review = Msg(
+                name="User",
+                role="user",
+                content=f"以下是初步译文，请检查术语一致性：\n\n{translation_text}",
+            )
+            for agent in self._agents:
+                await agent.observe(msg_review)
+            resp_terminologist = await self.terminologist(msg_review)
+            term_feedback = _extract_text(resp_terminologist.content) or "无需修改"
+            logger.debug("Terminologist feedback: %s", term_feedback[:200])
         except Exception:
             logger.warning(
                 "Step 2 (Terminologist) failed, continuing with '无需修改'"
@@ -308,20 +350,20 @@ class TranslationTeam:
 
         # ---------- Step 3: Polisher produces final version -------------
         try:
-            with msghub(participants=self._agents) as hub:
-                msg_polish = Msg(
-                    name="User",
-                    role="user",
-                    content=(
-                        f"以下是初步译文和术语审校意见：\n\n"
-                        f"【初步译文】\n{translation_text}\n\n"
-                        f"【术语审校意见】\n{term_feedback}\n\n"
-                        f"请结合以上意见，输出最终润色后的完整译文。"
-                    ),
-                )
-                hub.broadcast(msg_polish)
-                resp_polisher = self.polisher(msg_polish)
-                final_text = resp_polisher.content or translation_text
+            msg_polish = Msg(
+                name="User",
+                role="user",
+                content=(
+                    f"以下是初步译文和术语审校意见：\n\n"
+                    f"【初步译文】\n{translation_text}\n\n"
+                    f"【术语审校意见】\n{term_feedback}\n\n"
+                    f"请结合以上意见，输出最终润色后的完整译文。"
+                ),
+            )
+            for agent in self._agents:
+                await agent.observe(msg_polish)
+            resp_polisher = await self.polisher(msg_polish)
+            final_text = _extract_text(resp_polisher.content) or translation_text
         except Exception:
             logger.warning(
                 "Step 3 (Polisher) failed, returning translator output"

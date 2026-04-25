@@ -85,8 +85,6 @@ class TranslationServiceTest {
         @Test
         void 空文本返回错误() {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
-            req.setText("");
-            req.setContext("");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
             assertFalse(resp.getSuccess());
@@ -95,8 +93,6 @@ class TranslationServiceTest {
         @Test
         void null文本返回错误() {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
-            req.setText(null);
-            req.setContext(null);
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
             assertFalse(resp.getSuccess());
@@ -107,15 +103,14 @@ class TranslationServiceTest {
             when(cacheService.getCache(anyString())).thenReturn("缓存结果");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
-            req.setText("Hello World");
-            req.setContext("Hello World");
+            req.setText("测试文本");
             req.setSourceLang("en");
             req.setTargetLang("zh");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
             assertTrue(resp.getSuccess());
             assertEquals("缓存结果", resp.getTranslation());
-            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean());
         }
 
         @Test
@@ -124,12 +119,11 @@ class TranslationServiceTest {
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello World");
-            req.setContext("Hello World");
             req.setSourceLang("en");
             req.setTargetLang("zh");
             req.setEngine("google");
@@ -137,7 +131,7 @@ class TranslationServiceTest {
 
             assertTrue(resp.getSuccess());
             assertEquals("翻译结果", resp.getTranslation());
-            verify(translationClient).translate(eq("Hello World"), eq("zh"), eq("google"), eq(false));
+            verify(translationClient).translate(eq("Hello World"), eq("zh"), eq("google"), eq(false), eq(false));
         }
 
         @Test
@@ -146,15 +140,16 @@ class TranslationServiceTest {
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":500,\"error\":\"引擎不可用\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello World");
-            req.setContext("Hello World");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
-            assertFalse(resp.getSuccess());
+            // executeFast 失败时返回原文，success=true（原文兜底）
+            assertTrue(resp.getSuccess());
+            assertEquals("Hello World", resp.getTranslation());
         }
 
         @Test
@@ -163,16 +158,15 @@ class TranslationServiceTest {
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"result\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("test");
-            req.setContext("test");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
             assertTrue(resp.getSuccess());
-            verify(translationClient).translate(eq("test"), eq("zh"), eq("auto"), eq(false));
+            verify(translationClient).translate(eq("test"), eq("zh"), eq("auto"), eq(false), eq(false));
         }
     }
 
@@ -202,7 +196,7 @@ class TranslationServiceTest {
         @Test
         void 单段落翻译() {
             when(cacheService.getCache(anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译段落\"}");
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -218,7 +212,7 @@ class TranslationServiceTest {
         @Test
         void 多段落并行翻译() {
             when(cacheService.getCache(anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
                         return "{\"code\":200,\"data\":\"[translated]\" + text}";
@@ -236,7 +230,7 @@ class TranslationServiceTest {
         @Test
         void 长文本分段翻译() {
             when(cacheService.getCache(anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
                         return "{\"code\":200,\"data\":\"[T:\" + text.length() + \"]\"}";
@@ -288,7 +282,6 @@ class TranslationServiceTest {
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello World");
-            req.setContext("Hello World");
             req.setSourceLang("en");
             req.setTargetLang("zh");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
@@ -305,7 +298,7 @@ class TranslationServiceTest {
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
-            req.setContext("Hello");
+            req.setText("Hello");
             req.setSourceLang("en");
             req.setTargetLang("zh");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
@@ -337,7 +330,7 @@ class TranslationServiceTest {
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
-            req.setContext("Hello");
+            req.setText("Hello");
             req.setSourceLang("en");
             req.setTargetLang("zh");
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);

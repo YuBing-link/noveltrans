@@ -5,13 +5,13 @@ import { Tabs } from '../components/ui/Tabs';
 import type { Tab } from '../components/ui/Tabs';
 import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
+import { Pagination } from '../components/ui/Pagination';
 import { collabApi } from '../api/collab';
 import type {
   CollabProjectResponse,
   ChapterTaskResponse,
   ProjectMemberResponse,
   CommentResponse,
-  PageResult,
 } from '../api/types';
 import { SUPPORTED_LANGUAGES } from '../api/types';
 import {
@@ -78,7 +78,6 @@ function CollabPage() {
   const [chapters, setChapters] = useState<ChapterTaskResponse[]>([]);
   const [chaptersLoading, setChaptersLoading] = useState(false);
   const [members, setMembers] = useState<ProjectMemberResponse[]>([]);
-  const [_membersLoading, setMembersLoading] = useState(false);
   const [detailTab, setDetailTab] = useState<string>('chapters');
   const [userRole, setUserRole] = useState<string>('');
 
@@ -120,6 +119,17 @@ function CollabPage() {
   const [commentContent, setCommentContent] = useState('');
   const [comments, setComments] = useState<CommentResponse[]>([]);
 
+  // Pagination state
+  const [projectPage, setProjectPage] = useState(1);
+  const [projectTotalPages, setProjectTotalPages] = useState(1);
+  const [chapterPage, setChapterPage] = useState(1);
+  const [chapterTotalPages, setChapterTotalPages] = useState(1);
+  const [memberPage, setMemberPage] = useState(1);
+  const [memberTotalPages, setMemberTotalPages] = useState(1);
+  const [myTasksPage, setMyTasksPage] = useState(1);
+  const [myTasksTotalPages, setMyTasksTotalPages] = useState(1);
+  const [commentPage, setCommentPage] = useState(1);
+
   // Create project form
   const [cpName, setCpName] = useState('');
   const [cpDesc, setCpDesc] = useState('');
@@ -130,8 +140,9 @@ function CollabPage() {
   const loadProjects = async () => {
     setProjectsLoading(true);
     try {
-      const res = await collabApi.listProjects();
-      setProjects(res.data);
+      const res = await collabApi.listProjects({ page: projectPage, pageSize: 9 });
+      setProjects(res.data.list);
+      setProjectTotalPages(res.data.totalPages);
     } catch {
       // API not ready yet, show empty state
     } finally {
@@ -142,8 +153,9 @@ function CollabPage() {
   const loadChapters = async (projectId: number) => {
     setChaptersLoading(true);
     try {
-      const res = await collabApi.listChapters(projectId);
-      setChapters(res.data);
+      const res = await collabApi.listChapters(projectId, { page: chapterPage, pageSize: 20 });
+      setChapters(res.data.list);
+      setChapterTotalPages(res.data.totalPages);
     } catch {
       toastError('加载章节失败');
     } finally {
@@ -152,26 +164,25 @@ function CollabPage() {
   };
 
   const loadMembers = async (projectId: number) => {
-    setMembersLoading(true);
     try {
-      const res = await collabApi.listMembers(projectId);
-      setMembers(res.data);
+      const res = await collabApi.listMembers(projectId, { page: memberPage, pageSize: 20 });
+      setMembers(res.data.list);
+      setMemberTotalPages(res.data.totalPages);
       if (user?.id) {
-        const me = res.data.find(m => m.userId === user.id);
+        const me = res.data.list.find(m => m.userId === user.id);
         setUserRole(me?.role || '');
       }
     } catch {
       toastError('加载成员失败');
-    } finally {
-      setMembersLoading(false);
     }
   };
 
   const loadMyChapters = async () => {
     setMyChaptersLoading(true);
     try {
-      const res = await collabApi.listMyChapters();
-      setMyChapters(res.data);
+      const res = await collabApi.listMyChapters({ page: myTasksPage, pageSize: 20 });
+      setMyChapters(res.data.list);
+      setMyTasksTotalPages(res.data.totalPages);
     } catch {
       // API not ready yet
     } finally {
@@ -181,33 +192,41 @@ function CollabPage() {
 
   const loadComments = async (chapterId: number) => {
     try {
-      const res = await collabApi.listComments(chapterId);
-      const pageData = res.data as unknown as PageResult<CommentResponse>;
-      setComments(pageData.records || []);
+      const res = await collabApi.listComments(chapterId, commentPage, 20);
+      setComments(res.data.list);
     } catch {
       toastError('加载评论失败');
     }
   };
 
-  useEffect(() => { loadProjects(); }, []);
+  useEffect(() => { loadProjects(); }, [projectPage]);
   useEffect(() => {
     if (selectedProjectId) {
       loadChapters(selectedProjectId);
       loadMembers(selectedProjectId);
     }
-  }, [selectedProjectId]);
+  }, [selectedProjectId, chapterPage, memberPage]);
   useEffect(() => {
     if (activeMainTab === 'my-tasks') loadMyChapters();
-  }, [activeMainTab]);
+  }, [activeMainTab, myTasksPage]);
+  useEffect(() => {
+    if (commentsOpen && selectedChapter) {
+      loadComments(selectedChapter.id);
+    }
+  }, [commentPage]);
 
   // ==================== Handlers ====================
   const handleSelectProject = (id: number) => {
     setSelectedProjectId(id);
     setDetailTab('chapters');
+    setChapterPage(1);
+    setMemberPage(1);
   };
 
   const handleBackToProjects = () => {
     setSelectedProjectId(null);
+    setChapterPage(1);
+    setMemberPage(1);
   };
 
   const handleCreateProject = async () => {
@@ -363,6 +382,7 @@ function CollabPage() {
   const handleOpenComments = (chapter: ChapterTaskResponse) => {
     setSelectedChapter(chapter);
     setCommentsOpen(true);
+    setCommentPage(1);
     loadComments(chapter.id);
   };
 
@@ -389,6 +409,23 @@ function CollabPage() {
     setAssignTargetId(0);
     setAssignReviewerId(0);
     setAssignOpen(true);
+  };
+
+  const handleMainTabChange = (tab: string) => {
+    setActiveMainTab(tab);
+    if (tab === 'projects') setProjectPage(1);
+    if (tab === 'my-tasks') setMyTasksPage(1);
+  };
+
+  const handleProjectSearchChange = (value: string) => {
+    setProjectSearch(value);
+    setProjectPage(1);
+  };
+
+  const handleDetailTabChange = (tab: string) => {
+    setDetailTab(tab);
+    if (tab === 'chapters') setChapterPage(1);
+    if (tab === 'members') setMemberPage(1);
   };
 
   // ==================== Filtered data ====================
@@ -458,7 +495,7 @@ function CollabPage() {
 
       {/* Main Tabs */}
       <div className="mb-6">
-        <Tabs tabs={mainTabs} activeTab={activeMainTab} onChange={setActiveMainTab} />
+        <Tabs tabs={mainTabs} activeTab={activeMainTab} onChange={handleMainTabChange} />
       </div>
 
       {/* ==================== Tab: 我的项目 ==================== */}
@@ -472,7 +509,7 @@ function CollabPage() {
                 type="text"
                 placeholder="搜索项目..."
                 value={projectSearch}
-                onChange={e => setProjectSearch(e.target.value)}
+                onChange={e => handleProjectSearchChange(e.target.value)}
                 style={{ paddingLeft: '3rem' }}
                 className="w-full pr-3 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent/50"
               />
@@ -540,6 +577,7 @@ function CollabPage() {
               ))}
             </div>
           )}
+          <Pagination page={projectPage} totalPages={projectTotalPages} onPageChange={setProjectPage} />
         </div>
       )}
 
@@ -553,8 +591,14 @@ function CollabPage() {
           members={members}
           userRole={userRole}
           detailTab={detailTab}
-          setDetailTab={setDetailTab}
+          setDetailTab={handleDetailTabChange}
           myProjectTasks={myProjectTasks}
+          chapterPage={chapterPage}
+          chapterTotalPages={chapterTotalPages}
+          memberPage={memberPage}
+          memberTotalPages={memberTotalPages}
+          onChapterPageChange={setChapterPage}
+          onMemberPageChange={setMemberPage}
           onBack={handleBackToProjects}
           onAddChapter={() => {
             const maxNum = chapters.reduce((max, c) => Math.max(max, c.chapterNumber), 0);
@@ -631,6 +675,7 @@ function CollabPage() {
               ))}
             </div>
           )}
+          <Pagination page={myTasksPage} totalPages={myTasksTotalPages} onPageChange={setMyTasksPage} />
         </div>
       )}
 
@@ -1174,6 +1219,12 @@ interface ProjectDetailViewProps {
   detailTab: string;
   setDetailTab: (tab: string) => void;
   myProjectTasks: ChapterTaskResponse[];
+  chapterPage: number;
+  chapterTotalPages: number;
+  memberPage: number;
+  memberTotalPages: number;
+  onChapterPageChange: (page: number) => void;
+  onMemberPageChange: (page: number) => void;
   onBack: () => void;
   onAddChapter: () => void;
   onUploadNovel: () => void;
@@ -1187,7 +1238,10 @@ interface ProjectDetailViewProps {
 
 function ProjectDetailView({
   projectId, projects, chapters, chaptersLoading, members, userRole,
-  detailTab, setDetailTab, myProjectTasks, onBack, onAddChapter, onUploadNovel,
+  detailTab, setDetailTab, myProjectTasks,
+  chapterPage, chapterTotalPages, memberPage, memberTotalPages,
+  onChapterPageChange, onMemberPageChange,
+  onBack, onAddChapter, onUploadNovel,
   onAssign, onReview, onComments, onInvite, onGenerateInvite, onRemoveMember,
 }: ProjectDetailViewProps) {
   const navigate = useNavigate();
@@ -1354,6 +1408,7 @@ function ProjectDetailView({
               </table>
             </div>
           )}
+          <Pagination page={chapterPage} totalPages={chapterTotalPages} onPageChange={onChapterPageChange} />
         </div>
       )}
 
@@ -1439,6 +1494,7 @@ function ProjectDetailView({
               </table>
             </div>
           )}
+          <Pagination page={memberPage} totalPages={memberTotalPages} onPageChange={onMemberPageChange} />
         </div>
       )}
 

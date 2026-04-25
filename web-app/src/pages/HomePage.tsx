@@ -97,7 +97,7 @@ function HomePage() {
       {/* Page Header */}
         <div className="mb-8 text-center">
           <h1 className="text-[32px] font-bold text-text-primary mb-2 tracking-tight">
-            AI 智能翻译
+            NovelTrans 智能翻译
           </h1>
           <p className="text-[15px] text-text-secondary">
             支持多语言实时互译，精准理解上下文语境

@@ -24,9 +24,15 @@ public class AiGlossaryService {
 
     /**
      * 获取项目所有已确认的术语
+     * 如果表不存在或查询失败，返回空列表（不阻断翻译流程）
      */
     public List<AiGlossary> getProjectGlossary(Long projectId) {
-        return aiGlossaryMapper.selectByProjectIdAndStatus(projectId, "confirmed");
+        try {
+            return aiGlossaryMapper.selectByProjectIdAndStatus(projectId, "confirmed");
+        } catch (Exception e) {
+            log.warn("获取 AI 术语表失败（可能表未创建）: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /**

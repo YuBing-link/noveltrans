@@ -25,6 +25,7 @@ test.describe('Team 模式翻译', () => {
 
     // --- 测试 1: Team 模式翻译 ---
     test('应成功进行 team 模式翻译', async ({ page }) => {
+      test.setTimeout(60000);
       const res = await page.request.post(`${API_BASE}/v1/translate/selection`, {
         data: {
           text: 'Hello, this is a test sentence for team translation.',

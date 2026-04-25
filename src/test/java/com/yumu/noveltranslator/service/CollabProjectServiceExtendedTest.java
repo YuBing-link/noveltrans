@@ -632,16 +632,16 @@ class CollabProjectServiceExtendedTest {
             project.setName("Shared Project");
             when(collabProjectMapper.selectByMemberUserId(1L)).thenReturn(List.of(project));
 
-            List<CollabProjectResponse> results = service.listByUserId(1L);
+            PageResponse<CollabProjectResponse> results = service.listByUserId(1L, 1, 20);
 
-            assertEquals(1, results.size());
+            assertEquals(1, results.getList().size());
         }
 
         @Test
         void 无参与项目返回空列表() {
             when(collabProjectMapper.selectByMemberUserId(1L)).thenReturn(List.of());
-            List<CollabProjectResponse> results = service.listByUserId(1L);
-            assertTrue(results.isEmpty());
+            PageResponse<CollabProjectResponse> results = service.listByUserId(1L, 1, 20);
+            assertTrue(results.getList().isEmpty());
         }
     }
 

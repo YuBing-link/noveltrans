@@ -69,6 +69,11 @@ class CollabStateMachineTest {
         }
 
         @Test
+        void UNASSIGNED到SUBMITTED合法() {
+            assertDoesNotThrow(() -> sm.validateChapterTransition(ChapterTaskStatus.UNASSIGNED, ChapterTaskStatus.SUBMITTED));
+        }
+
+        @Test
         void TRANSLATING到SUBMITTED合法() {
             assertDoesNotThrow(() -> sm.validateChapterTransition(ChapterTaskStatus.TRANSLATING, ChapterTaskStatus.SUBMITTED));
         }

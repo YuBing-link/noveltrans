@@ -15,9 +15,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -69,9 +71,9 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
     }
 
     /**
-     * 获取章节评论列表（树形结构）
+     * 获取章节评论列表（分页，树形结构）
      */
-    public List<CommentResponse> getCommentsByChapter(Long chapterTaskId, Long userId) {
+    public IPage<CommentResponse> getCommentsByChapterPage(Long chapterTaskId, Long userId, int page, int size) {
         CollabChapterTask task = chapterTaskMapper.selectById(chapterTaskId);
         if (task == null) {
             throw new IllegalArgumentException("章节不存在: " + chapterTaskId);
@@ -80,19 +82,26 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
         if (member == null) {
             throw new SecurityException("无权访问该项目");
         }
-        List<CollabComment> rootComments = collabCommentMapper.selectByChapterTaskId(chapterTaskId);
 
-        // 预加载所有回复
-        List<CollabComment> allReplies = rootComments.stream()
-                .flatMap(c -> collabCommentMapper.selectRepliesByParentId(c.getId()).stream())
-                .toList();
+        // 分页查询根评论
+        Page<CollabComment> commentPage = new Page<>(page, size);
+        var rootPage = collabCommentMapper.selectByChapterTaskIdPage(commentPage, chapterTaskId);
 
-        Map<Long, List<CollabComment>> repliesMap = allReplies.stream()
-                .collect(Collectors.groupingBy(CollabComment::getParentId));
-
-        return rootComments.stream()
-                .map(c -> buildCommentTree(c, repliesMap))
+        // 为当前页的根评论加载回复
+        List<CommentResponse> responses = rootPage.getRecords().stream()
+                .map(root -> {
+                    CommentResponse resp = toCommentResponse(root);
+                    List<CollabComment> replies = collabCommentMapper.selectRepliesByParentId(root.getId());
+                    resp.setReplies(replies.stream()
+                            .map(this::toCommentResponse)
+                            .collect(Collectors.toList()));
+                    return resp;
+                })
                 .collect(Collectors.toList());
+
+        IPage<CommentResponse> resultPage = new Page<>(rootPage.getCurrent(), rootPage.getSize(), rootPage.getTotal());
+        resultPage.setRecords(responses);
+        return resultPage;
     }
 
     /**
@@ -136,15 +145,6 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
             throw new SecurityException("无权删除他人评论");
         }
         removeById(commentId);
-    }
-
-    private CommentResponse buildCommentTree(CollabComment comment, Map<Long, List<CollabComment>> repliesMap) {
-        CommentResponse resp = toCommentResponse(comment);
-        List<CollabComment> replies = repliesMap.getOrDefault(comment.getId(), List.of());
-        resp.setReplies(replies.stream()
-                .map(r -> toCommentResponse(r))
-                .collect(Collectors.toList()));
-        return resp;
     }
 
     private CommentResponse toCommentResponse(CollabComment comment) {

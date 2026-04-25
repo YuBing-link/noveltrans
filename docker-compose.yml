@@ -42,13 +42,10 @@ services:
 
   # Python 翻译微服务
   llm-engine:
-    image: python:3.11-slim
+    build: ./services/translate-engine
     working_dir: /app
     volumes:
       - ./services/translate-engine:/app
-    command: >
-      bash -c "pip install -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com fastapi uvicorn openai &&
-               python translate_server.py"
     environment:
       - OPENAI_API_KEY=${LLM_API_KEY}
       - OPENAI_BASE_URL=${LLM_BASE_URL}
@@ -78,7 +75,7 @@ services:
              ollama pull bge-m3:latest 2>/dev/null || true &&
              wait"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:11434/api/tags > /dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -132,10 +129,10 @@ services:
       - HTTPS_PROXY=http://host.docker.internal:7890
       - http_proxy=http://host.docker.internal:7890
       - https_proxy=http://host.docker.internal:7890
-      - NO_PROXY=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,api.stripe.com,checkout.stripe.com
-      - no_proxy=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,api.stripe.com,checkout.stripe.com
-      - MAVEN_OPTS=-Dhttp.proxyHost=host.docker.internal -Dhttp.proxyPort=7890 -Dhttps.proxyHost=host.docker.internal -Dhttps.proxyPort=7890 -Dhttp.nonProxyHosts=api.stripe.com\|checkout.stripe.com\|localhost\|127.0.0.1
-      - JAVA_TOOL_OPTIONS=-Dhttp.nonProxyHosts=localhost\|127.0.0.1\|llm-engine\|mtran-server\|mysql\|redis\|api.stripe.com\|checkout.stripe.com -Djava.net.useSystemProxies=false
+      - NO_PROXY=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,ollama,api.stripe.com,checkout.stripe.com
+      - no_proxy=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,ollama,api.stripe.com,checkout.stripe.com
+      - MAVEN_OPTS=-Dhttp.proxyHost=host.docker.internal -Dhttp.proxyPort=7890 -Dhttps.proxyHost=host.docker.internal -Dhttps.proxyPort=7890 -Dhttp.nonProxyHosts=api.stripe.com\|checkout.stripe.com\|localhost\|127.0.0.1\|ollama
+      - JAVA_TOOL_OPTIONS=-Dhttp.nonProxyHosts=localhost\|127.0.0.1\|llm-engine\|mtran-server\|mysql\|redis\|ollama\|api.stripe.com\|checkout.stripe.com -Djava.net.useSystemProxies=false
     depends_on:
       mysql:
         condition: service_healthy

@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import com.yumu.noveltranslator.dto.Result;
+import com.yumu.noveltranslator.dto.PageResponse;
 import java.util.List;
 
 /**
@@ -42,8 +43,11 @@ public class CollabMemberController {
 
     @GetMapping("/projects/{projectId}/members")
     @RequireProjectAccess
-    public Result<List<ProjectMemberResponse>> listMembers(@PathVariable Long projectId) {
-        List<ProjectMemberResponse> members = collabProjectService.getMembers(projectId);
+    public Result<PageResponse<ProjectMemberResponse>> listMembers(
+            @PathVariable Long projectId,
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
+        PageResponse<ProjectMemberResponse> members = collabProjectService.getMembers(projectId, page, pageSize);
         return Result.ok(members);
     }
 

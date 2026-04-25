@@ -1,8 +1,15 @@
 import { api } from './client';
-import type { GlossaryItem } from './types';
+import type { GlossaryItem, PaginatedList } from './types';
 
 export const glossaryApi = {
-  getList: () => api.get<GlossaryItem[]>('/user/glossaries'),
+  getList: (params?: { page?: number; pageSize?: number; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+    if (params?.search) qs.set('search', params.search);
+    const query = qs.toString();
+    return api.get<PaginatedList<GlossaryItem>>(`/user/glossaries${query ? `?${query}` : ''}`);
+  },
   getDetail: (id: number) => api.get<GlossaryItem>(`/user/glossaries/${id}`),
   create: (data: { sourceWord: string; targetWord: string; remark: string }) =>
     api.post<GlossaryItem>('/user/glossaries', data),

@@ -10,11 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import com.yumu.noveltranslator.dto.Result;
-import java.util.List;
+import com.yumu.noveltranslator.dto.PageResponse;
 
-/**
- * 协作评论 Controller
- */
 @RestController
 @RequestMapping("/v1/collab")
 @RequiredArgsConstructor
@@ -32,10 +29,16 @@ public class CollabCommentController {
     }
 
     @GetMapping("/chapters/{chapterTaskId}/comments")
-    public Result<List<CommentResponse>> listComments(@PathVariable Long chapterTaskId) {
+    public Result<PageResponse<CommentResponse>> listComments(
+            @PathVariable Long chapterTaskId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
         Long userId = SecurityUtil.getRequiredUserId();
-        List<CommentResponse> comments = collabCommentService.getCommentsByChapter(chapterTaskId, userId);
-        return Result.ok(comments, "200");
+        com.baomidou.mybatisplus.core.metadata.IPage<CommentResponse> iPage =
+            collabCommentService.getCommentsByChapterPage(chapterTaskId, userId, page, size);
+        PageResponse<CommentResponse> response = PageResponse.of(
+            (int) iPage.getCurrent(), (int) iPage.getSize(), iPage.getTotal(), iPage.getRecords());
+        return Result.ok(response);
     }
 
     @PutMapping("/comments/{commentId}/resolve")

@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.controller.collab;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.dto.AssignChapterRequest;
 import com.yumu.noveltranslator.dto.ChapterTaskResponse;
+import com.yumu.noveltranslator.dto.PageResponse;
 import com.yumu.noveltranslator.dto.ReviewChapterRequest;
 import com.yumu.noveltranslator.dto.SubmitChapterRequest;
 import com.yumu.noveltranslator.entity.User;
@@ -171,7 +172,8 @@ class ChapterTaskControllerTest {
             setupSecurityContext();
             ChapterTaskResponse resp = createChapterResponse();
 
-            when(chapterTaskService.listByAssigneeId(1L)).thenReturn(List.of(resp));
+            PageResponse<ChapterTaskResponse> pageResp = PageResponse.of(1, 20, 1L, List.of(resp));
+            when(chapterTaskService.listByAssigneeId(1L, 1, 20)).thenReturn(pageResp);
 
             mockMvc.perform(get("/v1/collab/chapters/my"))
                 .andExpect(status().isOk())

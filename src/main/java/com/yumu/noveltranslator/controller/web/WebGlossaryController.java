@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Web 术语库管理接口
@@ -35,10 +36,13 @@ public class WebGlossaryController {
      * GET /user/glossaries
      */
     @GetMapping
-    public Result<List<GlossaryResponse>> getGlossaryList() {
+    public Result<PageResponse<GlossaryResponse>> getGlossaryList(
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize,
+            @RequestParam(required = false) String search) {
         Long userId = SecurityUtil.getRequiredUserId();
-        List<GlossaryResponse> glossaries = userService.getGlossaryList(userId);
-        return Result.ok(glossaries);
+        PageResponse<GlossaryResponse> result = userService.getGlossaryList(userId, page, pageSize, search);
+        return Result.ok(result);
     }
 
     /**
@@ -116,7 +120,7 @@ public class WebGlossaryController {
     @GetMapping("/export")
     public ResponseEntity<byte[]> exportGlossary() {
         Long userId = SecurityUtil.getRequiredUserId();
-        List<GlossaryResponse> glossaries = userService.getGlossaryList(userId);
+        List<GlossaryResponse> glossaries = userService.getGlossaryTerms(userId);
 
         StringBuilder csv = new StringBuilder();
         csv.append("﻿"); // BOM for Excel UTF-8

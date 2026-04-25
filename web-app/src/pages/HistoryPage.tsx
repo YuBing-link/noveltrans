@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../components/ui/Toast';
+import { Pagination } from '../components/ui/Pagination';
 import { userApi } from '../api/user';
 import { translateApi } from '../api/translate';
 import type { TranslationHistoryItem } from '../api/types';
-import { Trash2, ChevronLeft, ChevronRight, Clock, Languages, FileText } from 'lucide-react';
+import { Trash2, Clock, Languages, FileText } from 'lucide-react';
 import { SUPPORTED_LANGUAGES } from '../api/types';
 
 const filterTabs = [
@@ -168,44 +169,7 @@ function HistoryPage() {
         )}
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 px-6 py-4 border-t border-border bg-surface-secondary">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage(p => p - 1)}
-              className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
-              if (p > totalPages) return null;
-              return (
-                <button
-                  key={`page-${p}`}
-                  onClick={() => setPage(p)}
-                  className={`min-w-[32px] h-8 px-2 text-[13px] font-medium rounded-lg transition-all ${
-                    p === page
-                      ? 'bg-accent text-white shadow-sm'
-                      : 'text-text-tertiary hover:text-text-primary hover:bg-surface-secondary'
-                  }`}
-                >
-                  {p}
-                </button>
-              );
-            })}
-            
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage(p => p + 1)}
-              className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
     </div>
   );

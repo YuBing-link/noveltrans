@@ -69,6 +69,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(SecurityPermitAllPaths.PERMIT_ALL_PATHS.toArray(new String[0])).permitAll()
+                .requestMatchers("/v1/translate/selection", "/v1/translate/reader", "/v1/translate/webpage", "/v1/translate/text/stream").permitAll()
                 .requestMatchers("/v1/translate/**").authenticated()
                 .anyRequest().authenticated()
             );

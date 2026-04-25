@@ -117,12 +117,13 @@ class CollabMemberControllerTest {
             setupSecurityContext();
             ProjectMemberResponse resp = createMemberResponse();
 
-            when(collabProjectService.getMembers(1L)).thenReturn(List.of(resp));
+            PageResponse<ProjectMemberResponse> pageResp = PageResponse.of(1, 20, 1L, List.of(resp));
+            when(collabProjectService.getMembers(1L, 1, 20)).thenReturn(pageResp);
 
             mockMvc.perform(get("/v1/collab/projects/1/members"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].username").value("testuser"));
+                .andExpect(jsonPath("$.data.list[0].username").value("testuser"));
         }
     }
 

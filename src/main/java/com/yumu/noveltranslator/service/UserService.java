@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Glossary;
@@ -102,14 +103,24 @@ public class UserService {
     /**
      * 获取术语库列表
      */
-    public List<GlossaryResponse> getGlossaryList(Long userId) {
+    public PageResponse<GlossaryResponse> getGlossaryList(Long userId, int page, int pageSize, String search) {
         LambdaQueryWrapper<Glossary> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Glossary::getUserId, userId);
+        if (search != null && !search.isEmpty()) {
+            wrapper.and(w -> w.like(Glossary::getSourceWord, search)
+                              .or()
+                              .like(Glossary::getTargetWord, search));
+        }
+        wrapper.orderByDesc(Glossary::getCreateTime);
 
-        List<Glossary> glossaries = glossaryMapper.selectList(wrapper);
-        return glossaries.stream()
+        Page<Glossary> pageParam = new Page<>(page, pageSize);
+        Page<Glossary> resultPage = glossaryMapper.selectPage(pageParam, wrapper);
+
+        List<GlossaryResponse> list = resultPage.getRecords().stream()
                 .map(this::toGlossaryResponse)
                 .collect(Collectors.toList());
+
+        return PageResponse.of(page, pageSize, resultPage.getTotal(), list);
     }
 
     /**
@@ -130,7 +141,16 @@ public class UserService {
      * 获取术语列表
      */
     public List<GlossaryResponse> getGlossaryTerms(Long userId) {
-        return getGlossaryList(userId);
+        return fetchAllGlossaries(userId);
+    }
+
+    private List<GlossaryResponse> fetchAllGlossaries(Long userId) {
+        LambdaQueryWrapper<Glossary> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Glossary::getUserId, userId)
+               .orderByDesc(Glossary::getCreateTime);
+        return glossaryMapper.selectList(wrapper).stream()
+                .map(this::toGlossaryResponse)
+                .collect(Collectors.toList());
     }
 
     /**

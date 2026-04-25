@@ -1,5 +1,16 @@
 // selection.js - 智能选中翻译按钮系统 (模式 3: 鼠标选中翻译)
 
+// 动态注入 selection CSS（当 content script 被动态注入时，manifest 的 CSS 不会自动加载）
+function injectSelectionStyles() {
+    if (document.getElementById('selection-styles-injected')) return;
+    const link = document.createElement('link');
+    link.id = 'selection-styles-injected';
+    link.rel = 'stylesheet';
+    link.href = browser.runtime.getURL('src/content/selection-styles.css');
+    (document.head || document.documentElement).appendChild(link);
+}
+injectSelectionStyles();
+
 class SelectionTranslator {
     constructor() {
         this.translationButton = null;
@@ -10,6 +21,8 @@ class SelectionTranslator {
         this.isTranslating = false; // 标记是否正在翻译
         this.translationResultVisible = false; // 标记翻译框是否可见
         this.buttonTimeoutId = null; // 按钮显示延迟计时器
+        this.selectionDebounceTimer = null; // 选择去抖计时器，避免 selectionchange 和 mouseup 竞态
+        this.lastHandleTime = 0; // 上次处理选择的时间戳
         this.resizeHandler = null; // 窗口大小变化处理函数
         this.scrollHandler = null; // 滚动处理函数
         this.keyHandler = null; // 键盘处理函数
@@ -23,37 +36,12 @@ class SelectionTranslator {
     }
 
     init() {
-        // 加载 Remix Icon 字体（用于按钮图标）
-        this.loadRemixIcon();
-
         // 跟踪鼠标位置
         this.trackMousePosition();
 
         this.setupSelectionListeners();
         this.createTranslationButton();
         this.setupGlobalEvents();
-    }
-
-    // 动态加载 Remix Icon 字体
-    loadRemixIcon() {
-        // 检查是否已经加载
-        if (document.querySelector('link[href*="remixicon"]')) {
-            return;
-        }
-
-        const remixIconLink = document.createElement('link');
-        remixIconLink.rel = 'stylesheet';
-        remixIconLink.href = 'https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css';
-
-        // 确保在 head 可用时再添加
-        if (document.head) {
-            document.head.appendChild(remixIconLink);
-        } else {
-            // 如果 head 还未加载，等待 DOMContentLoaded
-            document.addEventListener('DOMContentLoaded', () => {
-                document.head.appendChild(remixIconLink);
-            });
-        }
     }
 
     // 跟踪鼠标位置，以便在必要时用作后备位置
@@ -72,18 +60,39 @@ class SelectionTranslator {
         };
         document.addEventListener('mousedown', this.mouseDownHandler);
 
-        // 监听鼠标抬起事件（选中完成）
+        // 监听鼠标抬起事件（选中完成）— 这是唯一触发 handleSelection 的入口
         this.mouseUpHandler = (e) => {
             this.isDragging = false;
             // 延迟处理选择，让选择事件先完成
-            setTimeout(() => this.handleSelection(), 100);
+            // 使用 setTimeout 避免与 selectionchange 竞态
+            if (this.selectionDebounceTimer) {
+                clearTimeout(this.selectionDebounceTimer);
+            }
+            this.selectionDebounceTimer = setTimeout(() => {
+                // 防抖：避免短时间内重复调用
+                const now = Date.now();
+                if (now - this.lastHandleTime < 150) return;
+                this.lastHandleTime = now;
+                this.handleSelection();
+            }, 50);
         };
         document.addEventListener('mouseup', this.mouseUpHandler);
 
-        // 监听文本选择变化
+        // 监听文本选择变化 — 仅在键盘选择（Shift+方向键）时触发
+        // mouseup 路径已经覆盖了鼠标选择，这里只处理键盘选择
         this.selectionChangeHandler = () => {
+            // 仅在非拖拽状态 + 键盘选择时才触发（键盘选择不会触发 mouseup）
             if (!this.isDragging) {
-                this.handleSelection();
+                // 使用去抖避免频繁触发
+                if (this.selectionDebounceTimer) {
+                    clearTimeout(this.selectionDebounceTimer);
+                }
+                this.selectionDebounceTimer = setTimeout(() => {
+                    const now = Date.now();
+                    if (now - this.lastHandleTime < 200) return; // 键盘选择间隔更大
+                    this.lastHandleTime = now;
+                    this.handleSelection();
+                }, 150);
             }
         };
         document.addEventListener('selectionchange', this.selectionChangeHandler);
@@ -91,13 +100,14 @@ class SelectionTranslator {
         // 监听键盘选择（Shift + 方向键）
         this.keyUpHandler = (e) => {
             if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-                this.handleSelection();
+                // 延迟触发，让 selectionchange 先完成
+                setTimeout(() => this.handleSelection(), 50);
             }
         };
         document.addEventListener('keyup', this.keyUpHandler);
     }
 
-    // 创建翻译按钮（使用 CSS 类名而非内联样式）
+    // 创建翻译按钮（Google 风格紧凑图标按钮）
     createTranslationButton() {
         // 如果按钮已存在，先移除
         this.removeTranslationButton();
@@ -106,11 +116,17 @@ class SelectionTranslator {
         this.translationButton = document.createElement('div');
         this.translationButton.id = 'selection-translator-button';
 
-        // 按钮内部结构：图标 + 文字
+        // 按钮内部：使用内联 SVG 图标（不依赖外部字体）
         const icon = document.createElement('span');
         icon.className = 'button-icon';
-        // 使用 Remix Icon 图标
-        icon.innerHTML = '<i class="ri-translate"></i>';
+        icon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m5 8 6 6"/>
+            <path d="m4 14 6-6 2-3"/>
+            <path d="M2 5h12"/>
+            <path d="M7 2h1"/>
+            <path d="m22 22-5-10-5 10"/>
+            <path d="M14 18h6"/>
+        </svg>`;
 
         const text = document.createElement('span');
         text.className = 'button-text';
@@ -131,7 +147,13 @@ class SelectionTranslator {
 
     // 处理文本选择
     handleSelection() {
-        const selection = window.getSelection();
+        let selection;
+        try {
+            selection = window.getSelection();
+        } catch (e) {
+            // 某些页面可能无法获取 selection（如 about:blank）
+            return;
+        }
 
         // 如果翻译框可见，不处理新的选择（避免干扰）
         if (this.translationResultVisible) {
@@ -156,14 +178,17 @@ class SelectionTranslator {
         this.selectionRange = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
 
         // 保存选区的矩形信息（用于后续定位）
+        // 放宽过滤条件：只要 height > 0 && width > 0 就认为是有效矩形
         if (this.selectionRange) {
-            // 获取选中文本的所有矩形区域
-            const allRects = Array.from(this.selectionRange.getClientRects());
-
-            // 过滤掉太小的矩形（可能来自图片等元素周围）
-            this.selectionRects = allRects.filter(rect =>
-                rect.height > 2 && rect.width > 2
-            );
+            try {
+                const allRects = Array.from(this.selectionRange.getClientRects());
+                this.selectionRects = allRects.filter(rect =>
+                    rect.height > 0 && rect.width > 0
+                );
+            } catch (e) {
+                // 某些特殊元素可能无法获取 clientRects
+                this.selectionRects = null;
+            }
         } else {
             this.selectionRects = null;
         }
@@ -188,7 +213,7 @@ class SelectionTranslator {
                 const range = this.selectionRange;
                 const rect = range.getBoundingClientRect();
 
-                // 如果获取到的矩形有效，使用它
+                // 只要矩形有效就使用
                 if (rect && rect.height > 0 && rect.width > 0) {
                     this.selectionRects = [rect];
                     if (!this.translationResultVisible) {
@@ -198,254 +223,98 @@ class SelectionTranslator {
                 }
             }
 
-            // 如果仍然无法定位，隐藏按钮
-            this.hideTranslationButton();
+            // 最后兜底：使用鼠标位置
+            const viewport = {
+                width: window.innerWidth,
+                height: window.innerHeight
+            };
+            const fallbackPos = this.getFallbackPosition(28, 28, viewport);
+            const button = this.translationButton;
+            if (button) {
+                button.style.left = `${fallbackPos.x}px`;
+                button.style.top = `${fallbackPos.y}px`;
+                this.showTranslationButton();
+            }
         } catch (e) {
-            // 在异常情况下也隐藏按钮
             this.hideTranslationButton();
         }
     }
 
-    // 智能定位按钮位置
+    // 智能定位按钮位置（fixed 定位，直接使用视口坐标）
     positionTranslationButton(selection) {
-        if (!this.selectionRange) return;
-
         const button = this.translationButton;
         if (!button) return;
 
-        // 获取选中文本的所有矩形（可能跨越多行）
-        const rects = Array.from(this.selectionRange.getClientRects());
-
-        // 过滤掉无效的矩形（高度或宽度太小的）
-        const validRects = rects.filter(rect =>
-            rect.height > 2 && rect.width > 2 &&
-            rect.top < window.innerHeight && rect.left < window.innerWidth
-        );
+        let validRects;
+        try {
+            const rects = this.selectionRects && this.selectionRects.length > 0
+                ? this.selectionRects
+                : Array.from(this.selectionRange.getClientRects());
+            validRects = rects.filter(rect =>
+                rect.height > 0 && rect.width > 0
+            );
+        } catch (e) {
+            validRects = [];
+        }
 
         if (validRects.length === 0) {
-            this.hideTranslationButton();
+            this.fallbackPositionTranslationButton(selection);
             return;
         }
 
-        // 计算最佳按钮位置
         const position = this.calculateBestPosition(validRects);
 
-        // 设置按钮位置
         button.style.left = `${position.x}px`;
         button.style.top = `${position.y}px`;
-
-        // 显示按钮
         this.showTranslationButton();
     }
 
-    // 计算最佳按钮位置
+    // 计算最佳按钮位置（Google 风格：选区末尾右下方）
     calculateBestPosition(rects) {
         const viewport = {
             width: window.innerWidth,
             height: window.innerHeight
         };
 
-        // 计算按钮大小
-        const buttonWidth = 80; // 按钮大致宽度
-        const buttonHeight = 36; // 按钮大致高度
+        const buttonSize = 28; // 按钮宽高一致
+        const margin = 6;      // 与选区的间距
 
-        let bestPosition;
+        // 取最后一个矩形（选区末尾）
+        const lastRect = rects[rects.length - 1];
 
-        // 过滤掉高度为 0 或非常小的矩形（可能是图片周围的空隙）
-        const validRects = rects.filter(rect => rect.height > 2 && rect.width > 2);
+        // 计算按钮位置：选区末尾右下方
+        let x = lastRect.right - buttonSize / 2;
+        let y = lastRect.bottom + margin;
 
-        // 如果过滤后还有有效矩形
-        if (validRects.length > 0) {
-            // 情况 1：选中是单行文本
-            if (validRects.length === 1) {
-                bestPosition = this.getSingleLinePosition(validRects[0], buttonWidth, buttonHeight, viewport);
-            }
-            // 情况 2：选中的是段落或多行
-            else {
-                bestPosition = this.getMultiLinePosition(validRects, buttonWidth, buttonHeight, viewport);
-            }
-        } else {
-            // 如果没有有效的文本矩形，尝试从选择范围获取一个合理的位置
-            bestPosition = this.getFallbackPosition(buttonWidth, buttonHeight, viewport);
+        // 如果下方空间不足，放到选区上方
+        if (y + buttonSize + margin > viewport.height) {
+            y = lastRect.top - buttonSize - margin;
+            if (y < margin) y = margin;
         }
 
-        // 确保按钮在视口内
-        bestPosition = this.constrainToViewport(bestPosition, buttonWidth, buttonHeight, viewport);
-
-        return bestPosition;
-    }
-
-    // 单行文本按钮位置
-    getSingleLinePosition(rect, buttonWidth, buttonHeight, viewport) {
-        const margin = 8;
-
-        // 确保 rect 数据有效
-        if (!rect || typeof rect.left !== 'number' || typeof rect.bottom !== 'number') {
-            return this.getFallbackPosition(buttonWidth, buttonHeight, viewport);
+        // 水平方向：确保按钮在视口内
+        if (x < margin) x = margin;
+        if (x + buttonSize > viewport.width - margin) {
+            x = viewport.width - buttonSize - margin;
         }
-
-        // 始终放在选中文本下方居中
-        let x = rect.left + (rect.width - buttonWidth) / 2;
-        let y = rect.bottom + margin;
 
         return { x: Math.round(x), y: Math.round(y) };
     }
 
-    // 多行文本按钮位置
-    getMultiLinePosition(rects, buttonWidth, buttonHeight, viewport) {
-        const margin = 8;
-
-        // 获取最后一个有效的文本矩形
-        let lastValidRect = null;
-        for (let i = rects.length - 1; i >= 0; i--) {
-            if (rects[i].height > 2 && rects[i].width > 2) {
-                lastValidRect = rects[i];
-                break;
-            }
-        }
-
-        if (!lastValidRect) {
-            return this.getFallbackPosition(buttonWidth, buttonHeight, viewport);
-        }
-
-        // 始终放在选中文本最后一行下方居中
-        let x = lastValidRect.left + (lastValidRect.width - buttonWidth) / 2;
-        let y = lastValidRect.bottom + margin;
-
-        return { x: Math.round(x), y: Math.round(y) };
-    }
-
-    // 获取后备位置（当无法确定合适位置时）
+    // 获取后备位置（当无法确定选区位置时，使用鼠标位置）
     getFallbackPosition(buttonWidth, buttonHeight, viewport) {
-        // 使用当前滚动位置作为参考
-        const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-        const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-
-        // 获取当前鼠标位置（如果可以的话）或使用页面中心
+        // fixed 定位：使用视口坐标
         const mouseX = window.mouseX || (viewport.width / 2);
         const mouseY = window.mouseY || (viewport.height / 2);
 
-        // 计算相对于文档的位置
-        let x = scrollX + mouseX - (buttonWidth / 2);
-        let y = scrollY + mouseY - (buttonHeight / 2) + 40; // 稍微偏下
+        let x = mouseX - (buttonWidth / 2) + 20;
+        let y = mouseY - (buttonHeight / 2) + 30;
 
         // 确保在视口内
         if (x < 10) x = 10;
-        if (x + buttonWidth > scrollX + viewport.width - 10) {
-            x = scrollX + viewport.width - buttonWidth - 10;
-        }
-
+        if (x + buttonWidth > viewport.width - 10) x = viewport.width - buttonWidth - 10;
         if (y < 10) y = 10;
-        if (y + buttonHeight > scrollY + viewport.height - 10) {
-            y = scrollY + viewport.height - buttonHeight - 10;
-        }
-
-        return { x: Math.round(x), y: Math.round(y) };
-    }
-
-    // 获取选中文本的边界
-    getSelectionBounds(rects) {
-        if (rects.length === 0) return null;
-
-        let minX = Infinity, maxX = -Infinity;
-        let minY = Infinity, maxY = -Infinity;
-
-        rects.forEach(rect => {
-            minX = Math.min(minX, rect.left);
-            maxX = Math.max(maxX, rect.right);
-            minY = Math.min(minY, rect.top);
-            maxY = Math.max(maxY, rect.bottom);
-        });
-
-        return {
-            left: minX,
-            top: minY,
-            right: maxX,
-            bottom: maxY,
-            width: maxX - minX,
-            height: maxY - minY
-        };
-    }
-
-    // 检查矩形是否在视口中
-    isRectVisible(rect, viewport) {
-        const margin = 50; // 边距
-
-        return (
-            rect.top >= margin &&
-            rect.bottom <= viewport.height - margin &&
-            rect.left >= margin &&
-            rect.right <= viewport.width - margin
-        );
-    }
-
-    // 寻找最可见的矩形
-    findMostVisibleRect(rects, viewport) {
-        let bestRect = null;
-        let bestScore = -Infinity;
-
-        rects.forEach(rect => {
-            const score = this.calculateVisibilityScore(rect, viewport);
-            if (score > bestScore) {
-                bestScore = score;
-                bestRect = rect;
-            }
-        });
-
-        return bestRect;
-    }
-
-    // 计算可见性分数
-    calculateVisibilityScore(rect, viewport) {
-        let score = 0;
-
-        // 完全在视口中的分数最高
-        if (rect.top >= 0 && rect.bottom <= viewport.height &&
-            rect.left >= 0 && rect.right <= viewport.width) {
-            score += 100;
-        }
-
-        // 部分可见的根据可见面积计算分数
-        const visibleTop = Math.max(rect.top, 0);
-        const visibleBottom = Math.min(rect.bottom, viewport.height);
-        const visibleLeft = Math.max(rect.left, 0);
-        const visibleRight = Math.min(rect.right, viewport.width);
-
-        if (visibleBottom > visibleTop && visibleRight > visibleLeft) {
-            const visibleArea = (visibleBottom - visibleTop) * (visibleRight - visibleLeft);
-            const totalArea = rect.width * rect.height;
-            score += (visibleArea / totalArea) * 50;
-        }
-
-        // 靠近视口中心的分数更高
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const distanceToCenter = Math.sqrt(
-            Math.pow(centerX - viewport.width / 2, 2) +
-            Math.pow(centerY - viewport.height / 2, 2)
-        );
-        const maxDistance = Math.sqrt(Math.pow(viewport.width, 2) + Math.pow(viewport.height, 2));
-
-        score += 50 * (1 - distanceToCenter / maxDistance);
-
-        return score;
-    }
-
-    // 约束位置到视口内
-    constrainToViewport(position, buttonWidth, buttonHeight, viewport) {
-        let { x, y } = position;
-
-        // 水平约束
-        if (x < 10) x = 10;
-        if (x + buttonWidth > viewport.width - 10) {
-            x = viewport.width - buttonWidth - 10;
-        }
-
-        // 垂直约束
-        if (y < 10) y = 10;
-        if (y + buttonHeight > viewport.height - 10) {
-            y = viewport.height - buttonHeight - 10;
-        }
+        if (y + buttonHeight > viewport.height - 10) y = viewport.height - buttonHeight - 10;
 
         return { x: Math.round(x), y: Math.round(y) };
     }
@@ -545,6 +414,9 @@ class SelectionTranslator {
         }
 
         // 发送翻译请求 (模式 3 - 严格按照接口文档格式)
+        // 使用 Promise.race 添加超时保护，避免永远挂起
+        const TRANSLATION_TIMEOUT = 30000; // 30 秒超时
+
         try {
             console.log('📤 [模式 3-选中翻译] 开始发送翻译请求:', {
                 context: currentSelection.substring(0, 50) + '...',
@@ -554,13 +426,22 @@ class SelectionTranslator {
             });
 
             const startTime = Date.now();
-            const response = await browser.runtime.sendMessage({
-                action: 'selectionTranslate',
-                sourceLang: 'auto',
-                targetLang: targetLang,
-                engine: engine,
-                context: currentSelection  // API 必需字段
+
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('翻译请求超时（30秒）')), TRANSLATION_TIMEOUT);
             });
+
+            const response = await Promise.race([
+                browser.runtime.sendMessage({
+                    action: 'selectionTranslate',
+                    sourceLang: 'auto',
+                    targetLang: targetLang,
+                    engine: engine,
+                    context: currentSelection  // API 必需字段
+                }),
+                timeoutPromise
+            ]);
+
             const endTime = Date.now();
             const duration = endTime - startTime;
 
@@ -597,11 +478,13 @@ class SelectionTranslator {
         } catch (error) {
             console.error('❌ 翻译请求异常:', error.message);
 
-            // 翻译异常时重置状态并显示错误
+            // 翻译异常时确保状态一定被重置
             this.resetTranslationState();
 
             if (error.message && error.message.includes('Could not establish connection')) {
                 this.showError('翻译服务暂时不可用，请刷新页面');
+            } else if (error.message && error.message.includes('超时')) {
+                this.showError('翻译超时，请稍后重试');
             } else {
                 this.showError('翻译失败：' + error.message);
             }
@@ -611,8 +494,30 @@ class SelectionTranslator {
     // 获取用户设置 (MV3 使用 Promise API)
     async getUserSettings() {
         try {
-            const result = await browser.storage.local.get(['settings']);
-            return result.settings || {};
+            // 优先从 sync 存储区读取（插件设置通常保存在 sync）
+            // 同时从 local 读取（作为 fallback）
+            const [syncResult, localResult] = await Promise.allSettled([
+                browser.storage.sync ? browser.storage.sync.get(['settings', 'targetLang', 'engine']) : Promise.resolve({}),
+                browser.storage.local.get(['settings'])
+            ]);
+
+            let settings = {};
+            // 先读 local
+            if (localResult.status === 'fulfilled' && localResult.value?.settings) {
+                settings = localResult.value.settings;
+            }
+            // 再用 sync 覆盖/补充
+            if (syncResult.status === 'fulfilled' && syncResult.value?.settings) {
+                settings = { ...settings, ...syncResult.value.settings };
+            }
+            // sync 中可能有平铺的字段
+            if (syncResult.status === 'fulfilled') {
+                if (syncResult.value?.targetLang) settings.targetLang = syncResult.value.targetLang;
+                if (syncResult.value?.target_lang) settings.target_lang = syncResult.value.target_lang;
+                if (syncResult.value?.engine) settings.engine = syncResult.value.engine;
+                if (syncResult.value?.bilingual !== undefined) settings.bilingual = syncResult.value.bilingual;
+            }
+            return settings;
         } catch (error) {
             console.error('获取设置失败:', error);
             return {};
@@ -703,6 +608,7 @@ class SelectionTranslator {
         // 添加关闭按钮事件（翻译完成状态）
         if (!isLoading) {
             this.isTranslating = false; // 翻译完成
+            this.translationResultVisible = true; // 确保标记为可见
 
             const closeBtn = resultOverlay.querySelector('.header-close');
             if (closeBtn) {
@@ -741,57 +647,49 @@ class SelectionTranslator {
         }, 300);
     }
 
-    // 计算结果显示位置
+    // 计算结果显示位置（fixed 定位，直接使用视口坐标）
     calculateResultPosition() {
+        const popupWidth = 360;
+        const popupEstimateHeight = 200;
         const viewport = {
             width: window.innerWidth,
             height: window.innerHeight
         };
+        const margin = 8;
 
-        let x, y;
-
-        // 使用保存的选区矩形信息
+        // 获取选区矩形
         let rects = this.selectionRects;
-
-        // 如果保存的矩形信息不存在，尝试从当前选区获取
         if (!rects || rects.length === 0) {
             if (this.selectionRange) {
-                const allRects = Array.from(this.selectionRange.getClientRects());
-                // 过滤掉太小的矩形（可能来自图片等元素周围）
-                rects = allRects.filter(rect => rect.height > 2 && rect.width > 2);
+                try {
+                    rects = Array.from(this.selectionRange.getClientRects())
+                        .filter(rect => rect.height > 0 && rect.width > 0);
+                } catch (e) {
+                    rects = [];
+                }
             }
         }
 
-        // 如果有选中范围，尽量靠近选中文本
         if (rects && rects.length > 0) {
-            // 获取最后一个有效的矩形
-            const lastValidRect = rects[rects.length - 1];
+            const lastRect = rects[rects.length - 1];
 
-            x = lastValidRect.left + (lastValidRect.width / 2) - 200; // 水平居中
-            y = lastValidRect.bottom + 20; // 选中内容下方
+            // 水平：选区末尾附近，确保不超出视口
+            let x = lastRect.right - popupWidth / 2;
+            x = Math.max(margin, Math.min(x, viewport.width - popupWidth - margin));
 
-            // 如果右侧空间不足，放在左侧
-            if (x + 400 > viewport.width - 20) {
-                x = lastValidRect.left - 420;
+            // 垂直：优先放在选区下方，空间不足时放上方
+            let y = lastRect.bottom + margin;
+            if (y + popupEstimateHeight > viewport.height) {
+                y = lastRect.top - popupEstimateHeight - margin;
             }
-
-            // 确保位置在视口内
-            if (x < 20) x = 20;
-            if (x + 400 > viewport.width - 20) {
-                x = viewport.width - 420;
-            }
-
-            if (y < 20) y = 20;
-            if (y + 300 > viewport.height - 20) {
-                y = viewport.height - 320;
-            }
+            y = Math.max(margin, Math.min(y, viewport.height - popupEstimateHeight - margin));
 
             return { x, y };
         }
 
-        // 默认放在屏幕右上角
+        // 兜底：屏幕右上角
         return {
-            x: viewport.width - 420,
+            x: Math.max(margin, viewport.width - popupWidth - margin),
             y: 80
         };
     }
@@ -946,6 +844,11 @@ class SelectionTranslator {
         this.currentSelection = '';
         this.selectionRange = null;
         this.selectionRects = null;
+        // 清除去抖计时器，避免延迟回调干扰
+        if (this.selectionDebounceTimer) {
+            clearTimeout(this.selectionDebounceTimer);
+            this.selectionDebounceTimer = null;
+        }
     }
 
     // 销毁方法

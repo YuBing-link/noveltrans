@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,9 +14,10 @@ import lombok.AllArgsConstructor;
 @AllArgsConstructor
 public class SelectionTranslationRequest {
     /**
-     * 待翻译文本
+     * 待翻译文本（支持 text 或 context 字段名）
      */
     @NotBlank(message = "翻译文本不能为空")
+    @JsonAlias("context")
     private String text;
 
     /**
@@ -32,11 +34,6 @@ public class SelectionTranslationRequest {
      * 翻译引擎
      */
     private String engine;
-
-    /**
-     * 上下文
-     */
-    private String context;
 
     /**
      * 翻译模式: fast/expert/team

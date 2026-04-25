@@ -70,7 +70,6 @@ public class ExternalTranslateController {
                 request.getSourceLang() != null ? request.getSourceLang() : "auto",
                 request.getTargetLang(),
                 request.getEngine() != null ? request.getEngine() : "google",
-                null,
                 "fast"
             );
 
@@ -117,7 +116,6 @@ public class ExternalTranslateController {
                     request.getSourceLang() != null ? request.getSourceLang() : "auto",
                     request.getTargetLang(),
                     request.getEngine() != null ? request.getEngine() : "google",
-                    null,
                     "fast"
                 );
                 String translated = translationService.selectionTranslate(selectionReq).getTranslation();

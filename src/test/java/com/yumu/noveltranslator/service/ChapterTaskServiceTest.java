@@ -1,7 +1,10 @@
 package com.yumu.noveltranslator.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.dto.ChapterTaskResponse;
+import com.yumu.noveltranslator.dto.PageResponse;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabProject;
 import com.yumu.noveltranslator.entity.CollabProjectMember;
@@ -111,7 +114,7 @@ class ChapterTaskServiceTest {
     class ListByProjectIdTests {
 
         @Test
-        void 返回章节列表() {
+        void 返回章节分页第一页() {
             CollabChapterTask task = new CollabChapterTask();
             task.setId(1L);
             task.setProjectId(1L);
@@ -121,21 +124,44 @@ class ChapterTaskServiceTest {
             task.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
             task.setProgress(0);
             task.setSourceWordCount(5);
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(List.of(task));
 
-            List<ChapterTaskResponse> result = chapterTaskService.listByProjectId(1L);
+            Page<CollabChapterTask> page = new Page<>(1, 20);
+            page.setRecords(List.of(task));
+            page.setTotal(1);
+            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
 
-            assertEquals(1, result.size());
-            assertEquals("第一章", result.get(0).getTitle());
+            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByProjectId(1L, 1, 20);
+
+            assertEquals(1, result.getList().size());
+            assertEquals("第一章", result.getList().get(0).getTitle());
+            assertEquals(1, result.getTotal());
+        }
+
+        @Test
+        void 分页第二页返回空() {
+            Page<CollabChapterTask> page = new Page<>(2, 20);
+            page.setRecords(List.of());
+            page.setTotal(1);
+            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+
+            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByProjectId(1L, 2, 20);
+
+            assertTrue(result.getList().isEmpty());
+            assertEquals(1, result.getTotal());
+            assertEquals(2, result.getPage());
         }
 
         @Test
         void 空项目返回空列表() {
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(List.of());
+            Page<CollabChapterTask> page = new Page<>(1, 20);
+            page.setRecords(List.of());
+            page.setTotal(0);
+            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
 
-            List<ChapterTaskResponse> result = chapterTaskService.listByProjectId(1L);
+            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByProjectId(1L, 1, 20);
 
-            assertTrue(result.isEmpty());
+            assertTrue(result.getList().isEmpty());
+            assertEquals(0, result.getTotal());
         }
     }
 
@@ -329,21 +355,28 @@ class ChapterTaskServiceTest {
             task.setTitle("第一章");
             task.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
             task.setProgress(0);
-            when(chapterTaskMapper.selectByAssigneeId(2L)).thenReturn(List.of(task));
+            task.setDeleted(0);
+            Page<CollabChapterTask> page = new Page<>(1, 20);
+            page.setRecords(List.of(task));
+            page.setTotal(1);
+            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
 
-            List<ChapterTaskResponse> result = chapterTaskService.listByAssigneeId(2L);
+            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByAssigneeId(2L, 1, 20);
 
-            assertEquals(1, result.size());
-            assertEquals("第一章", result.get(0).getTitle());
+            assertEquals(1, result.getList().size());
+            assertEquals("第一章", result.getList().get(0).getTitle());
         }
 
         @Test
         void 没有待处理章节返回空列表() {
-            when(chapterTaskMapper.selectByAssigneeId(2L)).thenReturn(List.of());
+            Page<CollabChapterTask> page = new Page<>(1, 20);
+            page.setRecords(List.of());
+            page.setTotal(0);
+            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
 
-            List<ChapterTaskResponse> result = chapterTaskService.listByAssigneeId(2L);
+            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByAssigneeId(2L, 1, 20);
 
-            assertTrue(result.isEmpty());
+            assertTrue(result.getList().isEmpty());
         }
     }
 }

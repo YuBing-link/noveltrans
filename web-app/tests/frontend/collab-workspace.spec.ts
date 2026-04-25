@@ -7,7 +7,7 @@
  * 测试账号: admin@example.com / admin123
  */
 
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
 
 const API_BASE = 'http://127.0.0.1:8080';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -25,37 +25,6 @@ async function loginApi(page: import('@playwright/test').Page) {
 
 function auth(token: string) {
   return { Authorization: `Bearer ${token}` };
-}
-
-/**
- * 注入 mock fetch，拦截 SSE 翻译请求并返回模拟流式响应
- */
-async function injectSseMock(page: import('@playwright/test').Page, chunks: string[]) {
-  await page.evaluate((mockChunks) => {
-    const origFetch = window.fetch;
-    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (url.includes('/v1/translate/text/stream')) {
-        const encoder = new TextEncoder();
-        const stream = new ReadableStream({
-          async start(controller) {
-            for (const chunk of mockChunks) {
-              await new Promise(r => setTimeout(r, 200));
-              controller.enqueue(encoder.encode(`data: ${chunk}\n\n`));
-            }
-            await new Promise(r => setTimeout(r, 100));
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-          },
-        });
-        return new Response(stream, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-        });
-      }
-      return origFetch(input as any, init);
-    };
-  }, chunks);
 }
 
 test.describe('CollabWorkspace 流式翻译展示', () => {
@@ -84,11 +53,11 @@ test.describe('CollabWorkspace 流式翻译展示', () => {
 
   // FIXME: CollabWorkspace 组件当前没有 "AI 翻译" 按钮，仅有"保存"和"提交"按钮。
   // 流式 AI 翻译功能尚未在前端实现，这两个测试需要等 UI 功能上线后重新启用。
-  test.fixme('Mock SSE 流式翻译 — 译文应保留在编辑器中，不会闪烁消失', async ({ page }) => {
+  test.fixme('Mock SSE 流式翻译 — 译文应保留在编辑器中，不会闪烁消失', async () => {
     test.skip(true, 'CollabWorkspace 组件缺少 AI 翻译按钮，功能待实现');
   });
 
-  test.fixme('Mock 流式翻译 — AI 翻译应替换编辑器内容而非叠加', async ({ page }) => {
+  test.fixme('Mock 流式翻译 — AI 翻译应替换编辑器内容而非叠加', async () => {
     test.skip(true, 'CollabWorkspace 组件缺少 AI 翻译按钮，功能待实现');
   });
 });

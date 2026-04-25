@@ -18,6 +18,9 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.yumu.noveltranslator.util.PasswordUtil;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -206,55 +209,81 @@ class UserServiceTest {
     class GlossaryListTests {
 
         @Test
-        void 返回术语列表() {
+        void 返回术语分页第一页() {
             UserService userService = createUserService();
-            Glossary g1 = new Glossary();
-            g1.setId(1L);
-            g1.setUserId(1L);
-            g1.setSourceWord("hello");
-            g1.setTargetWord("你好");
-            g1.setRemark("greeting");
+            Glossary g1 = buildGlossary(1L, 1L, "hello", "你好", "greeting");
+            Glossary g2 = buildGlossary(2L, 1L, "world", "世界", "noun");
 
-            Glossary g2 = new Glossary();
-            g2.setId(2L);
-            g2.setUserId(1L);
-            g2.setSourceWord("world");
-            g2.setTargetWord("世界");
-            g2.setRemark("noun");
+            Page<Glossary> page = new Page<>(1, 20);
+            page.setRecords(List.of(g1, g2));
+            page.setTotal(2);
+            when(glossaryMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
 
-            when(glossaryMapper.selectList(any())).thenReturn(List.of(g1, g2));
+            PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, null);
 
-            List<GlossaryResponse> result = userService.getGlossaryList(1L);
+            assertEquals(2, result.getList().size());
+            assertEquals(2, result.getTotal());
+            assertEquals(1, result.getPage());
+            assertEquals(20, result.getPageSize());
+            assertEquals("hello", result.getList().get(0).getSourceWord());
+            assertEquals("世界", result.getList().get(1).getTargetWord());
+        }
 
-            assertEquals(2, result.size());
-            assertEquals("hello", result.get(0).getSourceWord());
-            assertEquals("世界", result.get(1).getTargetWord());
+        @Test
+        void 分页第二页返回空() {
+            UserService userService = createUserService();
+
+            Page<Glossary> page = new Page<>(2, 20);
+            page.setRecords(List.of());
+            page.setTotal(2);
+            when(glossaryMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+
+            PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 2, 20, null);
+
+            assertTrue(result.getList().isEmpty());
+            assertEquals(2, result.getTotal());
+            assertEquals(2, result.getPage());
+        }
+
+        @Test
+        void 搜索过滤返回匹配结果() {
+            UserService userService = createUserService();
+            Glossary g = buildGlossary(1L, 1L, "hello", "你好", "greeting");
+
+            Page<Glossary> page = new Page<>(1, 20);
+            page.setRecords(List.of(g));
+            page.setTotal(1);
+            when(glossaryMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+
+            PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, "hello");
+
+            assertEquals(1, result.getList().size());
+            assertEquals("hello", result.getList().get(0).getSourceWord());
         }
 
         @Test
         void 空列表返回空数组() {
             UserService userService = createUserService();
-            when(glossaryMapper.selectList(any())).thenReturn(List.of());
 
-            List<GlossaryResponse> result = userService.getGlossaryList(1L);
+            Page<Glossary> page = new Page<>(1, 20);
+            page.setRecords(List.of());
+            page.setTotal(0);
+            when(glossaryMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
 
-            assertTrue(result.isEmpty());
+            PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, null);
+
+            assertTrue(result.getList().isEmpty());
+            assertEquals(0, result.getTotal());
         }
 
-        @Test
-        void getGlossaryTerms返回与列表相同() {
-            UserService userService = createUserService();
+        private Glossary buildGlossary(Long id, Long userId, String source, String target, String remark) {
             Glossary g = new Glossary();
-            g.setId(1L);
-            g.setUserId(1L);
-            g.setSourceWord("test");
-            g.setTargetWord("测试");
-            when(glossaryMapper.selectList(any())).thenReturn(List.of(g));
-
-            List<GlossaryResponse> result = userService.getGlossaryTerms(1L);
-
-            assertEquals(1, result.size());
-            assertEquals("test", result.get(0).getSourceWord());
+            g.setId(id);
+            g.setUserId(userId);
+            g.setSourceWord(source);
+            g.setTargetWord(target);
+            g.setRemark(remark);
+            return g;
         }
     }
 

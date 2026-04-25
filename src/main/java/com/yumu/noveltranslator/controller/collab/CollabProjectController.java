@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import com.yumu.noveltranslator.dto.Result;
+import com.yumu.noveltranslator.dto.PageResponse;
 import java.util.List;
 
 /**
@@ -37,9 +38,11 @@ public class CollabProjectController {
     }
 
     @GetMapping("/projects")
-    public Result<List<CollabProjectResponse>> listProjects() {
+    public Result<PageResponse<CollabProjectResponse>> listProjects(
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
         Long userId = SecurityUtil.getRequiredUserId();
-        List<CollabProjectResponse> projects = collabProjectService.listByUserId(userId);
+        PageResponse<CollabProjectResponse> projects = collabProjectService.listByUserId(userId, page, pageSize);
         return Result.ok(projects);
     }
 
@@ -100,8 +103,11 @@ public class CollabProjectController {
 
     @GetMapping("/projects/{projectId}/chapters")
     @RequireProjectAccess
-    public Result<List<ChapterTaskResponse>> listChapters(@PathVariable Long projectId) {
-        List<ChapterTaskResponse> chapters = chapterTaskService.listByProjectId(projectId);
+    public Result<PageResponse<ChapterTaskResponse>> listChapters(
+            @PathVariable Long projectId,
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
+        PageResponse<ChapterTaskResponse> chapters = chapterTaskService.listByProjectId(projectId, page, pageSize);
         return Result.ok(chapters);
     }
 }

@@ -13,6 +13,8 @@ import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.service.state.CollabStateMachine;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,13 +66,19 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     }
 
     /**
-     * 获取项目章节列表
+     * 获取项目章节列表（分页）
      */
-    public List<ChapterTaskResponse> listByProjectId(Long projectId) {
-        return chapterTaskMapper.selectByProjectId(projectId)
-                .stream()
+    public PageResponse<ChapterTaskResponse> listByProjectId(Long projectId, int page, int pageSize) {
+        LambdaQueryWrapper<CollabChapterTask> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CollabChapterTask::getProjectId, projectId)
+               .eq(CollabChapterTask::getDeleted, 0)
+               .orderByAsc(CollabChapterTask::getChapterNumber);
+        Page<CollabChapterTask> pageParam = new Page<>(page, pageSize);
+        Page<CollabChapterTask> resultPage = chapterTaskMapper.selectPage(pageParam, wrapper);
+        List<ChapterTaskResponse> list = resultPage.getRecords().stream()
                 .map(this::toChapterResponse)
                 .collect(Collectors.toList());
+        return PageResponse.of(page, pageSize, resultPage.getTotal(), list);
     }
 
     /**
@@ -196,13 +204,22 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     }
 
     /**
-     * 获取用户待处理的章节列表
+     * 获取用户待处理的章节列表（分页）
      */
-    public List<ChapterTaskResponse> listByAssigneeId(Long assigneeId) {
-        return chapterTaskMapper.selectByAssigneeId(assigneeId)
-                .stream()
+    public PageResponse<ChapterTaskResponse> listByAssigneeId(Long assigneeId, int page, int pageSize) {
+        LambdaQueryWrapper<CollabChapterTask> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CollabChapterTask::getAssigneeId, assigneeId)
+               .eq(CollabChapterTask::getDeleted, 0)
+               .in(CollabChapterTask::getStatus,
+                   ChapterTaskStatus.TRANSLATING.getValue(),
+                   ChapterTaskStatus.SUBMITTED.getValue())
+               .orderByDesc(CollabChapterTask::getUpdateTime);
+        Page<CollabChapterTask> pageParam = new Page<>(page, pageSize);
+        Page<CollabChapterTask> resultPage = chapterTaskMapper.selectPage(pageParam, wrapper);
+        List<ChapterTaskResponse> list = resultPage.getRecords().stream()
                 .map(this::toChapterResponse)
                 .collect(Collectors.toList());
+        return PageResponse.of(page, pageSize, resultPage.getTotal(), list);
     }
 
     /**

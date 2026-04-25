@@ -194,7 +194,19 @@
       "Bash(awk *)",
       "Bash(perl -ne 'while\\(/\\(<class\\\\b[^>]*name=\"[^\"]*SubscriptionService[^\"]*\"[^>]*>.*?<\\\\/class>\\)/g\\){print \"$1\\\\n\";}' jacoco.xml)",
       "Bash(cat .env)",
-      "Bash(cat .env.example)"
+      "Bash(cat .env.example)",
+      "Bash(MYSQL_PORT=3307 MYSQL_HOST=localhost MYSQL_DB=novel_translator MYSQL_USER=root MYSQL_PASSWORD=123456 REDIS_HOST=localhost REDIS_PORT=6379 REDIS_PASSWORD=123456 REDIS_DB=0 JWT_SECRET=123456 STRIPE_SECRET_KEY=sk_test_51TPbTWBQCjmFQYVfzixCUR3WO9fuo8nGkR8brPVSYLmUDkzVVGgOq60ETiDHhlxvsjScDGcBmHhKSuQeb1cW4VbR00ry3V0MEK STRIPE_WEBHOOK_SECRET=whsec_gOM7aqTgzSXNZu77NZWn79nOejGhjpPM STRIPE_SUCCESS_URL='http://localhost:7341/subscription/result?session_id={CHECKOUT_SESSION_ID}' STRIPE_CANCEL_URL=http://localhost:7341/subscription/result?canceled=true STRIPE_PRO_MONTHLY_PRICE_ID=price_1TPcVdBQCjmFQYVfktsSLmpr STRIPE_PRO_YEARLY_PRICE_ID=price_1TPcW7BQCjmFQYVfibfdMZzv STRIPE_MAX_MONTHLY_PRICE_ID=price_1TPcX2BQCjmFQYVfuPiZ070T STRIPE_MAX_YEARLY_PRICE_ID=price_1TPcXZBQCjmFQYVfUVKp0a6K LLM_API_KEY=sk-bd988dbffdb24e7486a8b76fb2810988 LLM_BASE_URL=https://api.deepseek.com LLM_MODEL=deepseek-v4-flash MTRAN_HOST=localhost MTRAN_PORT=8989 PYTHON_TRANSLATE_URL=http://localhost:8000/translate EMBEDDING_PROVIDER=ollama EMBEDDING_OLLAMA_BASE_URL=http://localhost:11434 EMBEDDING_OLLAMA_MODEL=bge-m3 MAIL_USERNAME= MAIL_PASSWORD= java *)",
+      "Bash(MYSQL_PORT=3307 java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar)",
+      "Bash(MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_DB=novel_translator MYSQL_USER=root MYSQL_PASSWORD=123456 JWT_SECRET=test-secret-key-for-testing PYTHON_TRANSLATE_URL=http://localhost:8000/translate MTRAN_HOST=localhost mvn spring-boot:run)",
+      "Bash(MYSQL_HOST=localhost MYSQL_PORT=3307 MYSQL_DB=novel_translator MYSQL_USER=root MYSQL_PASSWORD=123456 JWT_SECRET=test-secret-key-for-testing PYTHON_TRANSLATE_URL=http://localhost:8000/translate MTRAN_HOST=localhost mvn test)",
+      "mcp__plugin_everything-claude-code_context7__resolve-library-id",
+      "mcp__plugin_everything-claude-code_context7__query-docs",
+      "Bash(npm ls *)",
+      "Bash(./mvnw compile *)",
+      "Bash(unzip -l /tmp/as-check/agentscope-1.0.19-py3-none-any.whl)",
+      "Bash(unzip *)",
+      "Bash(redis-cli ping *)",
+      "Bash(timeout 120 bash -c 'while true; do sleep 5; out=$\\(docker compose logs backend 2>/dev/null | grep -E \"Started Novel|Redis 向量\" | tail -1\\); if [ -n \"$out\" ]; then echo \"$out\"; break; fi; done')"
     ]
   }
 }

@@ -14,7 +14,9 @@ from agentscope.model import OpenAIChatModel
 # ---------------------------------------------------------------------------
 OPENAI_BASE_URL: str = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
-TRANSLATION_MODEL: str = os.environ.get("TRANSLATION_MODEL", "gpt-4o")
+TRANSLATION_MODEL: str = os.environ.get(
+    "TRANSLATION_MODEL", os.environ.get("OPENAI_MODEL", "gpt-4o")
+)
 MODEL_TEMPERATURE: float = float(os.environ.get("MODEL_TEMPERATURE", "0.3"))
 
 # ---------------------------------------------------------------------------
@@ -35,8 +37,8 @@ def get_model() -> OpenAIChatModel:
         _model = OpenAIChatModel(
             model_name=TRANSLATION_MODEL,
             api_key=OPENAI_API_KEY,
-            base_url=OPENAI_BASE_URL,
-            temperature=MODEL_TEMPERATURE,
+            client_kwargs={"base_url": OPENAI_BASE_URL},
+            generate_kwargs={"temperature": MODEL_TEMPERATURE},
         )
     return _model
 

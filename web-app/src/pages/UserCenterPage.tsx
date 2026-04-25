@@ -10,6 +10,7 @@ import { preferencesApi } from '../api/preferences';
 import { SubscriptionStatusPage } from './SubscriptionStatusPage';
 import type { UserStatistics, UserQuota, ApiKeyItem, UserPreferences } from '../api/types';
 import { Copy, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+import { Pagination } from '../components/ui/Pagination';
 
 function UserCenterPage() {
   const { user, refreshUser } = useAuth();
@@ -164,19 +165,25 @@ function ApiKeysTab() {
   const [showKey, setShowKey] = useState<number | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  useEffect(() => { loadKeys(); }, []);
+  useEffect(() => { loadKeys(); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadKeys = async () => {
     setLoading(true);
-    try { const { data } = await apiKeyApi.getList(); setKeys(data || []); }
+    try {
+      const { data } = await apiKeyApi.getList({ page, pageSize: 20 });
+      setKeys(data.list || []);
+      setTotalPages(data.totalPages || 1);
+    }
     catch { /* ignore */ }
     finally { setLoading(false); }
   };
 
   const handleCreate = async () => {
     if (!newKeyName.trim()) { toastError('请输入名称'); return; }
-    try { await apiKeyApi.create(newKeyName.trim()); success('创建成功'); setNewKeyName(''); loadKeys(); }
+    try { await apiKeyApi.create(newKeyName.trim()); success('创建成功'); setNewKeyName(''); setPage(1); loadKeys(); }
     catch { toastError('创建失败'); }
   };
 
@@ -229,6 +236,7 @@ function ApiKeysTab() {
           ))}
         </div>
       )}
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   );
 }

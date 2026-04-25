@@ -198,7 +198,7 @@ test.describe('需要认证的接口', () => {
       const listRes = await page.request.get(`${API_BASE}/user/glossaries`, { headers: authHeaders(token) });
       const listJson = await listRes.json();
       const glossaryList = listJson.data?.list || listJson.data?.records || [];
-      expect(glossaryList.some((g: any) => g.sourceWord.startsWith('hello_'))).toBe(true);
+      expect(glossaryList.some((g: { sourceWord: string }) => g.sourceWord.startsWith('hello_'))).toBe(true);
 
       // 删除
       const deleteRes = await page.request.delete(`${API_BASE}/user/glossaries/${createJson.data.id}`, {

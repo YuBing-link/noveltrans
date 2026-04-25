@@ -1899,12 +1899,16 @@ class ReaderModeManager {
         this.showNotification('正在翻译...', 'info');
 
         try {
+            // 将标题合并到内容中一起翻译
+            const title = this.processedArticle?.title || this.extractedTitle || document.title;
+            const contentWithTitle = `<h1>${title}</h1>${this.originalContent}`;
+
             const backgroundResponse = await this.sendToBackgroundForProcessing({
                 action: 'processArticleForReader',
-                content: this.originalContent,
+                content: contentWithTitle,
                 targetLang: targetLang,
                 engine: engine,
-                title: this.processedArticle?.title || this.extractedTitle || document.title,
+                title: title,
                 byline: this.processedArticle?.byline || this.extractedByline || ''
             });
 
@@ -1956,8 +1960,13 @@ class ReaderModeManager {
         const langText = document.getElementById('reader-lang-text');
 
         if (switchGroup && switchBtn && langText) {
-            // 显示切换按钮组
-            switchGroup.style.display = 'flex';
+            // 有译文时才显示切换按钮
+            if (this.translatedContent) {
+                switchGroup.style.display = 'flex';
+            } else {
+                switchGroup.style.display = 'none';
+                return;
+            }
 
             if (this.showingTranslated) {
                 switchBtn.classList.add('active');
@@ -1973,12 +1982,14 @@ class ReaderModeManager {
 
     // ========== 更新翻译按钮 ==========
     updateTranslateButton() {
+        const translateGroup = document.getElementById('reader-translate-btn')?.parentElement;
         const translateBtn = document.getElementById('reader-translate-btn');
         if (translateBtn) {
+            // 有译文时隐藏翻译按钮（功能已由切换按钮接管）
             if (this.translatedContent) {
-                translateBtn.classList.add('active');
-                translateBtn.title = '文章已翻译';
+                if (translateGroup) translateGroup.style.display = 'none';
             } else {
+                if (translateGroup) translateGroup.style.display = 'flex';
                 translateBtn.classList.remove('active');
                 translateBtn.title = '翻译文章';
             }
@@ -2101,20 +2112,26 @@ class ReaderModeManager {
         contentContainer.innerHTML = '';
         console.log('[Reader] contentContainer.innerHTML 已清空');
 
-        // 更新标题
+        // 确定当前显示的内容类型
+        const isShowingTranslated = articleData.content === this.translatedContent;
+
+        // 更新标题（切换原文/译文时标题也要跟着切换）
         const titleEl = document.getElementById('reader-title');
-        if (titleEl && articleData.title) {
-            titleEl.textContent = articleData.title;
-            console.log('[Reader] 标题已设置:', articleData.title);
+        if (titleEl) {
+            const displayTitle = articleData.title || document.title || '阅读模式';
+            titleEl.textContent = displayTitle;
+            console.log('[Reader] 标题已设置:', displayTitle);
         }
 
         // 构建文章 HTML
         let html = `<article class="reader-article">`;
 
-        // 标题 - 如果 articleData.title 为空，使用页面标题
-        const displayTitle = articleData.title || document.title || '阅读模式';
-        if (displayTitle) {
-            html += `<h1 class="reader-title">${displayTitle}</h1>`;
+        // 文章内标题 - 原文模式手动添加标题，译文模式标题已在内容中
+        if (!this.showingTranslated) {
+            const displayTitle = articleData.title || document.title || '阅读模式';
+            if (displayTitle) {
+                html += `<h1 class="reader-title">${displayTitle}</h1>`;
+            }
         }
 
         // 作者信息
@@ -2259,10 +2276,13 @@ class ReaderModeManager {
         console.log('[Reader] showingTranslated 切换为:', this.showingTranslated);
 
         const content = this.showingTranslated ? this.translatedContent : this.originalContent;
+        // 切换标题：译文时使用原文标题（因为没有翻译标题），原文时使用原文标题
+        const title = this.extractedTitle || document.title || '阅读模式';
         console.log('[Reader] 准备显示的内容', {
             isShowingTranslated: this.showingTranslated,
             contentLength: content?.length,
-            contentPreview: content?.substring(0, 50)
+            contentPreview: content?.substring(0, 50),
+            title: title
         });
 
         this.updateSwitchButton();
@@ -2270,6 +2290,7 @@ class ReaderModeManager {
 
         this.displayContent({
             ...this.processedArticle,
+            title: title,
             content: content,
             translatedContent: this.translatedContent
         });
@@ -2472,7 +2493,21 @@ class ReaderModeManager {
 // ========== 全局实例 ==========
 let readerModeManager = null;
 
+// 动态注入阅读器样式（当内容脚本是动态注入时，CSS 不会自动注入）
+function injectReaderStyles() {
+    if (document.getElementById('reader-styles-injected')) return;
+    const link = document.createElement('link');
+    link.id = 'reader-styles-injected';
+    link.rel = 'stylesheet';
+    link.href = browser.runtime.getURL('src/content/reader-styles.css');
+    document.head.appendChild(link);
+    console.log('[Reader] 动态注入阅读器样式');
+}
+
 console.log('[Reader] read.js 开始加载，document.readyState:', document.readyState);
+
+// 立即注入样式（无论是否是动态注入）
+injectReaderStyles();
 
 // 监听来自 background 的消息
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -2481,15 +2516,30 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'activateReaderMode') {
         console.log('[Reader] 收到激活阅读模式请求');
 
+        // 确保样式已注入
+        injectReaderStyles();
+
         // 检查是否已经存在 overlay
         const existingOverlay = document.getElementById('extreme-reader-overlay');
         if (existingOverlay) {
-            console.log('[Reader] overlay 已存在，直接显示');
-            existingOverlay.style.display = 'block';
-            existingOverlay.style.opacity = '1';
-            existingOverlay.style.visibility = 'visible';
-            sendResponse({ success: true, message: '阅读模式已激活' });
-            return true;
+            console.log('[Reader] overlay 已存在');
+            // 如果管理器实例不存在或状态丢失，重建 overlay
+            if (!readerModeManager || !readerModeManager.originalContent) {
+                console.log('[Reader] 管理器状态丢失，重建 overlay');
+                existingOverlay.remove();
+                readerModeManager = null;
+                // 继续走下面的正常激活流程
+            } else {
+                console.log('[Reader] 恢复显示');
+                existingOverlay.style.display = 'block';
+                existingOverlay.style.opacity = '1';
+                existingOverlay.style.visibility = 'visible';
+                // 重新绑定事件
+                readerModeManager.bindEvents();
+                readerModeManager.applyReadingPreferences();
+                sendResponse({ success: true, message: '阅读模式已激活' });
+                return true;
+            }
         }
 
         // 使用 async IIFE 来处理异步逻辑

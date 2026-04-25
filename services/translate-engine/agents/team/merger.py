@@ -174,5 +174,5 @@ class MergeAgent:
 
     @staticmethod
     def _safe_join(segments: list[str]) -> str:
-        """Join segments with the marker, stripping each first."""
+        """Join segments with the marker, stripping only outer whitespace."""
         return f"\n\n{SEGMENT_MARKER}\n\n".join(s.strip() for s in segments)

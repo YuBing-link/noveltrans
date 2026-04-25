@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '../components/ui/Toast';
+import { Pagination } from '../components/ui/Pagination';
 import { glossaryApi } from '../api/glossaries';
 import type { GlossaryItem } from '../api/types';
 import { Plus, Pencil, Trash2, Search, Upload, Download, BookOpen } from 'lucide-react';
@@ -9,6 +10,9 @@ function GlossaryPage() {
   const [terms, setTerms] = useState<GlossaryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTerm, setEditingTerm] = useState<GlossaryItem | null>(null);
   const [sourceWord, setSourceWord] = useState('');
@@ -17,12 +21,18 @@ function GlossaryPage() {
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { loadTerms(); }, []);
+  useEffect(() => { loadTerms(); }, [page]);
+  useEffect(() => { setPage(1); }, [search]);
 
   const loadTerms = async () => {
     setLoading(true);
-    try { const { data } = await glossaryApi.getList(); setTerms(data || []); }
-    catch (err) { 
+    try {
+      const { data } = await glossaryApi.getList({ page, pageSize: 20, search: search || undefined });
+      setTerms(data.list || []);
+      setTotalPages(data.totalPages || 1);
+      setTotal(data.total || 0);
+    }
+    catch (err) {
       console.warn('加载术语表失败:', err);
     }
     finally { setLoading(false); }
@@ -47,7 +57,7 @@ function GlossaryPage() {
   };
 
   const handleDelete = async (term: GlossaryItem) => {
-    try { await glossaryApi.delete(term.id); success('已删除'); setSearch(''); loadTerms(); }
+    try { await glossaryApi.delete(term.id); success('已删除'); setSearch(''); setPage(1); loadTerms(); }
     catch { toastError('删除失败'); }
   };
 
@@ -68,9 +78,6 @@ function GlossaryPage() {
     finally { setImporting(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
   };
 
-  const filtered = terms.filter(t =>
-    !search || t.sourceWord.includes(search) || t.targetWord.includes(search)
-  );
 
   return (
     <div className="py-8">
@@ -141,7 +148,7 @@ function GlossaryPage() {
             <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
             <span className="text-[13px] text-text-tertiary">加载中...</span>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : terms.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
             <div className="w-16 h-16 rounded-full bg-surface-secondary flex items-center justify-center">
               <BookOpen className="w-8 h-8 text-text-tertiary" />
@@ -167,7 +174,7 @@ function GlossaryPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(term => (
+                {terms.map(term => (
                   <tr key={term.id} className="border-b border-border/50 last:border-0 hover:bg-surface-secondary/30 transition-colors">
                     <td className="py-4 px-6 text-text-primary font-medium">{term.sourceWord}</td>
                     <td className="py-4 px-6 text-text-primary">{term.targetWord}</td>
@@ -200,9 +207,11 @@ function GlossaryPage() {
         )}
         </div>
 
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+
         {/* Bottom bar */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-surface-secondary">
-          <span className="text-[12px] text-text-tertiary">{terms.length} 个术语</span>
+          <span className="text-[12px] text-text-tertiary">{total} 个术语</span>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '../components/ui/Toast';
+import { Pagination } from '../components/ui/Pagination';
 import { documentApi } from '../api/documents';
 import type { DocumentItem } from '../api/types';
 import { FileText, Download, Trash2, RefreshCw, XCircle, Upload, Clock, Languages, HardDrive } from 'lucide-react';
@@ -13,6 +14,9 @@ function DocumentPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const hasActiveTasks = documents.some(
     doc => doc.status === 'pending' || doc.status === 'processing'
@@ -25,12 +29,16 @@ function DocumentPage() {
   }, [hasActiveTasks]);
 
   useEffect(() => { loadDocuments(); }, []);
+  useEffect(() => { loadDocuments(); }, [page]);
+  useEffect(() => { setPage(1); }, [sourceLang, targetLang, mode]);
 
   const loadDocuments = async () => {
     setLoading(true);
     try {
-      const { data } = await documentApi.getList({ page: 1, pageSize: 20 });
+      const { data } = await documentApi.getList({ page, pageSize: 20 });
       setDocuments(data.list || []);
+      setTotalPages(Math.ceil((data.total || 0) / 20) || 1);
+      setTotal(data.total || 0);
     } catch (err) {
       console.warn('加载文档列表失败:', err);
     }
@@ -346,10 +354,12 @@ function DocumentPage() {
         )}
         </div>
 
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+
         {/* Bottom bar */}
         <div className="flex items-center justify-between px-6 py-3 border-t border-border bg-surface-secondary">
           <div className="flex items-center gap-4 text-[12px] text-text-tertiary">
-            <span>{documents.length} 个文档</span>
+            <span>{documents.length} / {total} 个文档</span>
             {documents.length > 0 && (
               <>
                 <span className="text-text-placeholder">|</span>

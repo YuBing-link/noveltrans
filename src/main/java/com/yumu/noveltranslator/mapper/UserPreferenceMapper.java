@@ -8,6 +8,6 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface UserPreferenceMapper extends BaseMapper<UserPreference> {
 
-    @Select("SELECT * FROM user_preference WHERE user_id = #{userId}")
+    @Select("SELECT * FROM user_preferences WHERE user_id = #{userId}")
     UserPreference findByUserId(Long userId);
 }

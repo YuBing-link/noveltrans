@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.security.aspect;
 
+import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.entity.CollabProjectMember;
@@ -38,7 +39,14 @@ public class ProjectAccessAspect {
             throw new IllegalStateException("无法从请求中提取 projectId");
         }
 
-        CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(projectId, userId);
+        // 绕过租户过滤：项目成员关系独立于当前租户上下文查询
+        CollabProjectMember member;
+        try {
+            TenantContext.setBypassTenant(true);
+            member = projectMemberMapper.selectByProjectAndUser(projectId, userId);
+        } finally {
+            TenantContext.setBypassTenant(false);
+        }
         if (member == null) {
             log.warn("用户 {} 无权访问项目 {}", userId, projectId);
             throw new SecurityException("无权访问该项目");

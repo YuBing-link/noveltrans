@@ -278,7 +278,8 @@ public class RagTranslationService {
                         "RETURN".getBytes(), "4".getBytes(),
                         "source_text".getBytes(), "target_text".getBytes(), "score".getBytes(), "id".getBytes(),
                         "SORTBY".getBytes(), "score".getBytes(), "ASC".getBytes(),
-                        "LIMIT".getBytes(), "0".getBytes(), String.valueOf(knnTopK).getBytes()
+                        "LIMIT".getBytes(), "0".getBytes(), String.valueOf(knnTopK).getBytes(),
+                        "DIALECT".getBytes(), "2".getBytes()
                 )
         );
 

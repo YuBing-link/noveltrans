@@ -1,6 +1,9 @@
 package com.yumu.noveltranslator.controller.web;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.dto.ApiKeyResponse;
+import com.yumu.noveltranslator.dto.PageResponse;
 import com.yumu.noveltranslator.dto.Result;
 import com.yumu.noveltranslator.entity.ApiKey;
 import com.yumu.noveltranslator.mapper.ApiKeyMapper;
@@ -61,10 +64,15 @@ public class WebApiKeyController {
      * GET /user/api-keys
      */
     @GetMapping
-    public Result<List<ApiKeyResponse>> getApiKeys() {
+    public Result<PageResponse<ApiKeyResponse>> getApiKeys(
+            @RequestParam(required = false, defaultValue = "1") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
         Long userId = SecurityUtil.getRequiredUserId();
-        List<ApiKey> keys = apiKeyMapper.findByUserId(userId);
-        List<ApiKeyResponse> responses = keys.stream().map(k -> {
+        LambdaQueryWrapper<ApiKey> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ApiKey::getUserId, userId).orderByDesc(ApiKey::getCreatedAt);
+        Page<ApiKey> pageParam = new Page<>(page, pageSize);
+        Page<ApiKey> resultPage = apiKeyMapper.selectPage(pageParam, wrapper);
+        List<ApiKeyResponse> responses = resultPage.getRecords().stream().map(k -> {
             ApiKeyResponse r = new ApiKeyResponse();
             r.setId(k.getId());
             r.setName(k.getName());
@@ -75,7 +83,7 @@ public class WebApiKeyController {
             r.setCreatedAt(k.getCreatedAt());
             return r;
         }).collect(Collectors.toList());
-        return Result.ok(responses);
+        return Result.ok(PageResponse.of(page, pageSize, resultPage.getTotal(), responses));
     }
 
     /**

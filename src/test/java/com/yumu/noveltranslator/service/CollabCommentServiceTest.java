@@ -1,5 +1,7 @@
 package com.yumu.noveltranslator.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.yumu.noveltranslator.dto.CommentResponse;
 import com.yumu.noveltranslator.dto.CreateCommentRequest;
 import com.yumu.noveltranslator.entity.CollabChapterTask;
@@ -169,23 +171,26 @@ class CollabCommentServiceTest {
 
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
             when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
-            when(collabCommentMapper.selectByChapterTaskId(1L)).thenReturn(List.of(root1, root2));
+            Page<CollabComment> commentPage = new Page<>(1, 20);
+            commentPage.setRecords(List.of(root1, root2));
+            commentPage.setTotal(2);
+            when(collabCommentMapper.selectByChapterTaskIdPage(any(Page.class), eq(1L))).thenReturn(commentPage);
             when(collabCommentMapper.selectRepliesByParentId(1L)).thenReturn(List.of(reply1));
             when(collabCommentMapper.selectRepliesByParentId(2L)).thenReturn(List.of());
             when(userMapper.selectById(anyLong())).thenReturn(null);
 
-            List<CommentResponse> result = service.getCommentsByChapter(1L, 1L);
+            IPage<CommentResponse> result = service.getCommentsByChapterPage(1L, 1L, 1, 20);
 
-            assertEquals(2, result.size());
-            assertEquals(1, result.get(0).getReplies().size());
-            assertEquals("reply1", result.get(0).getReplies().get(0).getContent());
+            assertEquals(2, result.getRecords().size());
+            assertEquals(1, result.getRecords().get(0).getReplies().size());
+            assertEquals("reply1", result.getRecords().get(0).getReplies().get(0).getContent());
         }
 
         @Test
         void 章节不存在抛出异常() {
             when(chapterTaskMapper.selectById(999L)).thenReturn(null);
             assertThrows(IllegalArgumentException.class, () ->
-                service.getCommentsByChapter(999L, 1L));
+                service.getCommentsByChapterPage(999L, 1L, 1, 20));
         }
 
         @Test
@@ -194,7 +199,7 @@ class CollabCommentServiceTest {
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
             when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(null);
             assertThrows(SecurityException.class, () ->
-                service.getCommentsByChapter(1L, 1L));
+                service.getCommentsByChapterPage(1L, 1L, 1, 20));
         }
     }
 
