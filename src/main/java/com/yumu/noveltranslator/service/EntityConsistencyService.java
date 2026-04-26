@@ -526,8 +526,8 @@ public class EntityConsistencyService {
             } else {
                 // LLM 可能把 [{N}] 破坏成 [N]，使用正则回退
                 String degradedPattern = "\\[" + mapping.getIndex() + "\\]";
-                if (result.matches(".*" + degradedPattern + ".*")) {
-                    result = result.replaceAll(degradedPattern, mapping.getTranslatedText());
+                if (result.contains("[" + mapping.getIndex() + "]")) {
+                    result = result.replaceAll(degradedPattern, Matcher.quoteReplacement(mapping.getTranslatedText()));
                     log.warn("占位符被 LLM 破坏，使用回退还原: {} → {}", placeholder, mapping.getTranslatedText());
                 } else {
                     log.warn("占位符还原失败: 未找到 {} (索引={}) 在译文中", placeholder, mapping.getIndex());

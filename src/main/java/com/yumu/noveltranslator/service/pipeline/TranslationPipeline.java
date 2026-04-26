@@ -193,6 +193,10 @@ public class TranslationPipeline {
         // L4: 多 Agent 协作翻译
         if (teamTranslationService == null) {
             log.warn("团队模式未初始化 TeamTranslationService，降级为标准直译");
+            if (translationClient == null) {
+                log.error("标准直译降级失败: translationClient 未初始化");
+                return null;
+            }
             return executeSegment(text, targetLang, engine);
         }
 

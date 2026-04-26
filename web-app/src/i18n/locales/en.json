@@ -1,0 +1,705 @@
+{
+  "header": {
+    "nav": {
+      "translate": "Translate",
+      "pricing": "Pricing",
+      "docs": "Documents",
+      "history": "History",
+      "glossary": "Glossary",
+      "collaboration": "Collaboration"
+    },
+    "user": {
+      "login": "Login",
+      "userCenter": "User Center",
+      "settings": "Settings",
+      "subscription": "Subscription Management",
+      "logout": "Logout"
+    },
+    "theme": {
+      "toggle": "Toggle theme"
+    }
+  },
+  "footer": {
+    "product": {
+      "title": "Product",
+      "textTranslation": "Text Translation",
+      "documentTranslation": "Document Translation",
+      "glossary": "Glossary Management",
+      "pricing": "Pricing"
+    },
+    "support": {
+      "title": "Support",
+      "helpCenter": "Help Center",
+      "aboutUs": "About Us"
+    },
+    "legal": {
+      "title": "Legal",
+      "privacyPolicy": "Privacy Policy",
+      "termsOfService": "Terms of Service"
+    },
+    "account": {
+      "title": "Account",
+      "register": "Register",
+      "login": "Login"
+    },
+    "slogan": "Smart translation, language is no longer a barrier"
+  },
+  "home": {
+    "title": "Smart Translation",
+    "subtitle": "Real-time multilingual translation with precise context understanding",
+    "modes": {
+      "expert": "Expert Mode",
+      "fast": "Fast Translation"
+    },
+    "progress": "Translation Progress",
+    "qualities": {
+      "accurate": "More accurate and natural",
+      "fast": "Speed first"
+    },
+    "result": {
+      "placeholder": "Translation results will appear here",
+      "hint": "Enter text on the left and click 'Start Translation'"
+    },
+    "shortcut": "Shortcut Ctrl+Enter to translate",
+    "actions": {
+      "startTranslate": "Start Translation",
+      "translating": "Translating...",
+      "clear": "Clear",
+      "swapLanguages": "Swap languages"
+    },
+    "language": {
+      "selectSource": "Select source language",
+      "selectTarget": "Select target language",
+      "selectEngine": "Select translation engine"
+    },
+    "resultActions": {
+      "copy": "Copy translation",
+      "speak": "Read aloud",
+      "clear": "Clear translation"
+    },
+    "inputPlaceholder": "Enter text to translate",
+    "errors": {
+      "sameLanguage": "Source and target languages cannot be the same",
+      "noText": "Please enter text to translate"
+    },
+    "quota": {
+      "remaining": "Remaining chars",
+      "loginHint": "Login to view character quota",
+      "loginNow": "Login now"
+    },
+    "notification": "Tip: View past translations in history"
+  },
+  "login": {
+    "welcome": "Welcome back",
+    "subtitle": "Log in to your account to continue using the translation service",
+    "email": "Email",
+    "password": "Password",
+    "emailPlaceholder": "Enter your email",
+    "passwordPlaceholder": "Enter your password",
+    "submit": "Login",
+    "noAccount": "Don't have an account?",
+    "registerNow": "Register now",
+    "forgotPassword": "Forgot password?",
+    "loginFailed": "Login failed"
+  },
+  "register": {
+    "title": "Create Account",
+    "subtitle": "Register to start using the translation service",
+    "email": "Email",
+    "verificationCode": "Verification Code",
+    "sendCode": "Send Code",
+    "username": "Username (optional)",
+    "password": "Password",
+    "usernamePlaceholder": "Enter username",
+    "passwordPlaceholder": "Enter password, at least 6 characters",
+    "submit": "Register",
+    "hasAccount": "Already have an account?",
+    "loginNow": "Login now",
+    "forgotPassword": "Forgot password",
+    "errors": {
+      "emailRequired": "Please enter your email first",
+      "sendFailed": "Failed to send",
+      "registerFailed": "Registration failed"
+    },
+    "success": {
+      "registered": "Registration successful",
+      "codeSent": "Verification code sent"
+    }
+  },
+  "forgotPassword": {
+    "title": "Forgot Password",
+    "subtitle": "Reset your password via email verification",
+    "email": "Email",
+    "verificationCode": "Verification Code",
+    "sendCode": "Send Code",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password",
+    "emailPlaceholder": "Enter your registered email",
+    "codePlaceholder": "Enter verification code",
+    "newPasswordPlaceholder": "Enter new password, at least 6 characters",
+    "confirmPasswordPlaceholder": "Re-enter your password",
+    "submit": "Reset Password",
+    "errors": {
+      "emailRequired": "Please enter your email first",
+      "sendFailed": "Failed to send",
+      "passwordMismatch": "Passwords do not match",
+      "passwordTooShort": "Password must be at least 6 characters",
+      "resetFailed": "Reset failed"
+    },
+    "success": {
+      "resetSuccess": "Password reset successfully, please log in"
+    }
+  },
+  "document": {
+    "title": "Document Translation",
+    "subtitle": "Support batch upload of multi-format documents, smart translation, preserving original layout",
+    "translationMode": "Translation Mode",
+    "modes": {
+      "fast": "Fast Translation",
+      "expert": "Expert Translation"
+    },
+    "upload": {
+      "drag": "Drag files here, or click to upload",
+      "formats": "Supports TXT, EPUB, DOCX, PDF, max 50MB per file",
+      "uploading": "Uploading...",
+      "unsupportedFormat": "Unsupported file type. Supported:",
+      "fileTooLarge": "File size exceeds 50MB limit"
+    },
+    "empty": {
+      "title": "No documents yet",
+      "subtitle": "Upload your first document to start translation"
+    },
+    "loading": "Loading...",
+    "status": {
+      "queued": "Queued",
+      "translating": "Translating",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "summary": {
+      "count": "documents",
+      "total": "Total"
+    },
+    "actions": {
+      "refresh": "Refresh",
+      "download": "Download translation",
+      "cancel": "Cancel translation",
+      "retry": "Retry translation",
+      "delete": "Delete document"
+    },
+    "messages": {
+      "deleteFailed": "Delete failed"
+    },
+    "progress": "Progress"
+  },
+  "history": {
+    "title": "Translation History",
+    "subtitle": "View and manage all your translation records",
+    "filters": {
+      "all": "All",
+      "completed": "Completed",
+      "inProgress": "In Progress",
+      "failed": "Failed"
+    },
+    "empty": {
+      "title": "No translation records yet",
+      "subtitle": "Start your first translation and history will appear here"
+    },
+    "loading": "Loading...",
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}} minutes ago",
+      "hoursAgo": "{{count}} hours ago",
+      "daysAgo": "{{count}} days ago"
+    },
+    "actions": {
+      "delete": "Delete record"
+    }
+  },
+  "glossary": {
+    "title": "Glossary Management",
+    "subtitle": "Manage terminology to ensure translation consistency and accuracy",
+    "search": "Search terms",
+    "actions": {
+      "import": "Import",
+      "importing": "Importing...",
+      "export": "Export",
+      "add": "Add Term",
+      "edit": "Edit Term",
+      "delete": "Delete Term"
+    },
+    "fields": {
+      "source": "Source",
+      "target": "Target",
+      "notes": "Notes",
+      "action": "Actions"
+    },
+    "empty": {
+      "notFound": "No matching terms found",
+      "title": "No terms yet",
+      "subtitle": "Try other keywords",
+      "noGlossary": "Click 'Add Term' to start building your glossary"
+    },
+    "form": {
+      "source": "Source",
+      "target": "Target",
+      "notes": "Notes (optional)",
+      "sourcePlaceholder": "Enter source term",
+      "targetPlaceholder": "Enter target term",
+      "notesPlaceholder": "Add notes, e.g., usage scenario, part of speech"
+    },
+    "buttons": {
+      "cancel": "Cancel",
+      "save": "Save"
+    },
+    "messages": {
+      "updateSuccess": "Updated successfully",
+      "addSuccess": "Added successfully",
+      "deleteSuccess": "Deleted",
+      "operationFailed": "Operation failed",
+      "deleteFailed": "Delete failed",
+      "exportSuccess": "Export successful",
+      "exportFailed": "Export failed",
+      "importSuccess": "Import successful",
+      "importFailed": "Import failed",
+      "fillRequired": "Please fill in source and target"
+    },
+    "count": "terms"
+  },
+  "pricing": {
+    "title": "Upgrade to Pro, unlock all features",
+    "subtitle": "Choose the plan that fits your needs",
+    "description": "The free plan covers daily use; upgrade for more translation quota and advanced features",
+    "billing": {
+      "monthly": "Monthly",
+      "yearly": "Yearly",
+      "save20": "Save 20%"
+    },
+    "plans": {
+      "free": {
+        "name": "Free",
+        "price": "¥0",
+        "features": [
+          "100 translations per day",
+          "5 concurrent translations",
+          "10,000 characters per month",
+          "Basic translation engine",
+          "Glossary management"
+        ],
+        "current": "Current Plan"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "¥49/month",
+        "priceMonthly": "¥49/month",
+        "priceYearly": "¥39/month",
+        "yearlyTotal": "¥468/year",
+        "features": [
+          "1,000 translations per day",
+          "20 concurrent translations",
+          "50,000 characters per month",
+          "AI translation + neural network",
+          "Translation memory",
+          "3 collaboration projects",
+          "Priority support"
+        ],
+        "subscribe": "Subscribe to Pro",
+        "popular": "Most Popular"
+      },
+      "ultimate": {
+        "name": "Ultimate",
+        "price": "¥99/month",
+        "priceMonthly": "¥99/month",
+        "priceYearly": "¥79/month",
+        "yearlyTotal": "¥948/year",
+        "features": [
+          "Unlimited translations",
+          "50 concurrent translations",
+          "200,000 characters per month",
+          "All translation engines",
+          "Translation memory",
+          "Unlimited collaboration projects",
+          "Dedicated support",
+          "API access"
+        ],
+        "subscribe": "Subscribe to Ultimate"
+      }
+    },
+    "messages": {
+      "checkoutFailed": "Failed to get payment link, please try again later"
+    },
+    "redirecting": "Redirecting..."
+  },
+  "settings": {
+    "title": "Settings",
+    "appearance": {
+      "title": "Dark Mode",
+      "description": "Switch between light/dark themes to protect your eyes"
+    },
+    "password": {
+      "title": "Change Password",
+      "description": "Change your password regularly to keep your account secure",
+      "currentPassword": "Current Password",
+      "currentPasswordPlaceholder": "Enter current password",
+      "newPassword": "New Password",
+      "newPasswordPlaceholder": "At least 6 characters",
+      "confirmPassword": "Confirm New Password",
+      "confirmPasswordPlaceholder": "Re-enter new password",
+      "saving": "Saving...",
+      "submit": "Change Password",
+      "errors": {
+        "fillAll": "Please fill in all fields",
+        "passwordMismatch": "Passwords do not match",
+        "passwordTooShort": "Password must be at least 6 characters",
+        "updateFailed": "Password change failed"
+      },
+      "success": "Password changed successfully"
+    },
+    "notifications": {
+      "title": "Notification Preferences",
+      "comingSoon": "Coming Soon",
+      "description": "Customize how you receive notifications",
+      "translationComplete": "Translation Complete",
+      "translationCompleteDesc": "Notify when document translation is done",
+      "emailReports": "Email Reports",
+      "emailReportsDesc": "Receive translation report emails",
+      "systemUpdates": "System Updates",
+      "systemUpdatesDesc": "New features and maintenance notifications"
+    }
+  },
+  "userCenter": {
+    "tabs": {
+      "profile": "Profile",
+      "stats": "Statistics",
+      "quota": "Quota Usage",
+      "subscription": "Subscription",
+      "preferences": "Preferences"
+    },
+    "profile": {
+      "username": "Username",
+      "email": "Email",
+      "saving": "Saving...",
+      "save": "Save Changes",
+      "errors": {
+        "usernameRequired": "Username cannot be empty"
+      },
+      "success": "Saved successfully",
+      "failed": "Save failed"
+    },
+    "stats": {
+      "totalTranslations": "Total Translations",
+      "textTranslation": "Text Translation",
+      "documentTranslation": "Document Translation",
+      "totalCharacters": "Total Characters",
+      "thisWeek": "This Week",
+      "thisMonth": "This Month",
+      "loading": "Loading..."
+    },
+    "quota": {
+      "level": "Account Level",
+      "monthlyUsage": "Monthly Usage",
+      "remaining": "Remaining Quota",
+      "concurrencyLimit": "Concurrency Limit"
+    },
+    "apiKeys": {
+      "keyName": "Key Name",
+      "created": "Created",
+      "active": "Active",
+      "inactive": "Inactive",
+      "usage": "Used {{count}} times",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "namePlaceholder": "Enter name",
+      "createSuccess": "Created successfully",
+      "createFailed": "Creation failed",
+      "delete": "Delete",
+      "deleteFailed": "Delete failed"
+    },
+    "preferences": {
+      "enableGlossary": "Enable Glossary",
+      "enableGlossaryDesc": "Use custom glossary during translation for better accuracy",
+      "enableCache": "Enable Cache",
+      "enableCacheDesc": "Cache translation results to speed up repeated content",
+      "save": "Save Settings"
+    }
+  },
+  "subscription": {
+    "title": "Subscription Management",
+    "status": {
+      "active": "Active",
+      "trial": "Trial",
+      "pending": "Pending",
+      "cancelled": "Cancelled",
+      "unpaid": "Unpaid",
+      "paused": "Paused",
+      "notSubscribed": "Not Subscribed"
+    },
+    "plans": {
+      "free": "Free",
+      "pro": "Professional",
+      "ultimate": "Ultimate"
+    },
+    "actions": {
+      "manageBilling": "Manage Billing",
+      "cancelSubscription": "Cancel Subscription",
+      "cancelSet": "Cancellation Set",
+      "processing": "Processing",
+      "viewPricing": "View Pricing",
+      "resubscribe": "Resubscribe"
+    },
+    "messages": {
+      "cancelling": "Subscription will be cancelled at the end of the current period",
+      "cancelFailed": "Failed to cancel subscription",
+      "openBillingFailed": "Failed to open billing management page",
+      "cancelConfirmed": "Subscription will be cancelled at the end of the period",
+      "notSubscribed": "Not currently subscribed to any plan. Visit the pricing page to choose one.",
+      "currentPeriodEnd": "Current period ends",
+      "fetchFailed": "Failed to fetch subscription status"
+    }
+  },
+  "payment": {
+    "success": {
+      "title": "Payment Successful",
+      "description": "Your subscription is active. Visit User Center to view your subscription.",
+      "viewSubscription": "View Subscription",
+      "backToHome": "Back to Home"
+    },
+    "cancelled": {
+      "title": "Payment Cancelled",
+      "description": "You cancelled the payment. Your current plan remains unchanged.",
+      "reselect": "Choose a plan again"
+    },
+    "error": {
+      "title": "Payment Status Unknown",
+      "description": "Missing payment session information. Unable to confirm payment result.",
+      "action": "Failed to verify payment status. Check User Center later."
+    },
+    "pending": {
+      "title": "Payment Pending",
+      "retry": "Pay Again",
+      "verifying": "Confirming payment status..."
+    }
+  },
+  "static": {
+    "about": {
+      "title": "About NovelTrans",
+      "subtitle": "AI-powered document translation platform",
+      "description": "NovelTrans is an AI-powered smart translation platform focused on providing high-quality translation services for novels, documents, and other long-form content.",
+      "techDescription": "Built with a Spring Boot backend and Python translation microservice architecture, supporting intelligent switching between multiple engines (Google, DeepL, Baidu, etc.) to ensure translation quality and stability."
+    },
+    "features": {
+      "title": "Core Features",
+      "textTranslation": "Text Translation",
+      "documentTranslation": "Document Translation",
+      "glossary": "Glossary Management",
+      "history": "Translation History",
+      "api": "API Service"
+    },
+    "tech": {
+      "title": "Technology"
+    },
+    "help": {
+      "title": "Help Center",
+      "faq": "Frequently Asked Questions",
+      "howToTranslateText": "How to use text translation",
+      "howToTranslateTextAnswer": "Enter your source text on the translation homepage, select the target language, and click the \"Translate\" button to get the translation result.",
+      "supportedFormats": "What document formats are supported",
+      "supportedFormatsAnswer": "Currently supports TXT, EPUB, DOCX, and PDF formats, with a maximum file size of 50MB per file.",
+      "manageHistory": "How to manage translation history",
+      "manageHistoryAnswer": "On the Translation History page, you can view, search, and delete all your translation records.",
+      "createApiKey": "How to create an API Key",
+      "createApiKeyAnswer": "In the User Center under the \"API Keys\" tab, click \"Create\" to generate a new API Key.",
+      "freeLimitations": "What are the free user limits",
+      "freeLimitationsAnswer": "Free users have daily translation count and file size limits. Upgrade your plan for higher quotas."
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "lastUpdated": "Last updated",
+      "intro": "NovelTrans values and protects user privacy. This policy explains how we collect, use, and store your information.",
+      "dataCollection": "Information Collection",
+      "dataCollectionDesc": "We only collect information necessary to provide our services, including registered email, translation records, and account settings.",
+      "dataUsage": "Information Usage",
+      "dataUsageDesc": "Your translation data is used solely to provide translation services and will not be shared with third parties.",
+      "dataSecurity": "Data Security",
+      "dataSecurityDesc": "We use encryption technology for data transmission and storage to protect your data security."
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "lastUpdated": "Last updated",
+      "intro": "Using NovelTrans services means you agree to the following terms.",
+      "serviceUsage": "Service Usage",
+      "serviceUsageDesc": "You may use our services for text and document translation. Do not use the services for illegal purposes.",
+      "accountResponsibility": "Account Responsibility",
+      "accountResponsibilityDesc": "You are responsible for protecting your account security and must not share your account credentials.",
+      "intellectualProperty": "Intellectual Property",
+      "intellectualPropertyDesc": "The intellectual property rights of your uploaded content belong to you. We will not use your content for purposes other than translation."
+    },
+    "notFound": {
+      "title": "Page Not Found",
+      "backToHome": "Back to Home"
+    }
+  },
+  "collab": {
+    "title": "Collaborative Translation",
+    "subtitle": "Team collaboration document management, chapter translation tasks",
+    "taskStatus": {
+      "pending": "Pending",
+      "translating": "Translating",
+      "submitted": "Submitted",
+      "reviewing": "Under Review",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "completed": "Completed"
+    },
+    "roles": {
+      "owner": "Owner",
+      "reviewer": "Reviewer",
+      "translator": "Translator"
+    },
+    "tabs": {
+      "myProjects": "My Projects",
+      "myTasks": "My Tasks",
+      "chapters": "Chapters",
+      "members": "Members",
+      "comments": "Comments",
+      "references": "References",
+      "settings": "Settings"
+    },
+    "actions": {
+      "joinProject": "Join Project",
+      "createProject": "Create Project",
+      "uploadNovel": "Upload Novel",
+      "addChapter": "Add Chapter",
+      "inviteMember": "Invite Member",
+      "invitationCode": "Invitation Code",
+      "assign": "Assign",
+      "review": "Review",
+      "translate": "Translate",
+      "workspace": "Workspace",
+      "send": "Send"
+    },
+    "forms": {
+      "createProject": "Create Project",
+      "joinProject": "Join Project",
+      "addChapter": "Add Chapter",
+      "uploadNovel": "Upload Novel",
+      "assignChapter": "Assign Chapter",
+      "reviewChapter": "Review Chapter",
+      "inviteMember": "Invite Member",
+      "comment": "Comment",
+      "invitationCode": "Invitation Code"
+    },
+    "fields": {
+      "projectName": "Project Name",
+      "description": "Description",
+      "sourceLanguage": "Source Language",
+      "targetLanguage": "Target Language",
+      "email": "Email",
+      "role": "Role",
+      "chapterNumber": "Chapter Number",
+      "chapterTitle": "Chapter Title",
+      "sourceContent": "Source Content (optional)",
+      "notes": "Notes",
+      "reviewResult": "Review Result",
+      "approve": "Approve",
+      "reject": "Reject",
+      "translator": "Translator",
+      "reviewer": "Reviewer (optional)"
+    },
+    "messages": {
+      "projectCreated": "Project created successfully",
+      "createFailed": "Creation failed",
+      "joinSuccess": "Joined successfully",
+      "joinFailed": "Join failed",
+      "generateFailed": "Generation failed",
+      "chapterAdded": "Chapter added successfully",
+      "addChapterFailed": "Failed to add chapter",
+      "uploadSuccess": "Upload successful",
+      "uploadFailed": "Upload failed",
+      "assignSuccess": "Assigned successfully",
+      "assignFailed": "Assignment failed",
+      "reviewApproved": "Review approved",
+      "reviewRejected": "Review rejected",
+      "inviteSent": "Invitation sent",
+      "inviteFailed": "Invitation failed",
+      "commentFailed": "Comment failed",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "loadChapterFailed": "Failed to load chapter",
+      "loadMemberFailed": "Failed to load members"
+    }
+  },
+  "common": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "loading": "Loading...",
+    "refresh": "Refresh",
+    "close": "Close",
+    "previous": "Previous",
+    "next": "Next",
+    "submit": "Submit",
+    "back": "Back",
+    "success": "Success",
+    "failed": "Failed",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Info",
+    "noData": "No data",
+    "noContent": "No content",
+    "pleaseWait": "Please wait",
+    "operationSuccess": "Operation successful",
+    "operationFailed": "Operation failed",
+    "languages": {
+      "auto": "Auto Detect",
+      "zh": "Chinese",
+      "en": "English",
+      "ja": "Japanese",
+      "ko": "Korean",
+      "fr": "French",
+      "de": "German",
+      "es": "Spanish",
+      "ru": "Russian",
+      "pt": "Portuguese",
+      "it": "Italian",
+      "th": "Thai",
+      "vi": "Vietnamese"
+    }
+  },
+  "translationResult": {
+    "title": "Translation Result",
+    "translating": "Translating...",
+    "copy": "Copy to clipboard",
+    "copyFailed": "Copy failed",
+    "copied": "Copied",
+    "speak": "Read aloud",
+    "clear": "Clear",
+    "clearResult": "Clear result"
+  },
+  "auth": {
+    "loginNoToken": "Login failed, no token received",
+    "registerNoToken": "Registration failed, no token received",
+    "verifyToken": "Verify if token is still valid"
+  },
+  "languageSelector": {
+    "fast": "Fast",
+    "expert": "Expert",
+    "switch": "Switch language"
+  },
+  "engines": {
+    "ai": "AI Translation (Recommended)",
+    "neural": "Neural Network",
+    "statistical": "Statistical Machine"
+  },
+  "taskProgress": {
+    "queued": "Queued",
+    "translating": "Translating",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
+  }
+}

@@ -75,7 +75,7 @@ function DocumentPage() {
 
   const handleDelete = async (docId: number) => {
     try { await documentApi.delete(docId); success('已删除'); loadDocuments(); }
-    catch { toastError(t('document.actions.delete')); }
+    catch { toastError(t('document.messages.deleteFailed')); }
   };
 
   const handleDownload = async (doc: DocumentItem) => {

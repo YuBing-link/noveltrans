@@ -316,7 +316,7 @@ async def translate_openai(text: str, target_lang: str) -> str:
     """
     return await translate_with_system_prompt(text, target_lang, SYSTEM_PROMPT)
 
-import re
+
 
 def clean_json_response(text: str) -> str:
     """从 LLM 响应中提取 JSON，处理 markdown 代码块、前后多余文本等。"""

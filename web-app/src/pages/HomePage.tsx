@@ -158,7 +158,7 @@ function HomePage() {
                     className="hover:text-accent transition-colors font-medium flex items-center gap-1"
                   >
                     <Trash2 className="w-3 h-3" />
-                    {t('common.close')}
+                    {t('home.actions.clear')}
                   </button>
                 )}
               </div>
