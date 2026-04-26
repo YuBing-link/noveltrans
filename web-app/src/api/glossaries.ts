@@ -20,7 +20,7 @@ export const glossaryApi = {
   // 导出术语表为 CSV
   exportGlossary: async () => {
     const token = localStorage.getItem('authToken');
-    const res = await fetch('/user/glossaries/export', {
+    const res = await fetch('/api/user/glossaries/export', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) throw new Error('导出失败');

@@ -42,6 +42,8 @@ class TranslationServiceStreamTest {
     @Mock
     private TranslationPostProcessingService postProcessingService;
     @Mock
+    private TeamTranslationService teamTranslationService;
+    @Mock
     private QuotaService quotaService;
     @Mock
     private UserMapper userMapper;
@@ -52,7 +54,7 @@ class TranslationServiceStreamTest {
     void setUp() {
         service = new TranslationService(
                 translationClient, cacheService, ragTranslationService,
-                entityConsistencyService, postProcessingService, quotaService, userMapper);
+                entityConsistencyService, postProcessingService, teamTranslationService, quotaService, userMapper);
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
         SecurityContextHolder.clearContext();

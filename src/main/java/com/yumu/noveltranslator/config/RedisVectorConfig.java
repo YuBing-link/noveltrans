@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 /**
  * Redis 向量索引配置
  * 应用启动时创建 RediSearch 索引，用于翻译记忆的向量检索
+ *
+ * 策略：直接 FT.CREATE，如果返回 "Index already exists" 说明索引已存在（Redis 数据卷持久化场景）。
  */
 @Component
 @RequiredArgsConstructor
@@ -30,39 +32,11 @@ public class RedisVectorConfig {
 
     @PostConstruct
     public void initVectorIndex() {
-        try {
-            var connection = redisConnectionFactory.getConnection();
+        // 创建索引：根据 provider 动态计算维度 (Ollama bge-m3=1024, OpenAI=1536)
+        final int dimension = "ollama".equals(provider) ? 1024 : 1536;
+        final int m = hnswM;
 
-            // Check if index already exists using FT._LIST
-            Object indexList = null;
-            try {
-                indexList = ((RedisCallback<Object>) con ->
-                        con.execute("FT._LIST")
-                ).doInRedis(connection);
-            } catch (Exception e) {
-                log.debug("FT._LIST not supported: {}", e.getMessage());
-            }
-
-            // Check if our index is in the list
-            if (indexList instanceof java.util.List<?> list) {
-                for (Object item : list) {
-                    if (item instanceof byte[] bytes
-                            && new String(bytes).equals("translation_memory_idx")) {
-                        log.info("Redis 向量索引已存在，跳过创建");
-                        connection.close();
-                        return;
-                    } else if ("translation_memory_idx".equals(String.valueOf(item))) {
-                        log.info("Redis 向量索引已存在，跳过创建");
-                        connection.close();
-                        return;
-                    }
-                }
-            }
-
-            // 创建索引：根据 provider 动态计算维度 (Ollama bge-m3=1024, OpenAI=1536)
-            final int dimension = "ollama".equals(provider) ? 1024 : 1536;
-            final int m = hnswM;
-
+        try (var connection = redisConnectionFactory.getConnection()) {
             ((RedisCallback<Object>) con -> con.execute("FT.CREATE",
                     "translation_memory_idx".getBytes(),
                     "ON".getBytes(), "HASH".getBytes(),
@@ -80,10 +54,24 @@ public class RedisVectorConfig {
                     "DISTANCE_METRIC".getBytes(), "COSINE".getBytes()
             )).doInRedis(connection);
 
-            connection.close();
             log.info("Redis 向量索引创建成功: translation_memory_idx (DIM={})", dimension);
         } catch (Exception e) {
-            log.error("Redis 向量索引创建失败: {}", e.getMessage(), e);
+            if (isIndexAlreadyExists(e)) {
+                log.info("Redis 向量索引已存在: translation_memory_idx (DIM={}), 跳过创建", dimension);
+            } else {
+                log.error("Redis 向量索引创建失败: {}", e.getMessage(), e);
+            }
         }
+    }
+
+    /**
+     * 递归检查异常链中是否包含 "Index already exists"
+     */
+    private boolean isIndexAlreadyExists(Throwable t) {
+        if (t == null) return false;
+        if (t.getMessage() != null && t.getMessage().contains("Index already exists")) {
+            return true;
+        }
+        return isIndexAlreadyExists(t.getCause());
     }
 }

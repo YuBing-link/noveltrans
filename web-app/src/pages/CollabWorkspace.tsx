@@ -5,7 +5,7 @@ import { Badge } from '../components/ui/Badge';
 import { Tabs } from '../components/ui/Tabs';
 import type { Tab } from '../components/ui/Tabs';
 import { collabApi } from '../api/collab';
-import type { ChapterTaskResponse, CommentResponse, PageResult } from '../api/types';
+import type { ChapterTaskResponse, CommentResponse } from '../api/types';
 import { SUPPORTED_LANGUAGES } from '../api/types';
 import {
   ArrowLeft,
@@ -91,8 +91,7 @@ function CollabWorkspace() {
   const [sidebarTab, setSidebarTab] = useState<'comments' | 'reference' | 'settings'>('comments');
   const [comments, setComments] = useState<CommentResponse[]>([]);
   const [commentPage, setCommentPage] = useState(1);
-  const [commentTotal, setCommentTotal] = useState(0);
-  const [hasMoreComments, setHasMoreComments] = useState(true);
+  const [commentTotalPages, setCommentTotalPages] = useState(0);
   const [commentInput, setCommentInput] = useState('');
   const [anchoredSourceText, setAnchoredSourceText] = useState<string | null>(null);
 
@@ -132,26 +131,21 @@ function CollabWorkspace() {
     }
   };
 
-  const loadComments = async (page = 1, append = false) => {
+  const loadComments = async (page = 1) => {
     try {
       const res = await collabApi.listComments(chapterId, page);
-      const pageData = res.data as unknown as PageResult<CommentResponse>;
-      const newComments = pageData.records || [];
-      if (append) {
-        setComments(prev => [...prev, ...newComments]);
-      } else {
-        setComments(newComments);
-      }
-      setCommentTotal(pageData.total || 0);
+      const pageData = res.data;
+      setComments(pageData.list || []);
       setCommentPage(page);
-      setHasMoreComments(page < pageData.pages);
+      setCommentTotalPages(pageData.totalPages || 0);
     } catch {
       // Silent fail — comments may not exist yet
     }
   };
 
-  const loadMoreComments = () => {
-    loadComments(commentPage + 1, true);
+  const goToCommentPage = (page: number) => {
+    if (page === commentPage) return;
+    loadComments(page);
   };
 
   // Draft auto-save (every 30 seconds)
@@ -508,13 +502,23 @@ function CollabWorkspace() {
                       {comments.map(comment => (
                         <CommentItem key={comment.id} comment={comment} depth={0} />
                       ))}
-                      {hasMoreComments && (
-                        <button
-                          onClick={loadMoreComments}
-                          className="w-full py-2 text-xs text-accent hover:text-accent-hover transition-colors border border-border rounded-button"
-                        >
-                          加载更多评论 ({comments.length}/{commentTotal})
-                        </button>
+                      {/* Numbered pagination */}
+                      {commentTotalPages > 0 && (
+                        <div className="flex items-center justify-center gap-1 pt-2">
+                          {Array.from({ length: commentTotalPages }, (_, i) => i + 1).map(page => (
+                            <button
+                              key={page}
+                              onClick={() => goToCommentPage(page)}
+                              className={`min-w-7 h-7 text-xs rounded transition-colors ${
+                                page === commentPage
+                                  ? 'bg-accent text-white font-medium'
+                                  : 'text-text-secondary hover:bg-surface-secondary'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </>
                   )}

@@ -78,11 +78,13 @@ function DocumentPage() {
     catch { toastError('删除失败'); }
   };
 
-  const handleDownload = async (docId: number) => {
+  const handleDownload = async (doc: DocumentItem) => {
     try {
-      const blob = await documentApi.download(docId);
+      const blob = await documentApi.download(doc.id);
+      const ext = doc.fileType || '.' + (doc.fileName?.split('.').pop() || 'txt');
+      const baseName = doc.fileName?.replace(/\.[^.]+$/, '') || `translated_${doc.id}`;
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `translated_${docId}`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `${baseName}_translated${ext}`; a.click();
       URL.revokeObjectURL(url);
       success('下载成功');
     } catch (e) {
@@ -284,7 +286,7 @@ function DocumentPage() {
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {doc.status === 'completed' && (
                           <button 
-                            onClick={() => handleDownload(doc.id)} 
+                            onClick={() => handleDownload(doc)} 
                             className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors"
                             title="下载译文"
                           >

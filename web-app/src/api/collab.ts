@@ -84,7 +84,7 @@ export const collabApi = {
     api.delete<null>(`/v1/collab/projects/${projectId}/members/${memberId}`),
 
   // Comments
-  listComments: (chapterTaskId: number, page = 1, size = 20) =>
+  listComments: (chapterTaskId: number, page = 1, size = 12) =>
     api.get<PaginatedList<CommentResponse>>(`/v1/collab/chapters/${chapterTaskId}/comments?page=${page}&size=${size}`),
   createComment: (chapterTaskId: number, data: CreateCommentRequest) =>
     api.post<CommentResponse>(`/v1/collab/chapters/${chapterTaskId}/comments`, data),

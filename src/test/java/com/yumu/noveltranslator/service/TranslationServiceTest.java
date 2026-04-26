@@ -43,6 +43,9 @@ class TranslationServiceTest {
     private TranslationPostProcessingService postProcessingService;
 
     @Mock
+    private TeamTranslationService teamTranslationService;
+
+    @Mock
     private QuotaService quotaService;
 
     @Mock
@@ -54,7 +57,7 @@ class TranslationServiceTest {
     void setUp() {
         translationService = new TranslationService(
                 translationClient, cacheService, ragTranslationService,
-                entityConsistencyService, postProcessingService, quotaService, userMapper);
+                entityConsistencyService, postProcessingService, teamTranslationService, quotaService, userMapper);
         // Pipeline 内部调用 fixUntranslatedChinese，mock 返回原文
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
