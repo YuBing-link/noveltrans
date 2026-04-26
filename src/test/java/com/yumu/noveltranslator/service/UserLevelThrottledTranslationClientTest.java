@@ -331,14 +331,21 @@ class UserLevelThrottledTranslationClientTest {
     }
 
     /**
-     * 通过反射调用 shouldUsePythonService
+     * 通过反射调用 shouldUsePythonService(boolean fastMode)
      */
     private boolean invokeShouldUsePythonService() {
+        return invokeShouldUsePythonService(false);
+    }
+
+    /**
+     * 通过反射调用 shouldUsePythonService(boolean fastMode)
+     */
+    private boolean invokeShouldUsePythonService(boolean fastMode) {
         try {
             java.lang.reflect.Method method = UserLevelThrottledTranslationClient.class
-                    .getDeclaredMethod("shouldUsePythonService");
+                    .getDeclaredMethod("shouldUsePythonService", boolean.class);
             method.setAccessible(true);
-            return (boolean) method.invoke(client);
+            return (boolean) method.invoke(client, fastMode);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

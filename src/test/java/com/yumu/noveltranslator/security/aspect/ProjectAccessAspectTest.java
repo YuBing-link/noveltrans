@@ -6,7 +6,6 @@ import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import com.yumu.noveltranslator.security.annotation.RequireProjectAccess;
-import com.yumu.noveltranslator.util.SecurityUtil;
 import org.aspectj.lang.JoinPoint;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,11 +17,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -100,31 +97,11 @@ class ProjectAccessAspectTest {
         }
 
         @Test
-        @DisplayName("从URL路径/projects/123/chapters提取projectId")
-        void 从URL路径提取projectId() {
-            setupAuthenticatedUser(1L, "FREE");
-            when(joinPoint.getArgs()).thenReturn(new Object[]{"someString"});
-            when(requireAccess.roles()).thenReturn(new ProjectMemberRole[]{ProjectMemberRole.TRANSLATOR});
-
-            CollabProjectMember member = new CollabProjectMember();
-            member.setRole("TRANSLATOR");
-            when(projectMemberMapper.selectByProjectAndUser(123L, 1L)).thenReturn(member);
-
-            MockHttpServletRequest mockRequest = new MockHttpServletRequest();
-            mockRequest.setRequestURI("/projects/123/chapters");
-            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(mockRequest));
-
-            assertDoesNotThrow(() -> aspect.checkAccess(joinPoint, requireAccess));
-        }
-
-        @Test
-        @DisplayName("无法提取projectId抛出IllegalStateException")
+        @DisplayName("无法从方法参数提取projectId抛出IllegalStateException")
         void 无法提取projectId抛出异常() {
             setupAuthenticatedUser(1L, "FREE");
             when(joinPoint.getArgs()).thenReturn(new Object[]{"someString"});
             when(requireAccess.roles()).thenReturn(new ProjectMemberRole[]{ProjectMemberRole.TRANSLATOR});
-
-            // 不设置RequestContextHolder，所以无法从URL提取
 
             IllegalStateException ex = assertThrows(IllegalStateException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));

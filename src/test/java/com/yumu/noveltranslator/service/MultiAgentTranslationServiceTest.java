@@ -68,6 +68,9 @@ class MultiAgentTranslationServiceTest {
     @Mock
     private AiGlossaryService aiGlossaryService;
 
+    @Mock
+    private TranslationPostProcessingService postProcessingService;
+
     private MultiAgentTranslationService service;
 
     @BeforeEach
@@ -75,7 +78,7 @@ class MultiAgentTranslationServiceTest {
         service = new MultiAgentTranslationService(
                 chapterTaskMapper, collabProjectMapper, documentMapper, translationTaskMapper,
                 teamTranslationService, cacheService, entityConsistencyService,
-                glossaryMapper, ragTranslationService, aiGlossaryService);
+                glossaryMapper, ragTranslationService, aiGlossaryService, postProcessingService);
     }
 
     @Nested

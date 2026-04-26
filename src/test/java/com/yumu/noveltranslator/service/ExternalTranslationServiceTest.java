@@ -24,7 +24,7 @@ class ExternalTranslationServiceTest {
 
         @Test
         void 翻译成功返回结果() {
-            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000);
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null);
             mockWebClient(service, Mono.just("{\"translatedText\":\"你好\",\"from\":\"en\",\"to\":\"zh\"}"));
 
             JSONObject result = service.translate("en", "zh", "Hello", false);
@@ -36,7 +36,7 @@ class ExternalTranslationServiceTest {
 
         @Test
         void html模式翻译() {
-            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000);
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null);
             mockWebClient(service, Mono.just("{\"translatedText\":\"<b>你好</b>\"}"));
 
             JSONObject result = service.translate("en", "zh", "<b>Hello</b>", true);
@@ -46,7 +46,7 @@ class ExternalTranslationServiceTest {
 
         @Test
         void http错误码抛出异常() {
-            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000);
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null);
             WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
             WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
             WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
@@ -70,7 +70,7 @@ class ExternalTranslationServiceTest {
 
         @Test
         void 超时抛出异常() {
-            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000);
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null);
             WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
             WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
             WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
@@ -93,7 +93,7 @@ class ExternalTranslationServiceTest {
 
         @Test
         void 连接失败抛出异常() {
-            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000);
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null);
             WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
             WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
             WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
@@ -116,7 +116,7 @@ class ExternalTranslationServiceTest {
 
         @Test
         void 连接超时抛出异常() {
-            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000);
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null);
             WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
             WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
             WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
@@ -140,7 +140,7 @@ class ExternalTranslationServiceTest {
 
         @Test
         void 一般异常抛出异常() {
-            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000);
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null);
             WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
             WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
             WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);
@@ -163,7 +163,7 @@ class ExternalTranslationServiceTest {
 
         @Test
         void 空错误消息使用默认消息() {
-            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000);
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null);
             WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);
             WebClient.RequestBodySpec bodySpec = mock(WebClient.RequestBodySpec.class);
             WebClient.ResponseSpec respSpec = mock(WebClient.ResponseSpec.class);

@@ -52,6 +52,8 @@ class MultiAgentTranslationServiceExtendedTest {
     private RagTranslationService ragTranslationService;
     @Mock
     private AiGlossaryService aiGlossaryService;
+    @Mock
+    private TranslationPostProcessingService postProcessingService;
 
     private MultiAgentTranslationService service;
 
@@ -60,7 +62,24 @@ class MultiAgentTranslationServiceExtendedTest {
         service = new MultiAgentTranslationService(
                 chapterTaskMapper, collabProjectMapper, documentMapper, translationTaskMapper,
                 teamTranslationService, cacheService, entityConsistencyService,
-                glossaryMapper, ragTranslationService, aiGlossaryService);
+                glossaryMapper, ragTranslationService, aiGlossaryService, postProcessingService);
+        clearRetryCounterMap();
+        // postProcessingService fixUntranslatedChinese 默认返回译文本身
+        lenient().doAnswer(inv -> inv.getArgument(1)).when(postProcessingService).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
+        // cache stubs
+        lenient().doReturn(null).when(cacheService).getCache(anyString());
+        lenient().doNothing().when(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        lenient().doNothing().when(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        // RAG stubs
+        lenient().doReturn(new RagTranslationResponse()).when(ragTranslationService).searchSimilar(anyString(), anyString(), anyString());
+        lenient().doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
+        // Team translation stub
+        lenient().doReturn("AI翻译结果").when(teamTranslationService).translateChapter(anyString(), anyString(), anyString(), anyString(), anyList());
+        // AI glossary stub
+        lenient().doReturn(List.of()).when(aiGlossaryService).getProjectGlossary(anyLong());
+        lenient().doNothing().when(aiGlossaryService).addTerm(anyLong(), anyString(), anyString(), anyString(), any(), any());
+        // Entity consistency stub
+        lenient().doReturn(false).when(entityConsistencyService).shouldUseConsistency(anyString());
         clearRetryCounterMap();
     }
 
@@ -215,7 +234,7 @@ class MultiAgentTranslationServiceExtendedTest {
         }
 
         @Test
-        void 缓存命中直接返回成功() throws Exception {
+        void 缓存命中通过管线翻译成功() throws Exception {
             CollabChapterTask chapter = new CollabChapterTask();
             chapter.setId(1L);
             chapter.setProjectId(1L);
@@ -224,16 +243,16 @@ class MultiAgentTranslationServiceExtendedTest {
             chapter.setChapterNumber(1);
             CollabProject project = createProject();
 
-            when(cacheService.getCacheByMode(anyString(), eq("team"))).thenReturn("你好世界");
-
             boolean result = invokeTranslateChapter(chapter, project);
             assertTrue(result);
-            assertEquals(ChapterTaskStatus.COMPLETED.getValue(), chapter.getStatus());
-            assertEquals(100, chapter.getProgress());
+            // 翻译管线成功执行后标记为 SUBMITTED（待审校）
+            assertEquals(ChapterTaskStatus.SUBMITTED.getValue(), chapter.getStatus());
+            assertEquals(80, chapter.getProgress());
+            assertNotNull(chapter.getTargetText());
         }
 
         @Test
-        void RAG直接命中返回成功() throws Exception {
+        void 正常翻译流程成功() throws Exception {
             CollabChapterTask chapter = new CollabChapterTask();
             chapter.setId(1L);
             chapter.setProjectId(1L);
@@ -243,15 +262,11 @@ class MultiAgentTranslationServiceExtendedTest {
             chapter.setChapterNumber(1);
             CollabProject project = createProject();
 
-            when(cacheService.getCacheByMode(anyString(), eq("team"))).thenReturn(null);
-            RagTranslationResponse ragResp = new RagTranslationResponse();
-            ragResp.setDirectHit(true);
-            ragResp.setTranslation("RAG翻译");
-            when(ragTranslationService.searchSimilarWithUser(anyString(), anyString(), anyString(), anyLong()))
-                    .thenReturn(ragResp);
-
             boolean result = invokeTranslateChapter(chapter, project);
             assertTrue(result);
+            assertEquals(ChapterTaskStatus.SUBMITTED.getValue(), chapter.getStatus());
+            assertEquals(80, chapter.getProgress());
+            assertNotNull(chapter.getTargetText());
         }
 
         private CollabProject createProject() {

@@ -68,6 +68,7 @@ public class MultiAgentTranslationService {
     private final GlossaryMapper glossaryMapper;
     private final RagTranslationService ragTranslationService;
     private final AiGlossaryService aiGlossaryService;
+    private final TranslationPostProcessingService postProcessingService;
 
     /**
      * 启动多 Agent 协作翻译
@@ -220,7 +221,7 @@ public class MultiAgentTranslationService {
             // 构建 Pipeline 并执行完整管线（L1→L2→L3→L4=Team）
             TranslationPipeline pipeline = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
-                    null, null, teamTranslationService, userId, chapter.getProjectId().toString());
+                    null, postProcessingService, teamTranslationService, userId, chapter.getProjectId().toString());
 
             String translated = pipeline.executeTeam(
                     sourceText, sourceLang, targetLang, "ai-team", novelType, glossaryTerms);

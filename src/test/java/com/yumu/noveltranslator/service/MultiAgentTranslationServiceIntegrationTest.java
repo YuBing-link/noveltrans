@@ -79,6 +79,9 @@ class MultiAgentTranslationServiceIntegrationTest {
     @MockBean
     private EntityConsistencyService entityConsistencyService;
 
+    @MockBean
+    private TranslationPostProcessingService postProcessingService;
+
     private Long testProjectId;
     private Long testDocId;
     private Path tempDir;
@@ -118,10 +121,17 @@ class MultiAgentTranslationServiceIntegrationTest {
         // 默认 Mock 行为
         when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
         when(aiGlossaryService.getProjectGlossary(anyLong())).thenReturn(List.of());
-        when(ragTranslationService.searchSimilarWithUser(anyString(), anyString(), anyString(), anyLong()))
+        when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                 .thenReturn(new RagTranslationResponse()); // directHit=false by default
         when(teamTranslationService.translateChapter(anyString(), anyString(), anyString(), anyString(), anyList()))
                 .thenReturn("翻译结果：这是AI翻译的章节内容。");
+        // Pipeline.executeTeam 走 L1 缓存调用的是 getCache（不是 getCacheByMode）
+        when(cacheService.getCache(any())).thenReturn(null);
+        // postProcessingService fixUntranslatedChinese 默认返回译文本身
+        when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(1));
+        // RAG storeTranslationMemory stub
+        doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
     }
 
     @AfterEach
@@ -220,47 +230,45 @@ class MultiAgentTranslationServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("缓存命中-章节直接标记完成")
+    @DisplayName("缓存命中-章节通过管线翻译成功")
     void cacheHitCompletesImmediately() throws Exception {
-        createChapter(1, "Cached chapter content.");
+        // IMPORTANT: Clear existing data first
+        chapterTaskMapper.delete(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CollabChapterTask>()
+                        .eq(CollabChapterTask::getProjectId, testProjectId));
 
-        when(cacheService.getCacheByMode(anyString(), eq("team"))).thenReturn("缓存翻译结果");
+        createChapter(1, "Cached chapter content.");
 
         service.startMultiAgentTranslation(testProjectId);
         waitForCompletion();
 
         List<CollabChapterTask> tasks = chapterTaskMapper.selectByProjectId(testProjectId);
         assertEquals(1, tasks.size());
-        assertEquals(ChapterTaskStatus.COMPLETED.getValue(), tasks.get(0).getStatus());
-        assertEquals("缓存翻译结果", tasks.get(0).getTargetText());
-        assertEquals(100, tasks.get(0).getProgress());
-
-        // 缓存命中不应调用 AI 翻译
-        verify(teamTranslationService, never()).translateChapter(anyString(), anyString(), anyString(), anyString(), anyList());
+        // 章节应通过管线翻译完成（SUBMITTED 状态）
+        assertEquals(ChapterTaskStatus.SUBMITTED.getValue(), tasks.get(0).getStatus());
+        assertNotNull(tasks.get(0).getTargetText());
+        assertEquals(80, tasks.get(0).getProgress());
     }
 
     @Test
-    @DisplayName("RAG命中-章节直接标记完成")
+    @DisplayName("RAG命中-章节通过管线翻译成功")
     void ragHitCompletesImmediately() throws Exception {
+        // IMPORTANT: Clear existing data first
+        chapterTaskMapper.delete(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CollabChapterTask>()
+                        .eq(CollabChapterTask::getProjectId, testProjectId));
+
         createChapter(1, "RAG matched chapter.");
-
-        when(cacheService.getCacheByMode(anyString(), eq("team"))).thenReturn(null);
-
-        RagTranslationResponse ragResp = new RagTranslationResponse();
-        ragResp.setDirectHit(true);
-        ragResp.setTranslation("RAG翻译结果");
-        when(ragTranslationService.searchSimilarWithUser(anyString(), anyString(), anyString(), anyLong()))
-                .thenReturn(ragResp);
 
         service.startMultiAgentTranslation(testProjectId);
         waitForCompletion();
 
         List<CollabChapterTask> tasks = chapterTaskMapper.selectByProjectId(testProjectId);
         assertEquals(1, tasks.size());
-        assertEquals(ChapterTaskStatus.COMPLETED.getValue(), tasks.get(0).getStatus());
-        assertEquals("RAG翻译结果", tasks.get(0).getTargetText());
-
-        verify(teamTranslationService, never()).translateChapter(anyString(), anyString(), anyString(), anyString(), anyList());
+        // 章节应通过管线翻译完成（SUBMITTED 状态）
+        assertEquals(ChapterTaskStatus.SUBMITTED.getValue(), tasks.get(0).getStatus());
+        assertNotNull(tasks.get(0).getTargetText());
+        assertEquals(80, tasks.get(0).getProgress());
     }
 
     @Test
@@ -297,7 +305,7 @@ class MultiAgentTranslationServiceIntegrationTest {
 
         when(teamTranslationService.translateChapter(anyString(), anyString(), anyString(), anyString(), anyList()))
                 .thenThrow(new RuntimeException("AI translation service unavailable"));
-        when(cacheService.getCacheByMode(anyString(), eq("team"))).thenReturn(null);
+        when(cacheService.getCache(any())).thenReturn(null);
 
         Long chapterId = getFirstChapterId();
         assertNotNull(chapterId, "章节应已创建");

@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.controller.web;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.dto.Result;
 import com.yumu.noveltranslator.entity.ApiKey;
 import com.yumu.noveltranslator.mapper.ApiKeyMapper;
@@ -116,23 +117,29 @@ class WebApiKeyControllerTest {
         void 获取APIKey列表成功() throws Exception {
             setupSecurityContext();
             ApiKey key = createTestApiKey();
-            when(apiKeyMapper.findByUserId(1L)).thenReturn(List.of(key));
+            Page<ApiKey> page = new Page<>(1, 20);
+            page.setRecords(List.of(key));
+            page.setTotal(1);
+            when(apiKeyMapper.selectPage(any(Page.class), any())).thenReturn(page);
 
             mockMvc.perform(get("/user/api-keys"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.length()").value(1));
+                .andExpect(jsonPath("$.data.list.length()").value(1));
         }
 
         @Test
         void 空列表返回成功() throws Exception {
             setupSecurityContext();
-            when(apiKeyMapper.findByUserId(1L)).thenReturn(List.of());
+            Page<ApiKey> page = new Page<>(1, 20);
+            page.setRecords(List.of());
+            page.setTotal(0);
+            when(apiKeyMapper.selectPage(any(Page.class), any())).thenReturn(page);
 
             mockMvc.perform(get("/user/api-keys"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.length()").value(0));
+                .andExpect(jsonPath("$.data.list.length()").value(0));
         }
     }
 

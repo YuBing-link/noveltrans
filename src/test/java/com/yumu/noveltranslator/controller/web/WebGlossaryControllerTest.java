@@ -78,13 +78,13 @@ class WebGlossaryControllerTest {
         @Test
         void 获取术语库列表成功() throws Exception {
             setupSecurityContext();
-            GlossaryResponse glossary = createTestGlossary();
-            when(userService.getGlossaryTerms(1L)).thenReturn(List.of(glossary));
+            PageResponse<GlossaryResponse> page = PageResponse.of(1, 20, 1L, List.of(createTestGlossary()));
+            when(userService.getGlossaryList(eq(1L), eq(1), eq(20), eq(null))).thenReturn(page);
 
             mockMvc.perform(get("/user/glossaries"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.length()").value(1));
+                .andExpect(jsonPath("$.data.list.length()").value(1));
         }
     }
 
