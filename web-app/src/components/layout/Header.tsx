@@ -2,19 +2,29 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { useState } from 'react';
-import { Moon, Sun, ChevronDown, LogOut, User, Settings } from 'lucide-react';
+import { Moon, Sun, ChevronDown, LogOut, User, Settings, Globe } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 function Header() {
   const { user, isAuthenticated, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showMenu, setShowMenu] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const { t, i18n } = useTranslation();
 
   const handleLogout = async () => {
     await logout();
     navigate('/');
     setShowMenu(false);
   };
+
+  const handleLangChange = (lang: string) => {
+    i18n.changeLanguage(lang);
+    setShowLangMenu(false);
+  };
+
+  const currentLang = i18n.language === 'zh' ? '中文' : 'English';
 
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-50/80 backdrop-blur-xl border-b border-divider dark:border-border">
@@ -31,24 +41,24 @@ function Header() {
           </Link>
           <nav className="hidden md:flex items-center gap-7">
             <Link to="/" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
-              翻译
+              {t('header.nav.translate')}
             </Link>
             <Link to="/pricing" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
-              定价
+              {t('header.nav.pricing')}
             </Link>
             {isAuthenticated && (
               <>
                 <Link to="/documents" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
-                  文档
+                  {t('header.nav.docs')}
                 </Link>
                 <Link to="/history" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
-                  历史
+                  {t('header.nav.history')}
                 </Link>
                 <Link to="/glossary" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
-                  术语表
+                  {t('header.nav.glossary')}
                 </Link>
                 <Link to="/collab" className="text-[14px] text-text-secondary hover:text-text-primary transition-colors">
-                  协作
+                  {t('header.nav.collaboration')}
                 </Link>
               </>
             )}
@@ -57,11 +67,43 @@ function Header() {
 
         {/* Right side */}
         <div className="flex items-center gap-1">
+          {/* Language selector dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowLangMenu(!showLangMenu)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-full text-text-secondary hover:text-text-primary hover:bg-gray-100 transition-button"
+            >
+              <Globe className="w-[15px] h-[15px]" />
+              <span className="text-[13px]">{currentLang}</span>
+              <ChevronDown className="w-3 h-3 text-text-tertiary" />
+            </button>
+
+            {showLangMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 w-40 rounded-card bg-white dark:bg-gray-50 shadow-elevated dark:border dark:border-border py-1 z-50 animate-fade-in">
+                  <button
+                    onClick={() => handleLangChange('zh')}
+                    className={`w-full px-4 py-2.5 text-[13px] text-left hover:bg-gray-100 ${i18n.language === 'zh' ? 'text-accent font-medium' : 'text-text-secondary'}`}
+                  >
+                    中文
+                  </button>
+                  <button
+                    onClick={() => handleLangChange('en')}
+                    className={`w-full px-4 py-2.5 text-[13px] text-left hover:bg-gray-100 ${i18n.language === 'en' ? 'text-accent font-medium' : 'text-text-secondary'}`}
+                  >
+                    English
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
             className="p-2 rounded-full text-text-secondary hover:text-text-primary hover:bg-gray-100 transition-button"
-            aria-label="切换主题"
+            aria-label={t('header.theme.toggle')}
           >
             {theme === 'dark' ? <Sun className="w-[15px] h-[15px]" /> : <Moon className="w-[15px] h-[15px]" />}
           </button>
@@ -76,7 +118,7 @@ function Header() {
                   {user?.username?.slice(0, 1).toUpperCase() || 'U'}
                 </div>
                 <span className="hidden sm:block text-[13px] text-text-primary max-w-24 truncate">
-                  {user?.username || '用户'}
+                  {user?.username || t('header.user.userCenter')}
                 </span>
                 <ChevronDown className="w-3 h-3 text-text-tertiary" />
               </button>
@@ -90,21 +132,21 @@ function Header() {
                       onClick={() => setShowMenu(false)}
                       className="flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-secondary hover:bg-gray-100"
                     >
-                      <User className="w-3.5 h-3.5" /> 个人中心
+                      <User className="w-3.5 h-3.5" /> {t('header.user.userCenter')}
                     </Link>
                     <Link
                       to="/settings"
                       onClick={() => setShowMenu(false)}
                       className="flex items-center gap-2 px-4 py-2.5 text-[13px] text-text-secondary hover:bg-gray-100"
                     >
-                      <Settings className="w-3.5 h-3.5" /> 设置
+                      <Settings className="w-3.5 h-3.5" /> {t('header.user.settings')}
                     </Link>
                     <hr className="my-1 border-divider dark:border-border" />
                     <button
                       onClick={handleLogout}
                       className="flex items-center gap-2 w-full px-4 py-2.5 text-[13px] text-red hover:bg-red-bg"
                     >
-                      <LogOut className="w-3.5 h-3.5" /> 退出登录
+                      <LogOut className="w-3.5 h-3.5" /> {t('header.user.logout')}
                     </button>
                   </div>
                 </>
@@ -112,7 +154,7 @@ function Header() {
             </div>
           ) : (
             <Link to="/login" className="text-[13px] font-medium text-blue px-4 py-1.5 hover:underline">
-              登录
+              {t('header.user.login')}
             </Link>
           )}
         </div>

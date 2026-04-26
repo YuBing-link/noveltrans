@@ -1,5 +1,6 @@
 import { ArrowLeftRight, Zap, Brain } from 'lucide-react';
-import { SUPPORTED_LANGUAGES, TRANSLATION_ENGINES } from '../../api/types';
+import { LANGUAGE_CODES, TRANSLATION_ENGINES } from '../../api/types';
+import { useTranslation } from 'react-i18next';
 
 interface LanguageSelectorProps {
   sourceLang: string;
@@ -13,15 +14,16 @@ interface LanguageSelectorProps {
   onModeChange?: (mode: string) => void;
 }
 
-const modeOptions = [
-  { value: 'fast', label: '快速', icon: Zap },
-  { value: 'expert', label: '专家', icon: Brain },
-];
-
 function LanguageSelector({
   sourceLang, targetLang, onSourceChange, onTargetChange, onSwap,
   engine, onEngineChange, mode, onModeChange,
 }: LanguageSelectorProps) {
+  const { t } = useTranslation();
+  const modeOptions = [
+    { value: 'fast', label: t('languageSelector.fast'), icon: Zap },
+    { value: 'expert', label: t('languageSelector.expert'), icon: Brain },
+  ];
+
   return (
     <div className="w-full bg-white dark:bg-gray-50 border-b border-gradient-b">
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-14">
@@ -39,8 +41,8 @@ function LanguageSelector({
               min-w-28
             "
           >
-            {SUPPORTED_LANGUAGES.map(lang => (
-              <option key={lang.code} value={lang.code}>{lang.name}</option>
+            {LANGUAGE_CODES.map(code => (
+              <option key={code} value={code}>{t(`common.languages.${code}`)}</option>
             ))}
           </select>
 
@@ -55,7 +57,7 @@ function LanguageSelector({
                 : 'text-text-tertiary hover:text-accent hover:bg-accent-bg hover:scale-110'
               }
             `}
-            title="切换语言"
+            title={t('languageSelector.switch')}
             disabled={sourceLang === 'auto'}
           >
             <ArrowLeftRight className="w-4 h-4" />
@@ -73,8 +75,8 @@ function LanguageSelector({
               min-w-28
             "
           >
-            {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => (
-              <option key={lang.code} value={lang.code}>{lang.name}</option>
+            {LANGUAGE_CODES.filter(c => c !== 'auto').map(code => (
+              <option key={code} value={code}>{t(`common.languages.${code}`)}</option>
             ))}
           </select>
         </div>
@@ -94,7 +96,7 @@ function LanguageSelector({
               "
             >
               {TRANSLATION_ENGINES.map(eng => (
-                <option key={eng.value} value={eng.value}>{eng.label}</option>
+                <option key={eng.value} value={eng.value}>{t(`engines.${eng.label}`, { defaultValue: eng.label })}</option>
               ))}
             </select>
           )}

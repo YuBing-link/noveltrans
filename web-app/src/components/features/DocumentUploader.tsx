@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Upload } from 'lucide-react';
 import { SUPPORTED_FILE_TYPES, MAX_FILE_SIZE } from '../../api/types';
+import { useTranslation } from 'react-i18next';
 
 interface DocumentUploaderProps {
   onUpload: (file: File) => void;
@@ -8,6 +9,7 @@ interface DocumentUploaderProps {
 }
 
 function DocumentUploader({ onUpload, loading }: DocumentUploaderProps) {
+  const { t } = useTranslation();
   const [dragOver, setDragOver] = useState(false);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -25,11 +27,11 @@ function DocumentUploader({ onUpload, loading }: DocumentUploaderProps) {
   const validateFile = (file: File): boolean => {
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!SUPPORTED_FILE_TYPES.includes(ext)) {
-      alert(`不支持的文件类型。支持: ${SUPPORTED_FILE_TYPES.join(', ')}`);
+      alert(`${t('document.upload.unsupportedFormat')} ${SUPPORTED_FILE_TYPES.join(', ')}`);
       return false;
     }
     if (file.size > MAX_FILE_SIZE) {
-      alert('文件大小超过 50MB 限制');
+      alert(t('document.upload.fileTooLarge'));
       return false;
     }
     return true;
@@ -62,10 +64,10 @@ function DocumentUploader({ onUpload, loading }: DocumentUploaderProps) {
         </div>
         <div>
           <p className="text-[15px] font-medium text-text-primary">
-            {loading ? '上传中...' : '拖拽文件到此处，或点击上传'}
+            {loading ? t('document.upload.uploading') : t('document.upload.drag')}
           </p>
           <p className="text-[12px] text-text-tertiary mt-1">
-            支持 {SUPPORTED_FILE_TYPES.join('、')}，最大 50MB
+            {t('document.upload.formats')}
           </p>
         </div>
       </div>

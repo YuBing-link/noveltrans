@@ -598,8 +598,10 @@ public class TranslationTaskService {
                     try {
                         String result;
                         if ("expert".equals(mode)) {
-                            result = userLevelThrottledTranslationClient.translateWithPython(
-                                    paragraph, targetLang, "google");
+                            TranslationPipeline pipeline = new TranslationPipeline(
+                                    cacheService, ragTranslationService, entityConsistencyService,
+                                    userLevelThrottledTranslationClient, postProcessingService, null, null);
+                            result = pipeline.execute(paragraph, targetLang, "google");
                         } else {
                             result = userLevelThrottledTranslationClient.translate(
                                     paragraph, targetLang, "google", false, true);
@@ -704,8 +706,10 @@ public class TranslationTaskService {
                     try {
                         String result;
                         if ("expert".equals(mode)) {
-                            result = userLevelThrottledTranslationClient.translateWithPython(
-                                    paragraph, targetLang, "google");
+                            TranslationPipeline pipeline = new TranslationPipeline(
+                                    cacheService, ragTranslationService, entityConsistencyService,
+                                    userLevelThrottledTranslationClient, postProcessingService, null, null);
+                            result = pipeline.execute(paragraph, targetLang, "google");
                         } else {
                             result = userLevelThrottledTranslationClient.translate(
                                     paragraph, targetLang, "google", false, true);

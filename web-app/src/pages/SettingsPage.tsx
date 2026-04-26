@@ -3,8 +3,10 @@ import { useTheme } from '../hooks/useTheme';
 import { useToast } from '../components/ui/Toast';
 import { authApi } from '../api/auth';
 import { Moon, Sun, Bell, Mail, Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 function SettingsPage() {
+  const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
   const { success, error: toastError } = useToast();
   const [oldPassword, setOldPassword] = useState('');
@@ -13,38 +15,38 @@ function SettingsPage() {
   const [saving, setSaving] = useState(false);
 
   const handleChangePassword = async () => {
-    if (!oldPassword || !newPassword || !confirmPassword) { 
-      toastError('请填写完整'); 
-      return; 
-    }
-    if (newPassword !== confirmPassword) {
-      toastError('两次输入的密码不一致');
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      toastError(t('settings.password.errors.fillAll'));
       return;
     }
-    if (newPassword.length < 6) { 
-      toastError('密码至少6位'); 
-      return; 
+    if (newPassword !== confirmPassword) {
+      toastError(t('settings.password.errors.passwordMismatch'));
+      return;
     }
-    
+    if (newPassword.length < 6) {
+      toastError(t('settings.password.errors.passwordTooShort'));
+      return;
+    }
+
     setSaving(true);
     try {
       await authApi.changePassword({ oldPassword, newPassword });
-      success('密码修改成功');
-      setOldPassword(''); 
-      setNewPassword(''); 
+      success(t('settings.password.success'));
+      setOldPassword('');
+      setNewPassword('');
       setConfirmPassword('');
-    } catch (err) { 
-      toastError(err instanceof Error ? err.message : '密码修改失败'); 
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t('settings.password.errors.updateFailed'));
     }
-    finally { 
-      setSaving(false); 
+    finally {
+      setSaving(false);
     }
   };
 
   return (
     <div className="py-8">
-      <h2 className="text-[15px] font-semibold text-text-primary">设置</h2>
-      
+      <h2 className="text-[15px] font-semibold text-text-primary">{t('settings.title')}</h2>
+
       <div className="space-y-4">
         {/* Theme */}
         <div className="border border-border/50 rounded-lg overflow-hidden">
@@ -54,8 +56,8 @@ function SettingsPage() {
                 {theme === 'dark' ? <Moon className="w-5 h-5 text-accent" /> : <Sun className="w-5 h-5 text-yellow" />}
               </div>
               <div>
-                <p className="text-[13px] font-medium text-text-primary">深色模式</p>
-                <p className="text-[12px] text-text-tertiary mt-0.5">切换浅色/深色主题，保护您的视力</p>
+                <p className="text-[13px] font-medium text-text-primary">{t('settings.appearance.title')}</p>
+                <p className="text-[12px] text-text-tertiary mt-0.5">{t('settings.appearance.description')}</p>
               </div>
             </div>
             <button
@@ -83,55 +85,55 @@ function SettingsPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-[13px] font-medium text-text-primary">修改密码</h3>
-                <p className="text-[12px] text-text-tertiary mt-0.5">定期更换密码以保障账号安全</p>
+                <h3 className="text-[13px] font-medium text-text-primary">{t('settings.password.title')}</h3>
+                <p className="text-[12px] text-text-tertiary mt-0.5">{t('settings.password.description')}</p>
               </div>
             </div>
           </div>
-          
+
           <div className="px-5 py-4 space-y-3">
             <div>
-              <label className="text-[13px] font-medium text-text-secondary block mb-1">当前密码</label>
-              <input 
-                type="password" 
-                value={oldPassword} 
-                onChange={e => setOldPassword(e.target.value)} 
-                placeholder="输入当前密码" 
-                className="w-full px-3 py-2 text-[13px] bg-surface-secondary text-text-primary rounded-input border border-border focus:border-accent focus:outline-none" 
+              <label className="text-[13px] font-medium text-text-secondary block mb-1">{t('settings.password.currentPassword')}</label>
+              <input
+                type="password"
+                value={oldPassword}
+                onChange={e => setOldPassword(e.target.value)}
+                placeholder={t('settings.password.currentPasswordPlaceholder')}
+                className="w-full px-3 py-2 text-[13px] bg-surface-secondary text-text-primary rounded-input border border-border focus:border-accent focus:outline-none"
               />
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-[13px] font-medium text-text-secondary block mb-1">新密码</label>
-                <input 
-                  type="password" 
-                  value={newPassword} 
-                  onChange={e => setNewPassword(e.target.value)} 
-                  placeholder="至少6位字符" 
-                  className="w-full px-3 py-2 text-[13px] bg-surface-secondary text-text-primary rounded-input border border-border focus:border-accent focus:outline-none" 
+                <label className="text-[13px] font-medium text-text-secondary block mb-1">{t('settings.password.newPassword')}</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder={t('settings.password.newPasswordPlaceholder')}
+                  className="w-full px-3 py-2 text-[13px] bg-surface-secondary text-text-primary rounded-input border border-border focus:border-accent focus:outline-none"
                 />
               </div>
-              
+
               <div>
-                <label className="text-[13px] font-medium text-text-secondary block mb-1">确认新密码</label>
-                <input 
-                  type="password" 
-                  value={confirmPassword} 
-                  onChange={e => setConfirmPassword(e.target.value)} 
-                  placeholder="再次输入新密码" 
-                  className="w-full px-3 py-2 text-[13px] bg-surface-secondary text-text-primary rounded-input border border-border focus:border-accent focus:outline-none" 
+                <label className="text-[13px] font-medium text-text-secondary block mb-1">{t('settings.password.confirmPassword')}</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder={t('settings.password.confirmPasswordPlaceholder')}
+                  className="w-full px-3 py-2 text-[13px] bg-surface-secondary text-text-primary rounded-input border border-border focus:border-accent focus:outline-none"
                 />
               </div>
             </div>
-            
+
             <div className="pt-1">
               <button
                 onClick={handleChangePassword}
                 disabled={saving}
                 className="px-5 py-1.5 text-[13px] font-medium text-white bg-accent rounded-button hover:bg-accent-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
-                {saving ? '保存中...' : '修改密码'}
+                {saving ? t('settings.password.saving') : t('settings.password.submit')}
               </button>
             </div>
           </div>
@@ -146,43 +148,43 @@ function SettingsPage() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-[13px] font-medium text-text-primary">通知偏好</h3>
+                  <h3 className="text-[13px] font-medium text-text-primary">{t('settings.notifications.title')}</h3>
                   <span className="px-2 py-0.5 text-[11px] font-medium text-text-tertiary bg-surface-secondary rounded-full">
-                    即将推出
+                    {t('settings.notifications.comingSoon')}
                   </span>
                 </div>
-                <p className="text-[12px] text-text-tertiary mt-0.5">自定义接收通知的方式和内容</p>
+                <p className="text-[12px] text-text-tertiary mt-0.5">{t('settings.notifications.description')}</p>
               </div>
             </div>
           </div>
-          
+
           <div className="px-5 py-4 space-y-3">
             <div className="flex items-center justify-between py-2">
               <div className="flex items-start gap-3">
                 <Bell className="w-4 h-4 text-text-tertiary mt-0.5" />
                 <div>
-                  <p className="text-[13px] font-medium text-text-primary">翻译完成通知</p>
-                  <p className="text-[12px] text-text-tertiary mt-0.5">文档翻译完成时推送通知</p>
+                  <p className="text-[13px] font-medium text-text-primary">{t('settings.notifications.translationComplete')}</p>
+                  <p className="text-[12px] text-text-tertiary mt-0.5">{t('settings.notifications.translationCompleteDesc')}</p>
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between py-2">
               <div className="flex items-start gap-3">
                 <Mail className="w-4 h-4 text-text-tertiary mt-0.5" />
                 <div>
-                  <p className="text-[13px] font-medium text-text-primary">邮件通知</p>
-                  <p className="text-[12px] text-text-tertiary mt-0.5">接收翻译报告邮件</p>
+                  <p className="text-[13px] font-medium text-text-primary">{t('settings.notifications.emailReports')}</p>
+                  <p className="text-[12px] text-text-tertiary mt-0.5">{t('settings.notifications.emailReportsDesc')}</p>
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between py-2">
               <div className="flex items-start gap-3">
                 <Info className="w-4 h-4 text-text-tertiary mt-0.5" />
                 <div>
-                  <p className="text-[13px] font-medium text-text-primary">系统更新通知</p>
-                  <p className="text-[12px] text-text-tertiary mt-0.5">新功能和维护通知</p>
+                  <p className="text-[13px] font-medium text-text-primary">{t('settings.notifications.systemUpdates')}</p>
+                  <p className="text-[12px] text-text-tertiary mt-0.5">{t('settings.notifications.systemUpdatesDesc')}</p>
                 </div>
               </div>
             </div>

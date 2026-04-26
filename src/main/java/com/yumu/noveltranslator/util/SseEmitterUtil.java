@@ -49,6 +49,16 @@ public class SseEmitterUtil {
         } catch (Exception ignored) {}
     }
 
+    /**
+     * 发送心跳事件，防止长翻译过程中 SSE 连接因超时而断开。
+     * 使用 SSE comment 格式（冒号前缀），前端会自动忽略此类注释行。
+     */
+    public static void sendHeartbeat(SseEmitter emitter) {
+        try {
+            emitter.send(SseEmitter.event().comment("heartbeat"));
+        } catch (Exception ignored) {}
+    }
+
     public static void complete(SseEmitter emitter) {
         emitter.complete();
     }

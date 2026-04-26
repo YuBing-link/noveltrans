@@ -514,11 +514,25 @@ public class EntityConsistencyService {
 
     /**
      * 译文中将占位符替换为翻译后的实体名（公开方法，供外部调用）
+     * 兼容 LLM 破坏占位符格式的情况：[{1}] → [1]
      */
     public String restorePlaceholders(String text, EntityMappingContext context) {
         String result = text;
         for (EntityMapping mapping : context.mappings) {
-            result = result.replace(mapping.getPlaceholder(), mapping.getTranslatedText());
+            String placeholder = mapping.getPlaceholder(); // [{N}]
+            // 优先尝试标准格式还原
+            if (result.contains(placeholder)) {
+                result = result.replace(placeholder, mapping.getTranslatedText());
+            } else {
+                // LLM 可能把 [{N}] 破坏成 [N]，使用正则回退
+                String degradedPattern = "\\[" + mapping.getIndex() + "\\]";
+                if (result.matches(".*" + degradedPattern + ".*")) {
+                    result = result.replaceAll(degradedPattern, mapping.getTranslatedText());
+                    log.warn("占位符被 LLM 破坏，使用回退还原: {} → {}", placeholder, mapping.getTranslatedText());
+                } else {
+                    log.warn("占位符还原失败: 未找到 {} (索引={}) 在译文中", placeholder, mapping.getIndex());
+                }
+            }
         }
         return result;
     }

@@ -4,10 +4,12 @@ import { Button } from '../ui/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../ui/Toast';
 import { api } from '../../api/client';
+import { useTranslation } from 'react-i18next';
 
 function ForgotPasswordForm() {
   const { sendResetCode } = useAuth();
   const { success, error: toastError } = useToast();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -18,11 +20,11 @@ function ForgotPasswordForm() {
   const [step, setStep] = useState<'email' | 'reset'>('email');
 
   const handleSendCode = async () => {
-    if (!email) { toastError('请先输入邮箱'); return; }
+    if (!email) { toastError(t('forgotPassword.errors.emailRequired')); return; }
     setSendingCode(true);
     try {
       await sendResetCode(email);
-      success('验证码已发送');
+      success(t('register.success.codeSent'));
       setStep('reset');
       setCountdown(60);
       const timer = setInterval(() => {
@@ -32,7 +34,7 @@ function ForgotPasswordForm() {
         });
       }, 1000);
     } catch (err) {
-      toastError(err instanceof Error ? err.message : '发送失败');
+      toastError(err instanceof Error ? err.message : t('forgotPassword.errors.sendFailed'));
     } finally {
       setSendingCode(false);
     }
@@ -40,16 +42,16 @@ function ForgotPasswordForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) { toastError('两次密码输入不一致'); return; }
-    if (password.length < 6) { toastError('密码至少6位'); return; }
+    if (password !== confirmPassword) { toastError(t('forgotPassword.errors.passwordMismatch')); return; }
+    if (password.length < 6) { toastError(t('forgotPassword.errors.passwordTooShort')); return; }
 
     setLoading(true);
     try {
       await api.post<null>('/user/reset-password', { email, code, newPassword: password });
-      success('密码重置成功，请登录');
+      success(t('forgotPassword.success.resetSuccess'));
       window.location.href = '/login';
     } catch (err) {
-      toastError(err instanceof Error ? err.message : '重置失败');
+      toastError(err instanceof Error ? err.message : t('forgotPassword.errors.resetFailed'));
     } finally {
       setLoading(false);
     }
@@ -58,20 +60,20 @@ function ForgotPasswordForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input
-        label="邮箱"
+        label={t('forgotPassword.email')}
         type="email"
         value={email}
         onChange={e => setEmail(e.target.value)}
-        placeholder="请输入注册邮箱"
+        placeholder={t('forgotPassword.emailPlaceholder')}
         required
       />
       <div className="flex gap-2">
         <div className="flex-1">
           <Input
-            label="验证码"
+            label={t('forgotPassword.verificationCode')}
             value={code}
             onChange={e => setCode(e.target.value)}
-            placeholder="输入验证码"
+            placeholder={t('forgotPassword.codePlaceholder')}
             required
           />
         </div>
@@ -84,33 +86,33 @@ function ForgotPasswordForm() {
             disabled={countdown > 0}
             className="whitespace-nowrap"
           >
-            {countdown > 0 ? `${countdown}s` : '发送验证码'}
+            {countdown > 0 ? `${countdown}s` : t('forgotPassword.sendCode')}
           </Button>
         </div>
       </div>
       {step === 'reset' && (
         <>
           <Input
-            label="新密码"
+            label={t('forgotPassword.newPassword')}
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder="请输入新密码（至少6位）"
+            placeholder={t('forgotPassword.newPasswordPlaceholder')}
             required
             minLength={6}
           />
           <Input
-            label="确认密码"
+            label={t('forgotPassword.confirmPassword')}
             type="password"
             value={confirmPassword}
             onChange={e => setConfirmPassword(e.target.value)}
-            placeholder="请再次输入密码"
+            placeholder={t('forgotPassword.confirmPasswordPlaceholder')}
             required
           />
         </>
       )}
       <Button type="submit" variant="primary" loading={loading} className="w-full">
-        重置密码
+        {t('forgotPassword.submit')}
       </Button>
     </form>
   );

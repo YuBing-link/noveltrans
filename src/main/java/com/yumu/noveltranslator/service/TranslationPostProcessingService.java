@@ -77,13 +77,13 @@ public class TranslationPostProcessingService {
      */
     private String remediateSegments(java.util.List<String> segments, String targetLang, String engine) throws Exception {
         String sourceText = String.join("\n", segments);
-        String prompt = "以下文本包含未翻译的中文内容，请将它们翻译为" + targetLang + "，返回翻译后的完整文本，保持原有换行：\n" + sourceText;
 
         String baseUrl = pythonTranslateUrl.replace("/translate", "");
         String url = baseUrl + "/translate";
 
+        // 只发送需要翻译的文本，不加额外指令，避免 LLM 混淆指令和待翻译文本
         var body = new LinkedHashMap<String, Object>();
-        body.put("text", prompt);
+        body.put("text", sourceText);
         body.put("target_lang", targetLang);
         body.put("engine", engine != null ? engine : "openai");
         body.put("fallback", true);
@@ -107,6 +107,12 @@ public class TranslationPostProcessingService {
         if (data == null || data.isBlank()) {
             throw new RuntimeException("补救翻译返回空数据");
         }
+
+        // 过滤：如果返回结果包含 prompt 关键词（LLM 原样返回了指令文本），视为翻译失败
+        if (data.contains("以下文本包含") || data.contains("未翻译的中文") || data.contains("请将它们翻译")) {
+            throw new RuntimeException("补救翻译返回了指令文本，LLM 未正确翻译");
+        }
+
         return data;
     }
 

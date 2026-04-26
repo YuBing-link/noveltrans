@@ -134,7 +134,7 @@ class TranslationServiceTest {
 
             assertTrue(resp.getSuccess());
             assertEquals("翻译结果", resp.getTranslation());
-            verify(translationClient).translate(eq("Hello World"), eq("zh"), eq("google"), eq(false), eq(false));
+            verify(translationClient).translate(eq("Hello World"), eq("zh"), eq("google"), eq(false), eq(true));
         }
 
         @Test
@@ -169,7 +169,7 @@ class TranslationServiceTest {
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
             assertTrue(resp.getSuccess());
-            verify(translationClient).translate(eq("test"), eq("zh"), eq("auto"), eq(false), eq(false));
+            verify(translationClient).translate(eq("test"), eq("zh"), eq("auto"), eq(false), eq(true));
         }
     }
 

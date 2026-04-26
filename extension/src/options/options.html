@@ -1,51 +1,69 @@
-<!-- settings.html -->
+﻿<!-- settings.html -->
 <!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Extreme Translator — 设置</title>
-  <style>
-    :root{--bg:#f7fafc;--card:#fff;--muted:#6b7280;--accent:#3b82f6}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans SC",Helvetica,Arial; background:var(--bg); margin:0;padding:28px;color:#0f172a}
-    .container{max-width:980px;margin:0 auto}
-    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
-    h1{font-size:20px;margin:0}
-    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(2,6,23,0.06);margin-bottom:16px}
-    .row{display:flex;gap:12px;align-items:center}
-    label{display:block;margin-bottom:6px;font-weight:600}
-    .muted{color:var(--muted);font-size:13px}
-    .switch{position:relative;width:46px;height:26px;background:#e6eefc;border-radius:20px}
-    .switch input{display:none}
-    .slider{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:all .18s}
-    input:checked + .slider{transform:translateX(20px)}
-    select, input[type=text]{padding:8px 10px;border-radius:8px;border:1px solid #e6edf3;background:#fff}
-    .controls{display:flex;gap:8px;margin-top:12px}
-    button{padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
-    button.secondary{background:#111827}
-    .group{margin-bottom:12px}
-    .small{font-size:13px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    textarea{width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid #e6edf3}
-    .export-area{display:flex;gap:8px}
-  </style>
-  <!-- 加载配置文件 -->
+  <title>Extreme Translator 鈥?璁剧疆</title>
+  <style>  :root{
+    --bg:#f5f4ed;
+    --card:#faf9f5;
+    --muted:#87867f;
+    --accent:#c96442;
+    --dark:#141413;
+    --olive:#5e5d59;
+    --border:#e8e6dc;
+  }
+  body{
+    font-family:Georgia,"Times New Roman","Noto Serif SC",-apple-system,system-ui,Roboto,Arial;
+    background:var(--bg);
+    margin:0;
+    padding:32px;
+    color:var(--dark);
+  }
+  .container{max-width:960px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+  h1{font-size:24px;margin:0;font-weight:500;letter-spacing:-0.02em;color:var(--dark)}
+  .card{background:var(--card);border-radius:16px;padding:24px;box-shadow:0 4px 20px rgba(20,20,19,0.06),0 0 0 1px var(--border);margin-bottom:20px}
+  .row{display:flex;gap:16px;align-items:center}
+  label{display:block;margin-bottom:8px;font-weight:600;font-size:14px;color:var(--dark)}
+  .muted{color:var(--muted);font-size:13px;line-height:1.5}
+  .switch{position:relative;width:46px;height:26px;background:var(--border);border-radius:20px}
+  .switch input{display:none}
+  .slider{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+  input:checked + .slider{transform:translateX(20px);background:var(--accent)}
+  input:checked + .slider + .switch{background:rgba(201,100,66,0.15)}
+  select, input[type=text]{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;font-size:14px;color:var(--dark);outline:none;transition:border-color .2s}
+  select:focus, input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(201,100,66,0.1)}
+  .controls{display:flex;gap:10px;margin-top:16px}
+  button{padding:10px 16px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer;font-size:14px;font-weight:500;transition:all .2s;box-shadow:0 2px 8px rgba(201,100,66,0.2)}
+  button:hover{background:#b5583a}
+  button:active{transform:translateY(1px)}
+  button.secondary{background:var(--olive);box-shadow:0 2px 8px rgba(94,93,89,0.15)}
+  button.secondary:hover{background:#4d4c48}
+  .group{margin-bottom:16px}
+  .small{font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  textarea{width:100%;min-height:100px;padding:12px;border-radius:10px;border:1px solid var(--border);font-family:inherit;font-size:14px;resize:vertical}
+  textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(201,100,66,0.1);outline:none}
+  .export-area{display:flex;gap:10px}</style>
+  <!-- 鍔犺浇閰嶇疆鏂囦欢 -->
   <script src="../lib/browser-polyfill.js"></script>
   <script src="../lib/config.js"></script>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>设置</h1>
-      <div class="muted">Extreme Translator • 配置中心</div>
+      <h1>璁剧疆</h1>
+      <div class="muted">Extreme Translator 鈥?閰嶇疆涓績</div>
     </header>
 
     <section class="card">
       <div class="grid">
         <div>
-          <label>自动翻译</label>
+          <label>鑷姩缈昏瘧</label>
           <div class="row">
-            <div class="small muted">当检测到选中文本后自动发起翻译</div>
+            <div class="small muted">褰撴娴嬪埌閫変腑鏂囨湰鍚庤嚜鍔ㄥ彂璧风炕璇?/div>
             <div style="margin-left:auto">
               <label class="switch">
                 <input type="checkbox" id="autoTranslate">
@@ -56,9 +74,9 @@
         </div>
 
         <div>
-          <label>显示音译 / 注音</label>
+          <label>鏄剧ず闊宠瘧 / 娉ㄩ煶</label>
           <div class="row">
-            <div class="small muted">在翻译结果中附加音译（如有）</div>
+            <div class="small muted">鍦ㄧ炕璇戠粨鏋滀腑闄勫姞闊宠瘧锛堝鏈夛級</div>
             <div style="margin-left:auto">
               <label class="switch">
                 <input type="checkbox" id="showTranslit">
@@ -70,38 +88,38 @@
       </div>
 
       <div class="group">
-        <label>翻译质量</label>
+        <label>缈昏瘧璐ㄩ噺</label>
         <select id="translationQuality">
-          <option value="fast">快速（低成本）</option>
-          <option value="balanced">均衡（默认）</option>
-          <option value="high">高质量（耗时/成本高）</option>
+          <option value="fast">蹇€燂紙浣庢垚鏈級</option>
+          <option value="balanced">鍧囪　锛堥粯璁わ級</option>
+          <option value="high">楂樿川閲忥紙鑰楁椂/鎴愭湰楂橈級</option>
         </select>
-        <div class="small muted" style="margin-top:8px">高质量会使用更大的模型或更多上下文。</div>
+        <div class="small muted" style="margin-top:8px">楂樿川閲忎細浣跨敤鏇村ぇ鐨勬ā鍨嬫垨鏇村涓婁笅鏂囥€?/div>
       </div>
 
       <div class="group">
-        <label>首选翻译服务</label>
+        <label>棣栭€夌炕璇戞湇鍔?/label>
         <select id="preferredService">
-          <!-- 选项将从 config.js 动态生成 -->
+          <!-- 閫夐」灏嗕粠 config.js 鍔ㄦ€佺敓鎴?-->
         </select>
       </div>
 
       <div class="controls">
-        <button id="btn-save">保存设置</button>
-        <button class="secondary" id="btn-reset">恢复默认</button>
+        <button id="btn-save">淇濆瓨璁剧疆</button>
+        <button class="secondary" id="btn-reset">鎭㈠榛樿</button>
       </div>
     </section>
 
     <section class="card">
-      <label>导出 / 导入 设置</label>
+      <label>瀵煎嚭 / 瀵煎叆 璁剧疆</label>
       <div style="margin-top:8px" class="export-area">
-        <textarea id="exportArea" placeholder="点击导出后将在此处看到JSON..."></textarea>
+        <textarea id="exportArea" placeholder="鐐瑰嚮瀵煎嚭鍚庡皢鍦ㄦ澶勭湅鍒癑SON..."></textarea>
       </div>
       <div class="controls" style="margin-top:8px">
-        <button id="btn-export">导出到JSON</button>
-        <button id="btn-import" class="secondary">从JSON导入</button>
+        <button id="btn-export">瀵煎嚭鍒癑SON</button>
+        <button id="btn-import" class="secondary">浠嶫SON瀵煎叆</button>
       </div>
-      <div class="small muted" style="margin-top:8px">导入会覆盖当前设置。请谨慎操作。</div>
+      <div class="small muted" style="margin-top:8px">瀵煎叆浼氳鐩栧綋鍓嶈缃€傝璋ㄦ厧鎿嶄綔銆?/div>
     </section>
 
     <footer style="text-align:center;margin-top:8px;color:var(--muted)">Version 1.0.0</footer>
@@ -130,7 +148,7 @@
         qs('#translationQuality').value = settings.translationQuality || DEFAULTS.translationQuality;
         qs('#preferredService').value = settings.preferredService || DEFAULTS.preferredService;
       } catch (e) {
-        console.warn('browser.storage 不可用，尝试 localStorage');
+        console.warn('browser.storage 涓嶅彲鐢紝灏濊瘯 localStorage');
         const s = localStorage.getItem('extremeTranslatorSettings');
         if (s) {
           const parsed = JSON.parse(s);
@@ -152,16 +170,16 @@
 
       try {
         await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(settings)});
-        alert('已保存设置');
+        alert('宸蹭繚瀛樿缃?);
       } catch (e) {
         localStorage.setItem('extremeTranslatorSettings', JSON.stringify(settings));
-        alert('已保存到 localStorage');
+        alert('宸蹭繚瀛樺埌 localStorage');
       }
     }
 
     async function exportSettings() {
       try {
-        // Promise-style: 使用 await 替代回调
+        // Promise-style: 浣跨敤 await 鏇夸唬鍥炶皟
         const res = await browser.storage.local.get(['extremeTranslatorSettings']);
         if (res && res.extremeTranslatorSettings) {
           qs('#exportArea').value = res.extremeTranslatorSettings;
@@ -177,23 +195,23 @@
 
     async function importSettings() {
       const text = qs('#exportArea').value.trim();
-      if (!text) { alert('请输入或粘贴合法的JSON'); return; }
+      if (!text) { alert('璇疯緭鍏ユ垨绮樿创鍚堟硶鐨凧SON'); return; }
       try {
         const parsed = JSON.parse(text);
-        // Promise-style: 使用 await 替代回调
+        // Promise-style: 浣跨敤 await 鏇夸唬鍥炶皟
         await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(parsed)});
-        alert('导入成功');
+        alert('瀵煎叆鎴愬姛');
         await load();
       } catch (e) {
-        alert('JSON 格式不正确');
+        alert('JSON 鏍煎紡涓嶆纭?);
       }
     }
 
     async function resetDefaults(){
-      if (!confirm('确定要恢复默认设置吗？')) return;
+      if (!confirm('纭畾瑕佹仮澶嶉粯璁よ缃悧锛?)) return;
       await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(DEFAULTS)});
       await load();
-      alert('已恢复默认');
+      alert('宸叉仮澶嶉粯璁?);
     }
 
     document.getElementById('btn-save').addEventListener('click', save);
@@ -201,16 +219,16 @@
     document.getElementById('btn-export').addEventListener('click', exportSettings);
     document.getElementById('btn-import').addEventListener('click', importSettings);
 
-    // 动态生成翻译服务选项（从 config.js 读取）
+    // 鍔ㄦ€佺敓鎴愮炕璇戞湇鍔￠€夐」锛堜粠 config.js 璇诲彇锛?
     document.addEventListener('DOMContentLoaded', async function() {
       const select = document.getElementById('preferredService');
 
-      // 清空现有选项
+      // 娓呯┖鐜版湁閫夐」
       while (select.options.length > 0) {
         select.remove(0);
       }
 
-      // 从 config.js 读取翻译服务列表
+      // 浠?config.js 璇诲彇缈昏瘧鏈嶅姟鍒楄〃
       if (window.translationServices) {
         const services = window.translationServices;
         services.forEach(service => {
@@ -221,7 +239,7 @@
         });
       }
 
-      // 恢复用户选择 - Promise-style: 使用 await 替代回调
+      // 鎭㈠鐢ㄦ埛閫夋嫨 - Promise-style: 浣跨敤 await 鏇夸唬鍥炶皟
       try {
         const res = await browser.storage.local.get(['extremeTranslatorSettings']);
         if (res && res.extremeTranslatorSettings) {
@@ -229,19 +247,20 @@
             const settings = JSON.parse(res.extremeTranslatorSettings);
             select.value = settings.preferredService || 'openai';
           } catch (e) {
-            console.error('加载设置失败:', e);
+            console.error('鍔犺浇璁剧疆澶辫触:', e);
           }
         }
       } catch (e) {
-        console.error('恢复用户选择失败:', e);
+        console.error('鎭㈠鐢ㄦ埛閫夋嫨澶辫触:', e);
       }
     });
 
-    // 初始化
+    // 鍒濆鍖?
     load();
   </script>
 
 </body>
 </html>
+
 
 

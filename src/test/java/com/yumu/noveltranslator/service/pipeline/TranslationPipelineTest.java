@@ -279,7 +279,7 @@ class TranslationPipelineTest {
             String result = pipeline.executeFast("<p>Hello</p>", "zh", "google", true);
 
             assertEquals("<p>翻译</p>", result);
-            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(false), eq(true));
+            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true));
         }
     }
 

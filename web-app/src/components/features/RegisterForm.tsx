@@ -5,11 +5,13 @@ import { Button } from '../ui/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../ui/Toast';
 import { Eye, EyeOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 function RegisterForm() {
   const { register, sendCode } = useAuth();
   const { success, error: toastError } = useToast();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -20,11 +22,11 @@ function RegisterForm() {
   const [countdown, setCountdown] = useState(0);
 
   const handleSendCode = async () => {
-    if (!email) { toastError('请先输入邮箱'); return; }
+    if (!email) { toastError(t('register.errors.emailRequired')); return; }
     setSendingCode(true);
     try {
       await sendCode(email);
-      success('验证码已发送');
+      success(t('register.success.codeSent'));
       setCountdown(60);
       const timer = setInterval(() => {
         setCountdown(prev => {
@@ -33,7 +35,7 @@ function RegisterForm() {
         });
       }, 1000);
     } catch (err) {
-      toastError(err instanceof Error ? err.message : '发送失败');
+      toastError(err instanceof Error ? err.message : t('register.errors.sendFailed'));
     } finally {
       setSendingCode(false);
     }
@@ -44,10 +46,10 @@ function RegisterForm() {
     setLoading(true);
     try {
       await register(email, password, code, username || undefined);
-      success('注册成功');
+      success(t('register.success.registered'));
       navigate('/', { replace: true });
     } catch (err) {
-      toastError(err instanceof Error ? err.message : '注册失败');
+      toastError(err instanceof Error ? err.message : t('register.errors.registerFailed'));
     } finally {
       setLoading(false);
     }
@@ -56,20 +58,20 @@ function RegisterForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input
-        label="邮箱"
+        label={t('register.email')}
         type="email"
         value={email}
         onChange={e => setEmail(e.target.value)}
-        placeholder="请输入邮箱"
+        placeholder={t('login.emailPlaceholder')}
         required
       />
       <div className="flex gap-2">
         <div className="flex-1">
           <Input
-            label="验证码"
+            label={t('register.verificationCode')}
             value={code}
             onChange={e => setCode(e.target.value)}
-            placeholder="输入验证码"
+            placeholder={t('forgotPassword.codePlaceholder')}
             required
           />
         </div>
@@ -82,23 +84,23 @@ function RegisterForm() {
             disabled={countdown > 0}
             className="whitespace-nowrap"
           >
-            {countdown > 0 ? `${countdown}s` : '发送验证码'}
+            {countdown > 0 ? `${countdown}s` : t('register.sendCode')}
           </Button>
         </div>
       </div>
       <Input
-        label="用户名（可选）"
+        label={t('register.username')}
         value={username}
         onChange={e => setUsername(e.target.value)}
-        placeholder="请输入用户名"
+        placeholder={t('register.usernamePlaceholder')}
       />
       <div className="relative">
         <Input
-          label="密码"
+          label={t('register.password')}
           type={showPassword ? 'text' : 'password'}
           value={password}
           onChange={e => setPassword(e.target.value)}
-          placeholder="请输入密码（至少6位）"
+          placeholder={t('register.passwordPlaceholder')}
           required
           minLength={6}
         />
@@ -111,12 +113,12 @@ function RegisterForm() {
         </button>
       </div>
       <Button type="submit" variant="primary" loading={loading} className="w-full">
-        注册
+        {t('register.submit')}
       </Button>
       <p className="text-center text-[13px] text-text-tertiary">
-        已有账号？{' '}
+        {t('register.hasAccount')}{' '}
         <Link to="/login" className="text-accent hover:underline">
-          立即登录
+          {t('register.loginNow')}
         </Link>
       </p>
     </form>

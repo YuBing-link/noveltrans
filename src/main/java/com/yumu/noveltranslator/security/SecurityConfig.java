@@ -48,8 +48,18 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        // CORS 白名单：仅允许配置的可信域名访问，禁止 "*" 与 allowCredentials 同时使用
+        String allowedOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
+        List<String> origins;
+        if (allowedOrigins != null && !allowedOrigins.isBlank()) {
+            origins = List.of(allowedOrigins.split(","));
+        } else {
+            // 开发环境默认允许本地前端端口
+            origins = List.of("http://localhost:5173", "http://localhost:3000");
+        }
+
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedOriginPatterns(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
@@ -63,13 +73,17 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            // CSRF 已禁用：本项目使用 JWT + Authorization header 认证，
+            // 不依赖浏览器自动携带的 Cookie 认证，因此不受 CSRF 攻击影响。
+            // 如果未来引入 Cookie 认证，需要启用 CSRF 保护。
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(SecurityPermitAllPaths.PERMIT_ALL_PATHS.toArray(new String[0])).permitAll()
-                .requestMatchers("/v1/translate/selection", "/v1/translate/reader", "/v1/translate/webpage", "/v1/translate/text/stream").permitAll()
+                // 翻译端点必须认证：防止匿名请求消耗配额和费用
+                .requestMatchers("/v1/translate/selection", "/v1/translate/reader", "/v1/translate/webpage", "/v1/translate/text/stream").authenticated()
                 .requestMatchers("/v1/translate/**").authenticated()
                 .anyRequest().authenticated()
             );

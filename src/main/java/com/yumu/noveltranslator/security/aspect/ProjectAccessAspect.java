@@ -12,10 +12,7 @@ import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 
 /**
@@ -64,10 +61,13 @@ public class ProjectAccessAspect {
     }
 
     /**
-     * 从方法参数或请求路径中提取 projectId
+     * 从方法参数中提取 projectId
+     *
+     * 安全约束：仅从方法签名中的第一个 Long 类型参数提取 projectId。
+     * 所有使用 @RequireProjectAccess 的 Controller 方法均以 Long projectId 作为参数，
+     * 不再依赖 URL 路径解析，避免路由变化导致权限校验绕过。
      */
     private Long extractProjectId(JoinPoint joinPoint) {
-        // 优先从方法参数中提取
         Object[] args = joinPoint.getArgs();
         for (Object arg : args) {
             if (arg instanceof Long longVal) {
@@ -75,22 +75,7 @@ public class ProjectAccessAspect {
             }
         }
 
-        // 从 URL 路径参数提取
-        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attrs != null) {
-            HttpServletRequest request = attrs.getRequest();
-            String path = request.getRequestURI();
-            String[] segments = path.split("/");
-            for (int i = 0; i < segments.length; i++) {
-                if ("projects".equals(segments[i]) && i + 1 < segments.length) {
-                    try {
-                        return Long.parseLong(segments[i + 1]);
-                    } catch (NumberFormatException e) {
-                        // ignore
-                    }
-                }
-            }
-        }
+        log.warn("无法从方法参数中提取 projectId，签名: {}", joinPoint.getSignature());
         return null;
     }
 }

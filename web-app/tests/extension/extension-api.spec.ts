@@ -10,16 +10,39 @@
 import { test, expect } from '@playwright/test';
 
 const EXTENSION_BACKEND = 'http://localhost:7341';
+const TEST_EMAIL = 'test@example.com';
+const TEST_PASSWORD = 'Test123456!';
+
+// 认证辅助函数：登录并获取 Bearer token
+async function getAuthToken(page: typeof test extends { page: infer P } ? P : never) {
+  const res = await page.request.post(`${EXTENSION_BACKEND}/user/login`, {
+    data: { email: TEST_EMAIL, password: TEST_PASSWORD },
+  });
+  expect(res.status()).toBe(200);
+  const json = await res.json();
+  return json.token || json.data?.token;
+}
+
+function authHeaders(token: string) {
+  return { Authorization: `Bearer ${token}` };
+}
 
 // ============================================================
 // 一、三种翻译模式测试
 // ============================================================
 
 test.describe('翻译模式', () => {
+  let token: string;
+
+  test.beforeEach(async ({ page }) => {
+    token = await getAuthToken(page);
+  });
+
   test.describe('POST /v1/translate/selection（选中翻译）', () => {
     test('应成功翻译单句英文', async ({ page }) => {
       const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
         data: { context: 'Hello, this is a simple test sentence.', sourceLang: 'en', targetLang: 'zh', engine: 'google' },
+        headers: authHeaders(token),
       });
 
       expect(res.status()).toBe(200);
@@ -33,12 +56,14 @@ test.describe('翻译模式', () => {
     test('应支持中日韩翻译', async ({ page }) => {
       const jaRes = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
         data: { context: 'こんにちは世界', sourceLang: 'ja', targetLang: 'zh', engine: 'google' },
+        headers: authHeaders(token),
       });
       expect(jaRes.status()).toBe(200);
       expect((await jaRes.json()).success).toBe(true);
 
       const koRes = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
         data: { context: '안녕하세요 세계', sourceLang: 'ko', targetLang: 'zh', engine: 'google' },
+        headers: authHeaders(token),
       });
       expect(koRes.status()).toBe(200);
       expect((await koRes.json()).success).toBe(true);
@@ -47,6 +72,7 @@ test.describe('翻译模式', () => {
     test('空文本应返回错误', async ({ page }) => {
       const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
         data: { context: '', sourceLang: 'en', targetLang: 'zh', engine: 'google' },
+        headers: authHeaders(token),
       });
       const json = await res.json();
       expect(json.success === false || res.status() === 400).toBe(true);
@@ -59,6 +85,7 @@ test.describe('翻译模式', () => {
 
       const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/reader`, {
         data: { content, sourceLang: 'en', targetLang: 'zh', engine: 'google' },
+        headers: authHeaders(token),
       });
 
       expect(res.status()).toBe(200);
@@ -68,6 +95,7 @@ test.describe('翻译模式', () => {
     test('缺少内容应返回错误', async ({ page }) => {
       const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/reader`, {
         data: { content: '', sourceLang: 'en', targetLang: 'zh', engine: 'google' },
+        headers: authHeaders(token),
       });
       const json = await res.json();
       expect(json.success === false || res.status() === 400).toBe(true);
@@ -84,6 +112,7 @@ test.describe('翻译模式', () => {
           ],
           sourceLang: 'en', targetLang: 'zh', engine: 'google', fastMode: true,
         },
+        headers: authHeaders(token),
       });
       expect(res.status()).toBe(200);
       const text = await res.text();
@@ -94,6 +123,7 @@ test.describe('翻译模式', () => {
     test('空 registry 应返回错误', async ({ page }) => {
       const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/webpage`, {
         data: { textRegistry: [], sourceLang: 'en', targetLang: 'zh', engine: 'google', fastMode: true },
+        headers: authHeaders(token),
       });
       const json = await res.json();
       expect(json.success === false || res.status() === 400).toBe(true);
@@ -106,6 +136,7 @@ test.describe('翻译模式', () => {
 
       const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/webpage`, {
         data: { textRegistry: registry, sourceLang: 'en', targetLang: 'zh', engine: 'google', fastMode: true },
+        headers: authHeaders(token),
       });
       expect(res.status()).toBe(200);
       const text = await res.text();
@@ -129,7 +160,7 @@ test.describe('SSE 流式翻译', () => {
         ],
         sourceLang: 'en', targetLang: 'zh', engine: 'google', fastMode: true,
       },
-      headers: { 'Accept': 'text/event-stream' },
+      headers: { ...authHeaders(token), 'Accept': 'text/event-stream' },
     });
 
     expect(res.status()).toBe(200);
@@ -148,7 +179,7 @@ test.describe('SSE 流式翻译', () => {
 
     const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/webpage`, {
       data: { textRegistry: registry, sourceLang: 'en', targetLang: 'zh', engine: 'google', fastMode: true },
-      headers: { 'Accept': 'text/event-stream' },
+      headers: { ...authHeaders(token), 'Accept': 'text/event-stream' },
     });
 
     const text = await res.text();
@@ -177,7 +208,7 @@ test.describe('CORS 跨域支持', () => {
   test('翻译请求应包含 CORS 响应头', async ({ page }) => {
     const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
       data: { context: 'CORS test', sourceLang: 'en', targetLang: 'zh', engine: 'google' },
-      headers: { 'Origin': 'chrome-extension://test-extension-id' },
+      headers: { ...authHeaders(token), 'Origin': 'chrome-extension://test-extension-id' },
     });
 
     const headers = res.headers();
@@ -190,9 +221,16 @@ test.describe('CORS 跨域支持', () => {
 // ============================================================
 
 test.describe('翻译引擎配置', () => {
+  let token: string;
+
+  test.beforeEach(async ({ page }) => {
+    token = await getAuthToken(page);
+  });
+
   test('google 引擎应正常工作', async ({ page }) => {
     const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
       data: { context: 'Test', sourceLang: 'en', targetLang: 'zh', engine: 'google' },
+      headers: authHeaders(token),
     });
     expect(res.status()).toBe(200);
     expect((await res.json()).success).toBe(true);
@@ -203,16 +241,19 @@ test.describe('翻译引擎配置', () => {
 
     const selRes = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
       data: { context: 'Test', sourceLang: 'en', targetLang: 'zh', engine },
+      headers: authHeaders(token),
     });
     expect((await selRes.json()).success, 'selection').toBe(true);
 
     const readerRes = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/reader`, {
       data: { content: '<p>Test</p>', sourceLang: 'en', targetLang: 'zh', engine },
+      headers: authHeaders(token),
     });
     expect((await readerRes.json()).success, 'reader').toBe(true);
 
     const webRes = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/webpage`, {
       data: { textRegistry: [{ id: 0, text: 'Test' }], sourceLang: 'en', targetLang: 'zh', engine, fastMode: true },
+      headers: authHeaders(token),
     });
     expect(webRes.status(), 'webpage status').toBe(200);
     const webText = await webRes.text();
@@ -225,9 +266,16 @@ test.describe('翻译引擎配置', () => {
 // ============================================================
 
 test.describe('错误处理和边界', () => {
+  let token: string;
+
+  test.beforeEach(async ({ page }) => {
+    token = await getAuthToken(page);
+  });
+
   test('无效引擎应返回错误或回退到默认引擎', async ({ page }) => {
     const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
       data: { context: 'Test', sourceLang: 'en', targetLang: 'zh', engine: 'invalid_engine' },
+      headers: authHeaders(token),
     });
     // Backend may either reject or fall back to default engine - both are acceptable
     expect(res.status()).toBeDefined();
@@ -240,12 +288,13 @@ test.describe('错误处理和边界', () => {
     const longText = 'A'.repeat(10000);
     const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
       data: { context: longText, sourceLang: 'en', targetLang: 'zh', engine: 'google' },
+      headers: authHeaders(token),
     });
     expect(res.status()).toBeDefined();
   });
 
   test('缺少必填字段应返回错误', async ({ page }) => {
-    const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, { data: {} });
+    const res = await page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, { data: {}, headers: authHeaders(token) });
     const json = await res.json();
     expect(json.success === false || res.status() === 400).toBe(true);
   });
@@ -254,6 +303,7 @@ test.describe('错误处理和边界', () => {
     const requests = Array.from({ length: 5 }, (_, i) =>
       page.request.post(`${EXTENSION_BACKEND}/v1/translate/selection`, {
         data: { context: `Concurrent test ${i}`, sourceLang: 'en', targetLang: 'zh', engine: 'google' },
+        headers: authHeaders(token),
       })
     );
 

@@ -206,7 +206,11 @@
       "Bash(unzip -l /tmp/as-check/agentscope-1.0.19-py3-none-any.whl)",
       "Bash(unzip *)",
       "Bash(redis-cli ping *)",
-      "Bash(timeout 120 bash -c 'while true; do sleep 5; out=$\\(docker compose logs backend 2>/dev/null | grep -E \"Started Novel|Redis 向量\" | tail -1\\); if [ -n \"$out\" ]; then echo \"$out\"; break; fi; done')"
+      "Bash(timeout 120 bash -c 'while true; do sleep 5; out=$\\(docker compose logs backend 2>/dev/null | grep -E \"Started Novel|Redis 向量\" | tail -1\\); if [ -n \"$out\" ]; then echo \"$out\"; break; fi; done')",
+      "Bash(git stash *)",
+      "Bash(pnpm build *)",
+      "Bash(git branch *)",
+      "Bash(git fetch *)"
     ]
   }
 }

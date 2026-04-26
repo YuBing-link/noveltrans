@@ -1,262 +1,273 @@
-/* selection-styles.css - 选中翻译模式样式（Google 风格精简版）*/
+﻿/* selection-styles.css - 选中文本翻译样式 (Claude Warm Theme) */
 
 /* =============================================
-   翻译按钮样式 - Google 划词翻译风格
-   紧凑的圆形图标按钮，贴近选中文本末尾
+   翻译按钮样式
+   温暖的圆形图标按钮，贴近选中文本
    ============================================= */
 
 #selection-translator-button {
-    position: fixed;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: #ffffff;
-    border-radius: 14px;
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.2),
-        0 1px 3px rgba(0, 0, 0, 0.1);
-    cursor: pointer;
-    z-index: 2147483647;
-    opacity: 0;
-    transform: translateY(-4px) scale(0.9);
-    transition: all 0.15s ease-out;
-    pointer-events: none;
-    -webkit-user-select: none;
-    user-select: none;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    outline: none;
+  position: fixed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: #faf9f5;
+  border-radius: 15px;
+  box-shadow:
+    0 2px 8px rgba(20, 20, 19, 0.15),
+    0 1px 3px rgba(20, 20, 19, 0.08),
+    0px 0px 0px 1px rgba(201, 100, 66, 0.2);
+  cursor: pointer;
+  z-index: 2147483647;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.9);
+  transition: all 0.2s ease-out;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+  border: none;
+  outline: none;
 }
 
 #selection-translator-button .button-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    line-height: 1;
-    color: #5f6368;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  color: #c96442;
 }
 
 #selection-translator-button .button-text {
-    display: none; /* 隐藏文字，仅保留图标 */
+  display: none;
 }
 
 #selection-translator-button.visible {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 
 #selection-translator-button:hover {
-    background: #f1f3f4;
-    box-shadow:
-        0 3px 12px rgba(0, 0, 0, 0.25),
-        0 1px 4px rgba(0, 0, 0, 0.15);
+  background: #fff;
+  box-shadow:
+    0 3px 12px rgba(201, 100, 66, 0.2),
+    0 1px 4px rgba(20, 20, 19, 0.1),
+    0px 0px 0px 2px rgba(201, 100, 66, 0.3);
 }
 
 #selection-translator-button:hover .button-icon {
-    color: #1a73e8;
+  color: #d97757;
 }
 
 #selection-translator-button:active {
-    transform: scale(0.95);
-    box-shadow:
-        0 1px 4px rgba(0, 0, 0, 0.2);
+  transform: scale(0.95);
+  box-shadow:
+    0 1px 4px rgba(20, 20, 19, 0.15);
 }
 
 /* =============================================
-   翻译结果弹窗样式 - 紧凑卡片设计
+   翻译结果弹窗样式
+   温暖卡片设计
    ============================================= */
 
 #selection-translation-result {
-    position: fixed;
-    width: 360px;
-    max-width: 90vw;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow:
-        0 4px 20px rgba(0, 0, 0, 0.2),
-        0 1px 6px rgba(0, 0, 0, 0.1);
-    z-index: 2147483646;
-    opacity: 0;
-    transform: translateY(-4px) scale(0.98);
-    transition: all 0.2s ease-out;
-    overflow: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    animation: nt-resultSlideIn 0.25s ease-out forwards;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+  position: fixed;
+  width: 340px;
+  max-width: 90vw;
+  background: #faf9f5;
+  border-radius: 12px;
+  box-shadow:
+    0 8px 32px rgba(20, 20, 19, 0.15),
+    0px 0px 0px 1px rgba(232, 230, 220, 0.8);
+  z-index: 2147483646;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+  transition: all 0.25s ease-out;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  animation: nt-resultSlideIn 0.3s ease-out forwards;
 }
 
 @keyframes nt-resultSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-4px) scale(0.98);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 #selection-translation-result.hiding {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.98);
-    transition: all 0.15s ease-out;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+  transition: all 0.2s ease-out;
 }
 
 /* 弹窗头部 */
 .selection-result-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e8eaed;
-    position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #f5f4ed;
+  border-bottom: 1px solid #e8e6dc;
+  position: relative;
 }
 
 .selection-result-header .header-title {
-    font-weight: 500;
-    font-size: 12px;
-    color: #5f6368;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #5e5d59;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: Georgia, serif;
 }
 
 .selection-result-header .header-title::before {
-    content: '';
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231a73e8'%3E%3Cpath d='M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.79 5.79L3 19.41l2.76-2.76L8.14 19H5.82l1.89-1.89L8.94 18.3l.92-.92.36-.36.56-.56c.24-.24.48-.49.71-.74l1.38 1.38zM21 10.96V6h-2v4.96l-1.56-1.56-1.42 1.42L18.58 13l-2.56 2.56 1.42 1.42L21 13.41V16h2v-2.56l1.42-1.42 1.42 1.42L22.42 16H24l-1.42-1.42 1.42-1.42L21 10.96z'/%3E%3C/svg%3E") center/contain no-repeat;
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23c96442'%3E%3Cpath d='M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.79 5.79L3 19.41l2.76-2.76L8.14 19H5.82l1.89-1.89L8.94 18.3l.92-.92.36-.36.56-.56c.24-.24.48-.49.71-.74l1.38 1.38z'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
 .selection-result-header .header-close {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border: none;
-    background: transparent;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background 0.15s;
-    padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
 }
 
 .selection-result-header .header-close:hover {
-    background: rgba(0, 0, 0, 0.08);
+  background: rgba(201, 100, 66, 0.1);
 }
 
 .selection-result-header .header-close svg {
-    width: 16px;
-    height: 16px;
-    stroke: #5f6368;
-    fill: none;
+  width: 16px;
+  height: 16px;
+  stroke: #87867f;
+  fill: none;
+}
+
+.selection-result-header .header-close:hover svg {
+  stroke: #c96442;
 }
 
 /* 加载状态 */
 .selection-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    padding: 24px 16px;
-    font-size: 13px;
-    color: #5f6368;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 16px;
+  font-size: 13px;
+  color: #5e5d59;
 }
 
 .selection-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(26, 115, 232, 0.15);
-    border-top: 2px solid #1a73e8;
-    border-radius: 50%;
-    animation: nt-spin 0.8s linear infinite;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(201, 100, 66, 0.15);
+  border-top: 2px solid #c96442;
+  border-radius: 50%;
+  animation: nt-spin 0.8s linear infinite;
 }
 
 @keyframes nt-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* 译文内容区 */
 .selection-result-content {
-    padding: 12px 14px;
-    max-height: 260px;
-    overflow-y: auto;
-    font-size: 14px;
-    line-height: 1.6;
-    color: #202124;
-    white-space: pre-wrap;
-    word-break: break-word;
+  padding: 14px;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #141413;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
 
 .selection-result-content::-webkit-scrollbar {
-    width: 5px;
+  width: 5px;
 }
 
 .selection-result-content::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 
 .selection-result-content::-webkit-scrollbar-thumb {
-    background: #dadce0;
-    border-radius: 3px;
+  background: #d1cfc5;
+  border-radius: 3px;
 }
 
 /* 双语对照 */
 .selection-result-bilingual {
-    display: flex;
-    flex-direction: column;
+  display: flex;
+  flex-direction: column;
 }
 
 .selection-bilingual-row {
-    display: flex;
-    flex-direction: column;
-    border-bottom: 1px solid #e8eaed;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid #e8e6dc;
 }
 
 .selection-bilingual-row:last-child {
-    border-bottom: none;
+  border-bottom: none;
 }
 
 .selection-bilingual-translation {
-    flex: 1;
-    min-width: 0;
-    padding: 12px 14px 6px 14px;
-    color: #202124;
-    font-size: 14px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px 6px 14px;
+  color: #141413;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
 
 .selection-bilingual-original {
-    flex: 1;
-    min-width: 0;
-    padding: 6px 14px 12px 14px;
-    color: #5f6368;
-    font-size: 13px;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-word;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 14px 12px 14px;
+  color: #87867f;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-style: italic;
 }
 
 /* 底部信息栏 */
 .selection-result-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 14px;
-    border-top: 1px solid #e8eaed;
-    background: #f8f9fa;
-    font-size: 11px;
-    color: #9aa0a6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  border-top: 1px solid #e8e6dc;
+  background: #f5f4ed;
+  font-size: 11px;
+  color: #b0aea5;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* =============================================
@@ -264,51 +275,51 @@
    ============================================= */
 
 .selection-error-toast {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-    z-index: 2147483647;
-    font-size: 13px;
-    color: #202124;
-    opacity: 0;
-    transform: translateX(80px);
-    transition: all 0.25s ease-out;
-    animation: nt-errorSlideIn 0.25s ease-out forwards;
-    border-left: 3px solid #ea4335;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #faf9f5;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(20, 20, 19, 0.12);
+  z-index: 2147483647;
+  font-size: 13px;
+  color: #141413;
+  opacity: 0;
+  transform: translateX(80px);
+  transition: all 0.25s ease-out;
+  animation: nt-errorSlideIn 0.25s ease-out forwards;
+  border-left: 3px solid #b53333;
 }
 
 @keyframes nt-errorSlideIn {
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .selection-error-toast.hiding {
-    opacity: 0;
-    transform: translateX(80px);
+  opacity: 0;
+  transform: translateX(80px);
 }
 
 .selection-error-toast .error-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .selection-error-toast .error-icon svg {
-    width: 16px;
-    height: 16px;
-    fill: #ea4335;
+  width: 16px;
+  height: 16px;
+  fill: #b53333;
 }
 
 /* =============================================
@@ -316,36 +327,40 @@
    ============================================= */
 
 @media (max-width: 600px) {
-    #selection-translator-button {
-        width: 26px;
-        height: 26px;
-    }
+  #selection-translator-button {
+    width: 28px;
+    height: 28px;
+  }
 
-    #selection-translator-button .button-icon {
-        font-size: 12px;
-    }
+  #selection-translator-button .button-icon {
+    font-size: 13px;
+  }
 
-    #selection-translation-result {
-        width: 320px;
-    }
+  #selection-translation-result {
+    width: 300px;
+  }
+
+  .selection-result-content {
+    max-height: 200px;
+  }
 }
 
 /* 减少动画偏好 */
 @media (prefers-reduced-motion: reduce) {
-    #selection-translator-button,
-    #selection-translation-result,
-    .selection-error-toast {
-        transition: none;
-        animation: none;
-    }
+  #selection-translator-button,
+  #selection-translation-result,
+  .selection-error-toast {
+    transition: none;
+    animation: none;
+  }
 
-    #selection-translator-button.visible {
-        opacity: 1;
-        transform: none;
-    }
+  #selection-translator-button.visible {
+    opacity: 1;
+    transform: none;
+  }
 
-    #selection-translation-result {
-        opacity: 1;
-        transform: none;
-    }
+  #selection-translation-result {
+    opacity: 1;
+    transform: none;
+  }
 }

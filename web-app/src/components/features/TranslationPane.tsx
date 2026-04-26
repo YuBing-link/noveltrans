@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 interface TranslationPaneProps {
   text: string;
   onChange: (text: string) => void;
@@ -8,9 +10,10 @@ interface TranslationPaneProps {
 }
 
 function TranslationPane({
-  text, onChange, onClear, placeholder = '请输入要翻译的文本...',
+  text, onChange, onClear, placeholder,
   maxLength, remainingChars,
 }: TranslationPaneProps) {
+  const { t } = useTranslation();
   const usagePercent = maxLength && maxLength > 0
     ? Math.min(100, (text.length / maxLength) * 100)
     : 0;
@@ -20,14 +23,14 @@ function TranslationPane({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[14px] font-semibold text-text-primary">源文本</h3>
+        <h3 className="text-[14px] font-semibold text-text-primary">{t('home.title')}</h3>
         <div className="flex items-center gap-3">
           {text && (
             <button
               onClick={onClear}
               className="text-[12px] text-text-tertiary hover:text-accent transition-colors"
             >
-              清空
+              {t('home.actions.clear')}
             </button>
           )}
           <span className="text-[12px] text-text-tertiary font-mono">
@@ -43,7 +46,7 @@ function TranslationPane({
       <textarea
         value={text}
         onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('home.inputPlaceholder')}
         maxLength={maxLength}
         className="
           flex-1 w-full resize-none bg-transparent
@@ -64,7 +67,7 @@ function TranslationPane({
             />
           </div>
           <p className={`text-[11px] mt-1 font-mono ${isNearLimit ? 'text-yellow' : 'text-text-tertiary'}`}>
-            {remainingChars.toLocaleString()} 字符剩余
+            {t('home.quota.remaining')}: {remainingChars.toLocaleString()}
           </p>
         </div>
       )}

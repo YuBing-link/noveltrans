@@ -15,6 +15,7 @@ import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -152,7 +153,7 @@ public class MultiAgentTranslationService {
 
     /**
      * 单个 Agent 翻译一个章节
-     * 新流程：三级缓存 → 实体提取 → 占位符保护 → AI 翻译团队 → 还原占位符 → 缓存
+     * 走 TranslationPipeline 完整管线（L1缓存→L2 RAG→L3实体一致性→L4团队翻译）
      * 翻译完成标记为 SUBMITTED（待审校状态）
      *
      * @return true 翻译成功, false 翻译失败
@@ -176,17 +177,7 @@ public class MultiAgentTranslationService {
         String targetLang = project.getTargetLang();
 
         try {
-            // ========== a. 检查 L1 缓存（按模式层级搜索） ==========
-            String baseCacheKey = buildBaseCacheKey(sourceText, targetLang);
-            String cachedTranslation = cacheService.getCacheByMode(baseCacheKey, "team");
-            if (cachedTranslation != null) {
-                log.info("L1/L2/L3 缓存命中: chapterId={}, baseCacheKey={}", chapterId, baseCacheKey);
-                applyTranslationResult(chapter, sourceText, cachedTranslation, true);
-                return true;
-            }
-
-            // ========== a.1. RAG 语义匹配 ==========
-            // 先获取 userId，RAG 需要用户上下文来过滤翻译记忆
+            // 获取 userId（RAG 需要用户上下文）
             Long userId = chapter.getAssigneeId();
             if (userId == null) {
                 CollabProject proj = collabProjectMapper.selectById(chapter.getProjectId());
@@ -195,18 +186,7 @@ public class MultiAgentTranslationService {
                 }
             }
 
-            RagTranslationResponse ragResponse = ragTranslationService.searchSimilarWithUser(
-                    sourceText, targetLang, "ai-team", userId);
-
-            if (ragResponse.isDirectHit() && ragResponse.getTranslation() != null) {
-                log.info("RAG 直接命中: chapterId={}, similarity={}", chapterId, ragResponse.getSimilarity());
-                applyTranslationResult(chapter, sourceText, ragResponse.getTranslation(), true);
-                return true;
-            }
-
-            // ========== 加载术语表和推导小说类型 ==========
-
-            // 加载用户术语表中在原文中出现的词条
+            // 加载术语表
             List<Glossary> glossaryTerms = loadGlossaryTermsForProject(userId, sourceText);
 
             // 加载 AI 术语表（仅已确认的术语，优先级低于用户术语表）
@@ -221,7 +201,7 @@ public class MultiAgentTranslationService {
                     })
                     .toList();
 
-            // 合并：用户术语表优先，AI 术语表补充（不覆盖同名用户术语）
+            // 合并：用户术语表优先，AI 术语表补充
             if (!aiGlossaryGlossaryTerms.isEmpty()) {
                 Set<String> userTermKeys = glossaryTerms.stream()
                         .map(Glossary::getSourceWord)
@@ -234,73 +214,22 @@ public class MultiAgentTranslationService {
                 log.info("AI 术语表注入: {} 个术语（过滤后）", aiGlossaryGlossaryTerms.size());
             }
 
-            // 推导小说类型（从项目描述/名称，默认 daily）
+            // 推导小说类型
             String novelType = deriveNovelType(project);
 
-            // ========== b~e. 实体一致性 + 占位符保护 + AI 翻译 ==========
-            boolean usePlaceholders = entityConsistencyService.shouldUseConsistency(sourceText);
-            String translated;
+            // 构建 Pipeline 并执行完整管线（L1→L2→L3→L4=Team）
+            TranslationPipeline pipeline = new TranslationPipeline(
+                    cacheService, ragTranslationService, entityConsistencyService,
+                    null, null, teamTranslationService, userId, chapter.getProjectId().toString());
 
-            if (usePlaceholders) {
-                try {
-                    // b. 提取实体（按章节隔离，章节超长时自动分段）
-                    List<String> extractedEntities = entityConsistencyService.extractEntitiesSegmented(sourceText, targetLang);
-
-                    if (!extractedEntities.isEmpty()) {
-                        // c. 翻译实体
-                        Map<String, String> entityTranslations = entityConsistencyService.translateEntities(
-                                extractedEntities, targetLang);
-
-                        // d. 构建占位符映射
-                        EntityConsistencyService.EntityMappingContext context = entityConsistencyService.buildMapping(
-                                entityTranslations);
-
-                        // e. 替换占位符
-                        String placeholderText = entityConsistencyService.replaceEntitiesWithPlaceholders(
-                                sourceText, context);
-
-                        // 调用 AI 翻译团队（带占位符保护的文本）
-                        log.info("调用 AI 翻译团队（占位符模式）: chapterId={}, 实体数={}, 原文{}字",
-                                chapterId, entityTranslations.size(), sourceText.length());
-                        translated = teamTranslationService.translateChapter(
-                                placeholderText, novelType, sourceLang, targetLang, glossaryTerms);
-
-                        if (translated != null && !translated.trim().isEmpty()) {
-                            // f. 还原占位符
-                            translated = entityConsistencyService.restorePlaceholders(translated, context);
-                        }
-                    } else {
-                        // 未提取到实体，直接调用 AI 翻译
-                        log.info("未提取到实体，直接调用 AI 翻译: chapterId={}", chapterId);
-                        translated = teamTranslationService.translateChapter(
-                                sourceText, novelType, sourceLang, targetLang, glossaryTerms);
-                    }
-                } catch (Exception e) {
-                    // 实体一致性失败，降级为普通 AI 翻译
-                    log.warn("实体一致性处理失败，降级为普通 AI 翻译: chapterId={}, error={}", chapterId, e.getMessage());
-                    translated = teamTranslationService.translateChapter(
-                            sourceText, novelType, sourceLang, targetLang, glossaryTerms);
-                }
-            } else {
-                // 短文本，不启用实体一致性
-                log.info("短文本，直接调用 AI 翻译: chapterId={}", chapterId);
-                translated = teamTranslationService.translateChapter(
-                        sourceText, novelType, sourceLang, targetLang, glossaryTerms);
-            }
+            String translated = pipeline.executeTeam(
+                    sourceText, sourceLang, targetLang, "ai-team", novelType, glossaryTerms);
 
             if (translated == null || translated.trim().isEmpty()) {
                 throw new RuntimeException("AI 翻译团队返回结果为空");
             }
 
-            // ========== g. 保存到缓存 ==========
-            cacheService.putCache(baseCacheKey, sourceText, translated, sourceLang, targetLang, "ai-team", "team");
-            log.info("翻译结果已写入缓存: baseCacheKey={}", baseCacheKey);
-
-            // ========== g.1. 存储到 RAG 翻译记忆 ==========
-            ragTranslationService.storeTranslationMemory(
-                    sourceText, translated, targetLang, "ai-team", userId);
-
-            // ========== g.2. 维护 AI 术语表：提取实体并保存 ==========
+            // 维护 AI 术语表：提取实体并保存
             try {
                 List<String> entities = entityConsistencyService.extractEntitiesSegmented(sourceText, targetLang);
                 if (!entities.isEmpty()) {
@@ -312,7 +241,7 @@ public class MultiAgentTranslationService {
                                 entry.getKey(),
                                 entry.getValue(),
                                 contextExcerpt,
-                                null, // entity type unknown
+                                null,
                                 chapter.getId()
                         );
                     }
@@ -322,7 +251,7 @@ public class MultiAgentTranslationService {
                 log.warn("AI 术语表维护失败: {}", e.getMessage());
             }
 
-            // ========== h. 标记为 SUBMITTED（待审校） ==========
+            // 标记为 SUBMITTED（待审校）
             applyTranslationResult(chapter, sourceText, translated, false);
 
             log.info("章节翻译完成（待审校）: chapterId={}, 原文{}字, 译文{}字",

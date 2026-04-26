@@ -106,30 +106,19 @@ public class TranslationService {
         }
 
         try {
-            String mode = req.getMode() != null ? req.getMode() : "fast";
-            String result;
-            if ("fast".equalsIgnoreCase(mode)) {
-                // 快速模式：跳过 RAG 和实体一致性，仅缓存 + 直译
-                TranslationPipeline pipeline = new TranslationPipeline(
-                        cacheService, ragTranslationService, entityConsistencyService,
-                        userLevelThrottledTranslationClient, postProcessingService, userId, null);
-                result = pipeline.executeFast(combined, target, engine);
-            } else if ("team".equalsIgnoreCase(mode)) {
-                // 团队模式：调用 AI 多角色协作翻译
-                String source = req.getSourceLang() != null ? req.getSourceLang() : "auto";
-                result = teamTranslationService.translateChapter(
-                        combined, "general", toLanguageName(source), toLanguageName(target), null);
-            } else {
-                // 专家模式：完整管线（RAG + 实体一致性 + 缓存）
-                result = translateWithCache(combined, target, engine);
-            }
+            TranslationPipeline pipeline = new TranslationPipeline(
+                    cacheService, ragTranslationService, entityConsistencyService,
+                    userLevelThrottledTranslationClient, postProcessingService, userId, null);
+            String result = pipeline.executeFast(combined, target, engine);
             if (result == null || result.trim().isEmpty()) {
                 return new SelectionTranslateResponse(false, engine, "翻译失败：返回结果为空");
             }
-            return new SelectionTranslateResponse(true, engine, result);
+            // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
+            String sanitized = TextCleaningUtil.sanitizeHtml(result);
+            return new SelectionTranslateResponse(true, engine, sanitized);
         } catch (Exception e) {
-            log.error("选中文本翻译失败：{}", e.getMessage());
-            return new SelectionTranslateResponse(false, engine, "翻译失败：" + e.getMessage());
+            log.error("选中文本翻译失败：{}", e.getMessage(), e);
+            return new SelectionTranslateResponse(false, engine, "翻译失败：服务器内部错误");
         }
     }
 
@@ -210,8 +199,9 @@ public class TranslationService {
         // 阅读器模式默认使用 MTranServer，html=true
         List<String> translatedSegments = translateSegmentsInParallel(segments, target, engine, true);
 
-        // 合并翻译结果
-        String combinedResult = String.join("", translatedSegments);
+        // 合并翻译结果并净化（XSS 防护）
+        String rawResult = String.join("", translatedSegments);
+        String combinedResult = TextCleaningUtil.sanitizeHtml(rawResult);
         log.info("阅读器翻译完成，原文长度：{}，译文长度：{}", content.length(), combinedResult.length());
         return new ReaderTranslateResponse(true, engine, combinedResult);
     }
@@ -382,16 +372,19 @@ public class TranslationService {
                             }
 
                             Map<String, Object> eventData = new HashMap<>(3);
+                            // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
+                            String sanitized = TextCleaningUtil.sanitizeHtml(extracted);
                             eventData.put("textId", id);
                             eventData.put("original", original);
-                            eventData.put("translation", extracted);
+                            eventData.put("translation", sanitized);
                             SseEmitterUtil.sendData(emitter, JSON.toJSONString(eventData));
                         } catch (Exception e) {
                             log.error("翻译失败 - ID: {}, 错误: {}", item.getId(), e.getMessage());
                             Map<String, Object> errorData = new HashMap<>(3);
                             errorData.put("textId", item.getId());
-                            errorData.put("original", item.getOriginal());
-                            errorData.put("translation", item.getOriginal());
+                            String orig = item.getOriginal() == null ? "" : item.getOriginal();
+                            errorData.put("original", orig);
+                            errorData.put("translation", TextCleaningUtil.sanitizeHtml(orig));
                             SseEmitterUtil.sendData(emitter, JSON.toJSONString(errorData));
                         } finally {
                             semaphore.release();
@@ -400,15 +393,34 @@ public class TranslationService {
                     });
                 }
 
+                // 心跳线程：每 30 秒发送一次心跳，防止 SSE 连接超时断开
+                var heartbeatDone = new java.util.concurrent.CountDownLatch(1);
+                Thread.startVirtualThread(() -> {
+                    while (true) {
+                        try {
+                            boolean done = heartbeatDone.await(30, java.util.concurrent.TimeUnit.SECONDS);
+                            if (done) break;
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                        SseEmitterUtil.sendHeartbeat(emitter);
+                    }
+                });
+
                 // 等待所有翻译完成
                 barrier.await();
+
+                // 翻译完成，停止心跳
+                heartbeatDone.countDown();
 
                 SseEmitterUtil.sendDone(emitter);
                 SseEmitterUtil.complete(emitter);
 
             } catch (Exception e) {
-                log.error("网页翻译失败：{}", e.getMessage());
-                SseEmitterUtil.sendError(emitter, "翻译失败：" + e.getMessage());
+                // 翻译失败，触发心跳停止
+                log.error("网页翻译失败：{}", e.getMessage(), e);
+                SseEmitterUtil.sendError(emitter, "翻译失败：服务器内部错误");
                 SseEmitterUtil.complete(emitter);
             }
         });
@@ -459,23 +471,35 @@ public class TranslationService {
                         userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
                 for (int i = 0; i < segments.size(); i++) {
+                    // 发送心跳保持连接活跃
+                    SseEmitterUtil.sendHeartbeat(emitter);
+
                     String segment = segments.get(i);
-                    String extracted = pipeline.execute(segment, target, engine);
+                    String extracted;
+                    if ("fast".equals(mode)) {
+                        // 快速模式：直连 MTranServer，避免轮询浪费
+                        extracted = pipeline.executeFast(segment, target, engine);
+                    } else {
+                        // 专家模式：完整四级管线（RAG + 实体一致性 + 轮询）
+                        extracted = pipeline.execute(segment, target, engine);
+                    }
 
                     if (extracted == null || extracted.trim().isEmpty()) {
                         log.warn("流式翻译失败，使用原文兜底：索引 {}", i);
                         extracted = segment;
                     }
 
-                    SseEmitterUtil.sendData(emitter, extracted);
+                    // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
+                    String sanitized = TextCleaningUtil.sanitizeHtml(extracted);
+                    SseEmitterUtil.sendData(emitter, sanitized);
                 }
 
                 SseEmitterUtil.sendDone(emitter);
                 SseEmitterUtil.complete(emitter);
 
             } catch (Exception e) {
-                log.error("文本流式翻译失败：{}", e.getMessage());
-                SseEmitterUtil.sendError(emitter, "翻译失败：" + e.getMessage());
+                log.error("文本流式翻译失败：{}", e.getMessage(), e);
+                SseEmitterUtil.sendError(emitter, "翻译失败：服务器内部错误");
                 SseEmitterUtil.complete(emitter);
             }
         });

@@ -36,6 +36,11 @@ if not OPENAI_API_KEY:
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+# 内部服务间认证 API Key（防止外部未授权访问）
+INTERNAL_API_KEY = os.getenv("TRANSLATE_SERVICE_API_KEY")
+if not INTERNAL_API_KEY:
+    logger.warning("TRANSLATE_SERVICE_API_KEY 环境变量未设置，服务将不校验请求来源（仅开发模式）")
+
 logger.info(f"配置加载: OPENAI_BASE_URL={OPENAI_BASE_URL}")
 logger.info(f"配置加载: OPENAI_MODEL={OPENAI_MODEL}")
 logger.info(f"配置加载: OPENAI_API_KEY={'已设置' if OPENAI_API_KEY else '未设置'}")
@@ -188,6 +193,30 @@ async def rate_limit_middleware(request: Request, call_next):
                 status_code=429,
                 content={"code": 429, "error": "请求频率超出限制，请稍后重试"},
             )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    """服务间认证中间件：校验 API Key，防止未授权访问。
+
+    仅对翻译相关端点生效；/health 端点免认证（供 K8s/探针使用）。
+    开发模式下未配置 TRANSLATE_SERVICE_API_KEY 时跳过校验。
+    """
+    protected_paths = ["/translate", "/translate-team", "/extract-entities",
+                       "/translate-entities", "/translate-with-placeholders"]
+
+    if INTERNAL_API_KEY and any(request.url.path.startswith(p) for p in protected_paths):
+        auth_header = request.headers.get("X-Service-Key") or request.headers.get("Authorization")
+        provided_key = auth_header.replace("Bearer ", "") if auth_header and auth_header.startswith("Bearer ") else auth_header or ""
+
+        if not provided_key or provided_key != INTERNAL_API_KEY:
+            logger.warning(f"未授权访问: path={request.url.path}, client={request.client}")
+            return JSONResponse(
+                status_code=401,
+                content={"code": 401, "error": "未授权访问：无效的 API Key"},
+            )
+
     return await call_next(request)
 
 # =============================================================================
@@ -393,7 +422,7 @@ async def extract_entities_api(req: EntityExtractionRequest):
 
     except Exception as e:
         logger.error(f"实体提取失败: {e}")
-        raise HTTPException(status_code=500, detail=f"实体提取失败: {e}")
+        raise HTTPException(status_code=500, detail="实体提取失败，请稍后重试")
 
 @app.post("/translate-entities")
 async def translate_entities_api(req: EntityTranslationRequestModel):
@@ -455,7 +484,7 @@ async def translate_entities_api(req: EntityTranslationRequestModel):
         raise
     except Exception as e:
         logger.error(f"实体翻译失败: {e}")
-        raise HTTPException(status_code=500, detail=f"实体翻译失败: {e}")
+        raise HTTPException(status_code=500, detail="实体翻译失败，请稍后重试")
 
 @app.post("/translate-with-placeholders")
 async def translate_with_placeholders_api(req: PlaceholderTranslateRequest):
@@ -527,13 +556,13 @@ async def translate_with_placeholders_api(req: PlaceholderTranslateRequest):
                 last_error = error_msg
                 continue
 
-        raise HTTPException(status_code=503, detail=f"所有翻译引擎均失败。最后错误: {last_error}")
+        raise HTTPException(status_code=503, detail="所有翻译引擎均失败，请稍后重试")
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"占位符翻译失败: {e}")
-        raise HTTPException(status_code=500, detail=f"占位符翻译失败: {e}")
+        raise HTTPException(status_code=500, detail="占位符翻译失败，请稍后重试")
 
 @app.get("/health")
 async def health():
@@ -553,17 +582,12 @@ async def health():
             "consecutive_failures": stats.consecutive_failures,
         }
 
-    # 检查 OpenAI API Key 是否可用
+    # 仅返回健康状态，不暴露模型/URL 等内部配置
     api_ready = bool(OPENAI_API_KEY)
-
     return {
         "status": "UP" if api_ready else "DEGRADED",
-        "api_key_configured": api_ready,
-        "model": OPENAI_MODEL,
-        "base_url": OPENAI_BASE_URL,
-        "rate_limit": f"{RATE_LIMIT_MAX} req/s",
-        "engine_health": engine_health,
         "engines": ENGINE_CANDIDATES,
+        "engine_health": engine_health,
     }
 
 @app.post("/translate")
@@ -646,7 +670,7 @@ async def translate_api(req: TranslateRequest):
     logger.error(f"所有翻译引擎均失败，最后错误: {last_error}")
     raise HTTPException(
         status_code=503,
-        detail=f"所有翻译引擎均失败。最后错误: {last_error}",
+        detail="所有翻译引擎均失败，请稍后重试",
     )
 
 # =============================================================================
@@ -756,7 +780,7 @@ async def translate_team(req: TeamTranslateRequest):
         cost_ms = (time.perf_counter() - start_time) * 1000
         logger.error(f"AI 翻译团队翻译失败: {e}")
         raise HTTPException(
-            status_code=503, detail=f"AI 翻译团队翻译失败: {str(e)}"
+            status_code=503, detail="AI 翻译团队翻译失败，请稍后重试"
         )
 
 

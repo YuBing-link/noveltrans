@@ -1,5 +1,7 @@
 package com.yumu.noveltranslator.service;
 
+import jakarta.annotation.Nullable;
+
 import com.alibaba.fastjson2.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,12 +24,20 @@ public class ExternalTranslationService {
 
     public ExternalTranslationService(
             @Value("${mtran.server.host:localhost}") String host,
-            @Value("${mtran.server.port:8989}") int port) {
-        this.webClient = WebClient.builder()
+            @Value("${mtran.server.port:8989}") int port,
+            @Value("${mtran.server.api-key:}") @Nullable String apiKey) {
+        var builder = WebClient.builder()
                 .baseUrl("http://%s:%d".formatted(host, port))
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(256 * 1024))
-                .build();
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(256 * 1024));
+
+        // 如果配置了 API Key，添加到请求头
+        if (apiKey != null && !apiKey.isEmpty()) {
+            builder.defaultHeader("Authorization", "Bearer " + apiKey);
+            log.info("MTranServer 认证已启用");
+        }
+
+        this.webClient = builder.build();
     }
 
     /**

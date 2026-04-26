@@ -437,7 +437,7 @@ class TranslationServiceStreamTest {
 
             assertTrue(resp.getSuccess());
             // reader mode uses html=true for MTranServer
-            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(false), eq(true));
+            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true));
         }
     }
 }

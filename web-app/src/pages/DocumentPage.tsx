@@ -4,9 +4,11 @@ import { Pagination } from '../components/ui/Pagination';
 import { documentApi } from '../api/documents';
 import type { DocumentItem } from '../api/types';
 import { FileText, Download, Trash2, RefreshCw, XCircle, Upload, Clock, Languages, HardDrive } from 'lucide-react';
-import { SUPPORTED_LANGUAGES } from '../api/types';
+import { LANGUAGE_CODES } from '../api/types';
+import { useTranslation } from 'react-i18next';
 
 function DocumentPage() {
+  const { t } = useTranslation();
   const { success, error: toastError } = useToast();
   const [sourceLang, setSourceLang] = useState('auto');
   const [targetLang, setTargetLang] = useState('zh');
@@ -46,15 +48,13 @@ function DocumentPage() {
   };
 
   const handleUpload = useCallback(async (file: File) => {
-    // 验证文件类型
     const allowedTypes = ['.txt', '.epub', '.docx', '.pdf'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!allowedTypes.includes(ext)) {
       toastError(`不支持的文件类型: ${ext}，仅支持 ${allowedTypes.join(', ')}`);
       return;
     }
-    
-    // 验证文件大小（限制 50MB）
+
     const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
       toastError(`文件过大: ${(file.size / 1024 / 1024).toFixed(1)}MB，最大支持 50MB`);
@@ -75,7 +75,7 @@ function DocumentPage() {
 
   const handleDelete = async (docId: number) => {
     try { await documentApi.delete(docId); success('已删除'); loadDocuments(); }
-    catch { toastError('删除失败'); }
+    catch { toastError(t('document.actions.delete')); }
   };
 
   const handleDownload = async (doc: DocumentItem) => {
@@ -104,8 +104,11 @@ function DocumentPage() {
   };
 
   const statusLabel: Record<string, string> = {
-    pending: '排队中', processing: '翻译中', completed: '已完成',
-    failed: '失败', cancelled: '已取消',
+    pending: t('document.status.queued'),
+    processing: t('document.status.translating'),
+    completed: t('document.status.completed'),
+    failed: t('document.status.failed'),
+    cancelled: t('document.status.cancelled'),
   };
 
   const statusColor: Record<string, string> = {
@@ -123,23 +126,21 @@ function DocumentPage() {
   };
 
   const getLangName = (code: string) => {
-    const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
-    return lang ? lang.name : code;
+    return t(`common.languages.${code}`, { defaultValue: code });
   };
 
   return (
     <div className="py-8">
       <div className="mb-6">
         <h1 className="text-[28px] font-bold text-text-primary mb-2 tracking-tight">
-          文档翻译
+          {t('document.title')}
         </h1>
         <p className="text-[15px] text-text-secondary">
-          支持批量上传、多格式文档智能翻译，保留原文排版格式
+          {t('document.subtitle')}
         </p>
       </div>
 
       <div className="border border-border rounded-xl shadow-sm bg-surface overflow-hidden">
-        {/* Language and mode bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 px-6 py-4 border-b border-border bg-surface-secondary/50">
           <div className="flex items-center gap-3 flex-1">
             <select
@@ -147,8 +148,8 @@ function DocumentPage() {
               onChange={e => setSourceLang(e.target.value)}
               className="bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors focus:outline-none border-none"
             >
-              {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang.code} value={lang.code}>{lang.name}</option>
+              {LANGUAGE_CODES.map(code => (
+                <option key={code} value={code}>{t(`common.languages.${code}`)}</option>
               ))}
             </select>
             <select
@@ -156,49 +157,48 @@ function DocumentPage() {
               onChange={e => setTargetLang(e.target.value)}
               className="bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors focus:outline-none border-none"
             >
-              {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => (
-                <option key={lang.code} value={lang.code}>{lang.name}</option>
+              {LANGUAGE_CODES.filter(c => c !== 'auto').map(code => (
+                <option key={code} value={code}>{t(`common.languages.${code}`)}</option>
               ))}
             </select>
           </div>
-          
+
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="text-[12px] text-text-tertiary whitespace-nowrap">翻译模式:</span>
+            <span className="text-[12px] text-text-tertiary whitespace-nowrap">{t('document.translationMode')}:</span>
             <select
               value={mode}
               onChange={e => setMode(e.target.value)}
               className="bg-transparent text-text-primary text-[13px] cursor-pointer hover:text-accent transition-colors focus:outline-none border-none flex-1 sm:flex-initial"
             >
-              <option value="fast">快速翻译</option>
-              <option value="expert">专家翻译</option>
+              <option value="fast">{t('document.modes.fast')}</option>
+              <option value="expert">{t('document.modes.expert')}</option>
             </select>
           </div>
         </div>
 
-        {/* Upload area */}
         <div className="p-6 border-b border-border">
           <div
-            onDragOver={e => { 
-              e.preventDefault(); 
-              e.currentTarget.classList.add('border-accent', 'bg-accent-bg'); 
-            }}
-            onDragLeave={e => { 
+            onDragOver={e => {
               e.preventDefault();
-              e.currentTarget.classList.remove('border-accent', 'bg-accent-bg'); 
+              e.currentTarget.classList.add('border-accent', 'bg-accent-bg');
             }}
-            onDrop={e => { 
-              e.preventDefault(); 
+            onDragLeave={e => {
+              e.preventDefault();
               e.currentTarget.classList.remove('border-accent', 'bg-accent-bg');
-              if (e.dataTransfer.files[0]) handleUpload(e.dataTransfer.files[0]); 
             }}
-            onClick={() => { 
-              const input = document.createElement('input'); 
-              input.type = 'file'; 
-              input.accept = '.txt,.epub,.docx,.pdf'; 
-              input.onchange = () => { 
-                if (input.files?.[0]) handleUpload(input.files[0]); 
-              }; 
-              input.click(); 
+            onDrop={e => {
+              e.preventDefault();
+              e.currentTarget.classList.remove('border-accent', 'bg-accent-bg');
+              if (e.dataTransfer.files[0]) handleUpload(e.dataTransfer.files[0]);
+            }}
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = '.txt,.epub,.docx,.pdf';
+              input.onchange = () => {
+                if (input.files?.[0]) handleUpload(input.files[0]);
+              };
+              input.click();
             }}
             className="border-2 border-dashed border-border rounded-xl p-10 text-center hover:border-accent/50 hover:bg-surface-secondary/30 transition-all cursor-pointer group"
           >
@@ -208,10 +208,10 @@ function DocumentPage() {
               </div>
               <div>
                 <p className="text-[15px] font-medium text-text-primary mb-1">
-                  拖拽文件到此处，或 <span className="text-accent">点击上传</span>
+                  {t('document.upload.drag')}
                 </p>
                 <p className="text-[13px] text-text-tertiary">
-                  支持 TXT、EPUB、DOCX、PDF 格式，单个文件最大 50MB
+                  {t('document.upload.formats')}
                 </p>
               </div>
               <div className="flex items-center gap-4 mt-2">
@@ -225,17 +225,16 @@ function DocumentPage() {
           {uploading && (
             <div className="mt-4 flex items-center justify-center gap-2 text-[13px] text-accent">
               <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-              上传中...
+              {t('document.upload.uploading')}
             </div>
           )}
         </div>
 
-        {/* Document list */}
         <div className="flex-1 overflow-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            <span className="text-[13px] text-text-tertiary">加载中...</span>
+            <span className="text-[13px] text-text-tertiary">{t('document.loading')}</span>
           </div>
         ) : documents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
@@ -243,8 +242,8 @@ function DocumentPage() {
               <FileText className="w-8 h-8 text-text-tertiary" />
             </div>
             <div>
-              <p className="text-[15px] font-medium text-text-secondary mb-1">暂无文档</p>
-              <p className="text-[13px] text-text-tertiary">上传您的第一个文档开始翻译</p>
+              <p className="text-[15px] font-medium text-text-secondary mb-1">{t('document.empty.title')}</p>
+              <p className="text-[13px] text-text-tertiary">{t('document.empty.subtitle')}</p>
             </div>
           </div>
         ) : (
@@ -255,7 +254,7 @@ function DocumentPage() {
                   <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-surface-secondary flex items-center justify-center">
                     <FileText className="w-5 h-5 text-text-tertiary" />
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0 flex-1">
@@ -273,75 +272,74 @@ function DocumentPage() {
                           </span>
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {new Date(doc.createTime).toLocaleString('zh-CN', { 
-                              month: '2-digit', 
-                              day: '2-digit', 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
+                            {new Date(doc.createTime).toLocaleString('zh-CN', {
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
                             })}
                           </span>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {doc.status === 'completed' && (
-                          <button 
-                            onClick={() => handleDownload(doc)} 
+                          <button
+                            onClick={() => handleDownload(doc)}
                             className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors"
-                            title="下载译文"
+                            title={t('document.actions.download')}
                           >
                             <Download className="w-4 h-4" />
                           </button>
                         )}
                         {(doc.status === 'pending' || doc.status === 'processing') && (
-                          <button 
-                            onClick={() => handleCancel(doc.id)} 
+                          <button
+                            onClick={() => handleCancel(doc.id)}
                             className="p-2 rounded-lg text-text-tertiary hover:text-red hover:bg-red-bg transition-colors"
-                            title="取消翻译"
+                            title={t('document.actions.cancel')}
                           >
                             <XCircle className="w-4 h-4" />
                           </button>
                         )}
                         {doc.status === 'failed' && (
-                          <button 
-                            onClick={() => handleRetry(doc.id)} 
+                          <button
+                            onClick={() => handleRetry(doc.id)}
                             className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors"
-                            title="重新翻译"
+                            title={t('document.actions.retry')}
                           >
                             <RefreshCw className="w-4 h-4" />
                           </button>
                         )}
-                        <button 
-                          onClick={() => handleDelete(doc.id)} 
+                        <button
+                          onClick={() => handleDelete(doc.id)}
                           className="p-2 rounded-lg text-text-tertiary hover:text-red hover:bg-red-bg transition-colors"
-                          title="删除文档"
+                          title={t('document.actions.delete')}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
-                    
-                    {/* Status and progress */}
+
                     <div className="flex items-center gap-3">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-medium ${statusColor[doc.status] || 'bg-gray-100 text-text-tertiary'}`}>
                         {statusLabel[doc.status] || doc.status}
                       </span>
-                      
+
                       {(doc.status === 'pending' || doc.status === 'processing') && (
                         <div className="flex-1 max-w-xs">
                           <div className="flex items-center justify-between text-[11px] text-text-tertiary mb-1">
-                            <span>进度</span>
+                            <span>{t('document.progress')}</span>
                             <span className="font-mono">{doc.progress || 0}%</span>
                           </div>
                           <div className="w-full h-1.5 bg-surface-secondary rounded-full overflow-hidden">
-                            <div 
+                            <div
                               className="h-full bg-gradient-brand transition-all duration-500 ease-out"
                               style={{ width: `${doc.progress || 0}%` }}
                             />
                           </div>
                         </div>
                       )}
-                      
+
                       {doc.status === 'failed' && doc.errorMessage && (
                         <span className="text-[12px] text-red flex-1 truncate" title={doc.errorMessage}>
                           {doc.errorMessage}
@@ -358,15 +356,14 @@ function DocumentPage() {
 
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
 
-        {/* Bottom bar */}
         <div className="flex items-center justify-between px-6 py-3 border-t border-border bg-surface-secondary">
           <div className="flex items-center gap-4 text-[12px] text-text-tertiary">
-            <span>{documents.length} / {total} 个文档</span>
+            <span>{documents.length} / {total} {t('document.summary.count')}</span>
             {documents.length > 0 && (
               <>
                 <span className="text-text-placeholder">|</span>
                 <span>
-                  总计: {formatFileSize(documents.reduce((sum, doc) => sum + (doc.fileSize || 0), 0))}
+                  {t('document.summary.total')}: {formatFileSize(documents.reduce((sum, doc) => sum + (doc.fileSize || 0), 0))}
                 </span>
               </>
             )}
@@ -377,7 +374,7 @@ function DocumentPage() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-text-tertiary hover:text-accent transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            刷新
+            {t('common.refresh')}
           </button>
         </div>
       </div>

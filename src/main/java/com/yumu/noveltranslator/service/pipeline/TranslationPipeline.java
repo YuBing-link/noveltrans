@@ -2,8 +2,10 @@ package com.yumu.noveltranslator.service.pipeline;
 
 import com.yumu.noveltranslator.dto.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.dto.RagTranslationResponse;
+import com.yumu.noveltranslator.entity.Glossary;
 import com.yumu.noveltranslator.service.EntityConsistencyService;
 import com.yumu.noveltranslator.service.RagTranslationService;
+import com.yumu.noveltranslator.service.TeamTranslationService;
 import com.yumu.noveltranslator.service.TranslationCacheService;
 import com.yumu.noveltranslator.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.service.UserLevelThrottledTranslationClient;
@@ -13,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 统一翻译管线组件
@@ -44,19 +47,12 @@ public class TranslationPipeline {
     private final EntityConsistencyService entityConsistencyService;
     private final UserLevelThrottledTranslationClient translationClient;
     private final TranslationPostProcessingService postProcessingService;
+    private final TeamTranslationService teamTranslationService;
     private final Long userId;
     private final String docId;
 
     /**
-     * 创建翻译管线实例
-     *
-     * @param cacheService        三级缓存服务
-     * @param ragTranslationService RAG 翻译服务
-     * @param entityConsistencyService 实体一致性服务
-     * @param translationClient   用户级限流翻译客户端
-     * @param postProcessingService 翻译后处理服务
-     * @param userId              用户 ID（可为 null，null 时跳过一致性翻译）
-     * @param docId               文档 ID（可为 null，用于一致性翻译的实体缓存）
+     * 创建翻译管线实例（标准模式，L4 走直译）
      */
     public TranslationPipeline(
             TranslationCacheService cacheService,
@@ -66,11 +62,30 @@ public class TranslationPipeline {
             TranslationPostProcessingService postProcessingService,
             Long userId,
             String docId) {
+        this(cacheService, ragTranslationService, entityConsistencyService, translationClient,
+             postProcessingService, null, userId, docId);
+    }
+
+    /**
+     * 创建翻译管线实例（支持团队模式，L4 可走 TeamTranslationService）
+     *
+     * @param teamTranslationService 团队翻译服务（可为 null，null 时 executeTeam 降级为标准直译）
+     */
+    public TranslationPipeline(
+            TranslationCacheService cacheService,
+            RagTranslationService ragTranslationService,
+            EntityConsistencyService entityConsistencyService,
+            UserLevelThrottledTranslationClient translationClient,
+            TranslationPostProcessingService postProcessingService,
+            TeamTranslationService teamTranslationService,
+            Long userId,
+            String docId) {
         this.cacheService = cacheService;
         this.ragTranslationService = ragTranslationService;
         this.entityConsistencyService = entityConsistencyService;
         this.translationClient = translationClient;
         this.postProcessingService = postProcessingService;
+        this.teamTranslationService = teamTranslationService;
         this.userId = userId;
         this.docId = docId;
     }
@@ -112,6 +127,101 @@ public class TranslationPipeline {
         }
 
         return result.toString();
+    }
+
+    /**
+     * 团队模式翻译管线（完整四级管线 + L4 走多 Agent 协作）
+     *
+     * L1: 缓存查询
+     * L2: RAG 语义匹配
+     * L3: 实体一致性（提取实体 + 占位符保护）
+     * L4: TeamTranslationService 多 Agent 协作翻译
+     *
+     * @param text           待翻译文本
+     * @param sourceLang     源语言
+     * @param targetLang     目标语言
+     * @param engine         翻译引擎
+     * @param novelType      小说类型
+     * @param glossaryTerms  术语表
+     * @return 翻译结果，失败返回 null
+     */
+    public String executeTeam(
+            String text,
+            String sourceLang,
+            String targetLang,
+            String engine,
+            String novelType,
+            List<Glossary> glossaryTerms) {
+
+        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang, engine);
+
+        // L1: 三级缓存查询
+        String cached = cacheService.getCache(cacheKey);
+        if (cached != null) {
+            log.debug("Pipeline 团队模式缓存命中 [{}]", cacheKey.substring(0, Math.min(16, cacheKey.length())));
+            return cached;
+        }
+
+        // L2: RAG 语义匹配
+        RagTranslationResponse ragResult = ragTranslationService.searchSimilar(text, targetLang, engine);
+        if (ragResult.isDirectHit()) {
+            log.info("Pipeline 团队模式 RAG 直接命中，相似度: {}", ragResult.getSimilarity());
+            String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, engine);
+            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
+            return result;
+        }
+
+        // L3: 实体一致性 + 占位符保护
+        String textForTranslation = text;
+        EntityConsistencyService.EntityMappingContext mappingContext = null;
+
+        if (userId != null && entityConsistencyService.shouldUseConsistency(text)) {
+            log.info("Pipeline 团队模式启用实体一致性");
+            try {
+                List<String> extractedEntities = entityConsistencyService.extractEntitiesSegmented(text, targetLang);
+                if (!extractedEntities.isEmpty()) {
+                    Map<String, String> entityTranslations = entityConsistencyService.translateEntities(
+                            extractedEntities, targetLang);
+                    mappingContext = entityConsistencyService.buildMapping(entityTranslations);
+                    textForTranslation = entityConsistencyService.replaceEntitiesWithPlaceholders(text, mappingContext);
+                }
+            } catch (Exception e) {
+                log.warn("团队模式实体一致性失败，降级为无占位符翻译: {}", e.getMessage());
+            }
+        }
+
+        // L4: 多 Agent 协作翻译
+        if (teamTranslationService == null) {
+            log.warn("团队模式未初始化 TeamTranslationService，降级为标准直译");
+            return executeSegment(text, targetLang, engine);
+        }
+
+        try {
+            String translated = teamTranslationService.translateChapter(
+                    textForTranslation, novelType, sourceLang, targetLang, glossaryTerms);
+
+            if (translated == null || translated.trim().isEmpty()) {
+                log.warn("Pipeline 团队模式 L4 翻译结果为空");
+                return null;
+            }
+
+            // 还原占位符
+            if (mappingContext != null) {
+                translated = entityConsistencyService.restorePlaceholders(translated, mappingContext);
+            }
+
+            // 后处理 + 缓存
+            translated = postProcessingService.fixUntranslatedChinese(text, translated, targetLang, engine);
+            if (shouldCache(text, translated)) {
+                cacheService.putCache(cacheKey, text, translated, sourceLang, targetLang, "ai-team", "");
+                ragTranslationService.storeTranslationMemory(text, translated, targetLang, "ai-team");
+            }
+
+            return translated;
+        } catch (Exception e) {
+            log.warn("Pipeline 团队模式翻译失败: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -209,9 +319,9 @@ public class TranslationPipeline {
             return cached;
         }
 
-        // L4: 直译（跳过 RAG 和一致性）
+        // L4: 直译（跳过 RAG 和一致性，快速模式直连 MTranServer）
         try {
-            String rawJson = translationClient.translate(text, targetLang, engine, false, html);
+            String rawJson = translationClient.translate(text, targetLang, engine, html, true);
             String result = ExternalResponseUtil.extractDataField(rawJson);
 
             if (result != null && !result.isBlank()) {

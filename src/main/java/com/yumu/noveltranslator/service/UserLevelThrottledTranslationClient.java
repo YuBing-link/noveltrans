@@ -50,6 +50,9 @@ public class UserLevelThrottledTranslationClient {
     @Value("${translation.python.url:http://llm-engine:8000/translate}")
     private String pythonTranslateUrl;
 
+    @Value("${translation.python.api-key:#{null}}")
+    private String pythonServiceApiKey;
+
     private static final boolean ENABLE_ROUND_ROBIN_TRANSLATION = true;
 
     // ========== 轮询配置 ==========
@@ -169,13 +172,13 @@ public class UserLevelThrottledTranslationClient {
     }
 
     /**
-     * 翻译请求（支持快速模式）
+     * 翻译请求（支持快速/专家模式）
      *
      * @param text 待翻译文本
      * @param targetLang 目标语言
      * @param engine 翻译引擎
      * @param html 是否启用 HTML 翻译模式
-     * @param fastMode 快速模式：true=直接走 MTranServer，false=走轮询
+     * @param fastMode 快速模式：true=大模型 30% 概率，false=大模型 70% 概率
      * @return 翻译结果 JSON
      */
     public String translate(String text, String targetLang, String engine, boolean html, boolean fastMode) {
@@ -185,20 +188,12 @@ public class UserLevelThrottledTranslationClient {
             // 尝试获取许可，设定超时时间
             if (userSemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 try {
-                    // 快速模式（网页翻译）：直接使用 MTranServer
-                    if (fastMode) {
-                        return doExternalTranslationRequest(text, targetLang, html);
-                    }
-                    // 阅读器模式：直接使用 MTranServer
+                    // HTML 模式（阅读器）：直接使用 MTranServer
                     if (html) {
                         return doExternalTranslationRequest(text, targetLang, html);
                     }
-                    // 普通模式：走轮询逻辑（支持降级到 MTranServer）
-                    if (ENABLE_ROUND_ROBIN_TRANSLATION) {
-                        return translateWithRoundRobin(text, targetLang, engine);
-                    } else {
-                        return translateWithFallback(text, targetLang, engine);
-                    }
+                    // 基于优秀率概率轮询（fast=30% 大模型，expert=70% 大模型）
+                    return translateWithRoundRobin(text, targetLang, engine, fastMode);
                 } finally {
                     userSemaphore.release();
                 }
@@ -228,25 +223,21 @@ public class UserLevelThrottledTranslationClient {
      * 1. 轮询到 Python 服务 → Python 所有引擎失败 → 降级到 MTranServer → MTranServer 失败 → 抛出异常
      * 2. 轮询到 MTranServer → MTranServer 失败 → 降级到 Python 服务 → Python 所有引擎失败 → 抛出异常
      *
-     * 核心逻辑：
-     * 1. 检查并重置过期的统计计数器
-     * 2. 如果某个引擎样本不足，优先分配请求
-     * 3. 计算各引擎的优秀率
-     * 4. 根据优秀率计算被选中的概率
-     * 5. 随机决定使用哪个引擎
-     * 6. 首选引擎失败自动降级到另一引擎
-     * 7. 所有引擎都失败时，抛出异常由调用方处理
+     * 概率控制：
+     * - fastMode=true:  Python 大模型概率上限 30%
+     * - fastMode=false: Python 大模型概率上限 70%
      */
-    private String translateWithRoundRobin(String text, String targetLang, String engine) {
+    private String translateWithRoundRobin(String text, String targetLang, String engine, boolean fastMode) {
         // 检查并重置过期统计
         resetStatsIfNeeded();
 
         // 计算当前应该使用哪个服务
-        boolean usePythonService = shouldUsePythonService();
+        boolean usePythonService = shouldUsePythonService(fastMode);
 
         if (usePythonService) {
             // 场景 1：轮询到 Python 服务
-            log.debug("轮询：Python 服务（优秀率概率选择）");
+            log.info("[轮询路由] 选择 Python 大模型（fastMode={}, pythonCount={}, mTranCount={}, textLength={}）",
+                    fastMode, pythonRequestCount.get(), mTranRequestCount.get(), text.length());
             try {
                 return doTranslateRequest(text, targetLang, engine);
             } catch (Exception e) {
@@ -263,7 +254,8 @@ public class UserLevelThrottledTranslationClient {
             }
         } else {
             // 场景 2：轮询到 MTranServer（本地引擎）
-            log.debug("轮询：MTran 服务（优秀率概率选择）");
+            log.info("[轮询路由] 选择 MTranServer（fastMode={}, pythonCount={}, mTranCount={}, textLength={}）",
+                    fastMode, pythonRequestCount.get(), mTranRequestCount.get(), text.length());
             try {
                 return doExternalTranslationRequest(text, targetLang);
             } catch (Exception e) {
@@ -312,9 +304,10 @@ public class UserLevelThrottledTranslationClient {
 
     /**
      * 判断是否应该使用 Python 服务
+     * @param fastMode true=大模型 30% 概率，false=大模型 70% 概率
      * @return true 使用 Python 服务，false 使用 MTran 服务
      */
-    private boolean shouldUsePythonService() {
+    private boolean shouldUsePythonService(boolean fastMode) {
         int pythonCount = pythonRequestCount.get();
         int mTranCount = mTranRequestCount.get();
 
@@ -338,22 +331,28 @@ public class UserLevelThrottledTranslationClient {
         double pythonExcellentRate = (double) pythonExcellent / pythonCount;
         double mTranExcellentRate = (double) mTranExcellent / mTranCount;
 
+        // 根据模式设置概率上限
+        double maxPythonProbability = fastMode ? 0.3 : 0.7;
+
         // 计算 Python 被选中的概率 = Python 优秀率 / (Python 优秀率 + MTran 优秀率)
         double totalExcellent = pythonExcellentRate + mTranExcellentRate;
         if (totalExcellent == 0) {
-            // 两者都没有优秀记录，平均分配
-            return Math.random() < 0.5;
+            // 两者都没有优秀记录，使用默认概率
+            return Math.random() < maxPythonProbability;
         }
 
         double pythonProbability = pythonExcellentRate / totalExcellent;
+        // 限制 Python 最大概率
+        double cappedProbability = Math.min(pythonProbability, maxPythonProbability);
         double random = Math.random();
 
-        log.debug("轮询统计 - Python: 请求={}, 优秀={}, 优秀率={:.2%} | MTran: 请求={}, 优秀={}, 优秀率={:.2%} | Python 概率={:.2%}",
+        log.info("[轮询统计] fastMode={} | Python: 请求={}, 优秀={}, 优秀率={:.2%} | MTran: 请求={}, 优秀={}, 优秀率={:.2%} | Python 原始概率={:.2%}, 上限={:.0%}, 限制后={:.2%}",
+                 fastMode,
                  pythonCount, pythonExcellent, pythonExcellentRate,
                  mTranCount, mTranExcellent, mTranExcellentRate,
-                 pythonProbability);
+                 pythonProbability, maxPythonProbability, cappedProbability);
 
-        return random < pythonProbability;
+        return random < cappedProbability;
     }
 
     /**
@@ -428,12 +427,19 @@ public class UserLevelThrottledTranslationClient {
      */
     private String doPythonServiceRequest(String jsonBody, String text) throws Exception {
         log.info("[Python请求] URL={}, body length={}", pythonTranslateUrl, jsonBody.length());
-        HttpRequest request = HttpRequest.newBuilder()
+        var requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(pythonTranslateUrl))
                 .version(HttpClient.Version.HTTP_1_1)
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .header("Accept", "application/json")
-                .timeout(Duration.ofMillis(READ_TIMEOUT_MS))
+                .timeout(Duration.ofMillis(READ_TIMEOUT_MS));
+
+        // 添加服务间认证 Key
+        if (pythonServiceApiKey != null && !pythonServiceApiKey.isEmpty()) {
+            requestBuilder.header("X-Service-Key", pythonServiceApiKey);
+        }
+
+        HttpRequest request = requestBuilder
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
                 .build();
         log.info("[Python请求] 发送请求到 {}", request.uri());
@@ -471,7 +477,9 @@ public class UserLevelThrottledTranslationClient {
         boolean success = false;
 
         try {
+            log.info("[MTran请求] targetLang={}, html={}, textLength={}", targetLang, html, text.length());
             JSONObject mtranResponse = externalTranslationService.translate("auto", targetLang, text, html);
+            long costTime = System.currentTimeMillis() - startTime;
 
             // 从 MTranServer 响应中提取 result 字段
             String translatedContent = mtranResponse.getString("result");
@@ -479,6 +487,11 @@ public class UserLevelThrottledTranslationClient {
                 // 如果没有 result 字段，返回原始 JSON 作为兜底
                 translatedContent = mtranResponse.toJSONString();
             }
+
+            // 解码 HTML 实体编码（&nbsp; &amp; &lt; &gt; 等）
+            translatedContent = decodeHtmlEntities(translatedContent);
+
+            log.info("[MTran响应] costMs={}, resultLength={}", costTime, translatedContent.length());
 
             // 包装成标准格式
             JSONObject standardResponse = new JSONObject();
@@ -488,6 +501,10 @@ public class UserLevelThrottledTranslationClient {
 
             success = true;
             return standardResponse.toJSONString();
+        } catch (Exception e) {
+            long costTime = System.currentTimeMillis() - startTime;
+            log.error("[MTran失败] costMs={}, error={}", costTime, e.getMessage(), e);
+            throw e;
         } finally {
             long costTime = System.currentTimeMillis() - startTime;
             recordStats(false, success, costTime);
@@ -497,6 +514,31 @@ public class UserLevelThrottledTranslationClient {
                 log.info("[慢请求] MTran 翻译耗时：{}ms, 文本长度：{}, html: {}", costTime, text.length(), html);
             }
         }
+    }
+
+    /**
+     * 解码 HTML 实体编码
+     */
+    private String decodeHtmlEntities(String text) {
+        if (text == null) return null;
+        return text
+                .replace("&nbsp;", " ")
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&#x27;", "'")
+                .replace("&apos;", "'")
+                .replace("&mdash;", "—")
+                .replace("&ndash;", "–")
+                .replace("&hellip;", "…")
+                .replace("&laquo;", "«")
+                .replace("&raquo;", "»")
+                .replace("&copy;", "©")
+                .replace("&reg;", "®")
+                .replace("&trade;", "™");
     }
 
 

@@ -1,5 +1,6 @@
 import { Copy, Trash2, Volume2, Sparkles } from 'lucide-react';
 import { useToast } from '../ui/Toast';
+import { useTranslation } from 'react-i18next';
 
 interface TranslationResultProps {
   text: string;
@@ -10,13 +11,14 @@ interface TranslationResultProps {
 
 function TranslationResultPane({ text, loading, onClear, costTime }: TranslationResultProps) {
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(text);
-      toast('success', '已复制到剪贴板');
+      toast('success', t('translationResult.copied'));
     } catch {
-      toast('error', '复制失败');
+      toast('error', t('translationResult.copyFailed'));
     }
   };
 
@@ -30,20 +32,20 @@ function TranslationResultPane({ text, loading, onClear, costTime }: Translation
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[14px] font-semibold text-text-primary">翻译结果</h3>
+        <h3 className="text-[14px] font-semibold text-text-primary">{t('translationResult.title')}</h3>
         {(text || loading) && (
           <div className="flex items-center gap-0.5">
             {text && !loading && (
               <>
-                <button onClick={handleCopy} className="p-1.5 rounded-button text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors" title="复制">
+                <button onClick={handleCopy} className="p-1.5 rounded-button text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors" title={t('translationResult.copy')}>
                   <Copy className="w-4 h-4" />
                 </button>
-                <button onClick={handleSpeak} className="p-1.5 rounded-button text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors" title="朗读">
+                <button onClick={handleSpeak} className="p-1.5 rounded-button text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors" title={t('translationResult.speak')}>
                   <Volume2 className="w-4 h-4" />
                 </button>
               </>
             )}
-            <button onClick={onClear} className="p-1.5 rounded-button text-text-tertiary hover:text-red hover:bg-red-bg transition-colors" title="清空">
+            <button onClick={onClear} className="p-1.5 rounded-button text-text-tertiary hover:text-red hover:bg-red-bg transition-colors" title={t('translationResult.clear')}>
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
@@ -55,7 +57,7 @@ function TranslationResultPane({ text, loading, onClear, costTime }: Translation
         {loading ? (
           <div className="flex items-center gap-2 text-accent">
             <Sparkles className="w-4 h-4 animate-pulse" />
-            <span className="text-[14px]">翻译中...</span>
+            <span className="text-[14px]">{t('translationResult.translating')}</span>
             {text && (
               <div className="text-[17px] leading-relaxed text-text-primary whitespace-pre-wrap mt-3 streaming-cursor">
                 {text}
@@ -77,7 +79,7 @@ function TranslationResultPane({ text, loading, onClear, costTime }: Translation
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-text-placeholder">
-            <p className="text-[15px] font-medium">翻译结果将显示在这里</p>
+            <p className="text-[15px] font-medium">{t('home.result.placeholder')}</p>
           </div>
         )}
       </div>

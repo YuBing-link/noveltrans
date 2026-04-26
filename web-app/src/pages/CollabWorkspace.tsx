@@ -6,7 +6,7 @@ import { Tabs } from '../components/ui/Tabs';
 import type { Tab } from '../components/ui/Tabs';
 import { collabApi } from '../api/collab';
 import type { ChapterTaskResponse, CommentResponse } from '../api/types';
-import { SUPPORTED_LANGUAGES } from '../api/types';
+import { LANGUAGE_CODES } from '../api/types';
 import {
   ArrowLeft,
   BookOpen,
@@ -20,20 +20,20 @@ import {
   Clock,
   Languages,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
-// ==================== Status config ====================
-const CHAPTER_STATUS_CONFIG: Record<string, { label: string; color: Parameters<typeof Badge>[0]['color'] }> = {
-  UNASSIGNED: { label: '待分配', color: 'gray' },
-  TRANSLATING: { label: '翻译中', color: 'blue' },
-  SUBMITTED: { label: '已提交', color: 'yellow' },
-  REVIEWING: { label: '审核中', color: 'purple' },
-  APPROVED: { label: '已批准', color: 'green' },
-  REJECTED: { label: '已退回', color: 'red' },
-  COMPLETED: { label: '已完成', color: 'green' },
+const STATUS_COLORS: Record<string, Parameters<typeof Badge>[0]['color']> = {
+  UNASSIGNED: 'gray',
+  TRANSLATING: 'blue',
+  SUBMITTED: 'yellow',
+  REVIEWING: 'purple',
+  APPROVED: 'green',
+  REJECTED: 'red',
+  COMPLETED: 'green',
 };
 
-function getLangName(code: string): string {
-  return SUPPORTED_LANGUAGES.find(l => l.code === code)?.name || code;
+function getLangName(t: ReturnType<typeof useTranslation>['t'], code: string): string {
+  return t(`common.languages.${code}`, { defaultValue: code });
 }
 
 // ==================== CommentItem (reused from CollabPage) ====================
@@ -74,6 +74,7 @@ function CollabWorkspace() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { success, error: toastError } = useToast();
+  const { t } = useTranslation();
 
   const chapterId = Number(searchParams.get('chapterId'));
   const [targetLang, setTargetLang] = useState(searchParams.get('targetLang') || 'zh');
@@ -319,28 +320,28 @@ function CollabWorkspace() {
               </span>
             )}
           </div>
-          <Badge color={CHAPTER_STATUS_CONFIG[chapter.status]?.color || 'gray'}>
-            {CHAPTER_STATUS_CONFIG[chapter.status]?.label || chapter.status}
+          <Badge color={STATUS_COLORS[chapter.status] || 'gray'}>
+            {t(`collab.taskStatus.${chapter.status.toLowerCase()}`, { defaultValue: chapter.status })}
           </Badge>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 text-xs text-text-tertiary">
             <Languages className="w-3.5 h-3.5" />
-            <span className="text-text-placeholder">自动检测 →</span>
+            <span className="text-text-placeholder">{t('common.languages.auto')} →</span>
             <select
               value={targetLang}
               onChange={e => setTargetLang(e.target.value)}
               className="bg-transparent text-text-primary text-xs border-none focus:outline-none cursor-pointer"
             >
-              {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => (
-                <option key={lang.code} value={lang.code}>{lang.name}</option>
+              {LANGUAGE_CODES.filter(c => c !== 'auto').map(code => (
+                <option key={code} value={code}>{t(`common.languages.${code}`)}</option>
               ))}
             </select>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-xs text-text-tertiary">
-            <span>原文: {sourceText.length.toLocaleString()} 字符</span>
-            <span>译文: {editorText.length.toLocaleString()} 字符</span>
+            <span>{t('workspace.sourceChars', { defaultValue: '原文' })}: {sourceText.length.toLocaleString()} {t('workspace.chars', { defaultValue: '字符' })}</span>
+            <span>{t('workspace.targetChars', { defaultValue: '译文' })}: {editorText.length.toLocaleString()} {t('workspace.chars', { defaultValue: '字符' })}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -574,7 +575,7 @@ function CollabWorkspace() {
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-text-tertiary">目标语言</span>
-                      <span className="text-text-primary">{getLangName(targetLang)}</span>
+                      <span className="text-text-primary">{getLangName(t, targetLang)}</span>
                     </div>
                   </div>
                 </div>
@@ -585,8 +586,8 @@ function CollabWorkspace() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-text-tertiary">状态</span>
-                      <Badge color={CHAPTER_STATUS_CONFIG[chapter.status]?.color || 'gray'}>
-                        {CHAPTER_STATUS_CONFIG[chapter.status]?.label || chapter.status}
+                      <Badge color={STATUS_COLORS[chapter.status] || 'gray'}>
+                        {t(`collab.taskStatus.${chapter.status.toLowerCase()}`, { defaultValue: chapter.status })}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between text-xs">
@@ -702,12 +703,12 @@ function CollabWorkspace() {
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-text-tertiary">目标语言</span>
-              <span className="text-text-primary">{getLangName(targetLang)}</span>
+              <span className="text-text-primary">{getLangName(t, targetLang)}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-text-tertiary">状态</span>
-              <Badge color={CHAPTER_STATUS_CONFIG[chapter.status]?.color || 'gray'}>
-                {CHAPTER_STATUS_CONFIG[chapter.status]?.label || chapter.status}
+              <Badge color={STATUS_COLORS[chapter.status] || 'gray'}>
+                {t(`collab.taskStatus.${chapter.status.toLowerCase()}`, { defaultValue: chapter.status })}
               </Badge>
             </div>
             <div className="flex items-center justify-between text-xs">

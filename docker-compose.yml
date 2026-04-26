@@ -39,6 +39,7 @@ services:
       - HTTPS_PROXY=
       - http_proxy=
       - https_proxy=
+      - API_KEY=${MTRAN_API_KEY}
 
   # Python 翻译微服务
   llm-engine:
@@ -50,6 +51,7 @@ services:
       - OPENAI_API_KEY=${LLM_API_KEY}
       - OPENAI_BASE_URL=${LLM_BASE_URL}
       - OPENAI_MODEL=${LLM_MODEL}
+      - TRANSLATE_SERVICE_API_KEY=${TRANSLATE_SERVICE_API_KEY}
     ports:
       - "8000:8000"
 
@@ -106,6 +108,7 @@ services:
       - REDIS_DB=${REDIS_DB}
       - MTRAN_HOST=mtran-server
       - MTRAN_PORT=${MTRAN_PORT}
+      - MTRAN_API_KEY=${MTRAN_API_KEY}
       - MAIL_USERNAME=${MAIL_USERNAME}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - PYTHON_TRANSLATE_URL=http://llm-engine:8000/translate

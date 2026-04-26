@@ -86,7 +86,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
 
     /**
      * 从上传文档创建协作项目（团队模式）
-     * 自动按段落拆分章节，创建项目后直接进入 ACTIVE 状态
+     * 自动按章节标题拆分章节，创建项目后直接进入 ACTIVE 状态
      *
      * @param userId 用户ID
      * @param documentName 文档名称
@@ -100,7 +100,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public TeamProjectCreateResult createProjectFromDocument(Long userId, Long documentId, String documentName,
                                                               String filePath, String fileType,
                                                               String sourceLang, String targetLang) {
-        // 读取文档内容并按段落分割
+        // 读取文档内容
         String content;
         try {
             content = Files.readString(Paths.get(filePath), java.nio.charset.StandardCharsets.UTF_8);
@@ -112,28 +112,8 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new RuntimeException("文档内容为空");
         }
 
-        // 按空行分割段落，每 500 字符或每个自然段作为一个章节
-        String[] paragraphs = content.split("\n+");
-        List<String> chapters = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-
-        for (String p : paragraphs) {
-            String trimmed = p.trim();
-            if (trimmed.isEmpty()) continue;
-            if (current.length() + trimmed.length() > 500 && current.length() > 0) {
-                chapters.add(current.toString().trim());
-                current = new StringBuilder();
-            }
-            current.append(trimmed).append("\n");
-        }
-        if (current.length() > 0) {
-            chapters.add(current.toString().trim());
-        }
-
-        // 至少创建一个章节
-        if (chapters.isEmpty()) {
-            chapters.add(content.trim());
-        }
+        // 智能章节分割：优先按章节标题分割，其次按字符数分组
+        List<String> chapters = splitIntoChapters(content);
 
         // 创建项目
         CollabProject project = new CollabProject();
@@ -217,27 +197,8 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new RuntimeException("文档内容为空");
         }
 
-        // 按段落分割
-        String[] paragraphs = content.split("\n+");
-        List<String> chapters = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-
-        for (String p : paragraphs) {
-            String trimmed = p.trim();
-            if (trimmed.isEmpty()) continue;
-            if (current.length() + trimmed.length() > 500 && current.length() > 0) {
-                chapters.add(current.toString().trim());
-                current = new StringBuilder();
-            }
-            current.append(trimmed).append("\n");
-        }
-        if (current.length() > 0) {
-            chapters.add(current.toString().trim());
-        }
-
-        if (chapters.isEmpty()) {
-            chapters.add(content.trim());
-        }
+        // 智能章节分割：优先按章节标题分割，其次按字符数分组
+        List<String> chapters = splitIntoChapters(content);
 
         // 获取当前最大章节号
         List<CollabChapterTask> existingChapters = collabChapterTaskMapper.selectByProjectId(projectId);
@@ -274,6 +235,90 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      */
     public void startMultiAgentTranslation(Long projectId) {
         multiAgentTranslationService.startMultiAgentTranslation(projectId);
+    }
+
+    /**
+     * 智能章节分割：优先按章节标题分割，无标题时按字符数分组
+     * <p>
+     * 分割策略：
+     * 1. 检测章节标题行（如"第1章"、"Chapter 1"、"一、"等），按标题分割
+     * 2. 若无章节标题，按段落累加到 ~2000 字符分组
+     * 3. 若总段落很少，保持完整不分割
+     */
+    private List<String> splitIntoChapters(String content) {
+        String[] lines = content.split("\n");
+        List<String> chapters = new ArrayList<>();
+        StringBuilder currentChapter = new StringBuilder();
+        boolean hasChapterTitle = false;
+
+        // 章节标题正则（中文小说 + 英文小说常见格式）
+        java.util.regex.Pattern chapterPattern = java.util.regex.Pattern.compile(
+                "^\\s*(?:" +
+                        "(?:第\\s*[零一二三四五六七八九十百千\\d]+\\s*(?:章|节|回|卷|篇))" +
+                        "|(?:chapter\\s+[ivxlcdm\\d]+)" +
+                        "|(?:ch\\.?\\s*\\d+)" +
+                        "|(?:part\\s+[ivxlcdm\\d]+)" +
+                        "|(?:(?:[一二三四五六七八九十]+)、)" +
+                        ")",
+                java.util.regex.Pattern.CASE_INSENSITIVE
+        );
+
+        for (String line : lines) {
+            String trimmed = line.trim();
+
+            // 检测是否为章节标题
+            if (chapterPattern.matcher(trimmed).find()) {
+                // 如果之前有累积内容，保存为前一章
+                if (currentChapter.length() > 0) {
+                    String chapterText = currentChapter.toString().trim();
+                    if (!chapterText.isEmpty()) {
+                        chapters.add(chapterText);
+                    }
+                    currentChapter = new StringBuilder();
+                }
+                hasChapterTitle = true;
+                currentChapter.append(trimmed).append("\n");
+            } else {
+                currentChapter.append(line).append("\n");
+            }
+        }
+
+        // 保存最后一章
+        if (currentChapter.length() > 0) {
+            String chapterText = currentChapter.toString().trim();
+            if (!chapterText.isEmpty()) {
+                chapters.add(chapterText);
+            }
+        }
+
+        // 如果没有检测到章节标题，回退到按段落+字符数分组
+        if (!hasChapterTitle) {
+            chapters.clear();
+            String[] paragraphs = content.split("\n+");
+            StringBuilder current = new StringBuilder();
+            int maxCharsPerChapter = 2000;
+
+            for (String p : paragraphs) {
+                String pTrimmed = p.trim();
+                if (pTrimmed.isEmpty()) continue;
+                if (current.length() + pTrimmed.length() > maxCharsPerChapter && current.length() > 0) {
+                    chapters.add(current.toString().trim());
+                    current = new StringBuilder();
+                }
+                current.append(pTrimmed).append("\n");
+            }
+            if (current.length() > 0) {
+                chapters.add(current.toString().trim());
+            }
+        }
+
+        // 至少返回一章
+        if (chapters.isEmpty()) {
+            chapters.add(content.trim());
+        }
+
+        log.debug("章节分割: 检测到章节标题={}, 分割出 {} 章", hasChapterTitle, chapters.size());
+        return chapters;
     }
 
     /**

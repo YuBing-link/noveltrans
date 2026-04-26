@@ -148,9 +148,21 @@ public class WebGlossaryController {
             return Result.error("文件不能为空");
         }
 
+        // 文件大小限制：最大 5MB
+        final long MAX_FILE_SIZE = 5 * 1024 * 1024;
+        if (file.getSize() > MAX_FILE_SIZE) {
+            return Result.error("文件大小超过限制（最大 5MB）");
+        }
+
         String filename = file.getOriginalFilename();
         if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
             return Result.error("仅支持 CSV 文件");
+        }
+
+        // MIME 类型校验
+        String contentType = file.getContentType();
+        if (contentType != null && !contentType.contains("csv") && !contentType.contains("text") && !contentType.contains("plain")) {
+            return Result.error("不支持的文件类型");
         }
 
         try (BufferedReader reader = new BufferedReader(
@@ -161,6 +173,7 @@ public class WebGlossaryController {
             }
 
             int imported = 0;
+            int skipped = 0;
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
@@ -180,8 +193,19 @@ public class WebGlossaryController {
                 glossary.setSourceWord(sourceWord);
                 glossary.setTargetWord(targetWord);
                 glossary.setRemark(remark.isEmpty() ? null : remark);
-                glossaryMapper.insert(glossary);
-                imported++;
+
+                try {
+                    glossaryMapper.insert(glossary);
+                    imported++;
+                } catch (org.springframework.dao.DuplicateKeyException e) {
+                    skipped++;
+                } catch (Exception e) {
+                    if (e.getMessage() != null && e.getMessage().contains("Duplicate entry")) {
+                        skipped++;
+                    } else {
+                        throw e;
+                    }
+                }
             }
 
             return Result.ok(imported);

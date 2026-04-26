@@ -266,7 +266,7 @@ public class RagTranslationService {
         String vectorStr = formatVectorForRedis(queryVector);
 
         // 使用 RediSearch 过滤语法：先按 TAG 字段过滤，再在子集中做 KNN
-        String filterQuery = String.format("(@user_id{%s} @target_lang{%s})", userId, targetLang);
+        String filterQuery = String.format("(@user_id:{%s} @target_lang:{%s})", userId, targetLang);
         String knnQuery = String.format("%s=>[KNN %d @embedding $query_vector AS score]", filterQuery, knnTopK);
 
         Object result = stringRedisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>) connection ->

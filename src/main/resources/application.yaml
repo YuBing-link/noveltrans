@@ -91,6 +91,7 @@ translation:
     base-url: "https://api.openai.com"
   python:
     url: "${PYTHON_TRANSLATE_URL:http://llm-engine:8000/translate}"  # Python 翻译服务地址
+    api-key: "${TRANSLATE_SERVICE_API_KEY:}"  # 服务间认证 Key（可选，生产环境必填）
 
 # Python translate-server 地址（TeamTranslationService 使用）
 translate-server:
@@ -117,6 +118,7 @@ mtran:
   server:
     host: ${MTRAN_HOST:localhost}
     port: ${MTRAN_PORT:8989}
+    api-key: ${MTRAN_API_KEY:}
 
 email:
 

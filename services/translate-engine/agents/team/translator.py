@@ -87,6 +87,11 @@ def _clean_llm_output(raw: str) -> str:
             text = match.group(1) if match.lastindex else text
             break
 
+    # Strip residual `---` separator lines that LLM may have copied from prompt
+    lines = text.split("\n")
+    cleaned = [line for line in lines if re.fullmatch(r"-{3,}", line.strip()) is None]
+    text = "\n".join(cleaned)
+
     # Only strip outer whitespace, preserve internal newlines
     return text.strip()
 

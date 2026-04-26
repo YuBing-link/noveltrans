@@ -232,26 +232,12 @@ export interface DeviceTokenResponse {
 }
 
 // ==================== Supported Languages ====================
-export const SUPPORTED_LANGUAGES = [
-  { code: 'auto', name: '自动检测' },
-  { code: 'zh', name: '中文' },
-  { code: 'en', name: '英语' },
-  { code: 'ja', name: '日语' },
-  { code: 'ko', name: '韩语' },
-  { code: 'fr', name: '法语' },
-  { code: 'de', name: '德语' },
-  { code: 'es', name: '西班牙语' },
-  { code: 'ru', name: '俄语' },
-  { code: 'pt', name: '葡萄牙语' },
-  { code: 'it', name: '意大利语' },
-  { code: 'th', name: '泰语' },
-  { code: 'vi', name: '越南语' },
-];
+export const LANGUAGE_CODES = ['auto', 'zh', 'en', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'pt', 'it', 'th', 'vi'];
 
 export const TRANSLATION_ENGINES = [
-  { value: 'ai', label: 'AI 翻译 (推荐)' },
-  { value: 'neural', label: '神经网络' },
-  { value: 'statistical', label: '统计机器' },
+  { value: 'ai', label: 'ai' },
+  { value: 'neural', label: 'neural' },
+  { value: 'statistical', label: 'statistical' },
 ];
 
 export const SUPPORTED_FILE_TYPES = ['.txt', '.epub', '.docx', '.pdf'];

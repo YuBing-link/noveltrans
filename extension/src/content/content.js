@@ -343,7 +343,7 @@ class DOMWalker {
 
   // 检查是否为明显的广告/非文章内容元素
   isObviousAd(element) {
-    const className = (element.className || '').toLowerCase();
+    const className = String(element.className?.baseVal || element.getAttribute?.('class') || element.className || '').toLowerCase();
     const id = (element.id || '').toLowerCase();
 
     // 广告选择器

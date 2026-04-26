@@ -1,6 +1,8 @@
 package com.yumu.noveltranslator.util;
 
 import org.apache.commons.text.StringEscapeUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 
 import java.util.regex.Pattern;
 
@@ -125,7 +127,29 @@ public class TextCleaningUtil {
     }
 
     /**
-     * 转义HTML特殊字符（& < > " '）
+     * 白名单 HTML 净化：仅允许安全的排版标签，移除所有恶意标签和属性。
+     * 使用 Jsoup Safelist，防止 LLM 返回的 &lt;script&gt;、&lt;iframe&gt; 等在前端渲染为 XSS。
+     *
+     * 允许标签: p, br, b, strong, i, em, u, s, blockquote, ul, ol, li, h1-h6, hr, pre, code, span, div
+     * 允许属性: 安全标签的 class 和 id（不含 onclick、style 等事件/样式属性）
+     *
+     * @param text 待净化的文本（可能包含任意 HTML）
+     * @return 净化后的文本（仅保留安全标签，移除所有危险内容）
+     */
+    public static String sanitizeHtml(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        Safelist safelist = Safelist.relaxed()
+                .addTags("hr")
+                .removeProtocols("a", "href", "javascript:", "vbscript:");
+
+        return Jsoup.clean(text, safelist);
+    }
+
+    /**
+     * 转义HTML特殊字符（&amp; &lt; &gt; " '）
      *
      * @param text 文本
      * @return 转义后的文本

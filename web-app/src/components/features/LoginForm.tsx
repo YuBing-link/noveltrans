@@ -5,12 +5,14 @@ import { Button } from '../ui/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../ui/Toast';
 import { Eye, EyeOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 function LoginForm() {
   const { login } = useAuth();
   const { error: toastError } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +26,7 @@ function LoginForm() {
       const from = (location.state as any)?.from || '/';
       navigate(from, { replace: true });
     } catch (err) {
-      toastError(err instanceof Error ? err.message : '登录失败');
+      toastError(err instanceof Error ? err.message : t('login.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -33,21 +35,21 @@ function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input
-        label="邮箱"
+        label={t('login.email')}
         type="email"
         value={email}
         onChange={e => setEmail(e.target.value)}
-        placeholder="请输入邮箱"
+        placeholder={t('login.emailPlaceholder')}
         required
         autoComplete="email"
       />
       <div className="relative">
         <Input
-          label="密码"
+          label={t('login.password')}
           type={showPassword ? 'text' : 'password'}
           value={password}
           onChange={e => setPassword(e.target.value)}
-          placeholder="请输入密码"
+          placeholder={t('login.passwordPlaceholder')}
           required
           autoComplete="current-password"
         />
@@ -60,17 +62,17 @@ function LoginForm() {
         </button>
       </div>
       <Button type="submit" variant="primary" loading={loading} className="w-full">
-        登录
+        {t('login.submit')}
       </Button>
       <p className="text-center text-[13px] text-text-tertiary">
-        还没有账号？{' '}
+        {t('login.noAccount')}{' '}
         <Link to="/register" className="text-accent hover:underline">
-          立即注册
+          {t('login.registerNow')}
         </Link>
       </p>
       <p className="text-center text-[13px]">
         <Link to="/forgot-password" className="text-accent hover:underline">
-          忘记密码？
+          {t('login.forgotPassword')}
         </Link>
       </p>
     </form>

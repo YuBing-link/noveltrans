@@ -3,10 +3,12 @@ import { ArrowLeftRight, Copy, Trash2, Volume2, Sparkles, History, Zap } from 'l
 import { useToast } from '../components/ui/Toast';
 import { translateApi } from '../api/translate';
 import { userApi } from '../api/user';
-import { SUPPORTED_LANGUAGES } from '../api/types';
+import { LANGUAGE_CODES } from '../api/types';
 import type { UserQuota } from '../api/types';
+import { useTranslation } from 'react-i18next';
 
 function HomePage() {
+  const { t } = useTranslation();
   const { error: toastError, info, success } = useToast();
   const [sourceText, setSourceText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
@@ -25,11 +27,9 @@ function HomePage() {
         .then(({ data }) => setQuota(data))
         .catch((err) => {
           console.warn('获取配额失败:', err);
-          // 即使失败也设置为 null，避免 undefined
           setQuota(null);
         });
     } else {
-      // 未登录用户也设置为 null
       setQuota(null);
     }
   }, []);
@@ -37,8 +37,8 @@ function HomePage() {
   const sameLangDisabled = sourceLang !== 'auto' && sourceLang === targetLang;
 
   const handleTranslate = useCallback(async () => {
-    if (sameLangDisabled) { info('源语言和目标语言不能相同'); return; }
-    if (!sourceText.trim()) { info('请输入要翻译的文本'); return; }
+    if (sameLangDisabled) { info(t('home.errors.sameLanguage')); return; }
+    if (!sourceText.trim()) { info(t('home.errors.noText')); return; }
     streamAbortRef.current = false;
     setLoading(true);
     setTranslatedText('');
@@ -51,13 +51,12 @@ function HomePage() {
       () => { setCostTime(Date.now() - startTime); setLoading(false); },
       (err) => { toastError(err); setLoading(false); },
     );
-  }, [sourceText, sourceLang, targetLang, engine, sameLangDisabled]);
+  }, [sourceText, sourceLang, targetLang, engine, sameLangDisabled, t]);
 
   const handleSwap = useCallback(() => {
     if (sourceLang === 'auto') return;
     setSourceLang(targetLang);
     setTargetLang(sourceLang);
-    // 只有当译文存在时才交换文本
     if (translatedText) {
       setSourceText(translatedText);
       setTranslatedText(sourceText);
@@ -65,8 +64,8 @@ function HomePage() {
   }, [sourceLang, targetLang, sourceText, translatedText]);
 
   const handleCopy = async () => {
-    try { await navigator.clipboard.writeText(translatedText); success('已复制'); }
-    catch { toastError('复制失败'); }
+    try { await navigator.clipboard.writeText(translatedText); success(t('translationResult.copied')); }
+    catch { toastError(t('translationResult.copyFailed')); }
   };
   const handleSpeak = () => {
     if (!translatedText || !window.speechSynthesis) return;
@@ -75,7 +74,6 @@ function HomePage() {
   const handleClearResult = () => setTranslatedText('');
   const handleClearSource = () => setSourceText('');
 
-  // Keyboard shortcut: Ctrl+Enter to translate
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && sourceText.trim() && !loading) {
@@ -88,37 +86,34 @@ function HomePage() {
   }, [sourceText, loading, handleTranslate]);
 
   const maxChars = quota ? quota.remainingChars : undefined;
-  const progressPercent = loading && translatedText.length > 0 
+  const progressPercent = loading && translatedText.length > 0
     ? Math.min(100, Math.round((translatedText.length / Math.max(1, sourceText.length)) * 100))
     : 0;
 
   return (
     <div className="py-12 pb-20">
-      {/* Page Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-[32px] font-bold text-text-primary mb-2 tracking-tight">
-            NovelTrans 智能翻译
-          </h1>
-          <p className="text-[15px] text-text-secondary">
-            支持多语言实时互译，精准理解上下文语境
-          </p>
-        </div>
+      <div className="mb-8 text-center">
+        <h1 className="text-[32px] font-bold text-text-primary mb-2 tracking-tight">
+          NovelTrans {t('home.title')}
+        </h1>
+        <p className="text-[15px] text-text-secondary">
+          {t('home.subtitle')}
+        </p>
+      </div>
 
-        {/* Translation Panel */}
-        <div className="border border-border rounded-xl shadow-sm bg-surface overflow-hidden">
+      <div className="border border-border rounded-xl shadow-sm bg-surface overflow-hidden">
         <div className="flex flex-col lg:flex-row">
           {/* Source Panel */}
           <div className="flex-1 min-h-[480px] flex flex-col">
-            {/* Language selector row */}
             <div className="flex items-center gap-4 px-6 h-[52px] border-b border-border bg-surface-secondary/50">
               <select
                 value={sourceLang}
                 onChange={(e) => setSourceLang(e.target.value)}
                 className="bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors focus:outline-none whitespace-nowrap border-none"
-                title="选择源语言"
+                title={t('home.language.selectSource')}
               >
-                {SUPPORTED_LANGUAGES.map(lang => (
-                  <option key={lang.code} value={lang.code}>{lang.name}</option>
+                {LANGUAGE_CODES.map(code => (
+                  <option key={code} value={code}>{t(`common.languages.${code}`)}</option>
                 ))}
               </select>
 
@@ -130,7 +125,7 @@ function HomePage() {
                     ? 'text-gray-300 cursor-not-allowed'
                     : 'text-text-tertiary hover:text-accent hover:bg-accent-bg'
                 }`}
-                title="交换语言"
+                title={t('home.actions.swapLanguages')}
               >
                 <ArrowLeftRight className="w-4 h-4" />
               </button>
@@ -139,79 +134,76 @@ function HomePage() {
                 value={targetLang}
                 onChange={(e) => setTargetLang(e.target.value)}
                 className="bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors focus:outline-none whitespace-nowrap border-none"
-                title="选择目标语言"
+                title={t('home.language.selectTarget')}
               >
-                {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => (
-                  <option key={lang.code} value={lang.code}>{lang.name}</option>
+                {LANGUAGE_CODES.filter(c => c !== 'auto').map(code => (
+                  <option key={code} value={code}>{t(`common.languages.${code}`)}</option>
                 ))}
               </select>
             </div>
 
-            {/* Textarea */}
             <div className="flex-1 p-6 flex flex-col">
               <textarea
                 value={sourceText}
                 onChange={e => setSourceText(e.target.value)}
-                placeholder="请输入要翻译的文本...（支持 Ctrl+Enter 快速翻译）"
+                placeholder={t('home.inputPlaceholder')}
                 maxLength={maxChars}
                 className="flex-1 w-full resize-none bg-transparent text-text-primary text-[17px] leading-relaxed placeholder:text-text-placeholder focus:outline-none"
               />
               <div className="flex items-center justify-between pt-4 text-[12px] text-text-tertiary">
                 <span className="font-mono">{sourceText.length.toLocaleString()} 字符</span>
                 {sourceText && (
-                  <button 
-                    onClick={handleClearSource} 
+                  <button
+                    onClick={handleClearSource}
                     className="hover:text-accent transition-colors font-medium flex items-center gap-1"
                   >
                     <Trash2 className="w-3 h-3" />
-                    清空
+                    {t('common.close')}
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Divider */}
           <div className="hidden lg:block w-px bg-gradient-to-b from-transparent via-border to-transparent mx-0" />
 
           {/* Result Panel */}
           <div className="flex-1 min-h-[480px] flex flex-col">
-            {/* Result header with engine selector and actions */}
             <div className="flex items-center justify-between px-6 h-[52px] border-b border-border bg-surface-secondary/50">
               <select
                 value={engine}
                 onChange={(e) => setEngine(e.target.value as 'ai' | 'fast')}
                 className="bg-transparent text-text-primary text-[14px] font-medium cursor-pointer hover:text-accent transition-colors focus:outline-none whitespace-nowrap border-none"
-                title="选择翻译引擎"
+                title={t('home.language.selectEngine')}
               >
-                <option value="ai">专家模式</option>
-                <option value="fast">快速翻译</option>
+                <option value="ai">{t('languageSelector.expert')}</option>
+                <option value="fast">{t('languageSelector.fast')}</option>
               </select>
-              
+
               {(translatedText || loading) && (
                 <div className="flex items-center gap-1">
                   {translatedText && !loading && (
                     <>
-                      <button 
-                        onClick={handleCopy} 
-                        className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors" 
-                        title="复制译文 (Ctrl+C)"
+                      <button
+                        onClick={handleCopy}
+                        className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors"
+                        title={t('home.resultActions.copy')}
                       >
                         <Copy className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={handleSpeak} 
-                        className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors" 
-                        title="朗读译文"
+                      <button
+                        onClick={handleSpeak}
+                        className="p-2 rounded-lg text-text-tertiary hover:text-accent hover:bg-accent-bg transition-colors"
+                        title={t('home.resultActions.speak')}
                       >
                         <Volume2 className="w-4 h-4" />
                       </button>
                     </>
                   )}
-                  <button 
-                    onClick={handleClearResult} 
-                    className="p-2 rounded-lg text-text-tertiary hover:text-red hover:bg-red-bg transition-colors" 
-                    title="清空译文"
+                  <button
+                    onClick={handleClearResult}
+                    className="p-2 rounded-lg text-text-tertiary hover:text-red hover:bg-red-bg transition-colors"
+                    title={t('home.resultActions.clear')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -219,12 +211,11 @@ function HomePage() {
               )}
             </div>
 
-            {/* Result content */}
             <div className="flex-1 p-6 relative overflow-y-auto">
               {loading ? (
                 <div className="space-y-2">
                   <p className="text-[17px] leading-relaxed text-text-primary whitespace-pre-wrap break-words">
-                    {translatedText || <span className="text-text-placeholder/40">正在翻译中...</span>}
+                    {translatedText || <span className="text-text-placeholder/40">{t('home.actions.translating')}</span>}
                     <span className="text-accent inline-block animate-pulse ml-0.5">▋</span>
                   </p>
                   {progressPercent > 0 && (
@@ -232,12 +223,12 @@ function HomePage() {
                       <div className="flex items-center justify-between text-[12px] text-text-tertiary mb-1">
                         <span className="flex items-center gap-1">
                           {engine === 'ai' ? <Sparkles className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
-                          翻译进度
+                          {t('home.progress')}
                         </span>
                         <span className="font-mono">{progressPercent}%</span>
                       </div>
                       <div className="w-full h-1.5 bg-surface-secondary rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-gradient-brand transition-all duration-300 ease-out"
                           style={{ width: `${progressPercent}%` }}
                         />
@@ -252,12 +243,12 @@ function HomePage() {
                     {engine === 'ai' ? (
                       <>
                         <Sparkles className="w-3.5 h-3.5 text-accent" />
-                        <span>专家模式 · 更精准自然</span>
+                        <span>{t('home.qualities.accurate')}</span>
                       </>
                     ) : (
                       <>
                         <Zap className="w-3.5 h-3.5 text-yellow" />
-                        <span>快速翻译 · 速度优先</span>
+                        <span>{t('home.qualities.fast')}</span>
                       </>
                     )}
                   </div>
@@ -268,12 +259,12 @@ function HomePage() {
                     <Sparkles className="w-8 h-8 text-text-tertiary" />
                   </div>
                   <div>
-                    <p className="text-[15px] text-text-secondary font-medium mb-1">翻译结果将显示在这里</p>
-                    <p className="text-[13px] text-text-tertiary">在左侧输入文本，点击"开始翻译"</p>
+                    <p className="text-[15px] text-text-secondary font-medium mb-1">{t('home.result.placeholder')}</p>
+                    <p className="text-[13px] text-text-tertiary">{t('home.result.hint')}</p>
                   </div>
                   <div className="flex items-center gap-2 text-[12px] text-text-tertiary">
                     <History className="w-3.5 h-3.5" />
-                    <span>提示：可在历史记录中查看过往翻译</span>
+                    <span>{t('home.notification')}</span>
                   </div>
                 </div>
               )}
@@ -287,12 +278,11 @@ function HomePage() {
           </div>
         </div>
 
-        {/* Bottom bar */}
         <div className="flex items-center justify-between px-6 py-3 border-t border-border bg-surface-secondary">
           <div className="flex items-center gap-4 text-[12px] text-text-tertiary">
             {quota ? (
               <div className="flex items-center gap-2">
-                <span>剩余字符:</span>
+                <span>{t('home.quota.remaining')}:</span>
                 <span className={`font-mono font-medium ${
                   quota.remainingChars < 1000 ? 'text-red' : 'text-text-primary'
                 }`}>
@@ -305,24 +295,24 @@ function HomePage() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-text-placeholder">登录后可查看字符配额</span>
-                <a 
-                  href="/login" 
+                <span className="text-text-placeholder">{t('home.quota.loginHint')}</span>
+                <a
+                  href="/login"
                   className="text-accent hover:text-accent-hover transition-colors font-medium"
                 >
-                  立即登录
+                  {t('home.quota.loginNow')}
                 </a>
               </div>
             )}
             <span className="hidden sm:inline text-text-placeholder">|</span>
             <span className="hidden sm:inline text-text-placeholder text-[11px]">
-              快捷键: Ctrl+Enter 翻译
+              {t('home.shortcut')}
             </span>
           </div>
           <button
             onClick={handleTranslate}
             disabled={!sourceText.trim() || loading || sameLangDisabled}
-            title={sameLangDisabled ? '源语言和目标语言不能相同' : ''}
+            title={sameLangDisabled ? t('home.errors.sameLanguage') : ''}
             className={`
               px-8 py-2 text-[14px] font-semibold text-white rounded-lg
               bg-gradient-brand transition-all duration-200 shadow-sm
@@ -331,10 +321,10 @@ function HomePage() {
               ${loading ? 'animate-pulse' : ''}
             `}
           >
-            {loading ? '翻译中...' : '开始翻译'}
+            {loading ? t('home.actions.translating') : t('home.actions.startTranslate')}
           </button>
         </div>
-        </div>
+      </div>
     </div>
   );
 }
