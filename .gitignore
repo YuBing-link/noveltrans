@@ -28,11 +28,28 @@ venv/
 # Environment
 .env
 *.env
-*.png
-*.txt
+
 # Node
 node_modules/
 web-app/node_modules/
 web-app/dist/
+
+# Test & Coverage
+coverage/
+test-results/
+
+# Tool artifacts
 .gstack/
 .playwright/
+.playwright-cli/
+.tours/
+
+# Backup files
+*.bak
+*.backup
+
+# Runtime data
+uploads/
+
+# Claude Code config
+.claude/

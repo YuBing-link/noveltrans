@@ -4,6 +4,14 @@ importScripts('../lib/vendor/idb-simple.js');
 importScripts('../lib/config.js');
 importScripts('../lib/vendor/p-limit.js');
 
+// 生产环境日志：仅在 DEBUG 模式下输出调试信息
+const DEBUG = false;
+const logger = {
+	log: (...args) => { if (DEBUG) logger.log(...args); },
+	warn: (...args) => { if (DEBUG) logger.warn(...args); },
+	error: (...args) => console.error(...args),
+};
+
 // 翻译服务管理器 - 统一调用后端API
 class TranslationServiceManager {
     constructor() {
@@ -40,7 +48,7 @@ class TranslationServiceManager {
     async initIDBCache() {
         try {
             await this.idbCache.open();
-            console.log('✅ IndexedDB 缓存已初始化');
+            logger.log('✅ IndexedDB 缓存已初始化');
         } catch (error) {
             console.error('❌ IndexedDB 缓存初始化失败:', error);
         }
@@ -82,7 +90,7 @@ class TranslationServiceManager {
                 return { source: 'idb', data: record.value };
             }
         } catch (error) {
-            console.warn('⚠️ 从 IDB 缓存读取失败:', error);
+            logger.warn('⚠️ 从 IDB 缓存读取失败:', error);
         }
 
         return { source: 'none', data: null };
@@ -97,7 +105,7 @@ class TranslationServiceManager {
         try {
             await this.idbCache.set('translations', cacheKey, translation);
         } catch (error) {
-            console.warn('⚠️ 保存到 IDB 缓存失败:', error);
+            logger.warn('⚠️ 保存到 IDB 缓存失败:', error);
         }
 
         // 3. 检查内存缓存大小，如果太大则清理
@@ -115,7 +123,7 @@ class TranslationServiceManager {
         const keysToRemove = keys.slice(0, this.cache.size - maxSize);
         keysToRemove.forEach(key => this.cache.delete(key));
 
-        console.log(`🧹 内存缓存已清理，保留 ${maxSize} 条，删除 ${keysToRemove.length} 条`);
+        logger.log(`🧹 内存缓存已清理，保留 ${maxSize} 条，删除 ${keysToRemove.length} 条`);
     }
 
     // 清理过期的 IDB 缓存
@@ -123,7 +131,7 @@ class TranslationServiceManager {
         try {
             const maxAge = this.CACHE_CONFIG.IDB_EXPIRATION_HOURS * 60 * 60 * 1000; // 毫秒
             await this.idbCache.deleteExpired('translations', maxAge);
-            console.log(`🧹 已清理过期的 IDB 缓存（${this.CACHE_CONFIG.IDB_EXPIRATION_HOURS} 小时）`);
+            logger.log(`🧹 已清理过期的 IDB 缓存（${this.CACHE_CONFIG.IDB_EXPIRATION_HOURS} 小时）`);
         } catch (error) {
             console.error('❌ 清理 IDB 缓存失败:', error);
         }
@@ -158,14 +166,14 @@ class TranslationServiceManager {
         // 1. 检查是否有相同的请求正在进行中
         const pendingPromise = this.checkPendingRequest(requestKey);
         if (pendingPromise) {
-            console.log('🔁 使用共享的请求结果:', requestKey);
+            logger.log('🔁 使用共享的请求结果:', requestKey);
             return await pendingPromise;
         }
 
         // 2. 检查缓存（内存 → IDB）
         const cached = await this.getCachedTranslation(cacheKey);
         if (cached.data) {
-            console.log(`📦 命中${cached.source}缓存:`, cacheKey.substring(0, 30));
+            logger.log(`📦 命中${cached.source}缓存:`, cacheKey.substring(0, 30));
             return cached.data;
         }
 
@@ -184,7 +192,7 @@ class TranslationServiceManager {
                 }, engine, apiKey);
 
                 // 详细记录后端返回的数据
-                console.log('🈴【后端返回数据-单条翻译】', {
+                logger.log('🈴【后端返回数据-单条翻译】', {
                     raw_response: result,
                     success: result.success,
                     data: result.data,
@@ -249,7 +257,7 @@ class TranslationServiceManager {
             }, engine, apiKey);
 
             // 详细记录后端返回的数据
-            console.log('📚【后端返回数据-阅读器翻译】', {
+            logger.log('📚【后端返回数据-阅读器翻译】', {
                 raw_response: result,
                 success: result.success,
                 data: result.data,
@@ -299,7 +307,7 @@ class TranslationServiceManager {
             }, engine, apiKey);
 
             // 详细记录后端返回的数据
-            console.log('🖱️【后端返回数据-选中翻译】', {
+            logger.log('🖱️【后端返回数据-选中翻译】', {
                 raw_response: result,
                 success: result.success,
                 data: result.data,
@@ -342,7 +350,7 @@ class TranslationServiceManager {
             });
 
             // 详细记录后端返回的数据
-            console.log('⚡【后端返回数据-批量翻译】', {
+            logger.log('⚡【后端返回数据-批量翻译】', {
                 raw_response: result,
                 success: result.success,
                 data: result.data,
@@ -372,13 +380,13 @@ class TranslationServiceManager {
             throw new Error('textRegistry 必须是非空数组');
         }
 
-        console.log(`🔄 [流式] 开始批量翻译，文本数量: ${textRegistry.length}, 引擎: ${engine || 'default'}, fastMode: ${fastMode}`);
+        logger.log(`🔄 [流式] 开始批量翻译，文本数量: ${textRegistry.length}, 引擎: ${engine || 'default'}, fastMode: ${fastMode}`);
 
         // 使用并发控制包装整个翻译过程
         return await this.limitConcurrency(async () => {
             while (retryCount < maxRetries) {
                 try {
-                    console.log(`🔄 [流式] 执行第 ${retryCount + 1} 次翻译请求`);
+                    logger.log(`🔄 [流式] 执行第 ${retryCount + 1} 次翻译请求`);
 
                     const apiKey = await this.getApiKey(engine);
 
@@ -400,12 +408,12 @@ class TranslationServiceManager {
                             if (onTranslationChunk) {
                                 onTranslationChunk(chunk);
                             }
-                            console.log(`📤 [流式] 收到翻译块: ${chunk.textId}`);
+                            logger.log(`📤 [流式] 收到翻译块: ${chunk.textId}`);
                         },
                         // 完成回调
                         (completeResult) => {
                             const duration = Date.now() - startTime;
-                            console.log(`✅ [流式] 翻译完成，耗时: ${duration}ms, 总计: ${completeResult.translations?.length || 0} 个`);
+                            logger.log(`✅ [流式] 翻译完成，耗时: ${duration}ms, 总计: ${completeResult.translations?.length || 0} 个`);
                         },
                         // 错误回调
                         (error) => {
@@ -413,7 +421,7 @@ class TranslationServiceManager {
                         }
                     );
 
-                    console.log(`✅ [流式] 后端API调用成功，返回结果长度: ${result.translations?.length || 0}`);
+                    logger.log(`✅ [流式] 后端API调用成功，返回结果长度: ${result.translations?.length || 0}`);
 
                     // 验证返回数据格式
                     if (!result.translations || !Array.isArray(result.translations)) {
@@ -427,7 +435,7 @@ class TranslationServiceManager {
                         translation: t.translation
                     }));
 
-                    console.log(`✅ [流式] 翻译处理完成，有效翻译数量: ${translations.length}`);
+                    logger.log(`✅ [流式] 翻译处理完成，有效翻译数量: ${translations.length}`);
 
                     return {
                         success: true,
@@ -450,7 +458,7 @@ class TranslationServiceManager {
                         throw new Error(errorMessage);
                     }
 
-                    console.warn(`⚠️ [流式] 翻译失败，第${retryCount}次重试...`, error.message);
+                    logger.warn(`⚠️ [流式] 翻译失败，第${retryCount}次重试...`, error.message);
                     await this.delay(delay);
                     delay *= 2; // 指数退避
                 }
@@ -480,7 +488,7 @@ class TranslationServiceManager {
         const keysToRemove = keys.slice(0, this.cache.size - maxSize);
         keysToRemove.forEach(key => this.cache.delete(key));
 
-        console.log(`🧹 内存缓存已清理，保留 ${maxSize} 条，删除 ${keysToRemove.length} 条`);
+        logger.log(`🧹 内存缓存已清理，保留 ${maxSize} 条，删除 ${keysToRemove.length} 条`);
     }
 
     // 清理过期的 IDB 缓存
@@ -488,7 +496,7 @@ class TranslationServiceManager {
         try {
             const maxAge = this.CACHE_CONFIG.IDB_EXPIRATION_HOURS * 60 * 60 * 1000; // 毫秒
             await this.idbCache.deleteExpired('translations', maxAge);
-            console.log(`🧹 已清理过期的 IDB 缓存（${this.CACHE_CONFIG.IDB_EXPIRATION_HOURS} 小时）`);
+            logger.log(`🧹 已清理过期的 IDB 缓存（${this.CACHE_CONFIG.IDB_EXPIRATION_HOURS} 小时）`);
         } catch (error) {
             console.error('❌ 清理 IDB 缓存失败:', error);
         }
@@ -936,7 +944,7 @@ class ShortcutManager {
                     break;
 
                 default:
-                    console.warn('未知命令:', command);
+                    logger.warn('未知命令:', command);
             }
         } catch (error) {
             console.error('处理快捷键失败:', error);
@@ -1067,7 +1075,7 @@ class BackgroundManager {
         const tabId = sender.tab?.id;
 
         // 调试日志：记录所有收到的消息
-        console.log('[BG] 收到消息:', request.action, request);
+        logger.log('[BG] 收到消息:', request.action, request);
 
         try {
             switch (request.action) {
@@ -1098,7 +1106,7 @@ class BackgroundManager {
                 // 模式2：阅读器翻译API调用
                 case 'readerTranslate':
                     try {
-                        console.log('🔄 [模式2-阅读器翻译] 开始处理API请求:', {
+                        logger.log('🔄 [模式2-阅读器翻译] 开始处理API请求:', {
                             contentLength: request.articleContent.length,
                             targetLang: request.targetLang || 'zh',
                             sourceLang: request.sourceLang || 'auto',
@@ -1115,7 +1123,7 @@ class BackgroundManager {
                         const endTime = Date.now();
                         const duration = endTime - startTime;
 
-                        console.log('✅ [模式2-阅读器翻译] API请求处理完成:', {
+                        logger.log('✅ [模式2-阅读器翻译] API请求处理完成:', {
                             success: readerResult?.success,
                             duration: `${duration}ms`,
                             translatedContentLength: readerResult?.translatedContent?.length
@@ -1131,7 +1139,7 @@ class BackgroundManager {
 
                         // 然后主动向标签页发送阅读模式翻译完成通知
                         try {
-                            console.log('📤 [模式2-阅读器翻译] 发送翻译完成通知到标签页:', {
+                            logger.log('📤 [模式2-阅读器翻译] 发送翻译完成通知到标签页:', {
                                 action: 'readerTranslationCompleted',
                                 contentLength: request.articleContent.length,
                                 tabId: tabId
@@ -1148,9 +1156,9 @@ class BackgroundManager {
                                 engine: request.engine || GlobalConfig.DEFAULT_SETTINGS.engine
                             });
 
-                            console.log('📥 [模式2-阅读器翻译] 翻译完成通知已发送至标签页', tabId);
+                            logger.log('📥 [模式2-阅读器翻译] 翻译完成通知已发送至标签页', tabId);
                         } catch (contentScriptError) {
-                            console.log(`⚠️ 无法主动发送阅读模式翻译结果到标签页 ${tabId}:`, contentScriptError.message);
+                            logger.log(`⚠️ 无法主动发送阅读模式翻译结果到标签页 ${tabId}:`, contentScriptError.message);
                         }
                     } catch (error) {
                         console.error('阅读器翻译失败:', error);
@@ -1165,9 +1173,9 @@ class BackgroundManager {
                                 error: error.message,
                                 contentLength: request.articleContent?.length
                             });
-                            console.log(`❌ 阅读模式翻译错误已主动发送至标签页 ${tabId}`);
+                            logger.log(`❌ 阅读模式翻译错误已主动发送至标签页 ${tabId}`);
                         } catch (contentScriptError) {
-                            console.log(`⚠️ 无法主动发送阅读模式翻译错误到标签页 ${tabId}:`, contentScriptError.message);
+                            logger.log(`⚠️ 无法主动发送阅读模式翻译错误到标签页 ${tabId}:`, contentScriptError.message);
                         }
                     }
                     break;
@@ -1175,7 +1183,7 @@ class BackgroundManager {
                 // 模式3：选中翻译API调用
                 case 'selectionTranslate':
                     try {
-                        console.log('🔄 [模式3-选中翻译] 开始处理API请求:', {
+                        logger.log('🔄 [模式3-选中翻译] 开始处理API请求:', {
                             textLength: request.context.length,
                             targetLang: request.targetLang || 'zh',
                             sourceLang: request.sourceLang || 'auto',
@@ -1192,7 +1200,7 @@ class BackgroundManager {
                         const endTime = Date.now();
                         const duration = endTime - startTime;
 
-                        console.log('✅ [模式3-选中翻译] API请求处理完成:', {
+                        logger.log('✅ [模式3-选中翻译] API请求处理完成:', {
                             success: selectionResult?.success,
                             duration: `${duration}ms`,
                             translationLength: selectionResult?.translation?.length
@@ -1217,9 +1225,9 @@ class BackgroundManager {
                                 error: error.message,
                                 originalText: request.context
                             });
-                            console.log(`❌ 选中翻译错误已主动发送至标签页 ${tabId}`);
+                            logger.log(`❌ 选中翻译错误已主动发送至标签页 ${tabId}`);
                         } catch (contentScriptError) {
-                            console.log(`⚠️ 无法主动发送选中翻译错误到标签页 ${tabId}:`, contentScriptError.message);
+                            logger.log(`⚠️ 无法主动发送选中翻译错误到标签页 ${tabId}:`, contentScriptError.message);
                         }
 
                         // 发送错误响应
@@ -1234,7 +1242,7 @@ class BackgroundManager {
 
                     if (request.textRegistry) {
                         // 使用 textRegistry 格式，调用整页翻译API
-                        console.log('🔄 [模式1-网页翻译] 开始处理API请求:', {
+                        logger.log('🔄 [模式1-网页翻译] 开始处理API请求:', {
                             registrySize: request.textRegistry.length,
                             targetLang: request.targetLang || 'zh',
                             sourceLang: request.sourceLang || 'auto',
@@ -1251,7 +1259,7 @@ class BackgroundManager {
                         const endTime = Date.now();
                         const duration = endTime - startTime;
 
-                        console.log('✅ [模式1-网页翻译] API请求处理完成:', {
+                        logger.log('✅ [模式1-网页翻译] API请求处理完成:', {
                             success: batchResult?.success,
                             duration: `${duration}ms`,
                             translationsLength: batchResult?.translations?.length,
@@ -1295,7 +1303,7 @@ class BackgroundManager {
                             request.mappingTable.batches.reduce((sum, batch) => sum + batch.length, 0) :
                             request.mappingTable.textRegistry?.length || 0;
 
-                        console.log('🔄 [流式模式1-网页翻译] 开始处理上传映射表请求:', {
+                        logger.log('🔄 [流式模式1-网页翻译] 开始处理上传映射表请求:', {
                             isBatched: hasBatches,
                             textCount: textCount,
                             batchCount: hasBatches ? request.mappingTable.batchCount : 'N/A',
@@ -1306,7 +1314,7 @@ class BackgroundManager {
                         });
 
                         if (hasBatches) {
-                            console.log('📊 批次大小分布:', request.mappingTable.batches.map(batch => batch.length));
+                            logger.log('📊 批次大小分布:', request.mappingTable.batches.map(batch => batch.length));
                         }
 
                         // 提取实际的textRegistry（如果是分批的，需要合并）
@@ -1314,7 +1322,7 @@ class BackgroundManager {
                             request.mappingTable.batches.flat() :
                             request.mappingTable.textRegistry;
 
-                        console.log('✅ 跳过API连接检查，开始流式翻译处理');
+                        logger.log('✅ 跳过API连接检查，开始流式翻译处理');
                         const startTime = Date.now();
                         const result = await this.mappingManager.processMappingTable(
                             {
@@ -1325,14 +1333,14 @@ class BackgroundManager {
                         );
                         const mappingProcessTime = Date.now() - startTime;
 
-                        console.log('🔍 [流式模式1-网页翻译] 映射表处理结果:', {
+                        logger.log('🔍 [流式模式1-网页翻译] 映射表处理结果:', {
                             success: result.success,
                             hasTranslationPlan: !!result.translationPlan,
                             mappingProcessTime: `${mappingProcessTime}ms`
                         });
 
                         if (result.success && result.translationPlan) {
-                            console.log('✅ [流式模式1-网页翻译] 映射表处理成功，开始流式翻译，文本数量:', textCount);
+                            logger.log('✅ [流式模式1-网页翻译] 映射表处理成功，开始流式翻译，文本数量:', textCount);
 
                             // 立即发送确认响应
                             sendResponse({
@@ -1365,7 +1373,7 @@ class BackgroundManager {
                                                     bilingual: request.bilingual || false
                                                 });
                                             } catch (pushError) {
-                                                console.warn(`⚠️ [流式] 推送翻译块失败: ${chunk.textId}`, pushError.message);
+                                                logger.warn(`⚠️ [流式] 推送翻译块失败: ${chunk.textId}`, pushError.message);
                                             }
                                         }
                                     );
@@ -1373,7 +1381,7 @@ class BackgroundManager {
                                     const batchEndTime = Date.now();
                                     const batchDuration = batchEndTime - batchStartTime;
 
-                                    console.log('✅ [流式模式1-网页翻译] 流式翻译完成:', {
+                                    logger.log('✅ [流式模式1-网页翻译] 流式翻译完成:', {
                                         translationsCount: batchResult.translations.length,
                                         batchDuration: `${batchDuration}ms`,
                                         totalTextCount: textCount
@@ -1396,9 +1404,9 @@ class BackgroundManager {
                                             bilingual: request.bilingual || false
                                         });
 
-                                        console.log(`📥 [流式] 翻译完成通知已主动发送至标签页 ${tabId}`);
+                                        logger.log(`📥 [流式] 翻译完成通知已主动发送至标签页 ${tabId}`);
                                     } catch (contentScriptError) {
-                                        console.log(`⚠️ [流式] 无法主动发送翻译完成通知到标签页 ${tabId}:`, contentScriptError.message);
+                                        logger.log(`⚠️ [流式] 无法主动发送翻译完成通知到标签页 ${tabId}:`, contentScriptError.message);
                                     }
 
                                     // 异步保存状态到本地存储
@@ -1409,7 +1417,7 @@ class BackgroundManager {
                                             pageStates[tabId] = 'showing_translation';
                                             await browser.storage.local.set({ pageStates });
 
-                                            console.log(`✅ [流式] 翻译完成状态已保存到本地存储: tab ${tabId}`);
+                                            logger.log(`✅ [流式] 翻译完成状态已保存到本地存储: tab ${tabId}`);
                                         } catch (statusSaveError) {
                                             console.error('[流式] 保存页面状态失败:', statusSaveError);
                                         }
@@ -1425,7 +1433,7 @@ class BackgroundManager {
                                             error: streamError.message
                                         });
                                     } catch (errorPushError) {
-                                        console.log('⚠️ [流式] 无法推送错误消息到标签页:', errorPushError.message);
+                                        logger.log('⚠️ [流式] 无法推送错误消息到标签页:', errorPushError.message);
                                     }
 
                                     // 保存失败状态
@@ -1473,26 +1481,26 @@ class BackgroundManager {
                 // 上传映射表（模式1: 整个网页翻译）
                 case 'uploadMappingTable': {
                     try {
-                        console.log('🔄 [模式1-网页翻译] 开始处理上传映射表请求:', {
+                        logger.log('🔄 [模式1-网页翻译] 开始处理上传映射表请求:', {
                             textRegistrySize: request.mappingTable.textRegistry.length,
                             targetLang: request.targetLang || 'zh',
                             sourceLang: request.sourceLang || 'auto',
                             engine: request.engine || GlobalConfig.DEFAULT_SETTINGS.engine
                         });
 
-                        console.log('✅ 跳过API连接检查，开始处理映射表');
+                        logger.log('✅ 跳过API连接检查，开始处理映射表');
                         const startTime = Date.now();
                         const result = await this.mappingManager.processMappingTable(request.mappingTable, tabId);
                         const mappingProcessTime = Date.now() - startTime;
 
-                        console.log('🔍 [模式1-网页翻译] 映射表处理结果:', {
+                        logger.log('🔍 [模式1-网页翻译] 映射表处理结果:', {
                             success: result.success,
                             hasTranslationPlan: !!result.translationPlan,
                             mappingProcessTime: `${mappingProcessTime}ms`
                         });
 
                         if (result.success && result.translationPlan) {
-                            console.log('✅ [模式1-网页翻译] 映射表处理成功，开始批量翻译，文本数量:', request.mappingTable.textRegistry.length);
+                            logger.log('✅ [模式1-网页翻译] 映射表处理成功，开始批量翻译，文本数量:', request.mappingTable.textRegistry.length);
 
                             const batchStartTime = Date.now();
                             const batchResult = await this.translationService.batchTranslateWebpage(
@@ -1504,7 +1512,7 @@ class BackgroundManager {
                             const batchEndTime = Date.now();
                             const batchDuration = batchEndTime - batchStartTime;
 
-                            console.log('✅ [模式1-网页翻译] 批量翻译完成:', {
+                            logger.log('✅ [模式1-网页翻译] 批量翻译完成:', {
                                 translationsCount: batchResult.translations.length,
                                 batchDuration: `${batchDuration}ms`,
                                 batchSize: request.mappingTable.textRegistry.length
@@ -1525,7 +1533,7 @@ class BackgroundManager {
 
                             // 然后主动向指定标签页的内容脚本发送翻译结果
                             try {
-                                console.log('📤 [模式1-网页翻译] 发送翻译结果到标签页:', {
+                                logger.log('📤 [模式1-网页翻译] 发送翻译结果到标签页:', {
                                     action: 'applyTranslations',
                                     translationsCount: batchResult.translations.length,
                                     tabId: tabId
@@ -1540,9 +1548,9 @@ class BackgroundManager {
                                     bilingual: request.bilingual || false
                                 });
 
-                                console.log(`📥 [模式1-网页翻译] 翻译结果已主动发送至标签页 ${tabId}`);
+                                logger.log(`📥 [模式1-网页翻译] 翻译结果已主动发送至标签页 ${tabId}`);
                             } catch (contentScriptError) {
-                                console.log(`⚠️ 无法主动发送翻译结果到标签页 ${tabId}:`, contentScriptError.message);
+                                logger.log(`⚠️ 无法主动发送翻译结果到标签页 ${tabId}:`, contentScriptError.message);
                             }
 
                             // 异步保存状态到本地存储，而不是发送给popup
@@ -1566,10 +1574,10 @@ class BackgroundManager {
                                             // 如果是 'original'，可能翻译尚未完全应用，等待后重试
                                             if (i < retries - 1) {
                                                 await new Promise(resolve => setTimeout(resolve, delay));
-                                                console.log(`Retry ${i + 1}/${retries}: Waiting for translation to apply...`);
+                                                logger.log(`Retry ${i + 1}/${retries}: Waiting for translation to apply...`);
                                             }
                                         } catch (error) {
-                                            console.log(`Retry ${i + 1}/${retries} failed:`, error.message);
+                                            logger.log(`Retry ${i + 1}/${retries} failed:`, error.message);
                                             if (i >= retries - 1) {
                                                 throw error; // 最后一次重试失败，抛出错误
                                             }
@@ -1590,7 +1598,7 @@ class BackgroundManager {
                                     pageStates[tabId] = accurateStatus;
                                     await browser.storage.local.set({ pageStates });
 
-                                    console.log(`✅ 翻译完成状态已保存到本地存储: tab ${tabId}, accurateStatus: ${accurateStatus}`);
+                                    logger.log(`✅ 翻译完成状态已保存到本地存储: tab ${tabId}, accurateStatus: ${accurateStatus}`);
                                 } catch (statusQueryError) {
                                     console.error('查询页面状态失败，使用默认状态:', statusQueryError);
 
@@ -1600,7 +1608,7 @@ class BackgroundManager {
                                     pageStates[tabId] = 'showing_translation';
                                     await browser.storage.local.set({ pageStates });
 
-                                    console.log(`✅ 默认翻译状态已保存到本地存储: tab ${tabId}, status: showing_translation`);
+                                    logger.log(`✅ 默认翻译状态已保存到本地存储: tab ${tabId}, status: showing_translation`);
                                 }
                             }, 100); // 短暂延迟以确保 response has been sent
                         } else {
@@ -1632,7 +1640,7 @@ class BackgroundManager {
                                             // 返回获取到的状态
                                             return accurateStatus;
                                         } catch (error) {
-                                            console.log(`Retry ${i + 1}/${retries} failed:`, error.message);
+                                            logger.log(`Retry ${i + 1}/${retries} failed:`, error.message);
                                             if (i >= retries - 1) {
                                                 throw error; // 最后一次重试失败，抛出错误
                                             }
@@ -1650,7 +1658,7 @@ class BackgroundManager {
                                     pageStates[tabId] = accurateStatus;
                                     await browser.storage.local.set({ pageStates });
 
-                                    console.log(`✅ 翻译失败状态已保存到本地存储: tab ${tabId}, accurateStatus: ${accurateStatus}`);
+                                    logger.log(`✅ 翻译失败状态已保存到本地存储: tab ${tabId}, accurateStatus: ${accurateStatus}`);
                                 } catch (statusQueryError) {
                                     console.error('查询页面状态失败，使用默认状态:', statusQueryError);
 
@@ -1660,7 +1668,7 @@ class BackgroundManager {
                                     pageStates[tabId] = 'original';
                                     await browser.storage.local.set({ pageStates });
 
-                                    console.log(`✅ 默认失败状态已保存到本地存储: tab ${tabId}, status: original`);
+                                    logger.log(`✅ 默认失败状态已保存到本地存储: tab ${tabId}, status: original`);
                                 }
                             }, 100);
                         }
@@ -1691,9 +1699,9 @@ class BackgroundManager {
                                 pageStates[tabId] = accurateStatus;
                                 await browser.storage.local.set({ pageStates });
 
-                                console.log(`✅ 上传映射表失败状态已保存到本地存储: tab ${tabId}, status: ${accurateStatus}`);
+                                logger.log(`✅ 上传映射表失败状态已保存到本地存储: tab ${tabId}, status: ${accurateStatus}`);
                             } catch (statusQueryError) {
-                                console.log('无法获取页面准确状态，保存默认原始状态:', statusQueryError.message);
+                                logger.log('无法获取页面准确状态，保存默认原始状态:', statusQueryError.message);
 
                                 // 查询失败时，使用默认的原始状态
                                 const result = await browser.storage.local.get(['pageStates']);
@@ -1701,7 +1709,7 @@ class BackgroundManager {
                                 pageStates[tabId] = 'original';
                                 await browser.storage.local.set({ pageStates });
 
-                                console.log(`✅ 默认失败状态已保存到本地存储: tab ${tabId}, status: original`);
+                                logger.log(`✅ 默认失败状态已保存到本地存储: tab ${tabId}, status: original`);
                             }
                         }, 100);
                     }
@@ -1728,7 +1736,7 @@ class BackgroundManager {
                         }
 
                         // 按照接口文档格式翻译文章内容
-                        console.log('📚 模式2: 阅读器翻译请求:', {
+                        logger.log('📚 模式2: 阅读器翻译请求:', {
                             contentLength: content.length,
                             targetLang,
                             engine
@@ -1770,14 +1778,14 @@ class BackgroundManager {
                                     title: request.title,
                                     byline: request.byline || ''
                                 });
-                                console.log('✅ 翻译结果已主动推送给内容脚本');
+                                logger.log('✅ 翻译结果已主动推送给内容脚本');
                             } catch (sendError) {
                                 console.error('❌ 发送翻译结果到内容脚本失败:', sendError);
                                 // 如果发送失败，可能内容脚本还没准备好或者已被卸载
                             }
                         }, 100); // 稍微延迟一下确保响应已发送
 
-                        console.log('✅ 处理阅读模式文章成功', readerResult.translatedContent);
+                        logger.log('✅ 处理阅读模式文章成功', readerResult.translatedContent);
 
                         // 注意：由于我们使用了异步发送消息，这里不再直接sendResponse
                         return true; // 保持消息通道开放，因为我们已经发送了初始响应
@@ -1800,7 +1808,7 @@ class BackgroundManager {
                                     error: error.message,
                                     originalContent: request.content
                                 });
-                                console.log('✅ 错误信息已主动推送给内容脚本');
+                                logger.log('✅ 错误信息已主动推送给内容脚本');
                             } catch (sendError) {
                                 console.error('❌ 发送错误信息到内容脚本失败:', sendError);
                             }
@@ -1874,7 +1882,7 @@ class BackgroundManager {
 
                 // 修复：处理 activateReaderMode - 转发到内容脚本
                 case 'activateReaderMode': {
-                    console.log('[BG] 收到 activateReaderMode 请求', request);
+                    logger.log('[BG] 收到 activateReaderMode 请求', request);
 
                     const tabId = sender.tab?.id || request.tabId;
                     if (!tabId) {
@@ -1883,7 +1891,7 @@ class BackgroundManager {
                         break;
                     }
 
-                    console.log('[BG] 转发消息到 content script, tabId:', tabId);
+                    logger.log('[BG] 转发消息到 content script, tabId:', tabId);
 
                     try {
                         // 转发消息到内容脚本
@@ -1894,17 +1902,17 @@ class BackgroundManager {
                             engine: request.engine
                         });
 
-                        console.log('[BG] 收到 content script 响应:', response);
+                        logger.log('[BG] 收到 content script 响应:', response);
                         sendResponse(response);
                     } catch (error) {
-                        console.log('[BG] 第一次尝试失败:', error.message);
-                        console.log('⚠️ 尝试动态注入脚本...');
+                        logger.log('[BG] 第一次尝试失败:', error.message);
+                        logger.log('⚠️ 尝试动态注入脚本...');
 
                         // 如果内容脚本未注入，尝试动态注入
                         if (error.message && error.message.includes('Could not establish connection')) {
                             try {
                                 // 动态注入阅读器脚本及其依赖
-                                console.log('[BG] 开始注入依赖和 read.js...');
+                                logger.log('[BG] 开始注入依赖和 read.js...');
                                 await browser.scripting.executeScript({
                                     target: { tabId },
                                     files: [
@@ -1915,14 +1923,14 @@ class BackgroundManager {
                                         'src/content/read.js'
                                     ]
                                 });
-                                console.log('✅ 阅读器脚本及依赖注入成功');
+                                logger.log('✅ 阅读器脚本及依赖注入成功');
 
                                 // 等待脚本初始化
-                                console.log('[BG] 等待 800ms 让脚本初始化...');
+                                logger.log('[BG] 等待 800ms 让脚本初始化...');
                                 await new Promise(resolve => setTimeout(resolve, 800));
 
                                 // 重试发送消息
-                                console.log('[BG] 重试发送消息到 content script');
+                                logger.log('[BG] 重试发送消息到 content script');
                                 const retryResponse = await browser.tabs.sendMessage(tabId, {
                                     action: 'activateReaderMode',
                                     targetLang: request.targetLang,
@@ -1930,7 +1938,7 @@ class BackgroundManager {
                                     engine: request.engine
                                 });
 
-                                console.log('[BG] 重试响应:', retryResponse);
+                                logger.log('[BG] 重试响应:', retryResponse);
                                 sendResponse(retryResponse);
                                 break;
                             } catch (injectError) {
@@ -1968,7 +1976,7 @@ class BackgroundManager {
                             pageStates[targetTabId] = status;
                             await browser.storage.local.set({ pageStates });
 
-                            console.log(`✅ 页面状态已保存到本地存储: tab ${targetTabId}, status: ${status}`);
+                            logger.log(`✅ 页面状态已保存到本地存储: tab ${targetTabId}, status: ${status}`);
                         }
 
                         sendResponse({ success: true, message: '状态更新已处理并保存', forwarded: false });
@@ -1994,7 +2002,7 @@ class BackgroundManager {
                             // 保存回本地存储
                             await browser.storage.local.set({ pageStates });
 
-                            console.log(`✅ 页面状态已保存: tab ${targetTabId}, status: ${status}`);
+                            logger.log(`✅ 页面状态已保存: tab ${targetTabId}, status: ${status}`);
 
                             // 尝试将状态更新转发到popup（如果打开的话）
                             try {
@@ -2005,7 +2013,7 @@ class BackgroundManager {
                                 });
                             } catch (popupError) {
                                 // 如果popup未打开，这是正常的，只需记录
-                                console.log('Popup可能未打开，状态已保存但未转发');
+                                logger.log('Popup可能未打开，状态已保存但未转发');
                             }
 
                             sendResponse({
@@ -2043,7 +2051,7 @@ class BackgroundManager {
 
                             await browser.storage.local.set({ pageStates });
 
-                            console.log(`🔄 页面加载，状态已重置: tab ${tabId}`);
+                            logger.log(`🔄 页面加载，状态已重置: tab ${tabId}`);
                         }
 
                         sendResponse({
@@ -2078,7 +2086,7 @@ class BackgroundManager {
                         const pageStates = result.pageStates || {};
                         const status = pageStates[tabId] || 'original';
 
-                        console.log(`✅ 返回页面状态: tab ${tabId}, status: ${status}`);
+                        logger.log(`✅ 返回页面状态: tab ${tabId}, status: ${status}`);
 
                         sendResponse({
                             success: true,
@@ -2110,7 +2118,7 @@ class BackgroundManager {
                         // 保存回本地存储
                         await browser.storage.local.set({ settings: currentSettings });
 
-                        console.log(`✅ 设置已更新: ${key} = ${value}`);
+                        logger.log(`✅ 设置已更新: ${key} = ${value}`);
 
                         // 广播设置变更到所有标签页
                         try {
@@ -2125,11 +2133,11 @@ class BackgroundManager {
                                     });
                                 } catch (msgError) {
                                     // 如果标签页无法接收消息（如内容脚本未加载），则忽略
-                                    console.log(`无法向标签页 ${tab.id} 发送设置更新:`, msgError.message);
+                                    logger.log(`无法向标签页 ${tab.id} 发送设置更新:`, msgError.message);
                                 }
                             }
                         } catch (broadcastError) {
-                            console.warn('广播设置更新时出错:', broadcastError.message);
+                            logger.warn('广播设置更新时出错:', broadcastError.message);
                         }
 
                         sendResponse({
@@ -2152,7 +2160,7 @@ class BackgroundManager {
                     try {
                         const { token, userInfo } = request;
                         await browser.storage.local.set({ auth_token: token, auth_user: userInfo });
-                        console.log('✅ 认证令牌已保存');
+                        logger.log('✅ 认证令牌已保存');
                         sendResponse({ success: true });
                     } catch (error) {
                         console.error('保存认证令牌失败:', error);
@@ -2177,7 +2185,7 @@ class BackgroundManager {
                 case 'clearAuthToken':
                     try {
                         await browser.storage.local.remove(['auth_token', 'auth_user']);
-                        console.log('✅ 认证令牌已清除');
+                        logger.log('✅ 认证令牌已清除');
                         sendResponse({ success: true });
                     } catch (error) {
                         sendResponse({ success: false, error: error.message });
@@ -2202,7 +2210,7 @@ class BackgroundManager {
 
 
                 default:
-                    console.warn('⚠️ 未知的操作:', request.action);
+                    logger.warn('⚠️ 未知的操作:', request.action);
                     sendResponse({ success: false, error: '未知的操作: ' + request.action });
             }
         } catch (error) {
@@ -2243,7 +2251,7 @@ class BackgroundManager {
             pageStates[tabId] = 'original';
 
             await browser.storage.local.set({ pageStates });
-            console.log(`🔄 页面状态已重置: tab ${tabId}`);
+            logger.log(`🔄 页面状态已重置: tab ${tabId}`);
         } catch (error) {
             console.error('重置页面状态失败:', error);
         }
@@ -2259,7 +2267,7 @@ class BackgroundManager {
             delete pageStates[tabId];
 
             await browser.storage.local.set({ pageStates });
-            console.log(`🗑️ 页面状态已清理: tab ${tabId}`);
+            logger.log(`🗑️ 页面状态已清理: tab ${tabId}`);
         } catch (error) {
             console.error('清理页面状态失败:', error);
         }
@@ -2405,7 +2413,7 @@ class BackgroundManager {
             // 在这里可以 perform any restoration tasks that might need backend assistance
             // Currently, the actual restoration happens in the content script, but we'll notify the popup
 
-            console.log('Handling restore text for tab:', tabId);
+            logger.log('Handling restore text for tab:', tabId);
 
             return { message: 'Restore command acknowledged' };
         } catch (error) {
