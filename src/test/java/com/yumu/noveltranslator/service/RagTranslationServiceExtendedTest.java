@@ -175,19 +175,19 @@ class RagTranslationServiceExtendedTest {
         @Test
         void userId为null直接返回() throws Exception {
             invokeStoreMemoryWithUser("Hello", "你好", "zh", "google", null);
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
         void 原文为null直接返回() throws Exception {
             invokeStoreMemoryWithUser(null, "你好", "zh", "google", 1L);
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
         void 质量不合格被拒绝() throws Exception {
             invokeStoreMemoryWithUser("Hello", "Hello", "zh", "google", 1L);
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -202,12 +202,12 @@ class RagTranslationServiceExtendedTest {
             invokeStoreMemoryWithUser("Hello", "你好世界", "zh", "ai-team", 1L);
 
             verify(translationMemoryService).storeTranslation(
-                    eq("Hello"), eq("你好世界"), eq("auto"), eq("zh"), eq(1L), isNull(), eq("ai-team"));
+                    eq("Hello"), eq("你好世界"), eq("auto"), eq("zh"), eq(1L), isNull(), eq("ai-team"), isNull());
         }
 
         @Test
         void 异常被捕获不抛出() throws Exception {
-            doThrow(new RuntimeException("DB error")).when(translationMemoryService).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            doThrow(new RuntimeException("DB error")).when(translationMemoryService).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
             assertDoesNotThrow(() -> invokeStoreMemoryWithUser("Hello", "你好世界", "zh", "ai-team", 1L));
             assertDoesNotThrow(() -> invokeStoreMemoryWithUser("Hello", "你好世界", "zh", "ai-team", 1L));
         }
@@ -465,9 +465,9 @@ class RagTranslationServiceExtendedTest {
 
         private List<?> invokeSearchFallback(float[] queryVector, Long userId, String targetLang) throws Exception {
             Method m = RagTranslationService.class.getDeclaredMethod("searchFallback",
-                    float[].class, Long.class, String.class);
+                    float[].class, Long.class, String.class, List.class);
             m.setAccessible(true);
-            return (List<?>) m.invoke(service, queryVector, userId, targetLang);
+            return (List<?>) m.invoke(service, queryVector, userId, targetLang, List.of("team", "expert", "fast"));
         }
     }
 
@@ -610,9 +610,9 @@ class RagTranslationServiceExtendedTest {
 
         private void invokeStoreToRedisVector(String source, String target, String targetLang, Long userId, String engine) throws Exception {
             Method m = RagTranslationService.class.getDeclaredMethod("storeToRedisVector",
-                    String.class, String.class, String.class, Long.class, String.class);
+                    String.class, String.class, String.class, Long.class, String.class, String.class);
             m.setAccessible(true);
-            m.invoke(service, source, target, targetLang, userId, engine);
+            m.invoke(service, source, target, targetLang, userId, engine, "fast");
         }
     }
 

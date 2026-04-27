@@ -225,21 +225,21 @@ class RagTranslationServiceTest {
         void 未认证用户不存储() {
             SecurityContextHolder.clearContext();
             service.storeTranslationMemory("Hello", "你好", "zh", "google");
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
         void 译文为空被拒绝() {
             setAuthenticatedUser(1L);
             service.storeTranslationMemory("Hello", "", "zh", "google");
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
         void 译文与原文相同被拒绝() {
             setAuthenticatedUser(1L);
             service.storeTranslationMemory("Hello world", "Hello world", "zh", "google");
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -247,14 +247,14 @@ class RagTranslationServiceTest {
             setAuthenticatedUser(1L);
             String longTarget = "这是一个非常非常非常非常非常非常非常非常非常长的翻译结果";
             service.storeTranslationMemory("Hi", longTarget, "zh", "google");
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
         void 包含广告关键词被拒绝() {
             setAuthenticatedUser(1L);
             service.storeTranslationMemory("Hello", "Powered by ChatGPT", "zh", "google");
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -262,7 +262,7 @@ class RagTranslationServiceTest {
             setAuthenticatedUser(1L);
             String specialText = "!@#$%^&*()_+!@#$%^&*()_+abc";
             service.storeTranslationMemory("Hello world test text here", specialText, "zh", "google");
-            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString());
+            verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
@@ -275,7 +275,7 @@ class RagTranslationServiceTest {
             service.storeTranslationMemory("Hello world", "你好世界", "zh", "google");
 
             verify(translationMemoryService).storeTranslation(eq("Hello world"), eq("你好世界"),
-                    eq("auto"), eq("zh"), eq(1L), isNull(), eq("google"));
+                    eq("auto"), eq("zh"), eq(1L), isNull(), eq("google"), isNull());
         }
     }
 }

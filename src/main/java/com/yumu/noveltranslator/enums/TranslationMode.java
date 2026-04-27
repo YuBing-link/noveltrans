@@ -78,4 +78,15 @@ public enum TranslationMode {
         }
         return BY_NAME.getOrDefault(name.trim().toLowerCase(), FAST);
     }
+
+    /**
+     * 获取当前模式允许读取的翻译模式列表（用于 RAG 向量匹配和缓存查询）
+     *
+     * <p>层级规则：FAST 可读取全部档位，EXPERT 可读取 EXPERT+TEAM，TEAM 仅读取 TEAM</p>
+     *
+     * @return 允许读取的模式名称列表
+     */
+    public List<String> getAllowedModes() {
+        return cacheHierarchy;
+    }
 }

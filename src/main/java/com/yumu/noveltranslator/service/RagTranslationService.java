@@ -44,9 +44,14 @@ public class RagTranslationService {
     private int fallbackMysqlLimit;
 
     /**
-     * 查询相似翻译记忆
+     * 查询相似翻译记忆（带模式层级过滤）
+     *
+     * <p>缓存分层规则：
+     * FAST → 读取 ["team","expert","fast"]
+     * EXPERT → 读取 ["team","expert"]
+     * TEAM → 读取 ["team"]
      */
-    public RagTranslationResponse searchSimilar(String sourceText, String targetLang, String engine) {
+    public RagTranslationResponse searchSimilarWithModes(String sourceText, String targetLang, List<String> allowedModes) {
         if (sourceText == null || sourceText.isBlank()) {
             return buildEmptyResponse();
         }
@@ -57,25 +62,21 @@ public class RagTranslationService {
         }
 
         try {
-            // 1. 生成向量
             float[] queryVector = embeddingService.embed(sourceText);
             if (queryVector.length == 0) {
                 return buildEmptyResponse();
             }
 
-            // 2. Redis FT.SEARCH KNN 查询（按用户过滤）
-            List<RagTranslationResponse.RagMatch> matches = searchInRedis(queryVector, userId, targetLang);
+            List<RagTranslationResponse.RagMatch> matches = searchInRedis(queryVector, userId, targetLang, allowedModes);
 
             if (matches.isEmpty()) {
-                // 3. Redis 查询失败或无结果，尝试 MySQL 降级
-                matches = searchFallback(queryVector, userId, targetLang);
+                matches = searchFallback(queryVector, userId, targetLang, allowedModes);
             }
 
             if (matches.isEmpty()) {
                 return buildEmptyResponse();
             }
 
-            // 4. 构建响应
             RagTranslationResponse response = new RagTranslationResponse();
             response.setMatches(matches);
 
@@ -84,8 +85,6 @@ public class RagTranslationService {
                 response.setDirectHit(true);
                 response.setTranslation(best.getTargetText());
                 response.setSimilarity(best.getSimilarity());
-
-                // 增加使用计数
                 translationMemoryService.incrementUsage(best.getMemoryId());
                 log.info("RAG 直接命中: similarity={}, memoryId={}", best.getSimilarity(), best.getMemoryId());
             } else if (best.getSimilarity() >= referenceThreshold) {
@@ -102,26 +101,43 @@ public class RagTranslationService {
     }
 
     /**
-     * 查询相似翻译记忆（指定 userId，用于后台任务等非 HTTP 上下文场景）
+     * 查询相似翻译记忆（旧方法，兼容调用）
+     * @deprecated 使用 {@link #searchSimilarWithModes} 代替，支持模式层级过滤
      */
+    @Deprecated
+    public RagTranslationResponse searchSimilar(String sourceText, String targetLang, String engine) {
+        return searchSimilarWithModes(sourceText, targetLang, List.of("team", "expert", "fast"));
+    }
+
+    /**
+     * 查询相似翻译记忆（指定 userId，用于后台任务等非 HTTP 上下文场景）
+     * @deprecated 使用 {@link #searchSimilarWithUserAndModes} 代替
+     */
+    @Deprecated
     public RagTranslationResponse searchSimilarWithUser(
             String sourceText, String targetLang, String engine, Long userId) {
+        return searchSimilarWithUserAndModes(sourceText, targetLang, userId, List.of("team", "expert", "fast"));
+    }
+
+    /**
+     * 查询相似翻译记忆（指定 userId + 模式层级过滤）
+     */
+    public RagTranslationResponse searchSimilarWithUserAndModes(
+            String sourceText, String targetLang, Long userId, List<String> allowedModes) {
         if (sourceText == null || sourceText.isBlank() || userId == null) {
             return buildEmptyResponse();
         }
 
         try {
-            // 1. 生成向量
             float[] queryVector = embeddingService.embed(sourceText);
             if (queryVector.length == 0) {
                 return buildEmptyResponse();
             }
 
-            // 2. Redis KNN 查询
-            List<RagTranslationResponse.RagMatch> matches = searchInRedis(queryVector, userId, targetLang);
+            List<RagTranslationResponse.RagMatch> matches = searchInRedis(queryVector, userId, targetLang, allowedModes);
 
             if (matches.isEmpty()) {
-                matches = searchFallback(queryVector, userId, targetLang);
+                matches = searchFallback(queryVector, userId, targetLang, allowedModes);
             }
 
             if (matches.isEmpty()) {
@@ -155,6 +171,13 @@ public class RagTranslationService {
      * 翻译完成后存储到翻译记忆（带质量筛选，指定 userId，用于后台任务等非 HTTP 上下文场景）
      */
     public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine, Long userId) {
+        storeTranslationMemory(sourceText, targetText, targetLang, engine, userId, null);
+    }
+
+    /**
+     * 翻译完成后存储到翻译记忆（带质量筛选，指定 userId + 模式标记）
+     */
+    public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine, Long userId, String translationMode) {
         if (userId == null || sourceText == null || sourceText.isBlank()) {
             return;
         }
@@ -168,10 +191,10 @@ public class RagTranslationService {
 
         try {
             translationMemoryService.storeTranslation(sourceText, targetText, "auto", targetLang,
-                    userId, null, engine);
+                    userId, null, engine, translationMode);
 
             // 注册到 Redis 向量索引（传入 MySQL 返回的自增 ID）
-            storeToRedisVector(sourceText, targetText, targetLang, userId, engine);
+            storeToRedisVector(sourceText, targetText, targetLang, userId, engine, translationMode);
 
             log.debug("RAG 存储翻译记忆: sourceLen={}, targetLen={}", sourceText.length(), targetText.length());
         } catch (Exception e) {
@@ -183,6 +206,14 @@ public class RagTranslationService {
      * 翻译完成后存储到翻译记忆（带质量筛选）
      */
     public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine) {
+        Long userId = SecurityUtil.getCurrentUserId().orElse(null);
+        storeTranslationMemory(sourceText, targetText, targetLang, engine, userId, null);
+    }
+
+    /**
+     * 翻译完成后存储到翻译记忆（带质量筛选 + 模式标记）
+     */
+    public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine, String translationMode) {
         Long userId = SecurityUtil.getCurrentUserId().orElse(null);
         if (userId == null || sourceText == null || sourceText.isBlank()) {
             return;
@@ -197,12 +228,12 @@ public class RagTranslationService {
 
         try {
             translationMemoryService.storeTranslation(sourceText, targetText, "auto", targetLang,
-                    userId, null, engine);
+                    userId, null, engine, translationMode);
 
             // 注册到 Redis 向量索引（传入 MySQL 返回的自增 ID）
-            storeToRedisVector(sourceText, targetText, targetLang, userId, engine);
+            storeToRedisVector(sourceText, targetText, targetLang, userId, engine, translationMode);
 
-            log.debug("RAG 存储翻译记忆: sourceLen={}, targetLen={}", sourceText.length(), targetText.length());
+            log.debug("RAG 存储翻译记忆: sourceLen={}, targetLen={}, mode={}", sourceText.length(), targetText.length(), translationMode);
         } catch (Exception e) {
             log.error("RAG 存储翻译记忆失败: {}", e.getMessage(), e);
         }
@@ -260,13 +291,28 @@ public class RagTranslationService {
     }
 
     /**
-     * Redis KNN 向量搜索（按用户和目标语言过滤）
+     * 构建 RediSearch 模式过滤条件
+     * 例: ["team","expert"] → "(@translation_mode:{team|expert})"
      */
-    private List<RagTranslationResponse.RagMatch> searchInRedis(float[] queryVector, Long userId, String targetLang) {
+    private String buildModeFilter(List<String> allowedModes) {
+        if (allowedModes == null || allowedModes.isEmpty()) {
+            return "";
+        }
+        String modes = String.join("|", allowedModes);
+        return String.format("(@translation_mode:{%s})", modes);
+    }
+
+    /**
+     * Redis KNN 向量搜索（按用户、目标语言和翻译模式过滤）
+     */
+    private List<RagTranslationResponse.RagMatch> searchInRedis(float[] queryVector, Long userId, String targetLang, List<String> allowedModes) {
         String vectorStr = formatVectorForRedis(queryVector);
 
+        // 构建模式过滤条件
+        String modeFilter = buildModeFilter(allowedModes);
+
         // 使用 RediSearch 过滤语法：先按 TAG 字段过滤，再在子集中做 KNN
-        String filterQuery = String.format("(@user_id:{%s} @target_lang:{%s})", userId, targetLang);
+        String filterQuery = String.format("(@user_id:{%s} @target_lang:{%s} %s)", userId, targetLang, modeFilter);
         String knnQuery = String.format("%s=>[KNN %d @embedding $query_vector AS score]", filterQuery, knnTopK);
 
         Object result = stringRedisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>) connection ->
@@ -390,11 +436,10 @@ public class RagTranslationService {
     }
 
     /**
-     * MySQL 降级方案：查询用户的翻译记忆，用余弦相似度计算匹配度
+     * MySQL 降级方案：查询用户的翻译记忆，用余弦相似度计算匹配度（带模式过滤）
      */
-    private List<RagTranslationResponse.RagMatch> searchFallback(float[] queryVector, Long userId, String targetLang) {
+    private List<RagTranslationResponse.RagMatch> searchFallback(float[] queryVector, Long userId, String targetLang, List<String> allowedModes) {
         try {
-            // 查询该用户的翻译记忆（取最近的 N 条）
             List<TranslationMemory> memories = translationMemoryService
                     .searchByUserAndLang(userId, "auto", targetLang, fallbackMysqlLimit);
 
@@ -402,8 +447,17 @@ public class RagTranslationService {
                 return Collections.emptyList();
             }
 
+            // 按 allowedModes 过滤
+            Set<String> modeSet = allowedModes != null ? new HashSet<>(allowedModes) : Collections.emptySet();
+
             List<RagTranslationResponse.RagMatch> matches = new ArrayList<>();
             for (TranslationMemory memory : memories) {
+                // 模式过滤：如果设置了 allowedModes，跳过不匹配的
+                if (!modeSet.isEmpty() && memory.getTranslationMode() != null
+                        && !modeSet.contains(memory.getTranslationMode())) {
+                    continue;
+                }
+
                 List<Float> storedEmbedding = memory.getEmbedding();
                 if (storedEmbedding == null || storedEmbedding.isEmpty()) {
                     continue;
@@ -420,7 +474,6 @@ public class RagTranslationService {
                 }
             }
 
-            // 按相似度降序排序
             matches.sort((a, b) -> Double.compare(b.getSimilarity(), a.getSimilarity()));
             return matches;
         } catch (Exception e) {
@@ -457,10 +510,10 @@ public class RagTranslationService {
     }
 
     /**
-     * 存储到 Redis 向量索引
+     * 存储到 Redis 向量索引（带 translation_mode）
      * 使用 MySQL 返回的自增 ID 作为 Redis key 的一部分，确保可追溯
      */
-    private void storeToRedisVector(String sourceText, String targetText, String targetLang, Long userId, String engine) {
+    private void storeToRedisVector(String sourceText, String targetText, String targetLang, Long userId, String engine, String translationMode) {
         try {
             float[] embedding = embeddingService.embed(sourceText);
             if (embedding.length == 0) {
@@ -492,6 +545,9 @@ public class RagTranslationService {
             stringRedisTemplate.opsForHash().put(key, "target_lang", targetLang);
             stringRedisTemplate.opsForHash().put(key, "user_id", userId.toString());
             stringRedisTemplate.opsForHash().put(key, "embedding", vectorStr);
+            if (translationMode != null) {
+                stringRedisTemplate.opsForHash().put(key, "translation_mode", translationMode);
+            }
 
         } catch (Exception e) {
             log.warn("Redis 向量存储失败: {}", e.getMessage());

@@ -71,8 +71,9 @@ class MultiAgentTranslationServiceExtendedTest {
         lenient().doNothing().when(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
         lenient().doNothing().when(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
         // RAG stubs
-        lenient().doReturn(new RagTranslationResponse()).when(ragTranslationService).searchSimilar(anyString(), anyString(), anyString());
+        lenient().doReturn(new RagTranslationResponse()).when(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), anyList());
         lenient().doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
+        lenient().doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
         // Team translation stub
         lenient().doReturn("AI翻译结果").when(teamTranslationService).translateChapter(anyString(), anyString(), anyString(), anyString(), anyList());
         // AI glossary stub

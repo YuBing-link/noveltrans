@@ -34,28 +34,28 @@ class TranslationMemoryServiceTest {
 
         @Test
         void 源文本为空跳过存储() {
-            service.storeTranslation(null, "hello", "en", "zh", 1L, null, "google");
+            service.storeTranslation(null, "hello", "en", "zh", 1L, null, "google", "fast");
             verifyNoInteractions(embeddingService);
             verify(service, never()).save(any());
         }
 
         @Test
         void 源文本为空白跳过存储() {
-            service.storeTranslation("   ", "hello", "en", "zh", 1L, null, "google");
+            service.storeTranslation("   ", "hello", "en", "zh", 1L, null, "google", "fast");
             verifyNoInteractions(embeddingService);
             verify(service, never()).save(any());
         }
 
         @Test
         void 目标文本为空跳过存储() {
-            service.storeTranslation("hello", null, "en", "zh", 1L, null, "google");
+            service.storeTranslation("hello", null, "en", "zh", 1L, null, "google", "fast");
             verifyNoInteractions(embeddingService);
             verify(service, never()).save(any());
         }
 
         @Test
         void 目标文本为空白跳过存储() {
-            service.storeTranslation("hello", "  ", "en", "zh", 1L, null, "google");
+            service.storeTranslation("hello", "  ", "en", "zh", 1L, null, "google", "fast");
             verifyNoInteractions(embeddingService);
             verify(service, never()).save(any());
         }
@@ -70,7 +70,7 @@ class TranslationMemoryServiceTest {
                 return true;
             }).when(service).save(any(TranslationMemory.class));
 
-            service.storeTranslation("hello world", "你好世界", "en", "zh", 1L, 100L, "google");
+            service.storeTranslation("hello world", "你好世界", "en", "zh", 1L, 100L, "google", "expert");
 
             verify(embeddingService).embed("hello world");
             verify(service).save(argThat(m ->
@@ -95,7 +95,7 @@ class TranslationMemoryServiceTest {
                 return true;
             }).when(service).save(any(TranslationMemory.class));
 
-            service.storeTranslation("hello", "你好", "en", "zh", 1L, null, "deepl");
+            service.storeTranslation("hello", "你好", "en", "zh", 1L, null, "deepl", "fast");
 
             verify(service).save(argThat(m -> m.getEmbedding() == null));
         }

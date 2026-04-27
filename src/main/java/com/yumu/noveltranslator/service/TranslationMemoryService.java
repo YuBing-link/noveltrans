@@ -26,7 +26,7 @@ public class TranslationMemoryService extends ServiceImpl<TranslationMemoryMappe
      * 存储翻译记忆（写入 MySQL）
      */
     public void storeTranslation(String sourceText, String targetText, String sourceLang, String targetLang,
-                                  Long userId, Long projectId, String engine) {
+                                  Long userId, Long projectId, String engine, String translationMode) {
         if (sourceText == null || sourceText.isBlank() || targetText == null || targetText.isBlank()) {
             return;
         }
@@ -39,6 +39,7 @@ public class TranslationMemoryService extends ServiceImpl<TranslationMemoryMappe
         memory.setSourceText(sourceText);
         memory.setTargetText(targetText);
         memory.setSourceEngine(engine);
+        memory.setTranslationMode(translationMode);
         memory.setUsageCount(0);
 
         // 生成向量

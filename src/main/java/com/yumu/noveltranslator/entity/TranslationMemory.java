@@ -39,7 +39,11 @@ public class TranslationMemory {
     private String sourceEngine;
 
     /**
-     * 租户 ID
+     * 翻译模式：fast / expert / team
+     */
+    private String translationMode;
+
+    /**
      */
     @TableField(fill = FieldFill.INSERT)
     private Long tenantId;
