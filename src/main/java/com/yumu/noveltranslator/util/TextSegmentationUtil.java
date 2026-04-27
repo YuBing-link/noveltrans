@@ -1,16 +1,16 @@
 package com.yumu.noveltranslator.util;
 
-import com.yumu.noveltranslator.enums.TranslationEngine;
-
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 文本分段工具类
- * 根据不同翻译引擎的字符限制，智能地将长文本拆分为符合要求的片段
- * 支持按句子、段落边界分割，避免破坏语义完整性
+ * 将长文本拆分为符合字符限制的片段，支持按句子、段落边界分割
  */
 public class TextSegmentationUtil {
+
+    /** 每段最大字符数（统一限制，不再按引擎区分） */
+    private static final int DEFAULT_MAX_CHARS_PER_SEGMENT = 2000;
 
     // 句子结束标点符号（中英文）
     private static final String SENTENCE_ENDINGS = ".!?。！？…\n\r";
@@ -27,8 +27,7 @@ public class TextSegmentationUtil {
             return new ArrayList<>();
         }
 
-        int maxChars = TranslationEngine.getMaxChars(engineName);
-        return segmentText(text, maxChars);
+        return segmentText(text, DEFAULT_MAX_CHARS_PER_SEGMENT);
     }
 
     /**
@@ -166,7 +165,7 @@ public class TextSegmentationUtil {
      * @return 最大字符数限制
      */
     public static int getMaxCharsForEngine(String engineName) {
-        return TranslationEngine.getMaxChars(engineName);
+        return DEFAULT_MAX_CHARS_PER_SEGMENT;
     }
 
     /**

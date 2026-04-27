@@ -3,6 +3,9 @@ package com.yumu.noveltranslator.service;
 import com.alibaba.fastjson2.JSON;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.enums.TranslationMode;
+import com.yumu.noveltranslator.enums.TranslationMode;
+import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.TextCleaningUtil;
@@ -90,7 +93,7 @@ public class TranslationService {
             return new SelectionTranslateResponse(false, req.getEngine(), "内容为空");
         }
 
-        String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
+        TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
 
         // 检查字符配额
@@ -98,9 +101,9 @@ public class TranslationService {
         if (userId != null) {
             User user = userMapper.selectById(userId);
             if (user != null) {
-                String mode = req.getMode() != null ? req.getMode() : "fast";
-                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), combined.length(), mode)) {
-                    return new SelectionTranslateResponse(false, engine, "字符配额不足，请升级档位或等待下月重置");
+                String modeName = req.getMode() != null ? req.getMode() : "fast";
+                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), combined.length(), modeName)) {
+                    return new SelectionTranslateResponse(false, mode.getName(), "字符配额不足，请升级档位或等待下月重置");
                 }
             }
         }
@@ -109,16 +112,16 @@ public class TranslationService {
             TranslationPipeline pipeline = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
                     userLevelThrottledTranslationClient, postProcessingService, userId, null);
-            String result = pipeline.executeFast(combined, target, engine);
+            String result = pipeline.executeFast(combined, target, mode);
             if (result == null || result.trim().isEmpty()) {
-                return new SelectionTranslateResponse(false, engine, "翻译失败：返回结果为空");
+                return new SelectionTranslateResponse(false, mode.getName(), "翻译失败：返回结果为空");
             }
             // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
             String sanitized = TextCleaningUtil.sanitizeHtml(result);
-            return new SelectionTranslateResponse(true, engine, sanitized);
+            return new SelectionTranslateResponse(true, mode.getName(), sanitized);
         } catch (Exception e) {
             log.error("选中文本翻译失败：{}", e.getMessage(), e);
-            return new SelectionTranslateResponse(false, engine, "翻译失败：服务器内部错误");
+            return new SelectionTranslateResponse(false, mode.getName(), "翻译失败：服务器内部错误");
         }
     }
 
@@ -131,11 +134,12 @@ public class TranslationService {
      */
     private String translateWithCache(String text, String target, String engine) {
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        TranslationMode mode = EngineAliasRegistry.normalizeToMode(engine);
         TranslationPipeline pipeline = new TranslationPipeline(
                 cacheService, ragTranslationService, entityConsistencyService,
                 userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
-        String result = pipeline.execute(text, target, engine);
+        String result = pipeline.execute(text, target, mode);
 
         if (result == null || result.trim().isEmpty()) {
             throw new RuntimeException("翻译服务返回错误或结果为空");
@@ -175,35 +179,35 @@ public class TranslationService {
         }
 
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
-        String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
+        TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
 
         // 检查字符配额
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         if (userId != null) {
             User user = userMapper.selectById(userId);
             if (user != null) {
-                String mode = req.getMode() != null ? req.getMode() : "fast";
-                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), content.length(), mode)) {
-                    return new ReaderTranslateResponse(false, engine, "字符配额不足，请升级档位或等待下月重置");
+                String modeName = req.getMode() != null ? req.getMode() : "fast";
+                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), content.length(), modeName)) {
+                    return new ReaderTranslateResponse(false, mode.getName(), "字符配额不足，请升级档位或等待下月重置");
                 }
             }
         }
 
         // 文本分段
-        List<String> segments = TextSegmentationUtil.segmentByTextEngine(content, engine);
+        List<String> segments = TextSegmentationUtil.segmentByTextEngine(content, mode.getName());
         if (segments.isEmpty()) {
-            return new ReaderTranslateResponse(false, engine, "段落为空");
+            return new ReaderTranslateResponse(false, mode.getName(), "段落为空");
         }
 
         // 并行翻译所有段落（复用全局线程池）
         // 阅读器模式默认使用 MTranServer，html=true
-        List<String> translatedSegments = translateSegmentsInParallel(segments, target, engine, true);
+        List<String> translatedSegments = translateSegmentsInParallel(segments, target, mode, true);
 
         // 合并翻译结果并净化（XSS 防护）
         String rawResult = String.join("", translatedSegments);
         String combinedResult = TextCleaningUtil.sanitizeHtml(rawResult);
         log.info("阅读器翻译完成，原文长度：{}，译文长度：{}", content.length(), combinedResult.length());
-        return new ReaderTranslateResponse(true, engine, combinedResult);
+        return new ReaderTranslateResponse(true, mode.getName(), combinedResult);
     }
 
     /**
@@ -219,20 +223,20 @@ public class TranslationService {
      * @param engine 翻译引擎
      * @param html 是否启用 HTML 翻译模式（仅对 MTranServer 有效）
      */
-    private List<String> translateSegmentsInParallel(List<String> segments, String target, String engine,
+    private List<String> translateSegmentsInParallel(List<String> segments, String target, TranslationMode mode,
                                                       boolean html) {
         List<String> results = new ArrayList<>(segments.size());
         List<int[]> indexesToTranslate = new ArrayList<>();
 
-        // 1. 先尝试从缓存获取
+        // 1. 先尝试从缓存获取（分层缓存）
         for (int i = 0; i < segments.size(); i++) {
             String segment = segments.get(i);
-            String cacheKey = CacheKeyUtil.buildCacheKey(segment, target, engine);
-            String cached = cacheService.getCache(cacheKey);
+            String cacheKey = CacheKeyUtil.buildCacheKey(segment, target);
+            String cached = cacheService.getCacheByMode(cacheKey, mode.getName());
 
             if (cached != null) {
                 results.add(cached);
-                log.debug("阅读器缓存命中：索引 {}", i);
+                log.debug("阅读器缓存命中：索引 {} mode={}", i, mode.getName());
             } else {
                 results.add(null); // 占位，稍后填充
                 indexesToTranslate.add(new int[]{i});
@@ -261,7 +265,7 @@ public class TranslationService {
 
                 tasks.add(() -> {
                     try {
-                        String translation = pipeline.executeFast(segment, target, engine, html);
+                        String translation = pipeline.executeFast(segment, target, mode, html);
                         if (translation != null && !translation.trim().isEmpty()) {
                             tempResults.set(taskIndex, translation);
                         } else {
@@ -326,12 +330,12 @@ public class TranslationService {
 
         // 检查字符配额
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
-        String mode = (req.getFastMode() != null && !req.getFastMode()) ? "expert" : "fast";
+        String quotaMode = (req.getFastMode() != null && !req.getFastMode()) ? "expert" : "fast";
 
         if (userId != null) {
             User user = userMapper.selectById(userId);
             if (user != null) {
-                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), totalChars, mode)) {
+                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), totalChars, quotaMode)) {
                     SseEmitterUtil.sendError(emitter, "字符配额不足，请升级档位或等待下月重置");
                     SseEmitterUtil.complete(emitter);
                     return emitter;
@@ -342,7 +346,7 @@ public class TranslationService {
         Thread.startVirtualThread(() -> {
             try {
                 String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
-                String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
+                TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
                 int totalCount = items.size();
 
                 TranslationPipeline pipeline = new TranslationPipeline(
@@ -364,7 +368,7 @@ public class TranslationService {
 
                             // fastMode=true（默认）使用 MTranServer，fastMode=false（专家模式）使用 DeepSeek
                             boolean fastMode = req.getFastMode() == null || req.getFastMode();
-                            String extracted = pipeline.executeFast(cleanText, target, engine, !fastMode);
+                            String extracted = pipeline.executeFast(cleanText, target, mode, !fastMode);
 
                             if (extracted == null || extracted.trim().isEmpty()) {
                                 log.warn("翻译失败，使用原文兜底：ID={}", id);
@@ -442,16 +446,16 @@ public class TranslationService {
             return emitter;
         }
 
-        String engine = req.getEngine() == null ? DEFAULT_ENGINE : req.getEngine();
+        TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
-        String mode = req.getMode() != null ? req.getMode() : "fast";
+        String modeString = req.getMode() != null ? req.getMode() : "fast";
 
         // 检查字符配额
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         if (userId != null) {
             User user = userMapper.selectById(userId);
             if (user != null) {
-                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), text.length(), mode)) {
+                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), text.length(), modeString)) {
                     SseEmitterUtil.sendError(emitter, "字符配额不足，请升级档位或等待下月重置");
                     SseEmitterUtil.complete(emitter);
                     return emitter;
@@ -461,7 +465,7 @@ public class TranslationService {
 
         Thread.startVirtualThread(() -> {
             try {
-                List<String> segments = TextSegmentationUtil.segmentByTextEngine(text, engine);
+                List<String> segments = TextSegmentationUtil.segmentByTextEngine(text, mode.getName());
                 if (segments.isEmpty()) {
                     segments = List.of(text);
                 }
@@ -476,12 +480,12 @@ public class TranslationService {
 
                     String segment = segments.get(i);
                     String extracted;
-                    if ("fast".equals(mode)) {
+                    if ("fast".equals(modeString)) {
                         // 快速模式：直连 MTranServer，避免轮询浪费
-                        extracted = pipeline.executeFast(segment, target, engine);
+                        extracted = pipeline.executeFast(segment, target, mode);
                     } else {
                         // 专家模式：完整四级管线（RAG + 实体一致性 + 轮询）
-                        extracted = pipeline.execute(segment, target, engine);
+                        extracted = pipeline.execute(segment, target, mode);
                     }
 
                     if (extracted == null || extracted.trim().isEmpty()) {

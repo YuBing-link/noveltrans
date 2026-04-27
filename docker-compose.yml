@@ -34,11 +34,14 @@ services:
     image: xxnuo/mtranserver:latest
     ports:
       - "8989:8989"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
-      - HTTP_PROXY=
-      - HTTPS_PROXY=
-      - http_proxy=
-      - https_proxy=
+      - HTTP_PROXY=http://host.docker.internal:7890
+      - HTTPS_PROXY=http://host.docker.internal:7890
+      - http_proxy=http://host.docker.internal:7890
+      - https_proxy=http://host.docker.internal:7890
       - API_KEY=${MTRAN_API_KEY}
 
   # Python 翻译微服务

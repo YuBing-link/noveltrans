@@ -9,6 +9,7 @@ import com.yumu.noveltranslator.entity.Glossary;
 import com.yumu.noveltranslator.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
@@ -224,7 +225,7 @@ public class MultiAgentTranslationService {
                     null, postProcessingService, teamTranslationService, userId, chapter.getProjectId().toString());
 
             String translated = pipeline.executeTeam(
-                    sourceText, sourceLang, targetLang, "ai-team", novelType, glossaryTerms);
+                    sourceText, sourceLang, targetLang, TranslationMode.TEAM, novelType, glossaryTerms);
 
             if (translated == null || translated.trim().isEmpty()) {
                 throw new RuntimeException("AI 翻译团队返回结果为空");

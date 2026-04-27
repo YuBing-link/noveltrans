@@ -103,7 +103,7 @@ class TranslationServiceTest {
 
         @Test
         void 缓存命中直接返回() {
-            when(cacheService.getCache(anyString())).thenReturn("缓存结果");
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("缓存结果");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("测试文本");
@@ -118,7 +118,7 @@ class TranslationServiceTest {
 
         @Test
         void 缓存未命中调用翻译客户端() {
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
@@ -134,12 +134,12 @@ class TranslationServiceTest {
 
             assertTrue(resp.getSuccess());
             assertEquals("翻译结果", resp.getTranslation());
-            verify(translationClient).translate(eq("Hello World"), eq("zh"), eq("google"), eq(false), eq(true));
+            verify(translationClient).translate(eq("Hello World"), eq("zh"), eq("fast"), eq(false), eq(true));
         }
 
         @Test
         void 翻译失败返回错误() {
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
@@ -157,7 +157,7 @@ class TranslationServiceTest {
 
         @Test
         void 默认语言和引擎() {
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
@@ -169,7 +169,7 @@ class TranslationServiceTest {
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
             assertTrue(resp.getSuccess());
-            verify(translationClient).translate(eq("test"), eq("zh"), eq("auto"), eq(false), eq(true));
+            verify(translationClient).translate(eq("test"), eq("zh"), eq("fast"), eq(false), eq(true));
         }
     }
 
@@ -198,7 +198,7 @@ class TranslationServiceTest {
 
         @Test
         void 单段落翻译() {
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译段落\"}");
 
@@ -214,7 +214,7 @@ class TranslationServiceTest {
 
         @Test
         void 多段落并行翻译() {
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
@@ -232,7 +232,7 @@ class TranslationServiceTest {
 
         @Test
         void 长文本分段翻译() {
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
@@ -329,7 +329,7 @@ class TranslationServiceTest {
 
         @Test
         void 选中文本翻译异常兜底() {
-            when(cacheService.getCache(anyString())).thenThrow(new RuntimeException("cache error"));
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenThrow(new RuntimeException("cache error"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");

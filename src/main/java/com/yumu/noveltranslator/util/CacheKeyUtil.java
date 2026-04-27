@@ -12,39 +12,36 @@ public class CacheKeyUtil {
     private static final String DEFAULT_SOURCE_LANG = "auto";
 
     /**
-     * 构建缓存 Key
-     * 格式：MD5(sourceText + "|" + sourceLang + "|" + targetLang + "|" + engine)
+     * 构建基础缓存 Key（不含引擎名）
+     * 格式：MD5(sourceText + "|" + sourceLang + "|" + targetLang)
+     *
+     * <p>引擎区分由 TranslationCacheService 的 mode 后缀处理。</p>
      *
      * @param sourceText 原文文本
      * @param targetLang 目标语言
-     * @param engine 翻译引擎
      * @return MD5 缓存键
      */
-    public static String buildCacheKey(String sourceText, String targetLang, String engine) {
-        return buildCacheKey(sourceText, DEFAULT_SOURCE_LANG, targetLang, engine);
+    public static String buildCacheKey(String sourceText, String targetLang) {
+        return buildCacheKey(sourceText, DEFAULT_SOURCE_LANG, targetLang);
     }
 
     /**
-     * 构建缓存 Key（带源语言）
-     * 格式：MD5(sourceText + "|" + sourceLang + "|" + targetLang + "|" + engine)
+     * 构建基础缓存 Key（含源语言，不含引擎名）
+     * 格式：MD5(sourceText + "|" + sourceLang + "|" + targetLang)
      *
      * @param sourceText 原文文本
      * @param sourceLang 源语言
      * @param targetLang 目标语言
-     * @param engine 翻译引擎
      * @return MD5 缓存键
      */
-    public static String buildCacheKey(String sourceText, String sourceLang,
-                                        String targetLang, String engine) {
+    public static String buildCacheKey(String sourceText, String sourceLang, String targetLang) {
         // 标准化输入
         String normalizedText = normalizeText(sourceText);
         String normalizedSourceLang = normalizeLang(sourceLang);
         String normalizedTargetLang = normalizeLang(targetLang);
-        String normalizedEngine = normalizeEngine(engine);
 
         // 构建原始字符串
-        String rawKey = normalizedText + "|" + normalizedSourceLang + "|" +
-                       normalizedTargetLang + "|" + normalizedEngine;
+        String rawKey = normalizedText + "|" + normalizedSourceLang + "|" + normalizedTargetLang;
 
         // 计算 MD5
         return md5(rawKey);
@@ -69,16 +66,6 @@ public class CacheKeyUtil {
             return DEFAULT_SOURCE_LANG;
         }
         return lang.trim().toLowerCase();
-    }
-
-    /**
-     * 标准化引擎名称：转为小写
-     */
-    private static String normalizeEngine(String engine) {
-        if (engine == null || engine.trim().isEmpty()) {
-            return "auto";
-        }
-        return engine.trim().toLowerCase();
     }
 
     /**

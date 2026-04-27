@@ -1,180 +1,186 @@
-# 贡献指南 (Contributing Guide)
+# Contributing Guide
 
-感谢你对 NovelTranslator 项目的关注！本文档说明如何参与项目开发、提交代码以及遵循的规范。
+Thank you for your interest in NovelTrans! This document explains how to set up the development environment, contribute code, and follow project conventions.
 
-## 目录
+## Table of Contents
 
-- [开发环境搭建](#开发环境搭建)
-- [项目结构](#项目结构)
-- [编码规范](#编码规范)
-- [Git 工作流](#git-工作流)
-- [提交信息规范](#提交信息规范)
-- [Pull Request 流程](#pull-request-流程)
-- [测试要求](#测试要求)
+- [Development Environment Setup](#development-environment-setup)
+- [Project Structure](#project-structure)
+- [Coding Standards](#coding-standards)
+- [Git Workflow](#git-workflow)
+- [Commit Message Conventions](#commit-message-conventions)
+- [Pull Request Process](#pull-request-process)
+- [Testing Requirements](#testing-requirements)
 
 ---
 
-## 开发环境搭建
+## Development Environment Setup
 
-### 必需工具
+### Required Tools
 
-| 工具 | 版本要求 | 用途 |
-|------|----------|------|
-| JDK | 21+ | Java 后端开发 |
-| Maven | 3.9+ | 项目构建 |
-| MySQL | 8.0+ | 数据库 |
-| Redis | 7+ | 缓存 |
-| Python | 3.11+ | 翻译微服务 |
-| Docker & Compose | 最新版 | 一键部署（推荐） |
+| Tool | Version | Purpose |
+|------|---------|---------|
+| JDK | 21+ | Java backend development |
+| Maven | 3.9+ | Project build |
+| MySQL | 8.0+ | Database |
+| Redis | 7+ | Cache + Vector store |
+| Python | 3.11+ | Translation microservice |
+| Docker & Compose | Latest | One-command deployment (recommended) |
 
-### 快速启动
+### Quick Start
 
 ```bash
-# 1. 克隆项目
+# 1. Clone the project
 git clone https://github.com/your-org/novelTranslator.git
 cd novelTranslator
 
-# 2. 使用 Docker Compose 启动所有服务
+# 2. Start all services with Docker Compose
 docker compose up -d
 
-# 3. 验证服务健康状态
+# 3. Verify service health
 curl http://localhost:7341/health
 ```
 
-### 本地开发模式
+### Local Development Mode
 
 ```bash
-# 仅启动 MySQL 和 Redis
+# Start only MySQL and Redis
 docker compose up -d mysql redis
 
-# 构建并启动 Java 后端
+# Build and start Java backend
 mvn clean package -DskipTests
 java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar
 
-# 启动翻译微服务（可选）
+# Start translation microservice (optional)
 pip install fastapi uvicorn openai
 python services/translate-engine/translate_server.py
 ```
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 novelTranslator/
 ├── src/main/java/com/yumu/noveltranslator/
-│   ├── controller/     # REST API 控制器层
-│   ├── service/        # 业务逻辑层
-│   ├── mapper/         # MyBatis-Plus 数据访问层
-│   ├── entity/         # 数据库实体类
-│   ├── dto/            # 数据传输对象
-│   ├── config/         # Spring 配置类
+│   ├── controller/     # REST API controllers (web, plugin, external, shared, collab)
+│   ├── service/        # Business logic layer
+│   │   └── pipeline/   # TranslationPipeline component
+│   ├── mapper/         # MyBatis-Plus data access layer
+│   ├── entity/         # Database entity classes
+│   ├── dto/            # Data transfer objects
+│   ├── config/         # Spring configuration classes
 │   ├── security/       # Spring Security + JWT
-│   ├── enums/          # 枚举定义
-│   └── util/           # 工具类
+│   ├── enums/          # Enum definitions
+│   └── util/           # Utility classes
 ├── src/main/resources/
-│   ├── application.yaml  # 主配置文件
-│   ├── schema.sql        # 数据库初始化脚本
-│   └── templates/        # Thymeleaf 模板
-├── extension/          # Chrome 扩展
-├── frontend/           # Web 管理界面
-├── services/           # Python 微服务
-└── nginx/              # Nginx 网关配置
+│   ├── application.yaml  # Main configuration file
+│   ├── sql/              # Database schema and migration scripts
+│   │   ├── schema.sql    # Database initialization script
+│   │   ├── ai_glossary.sql
+│   │   ├── chapter_entity_map.sql
+│   │   └── migration-ai-glossary.sql
+│   └── templates/        # Thymeleaf templates
+├── web-app/            # Web dashboard (React + TypeScript + Vite)
+├── extension/          # Chrome browser extension
+├── services/           # Python microservice
+│   └── translate-engine/
+└── nginx/              # Nginx gateway configuration
 ```
 
-### 分层架构说明
+### Layered Architecture
 
-| 层级 | 包路径 | 职责 |
-|------|--------|------|
-| Controller | `controller` | 接收 HTTP 请求、参数校验、返回响应 |
-| Service | `service` | 核心业务逻辑、事务管理、缓存协调 |
-| Mapper | `mapper` | 数据库 CRUD 操作（MyBatis-Plus） |
-| Entity | `entity` | 数据库表映射对象 |
-| DTO | `dto` | API 请求/响应数据传输对象 |
+| Layer | Package Path | Responsibility |
+|-------|--------------|----------------|
+| Controller | `controller` | Receive HTTP requests, validate parameters, return responses |
+| Service | `service` | Core business logic, transaction management, cache coordination |
+| Mapper | `mapper` | Database CRUD operations (MyBatis-Plus) |
+| Entity | `entity` | Database table mapping objects |
+| DTO | `dto` | API request/response data transport objects |
 
 ---
 
-## 编码规范
+## Coding Standards
 
-### 命名规范
+### Naming Conventions
 
-- **类名**: PascalCase，如 `TranslationService`
-- **方法名**: camelCase，如 `translateWebpage`
-- **常量**: UPPER_SNAKE_CASE，如 `MAX_RETRY_COUNT`
-- **包名**: 全小写，如 `com.yumu.noveltranslator.service`
-- **数据库表**: snake_case，如 `translation_cache`
-- **环境变量**: UPPER_SNAKE_CASE，如 `MYSQL_HOST`
+- **Class names**: PascalCase, e.g., `TranslationService`
+- **Method names**: camelCase, e.g., `translateWebpage`
+- **Constants**: UPPER_SNAKE_CASE, e.g., `MAX_RETRY_COUNT`
+- **Package names**: All lowercase, e.g., `com.yumu.noveltranslator.service`
+- **Database tables**: snake_case, e.g., `translation_cache`
+- **Environment variables**: UPPER_SNAKE_CASE, e.g., `MYSQL_HOST`
 
-### 注释规范
+### Comment Standards
 
-- 所有类必须有 Javadoc 注释，说明类的职责
-- 公共方法必须有 Javadoc，说明参数、返回值、异常
-- 复杂业务逻辑需有行内注释解释 "为什么"（而非 "是什么"）
-- Controller 层的接口使用 `@Operation` 或注释说明接口用途
+- All classes must have Javadoc describing their responsibility
+- Public methods must have Javadoc documenting parameters, return values, and exceptions
+- Complex business logic should have inline comments explaining "why" (not "what")
+- Controller endpoints should use `@Operation` or comments to describe the API purpose
 
-### 代码风格
+### Code Style
 
-- 使用 4 空格缩进（不使用 Tab）
-- 每行不超过 120 字符
-- 使用 Lombok 简化 getter/setter/构造器（`@Data`, `@Builder`, `@Slf4j`）
-- 统一使用 UTF-8 编码
-- 异常处理：业务异常使用自定义 `ErrorCodeEnum`，不允许吞掉异常
+- 4-space indentation (no tabs)
+- Maximum 120 characters per line
+- Use Lombok to simplify boilerplate (`@Data`, `@Builder`, `@Slf4j`)
+- UTF-8 encoding throughout
+- Error handling: business exceptions use `ErrorCodeEnum`, never swallow exceptions
 
-### 依赖注入
+### Dependency Injection
 
-- 优先使用构造函数注入（Lombok `@RequiredArgsConstructor`）
-- 避免使用 `@Autowired` 字段注入
+- Prefer constructor injection (Lombok `@RequiredArgsConstructor`)
+- Avoid `@Autowired` field injection
 
-### 事务管理
+### Transaction Management
 
-- Service 层写操作使用 `@Transactional`
-- 只读查询使用 `@Transactional(readOnly = true)`
+- Service-layer write operations use `@Transactional`
+- Read-only queries use `@Transactional(readOnly = true)`
 
-### API 设计规范
+### API Design
 
-- RESTful 风格，使用名词复数形式
-- 统一响应格式使用 `Result<T>` 包装
-- HTTP 状态码语义化：200 成功、400 参数错误、401 未认证、403 无权限、500 服务端错误
+- RESTful style, using noun plural forms
+- Unified response format with `Result<T>` envelope
+- Semantic HTTP status codes: 200 success, 400 bad request, 401 unauthorized, 403 forbidden, 500 server error
 
 ---
 
-## Git 工作流
+## Git Workflow
 
-### 分支策略
+### Branch Strategy
 
-采用 Git Flow 简化模型：
+Uses a simplified Git Flow model:
 
 ```
-main (生产)          ───────────────────────────────
-                        ↑ merge         ↑ merge
+main (production)       ───────────────────────────────
+                           ↑ merge         ↑ merge
 feature/xxx  ───── branch ── develop ── merge ────
 ```
 
-- `main`: 生产分支，只能通过 Pull Request 合并
-- `feature/<name>`: 功能分支，从 `main` 创建
-- `fix/<name>`: 修复分支，从 `main` 创建
+- `main`: Production branch, only merge via Pull Request
+- `feature/<name>`: Feature branch, created from `main`
+- `fix/<name>`: Fix branch, created from `main`
 
-### 开发流程
+### Development Process
 
 ```bash
-# 1. 从 main 创建功能分支
+# 1. Create feature branch from main
 git checkout main
 git pull origin main
 git checkout -b feature/glossary-pagination
 
-# 2. 开发并提交
+# 2. Develop and commit
 git add <files>
 git commit -m "feat: add glossary pagination support"
 
-# 3. 推送并创建 Pull Request
+# 3. Push and create Pull Request
 git push origin feature/glossary-pagination
 ```
 
 ---
 
-## 提交信息规范
+## Commit Message Conventions
 
-采用 [Conventional Commits](https://www.conventionalcommits.org/) 规范：
+Follows [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 <type>(<scope>): <description>
@@ -184,21 +190,21 @@ git push origin feature/glossary-pagination
 [optional footer(s)]
 ```
 
-### Type 类型
+### Type Values
 
-| Type | 说明 | 示例 |
-|------|------|------|
-| `feat` | 新功能 | `feat: add document translation` |
-| `fix` | Bug 修复 | `fix: resolve SSE streaming memory leak` |
-| `docs` | 文档变更 | `docs: update API documentation` |
-| `style` | 代码格式（不影响功能） | `style: format code with consistent indentation` |
-| `refactor` | 重构 | `refactor: extract cache logic to separate service` |
-| `test` | 测试相关 | `test: add unit tests for TranslationService` |
-| `chore` | 构建/工具变更 | `chore: update Maven dependencies` |
-| `perf` | 性能优化 | `perf: optimize Redis connection pool` |
-| `ci` | CI/CD 配置变更 | `ci: add GitHub Actions workflow` |
+| Type | Description | Example |
+|------|-------------|---------|
+| `feat` | New feature | `feat: add document translation` |
+| `fix` | Bug fix | `fix: resolve SSE streaming memory leak` |
+| `docs` | Documentation changes | `docs: update API documentation` |
+| `style` | Code formatting (no functional change) | `style: format code with consistent indentation` |
+| `refactor` | Refactoring | `refactor: extract cache logic to separate service` |
+| `test` | Test-related | `test: add unit tests for TranslationService` |
+| `chore` | Build/tool changes | `chore: update Maven dependencies` |
+| `perf` | Performance optimization | `perf: optimize Redis connection pool` |
+| `ci` | CI/CD configuration | `ci: add GitHub Actions workflow` |
 
-### 示例
+### Example
 
 ```
 feat(user): add user preference management API
@@ -213,64 +219,68 @@ Closes #42
 
 ---
 
-## Pull Request 流程
+## Pull Request Process
 
-1. **Fork** 本项目到你的 GitHub 账号
-2. **创建功能分支** `git checkout -b feature/your-feature`
-3. **提交变更** 遵循 Conventional Commits 规范
-4. **确保构建通过** `mvn clean package -DskipTests`
-5. **编写测试** 新功能需包含单元测试
-6. **推送分支** `git push origin feature/your-feature`
-7. **创建 PR** 到主仓库的 `main` 分支
-8. **等待 Review** 至少一位维护者审核通过后合并
+1. **Fork** this project to your GitHub account
+2. **Create a feature branch** `git checkout -b feature/your-feature`
+3. **Commit changes** following Conventional Commits
+4. **Ensure the build passes** `mvn clean package -DskipTests`
+5. **Write tests** for new features
+6. **Push your branch** `git push origin feature/your-feature`
+7. **Create a PR** to the `main` branch
+8. **Wait for review** — at least one maintainer must approve before merging
 
-### PR 要求
+### PR Requirements
 
-- 标题使用 Conventional Commits 格式
-- 描述中说明：
-  - 本次变更的目的
-  - 影响的范围
-  - 测试方式
-  - 关联的 Issue（如有）
+- Title in Conventional Commits format
+- Description should include:
+  - Purpose of the change
+  - Affected scope
+  - Testing approach
+  - Related issue (if any)
 
 ---
 
-## 测试要求
+## Testing Requirements
 
-### 单元测试
+### Unit Tests
 
-- Service 层核心业务逻辑需有单元测试
-- 使用 `@SpringBootTest` 集成测试或 `@ExtendWith(MockitoExtension.class)` Mock 测试
-- 测试覆盖率目标：核心 Service 层 > 70%
+- Service layer core business logic requires unit tests
+- Use `@SpringBootTest` for integration tests or `@ExtendWith(MockitoExtension.class)` for mock-based tests
+- Target coverage: core Service layer > 70%
 
-### 运行测试
+### Running Tests
 
 ```bash
-# 运行所有测试
+# Run all tests
 mvn test
 
-# 运行单个测试类
+# Run a single test class
 mvn test -Dtest=TranslationServiceTest
 
-# 运行单个测试方法
+# Run a single test method
 mvn test -Dtest=TranslationServiceTest#testTranslateWebpage
 
-# 生成覆盖率报告
+# Generate coverage report
 mvn test jacoco:report
 ```
 
 ---
 
-## 常见问题
+## Frequently Asked Questions
 
-**Q: 数据库表结构变更如何处理？**
+**Q: How should I handle database schema changes?**
 
-A: 修改 `src/main/resources/schema.sql` 文件，并在 PR 描述中说明变更内容。
+A: Modify the `src/main/resources/sql/schema.sql` file and describe the schema changes in your PR description.
 
-**Q: 如何调试 Docker 中的服务？**
+**Q: How do I debug services running in Docker?**
 
-A: 使用 `docker compose logs -f backend` 查看后端日志，或 `docker compose exec backend bash` 进入容器。
+A: Use `docker compose logs -f backend` to view backend logs, or `docker compose exec backend bash` to enter the container.
 
-**Q: 本地开发时如何切换翻译引擎？**
+**Q: How do I switch translation engines during local development?**
 
-A: 通过修改 `application.yaml` 中的 `translation.openai.base-url` 环境变量，或设置 `OPENAI_BASE_URL` 环境变量。
+A: Modify the `translation.openai.base-url` in `application.yaml` or set the `OPENAI_BASE_URL` environment variable.
+
+---
+
+**Last updated**: 2026-04-27

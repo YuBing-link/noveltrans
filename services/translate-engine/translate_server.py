@@ -81,6 +81,7 @@ ENGINE_ALIASES = {
     "baidu": "openai",
     "youdao": "openai",
     "fast": "openai",
+    "ai": "openai",
 }
 
 # 自动生成候选引擎列表（按优先级排序）
@@ -603,6 +604,9 @@ async def translate_api(req: TranslateRequest):
         f"text_length={len(req.text)}"
     )
     start_time = time.perf_counter()
+
+    # 解析引擎别名（将前端引擎名映射为后端实际引擎名）
+    req.engine = ENGINE_ALIASES.get(req.engine, req.engine)
 
     # 构建候选引擎列表
     candidates = []

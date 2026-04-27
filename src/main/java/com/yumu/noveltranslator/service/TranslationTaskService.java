@@ -4,6 +4,7 @@ import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationHistory;
 import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.TranslationHistoryMapper;
@@ -148,9 +149,9 @@ public class TranslationTaskService {
                     String translated;
                     try {
                         if ("fast".equals(doc.getMode())) {
-                            translated = pipeline.executeFast(batchText, targetLang, "google");
+                            translated = pipeline.executeFast(batchText, targetLang, TranslationMode.FAST);
                         } else {
-                            translated = pipeline.execute(batchText, targetLang, engine);
+                            translated = pipeline.execute(batchText, targetLang, TranslationMode.EXPERT);
                         }
                     } catch (Exception e) {
                         log.warn("翻译批次失败 [{}/{}]，保留原文: {}", batchStart, total, e.getMessage());
@@ -601,7 +602,7 @@ public class TranslationTaskService {
                             TranslationPipeline pipeline = new TranslationPipeline(
                                     cacheService, ragTranslationService, entityConsistencyService,
                                     userLevelThrottledTranslationClient, postProcessingService, null, null);
-                            result = pipeline.execute(paragraph, targetLang, "google");
+                            result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
                         } else {
                             result = userLevelThrottledTranslationClient.translate(
                                     paragraph, targetLang, "google", false, true);
@@ -709,7 +710,7 @@ public class TranslationTaskService {
                             TranslationPipeline pipeline = new TranslationPipeline(
                                     cacheService, ragTranslationService, entityConsistencyService,
                                     userLevelThrottledTranslationClient, postProcessingService, null, null);
-                            result = pipeline.execute(paragraph, targetLang, "google");
+                            result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
                         } else {
                             result = userLevelThrottledTranslationClient.translate(
                                     paragraph, targetLang, "google", false, true);

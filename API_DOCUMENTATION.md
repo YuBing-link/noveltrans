@@ -1,40 +1,41 @@
-# 网站后端 API 接口文档
+# Backend API Reference
 
-> 本文档描述后端服务器提供的所有 REST API 接口。
-
----
-
-## 📋 目录
-
-- [通用说明](#通用说明)
-- [翻译接口](#翻译接口)
-  - [插件翻译（浏览器扩展）](#插件翻译浏览器扩展)
-  - [共享翻译（Web + 插件）](#共享翻译web--插件)
-  - [外部 API（API Key 调用）](#外部-apiapi-key-调用)
-  - [RAG 翻译记忆](#rag-翻译记忆)
-- [用户接口](#用户接口)
-- [文档管理接口](#文档管理接口)
-- [协作项目接口](#协作项目接口)
-- [页面路由接口](#页面路由接口)
-- [错误码说明](#错误码说明)
-- [前端数据流图](#前端数据流图)
+> This document describes all REST API endpoints provided by the NovelTrans backend server.
 
 ---
 
-## 通用说明
+## Table of Contents
 
-### 基础信息
+- [General](#general)
+- [Translation API](#translation-api)
+  - [Plugin Translation (Browser Extension)](#plugin-translation-browser-extension)
+  - [Shared Translation (Web + Plugin)](#shared-translation-web--plugin)
+  - [External API (API Key Access)](#external-api-api-key-access)
+  - [RAG Translation Memory](#rag-translation-memory)
+- [User API](#user-api)
+- [Document Management](#document-management)
+- [Glossary Management](#glossary-management)
+- [Collaboration Projects](#collaboration-projects)
+- [Platform Statistics](#platform-statistics)
+- [Page Routes](#page-routes)
+- [Error Codes](#error-codes)
 
-| 项目 | 值 |
-|------|------|
-| 基础 URL | `http://localhost:7341` |
-| API 版本 | `v1` |
-| 数据格式 | JSON |
-| 字符编码 | UTF-8 |
+---
 
-### 通用响应格式
+## General
 
-所有接口统一返回以下格式：
+### Base Information
+
+| Item | Value |
+|------|-------|
+| Base URL | `http://localhost:7341` |
+| API Version | `v1` |
+| Data Format | JSON |
+| Character Encoding | UTF-8 |
+
+### Common Response Format
+
+All endpoints return a consistent envelope:
 
 ```json
 {
@@ -46,66 +47,54 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| success | boolean | 请求是否成功 |
-| data | T | 响应数据，类型因接口而异 |
-| code | string | 状态码，"200" 表示成功 |
-| message | string | 错误信息，成功时为 null |
-| token | string | JWT Token（仅登录/注册接口返回） |
+| Field | Type | Description |
+|-------|------|-------------|
+| success | boolean | Whether the request succeeded |
+| data | T | Response data, type varies by endpoint |
+| code | string | Status code, `"200"` for success |
+| message | string | Error message, null on success |
+| token | string | JWT Token (login/register endpoints only) |
 
-### 认证方式
+### Authentication
 
-需要认证的接口需在请求头中携带 JWT Token：
+Endpoints requiring authentication accept one of:
 
-```
-Authorization: Bearer <token>
-```
+- **JWT Bearer Token**: `Authorization: Bearer <token>`
+- **API Key**: `Authorization: Bearer nt_sk_xxxx`
 
 ---
 
-## 翻译接口
+## Translation API
 
-### 插件翻译（浏览器扩展）
+### Plugin Translation (Browser Extension)
 
-**基础路径**: `/v1/translate`
+**Base path**: `/v1/translate`
 **Controller**: `PluginTranslateController`
 
-以下接口面向浏览器扩展，支持公共访问（认证用户享有更高配额）。
+These endpoints serve the browser extension. Authenticated users receive higher quotas.
 
-#### 1. 选中文本翻译
+#### 1. Selection Translation
 
-**接口**: `POST /v1/translate/selection`
+`POST /v1/translate/selection`
 
-**认证**: 不需要
+**Auth**: Not required
 
-**请求体**:
-```json
-{
-  "text": "选中的文本",
-  "sourceLang": "auto",
-  "targetLang": "zh",
-  "engine": "google",
-  "context": "上下文内容"
-}
-```
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| text | string | Yes | - | Selected text to translate |
+| sourceLang | string | No | auto | Source language code |
+| targetLang | string | No | zh | Target language code |
+| engine | string | No | - | Translation engine: google, deepl, baidu, openai, mymemory, libre |
+| context | string | No | null | Surrounding context for improved accuracy |
 
-| 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| text | string | 是 | - | 选中的待翻译文本 |
-| sourceLang | string | 否 | auto | 源语言代码 |
-| targetLang | string | 否 | zh | 目标语言代码 |
-| engine | string | 否 | - | 翻译引擎：google, deepl, baidu, openai, mymemory, libre |
-| context | string | 否 | null | 上下文内容，帮助提高翻译准确性 |
-
-**成功响应**:
+**Success Response**:
 ```json
 {
   "success": true,
   "data": {
     "success": true,
     "engine": "google",
-    "translation": "翻译结果"
+    "translation": "Translation result"
   },
   "code": "200",
   "message": null
@@ -114,37 +103,27 @@ Authorization: Bearer <token>
 
 ---
 
-#### 2. 阅读器翻译
+#### 2. Reader Translation
 
-**接口**: `POST /v1/translate/reader`
+`POST /v1/translate/reader`
 
-**认证**: 不需要
+**Auth**: Not required
 
-**请求体**:
-```json
-{
-  "content": "<h1>文章标题</h1><p>文章内容...</p>",
-  "sourceLang": "auto",
-  "targetLang": "zh",
-  "engine": "google"
-}
-```
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| content | string | Yes | - | Article content in HTML format |
+| sourceLang | string | No | auto | Source language code |
+| targetLang | string | Yes | - | Target language code |
+| engine | string | No | - | Translation engine |
 
-| 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| content | string | 是 | - | HTML 格式的文章内容 |
-| sourceLang | string | 否 | auto | 源语言代码 |
-| targetLang | string | 是 | - | 目标语言代码 |
-| engine | string | 否 | - | 翻译引擎 |
-
-**成功响应**:
+**Success Response**:
 ```json
 {
   "success": true,
   "data": {
     "success": true,
     "engine": "google",
-    "translatedContent": "<h1>文章标题（已翻译）</h1><p>翻译后的内容...</p>"
+    "translatedContent": "<h1>Translated Title</h1><p>Translated content...</p>"
   },
   "code": "200",
   "message": null
@@ -153,164 +132,65 @@ Authorization: Bearer <token>
 
 ---
 
-#### 3. 网页翻译（SSE 流式）
+#### 3. Full-Page Translation (SSE Streaming)
 
-**接口**: `POST /v1/translate/webpage`
+`POST /v1/translate/webpage`
 
-**认证**: 不需要
+**Auth**: Not required
 
 **Content-Type**: `application/json`
 
-**响应类型**: `text/event-stream` (SSE 流式响应)
+**Response**: `text/event-stream` (SSE)
 
-**请求体**:
-```json
-{
-  "targetLang": "zh",
-  "sourceLang": "auto",
-  "engine": "google",
-  "textRegistry": [
-    {
-      "id": "text_a1b2c3",
-      "original": "Hello world",
-      "context": "上下文信息"
-    },
-    {
-      "id": "text_d4e5f6",
-      "original": "Another paragraph",
-      "context": "更多上下文"
-    }
-  ]
-}
-```
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| targetLang | string | Yes | - | Target language code |
+| sourceLang | string | No | auto | Source language code |
+| engine | string | No | - | Translation engine |
+| textRegistry | array | Yes | - | Text mapping table |
+| textRegistry[].id | string | Yes | - | Unique text node identifier |
+| textRegistry[].original | string | Yes | - | Original text |
+| textRegistry[].context | string | No | null | Context information |
 
-| 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| targetLang | string | 是 | - | 目标语言代码 |
-| sourceLang | string | 否 | auto | 源语言代码 |
-| engine | string | 否 | - | 翻译引擎 |
-| textRegistry | array | 是 | - | 文本映射表 |
-| textRegistry[].id | string | 是 | - | 文本节点唯一标识 |
-| textRegistry[].original | string | 是 | - | 原始文本 |
-| textRegistry[].context | string | 否 | null | 上下文信息 |
+**SSE Event Format**:
 
-**流式响应格式**:
-
-每个事件独立返回，格式如下：
-
-```
-data: {"textId":"text_a1b2c3","original":"Hello world","translation":"你好世界"}
-
-data: {"textId":"text_d4e5f6","original":"Another paragraph","translation":"另一个段落"}
-
-data: [DONE]
-```
-
-| 事件类型 | 格式 | 说明 |
-|----------|------|------|
-| 翻译块 | `data: {"textId":"xxx","translation":"..."}` | 单个文本块的翻译结果 |
-| 完成标记 | `data: [DONE]` | 全部翻译完成 |
-| 错误信息 | `data: ERROR: 错误描述` | 发生错误时返回 |
-
-**前端 SSE 处理示例**:
-
-```javascript
-const response = await fetch('http://localhost:8080/v1/translate/webpage', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestData)
-});
-
-const reader = response.body.getReader();
-const decoder = new TextDecoder('utf-8');
-let buffer = '';
-
-while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-
-        const data = line.slice(6).trim();
-
-        if (data === '[DONE]') {
-            console.log('翻译完成');
-            break;
-        }
-
-        if (data.startsWith('ERROR:')) {
-            console.error('错误:', data);
-            break;
-        }
-
-        // 处理单个翻译结果
-        const result = JSON.parse(data);
-        const { textId, translation } = result;
-
-        // 立即更新对应 DOM 节点
-        const element = document.getElementById(textId);
-        if (element) {
-            element.textContent = translation;
-        }
-    }
-}
-```
+| Event | Format | Description |
+|-------|--------|-------------|
+| Translation block | `data: {"textId":"xxx","translation":"..."}` | Single text block result |
+| Done marker | `data: [DONE]` | Translation complete |
+| Error | `data: ERROR: description` | Error occurred |
 
 ---
 
-#### 4. 文本流式翻译（SSE）
+#### 4. Text Streaming Translation
 
-**接口**: `POST /v1/translate/text/stream`
+`POST /v1/translate/text/stream`
 
-**认证**: 不需要
+**Auth**: Not required
 
-**响应类型**: `text/event-stream`
-
-请求参数与「选中文本翻译」相同，但以 SSE 流式方式返回结果，适用于长文本的单段流式输出。
+Same parameters as Selection Translation, returns results via SSE streaming.
 
 ---
 
-#### 5. 高级翻译（认证用户）
+#### 5. Premium Translation (Authenticated)
 
-**接口**: `POST /v1/translate/premium-selection`
+`POST /v1/translate/premium-selection` — Auth required. Higher quota selection translation.
 
-**认证**: 需要
+`POST /v1/translate/premium-reader` — Auth required. Higher quota reader translation.
 
-为认证用户提供更高配额的选中文本翻译，参数和响应与 `/v1/translate/selection` 相同。
-
----
-
-**接口**: `POST /v1/translate/premium-reader`
-
-**认证**: 需要
-
-为认证用户提供更高配额的阅读器翻译，参数和响应与 `/v1/translate/reader` 相同。
+Parameters and responses match the non-premium equivalents.
 
 ---
 
-### 共享翻译（Web + 插件）
+### Shared Translation (Web + Plugin)
 
-**基础路径**: `/v1/translate`
+**Base path**: `/v1/translate`
 **Controller**: `SharedTranslateController`
 
-#### 6. 查询翻译任务状态
+#### 6. Query Translation Task Status
 
-**接口**: `GET /v1/translate/task/{taskId}`
+`GET /v1/translate/task/{taskId}` — **Auth**: Not required
 
-**认证**: 不需要
-
-**路径参数**:
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| taskId | string | 任务 ID |
-
-**成功响应**:
 ```json
 {
   "success": true,
@@ -321,163 +201,93 @@ while (true) {
     "progress": 45,
     "sourceLang": "en",
     "targetLang": "zh",
-    "createTime": "2026-02-24T10:00:00Z",
-    "completedTime": null,
-    "errorMessage": null
+    "createTime": "2026-02-24T10:00:00Z"
   },
   "code": "200"
 }
 ```
 
----
+#### 7. Cancel Translation Task
 
-#### 7. 取消翻译任务
+`DELETE /v1/translate/task/{taskId}` — **Auth**: Required
 
-**接口**: `DELETE /v1/translate/task/{taskId}`
+#### 8. Delete Translation History
 
-**认证**: 需要
+`DELETE /v1/translate/history/{taskId}` — **Auth**: Required
 
----
+#### 9. Get Translation Result
 
-#### 8. 删除翻译历史记录
+`GET /v1/translate/task/{taskId}/result` — **Auth**: Not required
 
-**接口**: `DELETE /v1/translate/history/{taskId}`
+#### 10. Download Translation Result
 
-**认证**: 需要
-
----
-
-#### 9. 获取翻译结果
-
-**接口**: `GET /v1/translate/task/{taskId}/result`
-
-**认证**: 不需要
+`GET /v1/translate/task/{taskId}/download` — **Auth**: Required (binary stream)
 
 ---
 
-#### 10. 下载翻译结果
+#### 11. Document Streaming Translation (File Upload)
 
-**接口**: `GET /v1/translate/task/{taskId}/download`
-
-**认证**: 需要
-
-返回二进制文件流。
-
----
-
-#### 11. 文档流式翻译（直接上传文件）
-
-**接口**: `POST /v1/translate/document/stream`
-
-**认证**: 不需要（部分场景可能需要认证）
+`POST /v1/translate/document/stream`
 
 **Content-Type**: `multipart/form-data`
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| file | file | 是 | - | 要翻译的文档文件 |
-| sourceLang | string | 否 | auto | 源语言代码 |
-| targetLang | string | 是 | zh | 目标语言代码 |
-| mode | string | 否 | fast | 翻译模式：fast, expert, team |
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| file | file | Yes | - | Document file |
+| sourceLang | string | No | auto | Source language code |
+| targetLang | string | Yes | zh | Target language code |
+| mode | string | No | fast | Translation mode: fast, expert, team |
 
-**响应类型**: `text/event-stream` (SSE 流式响应)
-
----
-
-#### 12. 文档流式翻译（基于已上传文档）
-
-**接口**: `POST /v1/translate/document/stream/{docId}`
-
-**认证**: 需要
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| docId | Long | 是 | - | 已上传的文档 ID |
-| targetLang | string | 是 | zh | 目标语言代码 |
-| mode | string | 否 | fast | 翻译模式 |
-
-**响应类型**: `text/event-stream`
+**Response**: `text/event-stream`
 
 ---
 
-### 外部 API（API Key 调用）
+#### 12. Document Streaming Translation (Pre-uploaded)
 
-**基础路径**: `/v1/external`
+`POST /v1/translate/document/stream/{docId}` — **Auth**: Required
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| docId | Long | Yes | - | Document ID |
+| targetLang | string | Yes | zh | Target language code |
+| mode | string | No | fast | Translation mode |
+
+**Response**: `text/event-stream`
+
+---
+
+### External API (API Key Access)
+
+**Base path**: `/v1/external`
 **Controller**: `ExternalTranslateController`
-**认证方式**: `Authorization: Bearer nt_sk_xxxx`（API Key）
+**Auth**: `Authorization: Bearer nt_sk_xxxx`
 
-#### 13. 文本翻译
+#### 13. Text Translation
 
-**接口**: `POST /v1/external/translate`
+`POST /v1/external/translate`
 
-**认证**: 需要（API Key）
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| text | string | Yes | - | Text to translate |
+| sourceLang | string | No | auto | Source language code |
+| targetLang | string | Yes | - | Target language code |
+| engine | string | No | google | Translation engine |
 
-**请求体**:
-```json
-{
-  "text": "要翻译的文本内容",
-  "sourceLang": "auto",
-  "targetLang": "zh",
-  "engine": "google"
-}
-```
+#### 14. Batch Text Translation
 
-| 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| text | string | 是 | - | 待翻译的文本内容 |
-| sourceLang | string | 否 | auto | 源语言代码 |
-| targetLang | string | 是 | - | 目标语言代码 |
-| engine | string | 否 | google | 翻译引擎 |
+`POST /v1/external/batch`
 
-**成功响应**:
-```json
-{
-  "success": true,
-  "data": {
-    "translatedText": "翻译后的文本",
-    "sourceLang": "en",
-    "targetLang": "zh",
-    "engine": "google",
-    "usage": 12
-  },
-  "code": "200"
-}
-```
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| texts | array | Yes | - | Text list (max 50) |
+| sourceLang | string | No | auto | Source language code |
+| targetLang | string | Yes | - | Target language code |
+| engine | string | No | google | Translation engine |
 
----
+#### 15. List Available Translation Engines
 
-#### 14. 批量文本翻译
+`GET /v1/external/models`
 
-**接口**: `POST /v1/external/batch`
-
-**认证**: 需要（API Key）
-
-**请求体**:
-```json
-{
-  "texts": ["Hello", "World"],
-  "sourceLang": "auto",
-  "targetLang": "zh",
-  "engine": "google"
-}
-```
-
-| 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| texts | array | 是 | - | 待翻译文本列表（最多 50 条） |
-| sourceLang | string | 否 | auto | 源语言代码 |
-| targetLang | string | 是 | - | 目标语言代码 |
-| engine | string | 否 | google | 翻译引擎 |
-
----
-
-#### 15. 获取可用翻译引擎列表
-
-**接口**: `GET /v1/external/models`
-
-**认证**: 需要（API Key）
-
-**成功响应**:
 ```json
 {
   "success": true,
@@ -493,231 +303,104 @@ while (true) {
 }
 ```
 
----
+#### 16. Download Translation (External API)
 
-#### 16. 下载翻译结果（外部 API）
-
-**接口**: `GET /v1/external/task/{taskId}/download`
-
-**认证**: 需要（API Key）
-
-返回二进制文件流。
+`GET /v1/external/task/{taskId}/download` — Binary stream
 
 ---
 
-### RAG 翻译记忆
+### RAG Translation Memory
 
-**基础路径**: `/v1/translate`
-**Controller**: `SharedTranslateController`
+`POST /v1/translate/rag` — **Auth**: Not required
 
-#### 17. RAG 翻译记忆查询
-
-**接口**: `POST /v1/translate/rag`
-
-**认证**: 不需要
-
-**请求体**:
-```json
-{
-  "text": "要查询的文本",
-  "targetLang": "zh",
-  "engine": "google"
-}
-```
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| text | string | Yes | Text to query |
+| targetLang | string | Yes | Target language code |
+| engine | string | No | Translation engine |
 
 ---
 
-## 用户接口
+## User API
 
-**基础路径**: `/user`
+**Base path**: `/user`
 **Controller**: `WebUserController`
 
-### 1. 发送注册验证码
+### 1. Send Registration Code
 
-**接口**: `POST /user/send-code`
-
-**认证**: 不需要
-
-**请求体**:
+`POST /user/send-code` — Auth not required
 ```json
-{
-  "email": "user@example.com"
-}
+{ "email": "user@example.com" }
 ```
 
----
+### 2. Send Password Reset Code
 
-### 2. 发送重置密码验证码
-
-**接口**: `POST /user/send-reset-code`
-
-**认证**: 不需要
-
-**请求体**:
+`POST /user/send-reset-code` — Auth not required
 ```json
-{
-  "email": "user@example.com"
-}
+{ "email": "user@example.com" }
 ```
 
----
+### 3. User Login
 
-### 3. 用户登录
+`POST /user/login` — Auth not required
 
-**接口**: `POST /user/login`
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| email | string | Yes | User email |
+| password | string | Yes | User password |
+| from | string | No | Login source: web, extension |
 
-**认证**: 不需要
+Returns `{ data: { user profile }, token: "JWT" }`.
 
-**请求体**:
-```json
-{
-  "email": "user@example.com",
-  "password": "password123",
-  "from": "web"
-}
-```
+### 4. User Registration
 
-| 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| email | string | 是 | - | 用户邮箱 |
-| password | string | 是 | - | 用户密码 |
-| from | string | 否 | null | 登录来源：web, extension |
+`POST /user/register` — Auth not required
 
-**成功响应**:
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "email": "user@example.com",
-    "username": "用户名",
-    "avatar": "https://...",
-    "userLevel": "FREE",
-    "createTime": "2026-01-01T00:00:00Z"
-  },
-  "code": "200",
-  "message": null,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
----
-
-### 4. 用户注册
-
-**接口**: `POST /user/register`
-
-**认证**: 不需要
-
-**请求体**:
 ```json
 {
   "email": "user@example.com",
   "password": "password123",
   "code": "123456",
-  "username": "用户名",
+  "username": "username",
   "avatar": "https://..."
 }
 ```
 
-**成功响应**: 同登录接口
+### 5. Get User Profile
 
----
+`GET /user/profile` — Auth required
 
-### 5. 获取当前用户信息
+### 6. Update User Profile
 
-**接口**: `GET /user/profile`
+`PUT /user/profile` — Auth required
 
-**认证**: 需要
-
----
-
-### 6. 更新用户信息
-
-**接口**: `PUT /user/profile`
-
-**认证**: 需要
-
-**请求体**:
 ```json
 {
-  "username": "新用户名",
-  "avatar": "https://new-avatar-url.com/avatar.jpg"
+  "username": "NewUsername",
+  "avatar": "https://..."
 }
 ```
 
----
+### 7. Change Password
 
-### 7. 修改密码
+`POST /user/change-password` — Auth required
 
-**接口**: `POST /user/change-password`
+### 8. Reset Password
 
-**认证**: 需要
+`POST /user/reset-password` — Auth not required
 
-**请求体**:
-```json
-{
-  "oldPassword": "原密码",
-  "newPassword": "新密码"
-}
-```
+### 9. Refresh Token
 
----
+`POST /user/refresh-token` — Auth not required
 
-### 8. 重置密码
+### 10. Logout
 
-**接口**: `POST /user/reset-password`
+`POST /user/logout` — Auth required
 
-**认证**: 不需要
+### 11. Get User Statistics
 
-**请求体**:
-```json
-{
-  "email": "user@example.com",
-  "code": "123456",
-  "newPassword": "新密码"
-}
-```
+`GET /user/statistics` — Auth required
 
----
-
-### 9. 刷新令牌
-
-**接口**: `POST /user/refresh-token`
-
-**认证**: 不需要
-
-**请求体**:
-```json
-{
-  "refreshToken": "刷新令牌"
-}
-```
-
----
-
-### 10. 退出登录
-
-**接口**: `POST /user/logout`
-
-**认证**: 需要
-
-**请求体** (可选):
-```json
-{
-  "refreshToken": "刷新令牌"
-}
-```
-
----
-
-### 11. 获取用户统计
-
-**接口**: `GET /user/statistics`
-
-**认证**: 需要
-
-**响应**:
 ```json
 {
   "success": true,
@@ -729,122 +412,71 @@ while (true) {
     "totalDocuments": 30,
     "weekTranslations": 25,
     "monthTranslations": 100
-  },
-  "code": "200"
+  }
 }
 ```
 
----
+### 12. Get User Quota
 
-### 12. 获取用户配额
+`GET /user/quota` — Auth required
 
-**接口**: `GET /user/quota`
-
-**认证**: 需要
-
-**响应**:
 ```json
 {
   "success": true,
   "data": {
     "userLevel": "FREE",
-    "dailyLimit": 50,
-    "usedToday": 12,
-    "remaining": 38,
-    "concurrencyLimit": 3,
-    "canTranslateDocument": false
-  },
-  "code": "200"
+    "monthlyChars": 100000,
+    "usedThisMonth": 12000,
+    "remainingChars": 88000,
+    "concurrencyLimit": 1,
+    "fastModeEquivalent": 176000,
+    "expertModeEquivalent": 88000,
+    "teamModeEquivalent": 44000
+  }
 }
 ```
 
----
+### 13. Get Translation History
 
-### 13. 获取翻译历史
+`GET /user/translation-history` — Auth required
 
-**接口**: `GET /user/translation-history`
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| page | integer | 1 | Page number |
+| pageSize | integer | 20 | Items per page |
+| type | string | all | Type: all, text, document |
 
-**认证**: 需要
+### 14. Get User Preferences
 
-**查询参数**:
+`GET /user/preferences` — Auth required
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| page | integer | 否 | 1 | 页码 |
-| pageSize | integer | 否 | 20 | 每页数量 |
-| type | string | 否 | all | 类型：all, text, document |
+### 15. Update User Preferences
 
----
-
-### 14. 获取用户偏好设置
-
-**接口**: `GET /user/preferences`
-
-**认证**: 需要
+`PUT /user/preferences` — Auth required
 
 ---
 
-### 15. 更新用户偏好设置
+## Glossary Management
 
-**接口**: `PUT /user/preferences`
-
-**认证**: 需要
-
----
-
-## 术语库管理接口
-
-**基础路径**: `/user/glossaries`
+**Base path**: `/user/glossaries`
 **Controller**: `WebGlossaryController`
-**认证**: 需要
+**Auth**: Required
 
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/user/glossaries` | GET | 获取术语库列表 |
-| `/user/glossaries/{id}` | GET | 获取术语库详情 |
-| `/user/glossaries` | POST | 创建术语项 |
-| `/user/glossaries/{id}` | PUT | 更新术语项 |
-| `/user/glossaries/{id}` | DELETE | 删除术语项 |
-| `/user/glossaries/{id}/terms` | GET | 获取术语列表 |
-
-**创建/更新术语项请求体**:
-```json
-{
-  "sourceWord": "spiritual energy",
-  "targetWord": "灵气",
-  "remark": "修仙小说中修炼所需的能量"
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "sourceWord": "magic",
-    "targetWord": "魔法",
-    "remark": "奇幻小说专用术语",
-    "createTime": "2026-03-04T10:00:00Z"
-  },
-  "code": "200"
-}
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/user/glossaries` | GET | List glossaries |
+| `/user/glossaries/{id}` | GET | Glossary detail |
+| `/user/glossaries` | POST | Create term |
+| `/user/glossaries/{id}` | PUT | Update term |
+| `/user/glossaries/{id}` | DELETE | Delete term |
+| `/user/glossaries/{id}/terms` | GET | List terms |
 
 ---
 
-## 平台统计接口
+## Platform Statistics
 
-**基础路径**: `/platform`
-**Controller**: `WebPlatformController`
+`GET /platform/stats` — Auth not required
 
-### 获取平台统计
-
-**接口**: `GET /platform/stats`
-
-**认证**: 不需要
-
-**响应**:
 ```json
 {
   "success": true,
@@ -859,257 +491,123 @@ while (true) {
     "totalDocumentTranslations": 500,
     "totalGlossaries": 200,
     "systemStatus": "normal"
-  },
-  "code": "200"
+  }
 }
 ```
 
 ---
 
-## 文档管理接口
+## Document Management
 
-**基础路径**: `/user/documents`
+**Base path**: `/user/documents`
 **Controller**: `WebDocumentController`
-**认证**: 需要
+**Auth**: Required
 
-### 1. 获取文档列表
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/user/documents` | GET | List documents (page, pageSize, status filters) |
+| `/user/documents/{docId}` | GET | Document detail |
+| `/user/documents/{docId}` | DELETE | Delete document |
+| `/user/documents/{docId}/cancel` | POST | Cancel translation |
+| `/user/documents/{docId}/retry` | POST | Retry translation |
+| `/user/documents/upload` | POST | Upload document (multipart/form-data) |
+| `/user/documents/{docId}/download` | GET | Download translated document |
 
-**接口**: `GET /user/documents`
-
-**查询参数**:
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| page | integer | 否 | 1 | 页码 |
-| pageSize | integer | 否 | 20 | 每页数量 |
-| status | string | 否 | all | 状态：all, pending, processing, completed, failed |
-
----
-
-### 2. 获取文档详情
-
-**接口**: `GET /user/documents/{docId}`
+> **Team mode**: Auto-creates collaboration project and splits chapters. Returns `projectId`.
 
 ---
 
-### 3. 删除文档
+## Collaboration Projects
 
-**接口**: `DELETE /user/documents/{docId}`
-
----
-
-### 4. 取消翻译
-
-**接口**: `POST /user/documents/{docId}/cancel`
-
----
-
-### 5. 重新翻译
-
-**接口**: `POST /user/documents/{docId}/retry`
-
----
-
-### 6. 上传文档
-
-**接口**: `POST /user/documents/upload`
-
-**Content-Type**: `multipart/form-data`
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| file | file | 是 | - | 文档文件 |
-| sourceLang | string | 否 | auto | 源语言代码 |
-| targetLang | string | 是 | - | 目标语言代码 |
-| mode | string | 否 | fast | 翻译模式：fast, expert, team |
-
-**成功响应**:
-```json
-{
-  "success": true,
-  "data": {
-    "taskId": "task_123456",
-    "documentId": 1,
-    "documentName": "novel.epub",
-    "status": "pending",
-    "projectId": null,
-    "message": "文档上传成功"
-  },
-  "code": "200"
-}
-```
-
-> **团队模式（team）**：上传后自动创建协作项目并拆分章节，响应中返回 `projectId`。
-
----
-
-### 7. 下载文档
-
-**接口**: `GET /user/documents/{docId}/download`
-
-返回翻译后的文档文件（二进制流）。
-
----
-
-## 协作项目接口
-
-**基础路径**: `/v1/collab`
+**Base path**: `/v1/collab`
 **Controller**: `CollabProjectController`
-**认证**: 需要
+**Auth**: Required
 
-### 项目管理
+### Projects
 
-| 接口 | 方法 | 说明 | 权限 |
-|------|------|------|------|
-| `/v1/collab/projects` | POST | 创建协作项目 | 认证用户 |
-| `/v1/collab/projects` | GET | 获取用户参与的项目列表 | 认证用户 |
-| `/v1/collab/projects/{projectId}` | GET | 获取项目详情 | 项目成员 |
-| `/v1/collab/projects/{projectId}` | PUT | 更新项目信息 | 项目成员 |
-| `/v1/collab/projects/{projectId}/status` | POST | 变更项目状态 | Owner |
-| `/v1/collab/projects/{projectId}` | DELETE | 删除项目 | Owner |
+| Endpoint | Method | Description | Permission |
+|----------|--------|-------------|------------|
+| `/v1/collab/projects` | POST | Create project | Authenticated |
+| `/v1/collab/projects` | GET | User's projects | Authenticated |
+| `/v1/collab/projects/{projectId}` | GET | Project detail | Member |
+| `/v1/collab/projects/{projectId}` | PUT | Update project | Member |
+| `/v1/collab/projects/{projectId}/status` | POST | Change status | Owner |
+| `/v1/collab/projects/{projectId}` | DELETE | Delete project | Owner |
 
-### 章节管理
+### Chapters
 
-| 接口 | 方法 | 说明 | 权限 |
-|------|------|------|------|
-| `/v1/collab/projects/{projectId}/chapters` | POST | 创建章节 | Owner |
-| `/v1/collab/projects/{projectId}/chapters` | GET | 获取项目章节列表 | 项目成员 |
-
----
-
-## 页面路由接口
-
-以下接口用于返回 HTML 页面，非 API 接口。
-
-| 方法 | 路径 | 说明 | 返回模板 |
-|------|------|------|----------|
-| GET | `/` | 首页 | index.html |
-| GET | `/home` | 首页（备用路径） | index.html |
-| GET | `/verification` | 验证码页面 | verification.html |
-| GET | `/register` | 注册页面 | verification.html |
+| Endpoint | Method | Description | Permission |
+|----------|--------|-------------|------------|
+| `/v1/collab/projects/{projectId}/chapters` | POST | Create chapter | Owner |
+| `/v1/collab/projects/{projectId}/chapters` | GET | Chapter list | Member |
 
 ---
 
-## 前端数据流图
+## Page Routes
 
-### 模式1: 网页翻译
-
-```
-用户点击"翻译网页"
-  ↓
-popup.js 发送 'translateWebPage' 消息
-  ↓
-content.js 分析 DOM → 生成映射表
-  ↓
-content.js 发送映射表 → background.js
-  ↓
-background.js 调用 /v1/translate/webpage 翻译映射表
-  ↓
-后端 SSE 流式返回 {textId → 翻译}
-  ↓
-background.js 发送翻译后的映射表 → content.js
-  ↓
-content.js 应用翻译到对应 DOM 节点
-  ↓
-用户看到翻译后的网页
-```
-
-### 模式2: 阅读器翻译
-
-```
-用户点击"阅读模式"
-  ↓
-popup.js 发送 'activateReaderMode' 消息
-  ↓
-read.js 提取文章内容
-  ↓
-background.js 调用 /v1/translate/reader
-  ↓
-后端返回翻译后的 HTML
-  ↓
-read.js 显示阅读界面
-  ↓
-用户进入阅读模式
-```
-
-### 模式3: 选中翻译
-
-```
-用户选中文本
-  ↓
-selection.js 显示翻译按钮
-  ↓
-用户点击按钮
-  ↓
-selection.js 通过 browser.runtime.sendMessage 发送消息到 background.js
-  ↓
-background.js 调用 /v1/translate/selection
-  ↓
-后端返回翻译结果
-  ↓
-background.js 将结果返回给 selection.js
-  ↓
-selection.js 显示结果
-  ↓
-用户看到翻译
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Home page |
+| GET | `/home` | Home page (alternate) |
+| GET | `/verification` | Verification code page |
+| GET | `/register` | Registration page |
 
 ---
 
-## 错误码说明
+## Error Codes
 
-### 通用错误码
+### General
 
-| 错误码 | 说明 |
-|--------|------|
-| 200 | 操作成功 |
-| 400 | 参数错误 |
-| 401 | 未授权访问 |
-| 403 | 禁止访问 |
-| 404 | 资源不存在 |
-| 408 | 请求超时 |
-| 409 | 资源冲突 |
-| 500 | 系统内部错误 |
+| Code | Description |
+|------|-------------|
+| 200 | Success |
+| 400 | Bad request |
+| 401 | Unauthorized |
+| 403 | Forbidden |
+| 404 | Not found |
+| 408 | Timeout |
+| 409 | Conflict |
+| 500 | Internal error |
 
-### 用户相关错误码
+### User
 
-| 错误码 | 说明 |
-|--------|------|
-| U001 | 用户不存在 |
-| U002 | 密码错误 |
-| U003 | 账户已被锁定 |
-| U004 | 账户已被禁用 |
-| U005 | 邮箱已被注册 |
-| U006 | 邮箱格式不正确 |
-| U007 | 密码长度不够 |
-| U008 | 验证码错误或已过期 |
+| Code | Description |
+|------|-------------|
+| U001 | User not found |
+| U002 | Invalid password |
+| U003 | Account locked |
+| U004 | Account disabled |
+| U005 | Email already registered |
+| U006 | Invalid email format |
+| U007 | Password too short |
+| U008 | Verification code expired or invalid |
 
-### 翻译相关错误码
+### Translation
 
-| 错误码 | 说明 |
-|--------|------|
-| T001 | 翻译引擎不可用 |
-| T002 | 翻译频率限制 |
-| T003 | 不支持的语言 |
-| T004 | 翻译内容为空 |
-| T005 | 翻译失败 |
+| Code | Description |
+|------|-------------|
+| T001 | Translation engine unavailable |
+| T002 | Rate limit exceeded |
+| T003 | Unsupported language |
+| T004 | Translation content empty |
+| T005 | Translation failed |
 
-### 邮件相关错误码
+### Email
 
-| 错误码 | 说明 |
-|--------|------|
-| E001 | 邮件发送失败 |
-| E002 | 无效的邮箱地址 |
-| E003 | 验证码已过期 |
+| Code | Description |
+|------|-------------|
+| E001 | Email send failed |
+| E002 | Invalid email address |
+| E003 | Verification code expired |
 
-### Token 相关错误码
+### Token
 
-| 错误码 | 说明 |
-|--------|------|
-| T101 | 令牌无效或已过期 |
-| T102 | 令牌已过期 |
-| T103 | 缺少令牌 |
+| Code | Description |
+|------|-------------|
+| T101 | Token invalid or expired |
+| T102 | Token expired |
+| T103 | Token missing |
 
 ---
 
-**文档更新日期**: 2026-04-22
+**Last updated**: 2026-04-27

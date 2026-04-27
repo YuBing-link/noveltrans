@@ -416,7 +416,7 @@ public class UserLevelThrottledTranslationClient {
             Map<String, Object> bodyMap = new LinkedHashMap<>();
             bodyMap.put("text", text);
             bodyMap.put("target_lang", targetLang);
-            bodyMap.put("engine", engine);
+            bodyMap.put("engine", "openai");
             bodyMap.put("fallback", true);
             String jsonBody = JSON.toJSONString(bodyMap);
             String result = doPythonServiceRequest(jsonBody, text);

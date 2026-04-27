@@ -92,7 +92,7 @@ class TranslationServiceExtendedTest {
         void 翻译返回空字符串判定失败() {
             // 快速模式 (默认) 使用 executeFast，失败时返回原文
             // 测试需要验证空结果行为：直接模式走 executeFast，返回原文
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
@@ -109,7 +109,7 @@ class TranslationServiceExtendedTest {
 
         @Test
         void 翻译返回null判定失败() {
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn(null);
 
@@ -126,7 +126,7 @@ class TranslationServiceExtendedTest {
 
         @Test
         void 缓存返回翻译结果() {
-            when(cacheService.getCache(anyString())).thenReturn("context-cached");
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("context-cached");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("test-text");
@@ -155,7 +155,7 @@ class TranslationServiceExtendedTest {
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(true);
 
             // 缓存全部未命中
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             // 翻译抛出异常 → 管线捕获异常并返回原文
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenThrow(new RuntimeException("translation error"));
@@ -180,7 +180,7 @@ class TranslationServiceExtendedTest {
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(true);
 
-            when(cacheService.getCache(anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"translated\"}");
 
@@ -191,7 +191,7 @@ class TranslationServiceExtendedTest {
             ReaderTranslateResponse resp = translationService.readerTranslate(req);
 
             assertNotNull(resp);
-            assertEquals("deepl", resp.getEngine());
+            assertEquals("expert", resp.getEngine());
         }
     }
 

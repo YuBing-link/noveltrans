@@ -18,26 +18,26 @@ class TranslationLimitPropertiesTest {
 
     @Test
     void 默认免费每日限制() {
-        assertEquals(100, props.getFreeDailyLimit());
+        assertEquals(500, props.getFreeDailyLimit());
     }
 
     @Test
     void 默认专业每日限制() {
-        assertEquals(1000, props.getProDailyLimit());
+        assertEquals(5000, props.getProDailyLimit());
     }
 
     @Test
     void 默认并发限制() {
-        assertEquals(5, props.getFreeConcurrencyLimit());
-        assertEquals(20, props.getProConcurrencyLimit());
-        assertEquals(3, props.getAnonymousConcurrencyLimit());
+        assertEquals(1, props.getFreeConcurrencyLimit());
+        assertEquals(3, props.getProConcurrencyLimit());
+        assertEquals(1, props.getAnonymousConcurrencyLimit());
     }
 
     @Test
     void 默认月度字符配额() {
-        assertEquals(10_000, props.getFreeMonthlyChars());
-        assertEquals(50_000, props.getProMonthlyChars());
-        assertEquals(200_000, props.getMaxMonthlyChars());
+        assertEquals(100_000, props.getFreeMonthlyChars());
+        assertEquals(500_000, props.getProMonthlyChars());
+        assertEquals(2_000_000, props.getMaxMonthlyChars());
     }
 
     @Test

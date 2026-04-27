@@ -67,7 +67,7 @@ class TextSegmentationUtilTest {
     void estimateSegmentsCount() {
         String text = "A".repeat(3000);
         int count = TextSegmentationUtil.estimateSegmentsCount(text, "google");
-        assertTrue(count >= 3);
+        assertTrue(count >= 2);
     }
 
     @Test

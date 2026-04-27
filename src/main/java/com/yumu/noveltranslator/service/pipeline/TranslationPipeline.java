@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.service.pipeline;
 import com.yumu.noveltranslator.dto.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.dto.RagTranslationResponse;
 import com.yumu.noveltranslator.entity.Glossary;
+import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.service.EntityConsistencyService;
 import com.yumu.noveltranslator.service.RagTranslationService;
 import com.yumu.noveltranslator.service.TeamTranslationService;
@@ -95,16 +96,16 @@ public class TranslationPipeline {
      *
      * @param text       待翻译文本
      * @param targetLang 目标语言
-     * @param engine     翻译引擎
+     * @param mode       翻译质量档位
      * @return 翻译结果，失败返回 null
      */
-    public String execute(String text, String targetLang, String engine) {
+    public String execute(String text, String targetLang, TranslationMode mode) {
         // Check if segmentation is needed
         List<String> segments = splitTextForTranslation(text);
 
         if (segments.size() == 1) {
             // Short text: original single-pass flow
-            return executeSegment(text, targetLang, engine);
+            return executeSegment(text, targetLang, mode);
         }
 
         // Long text: translate each segment and merge
@@ -113,7 +114,7 @@ public class TranslationPipeline {
 
         for (int i = 0; i < segments.size(); i++) {
             String segment = segments.get(i);
-            String translated = executeSegment(segment, targetLang, engine);
+            String translated = executeSegment(segment, targetLang, mode);
             if (translated != null && !translated.isBlank()) {
                 result.append(translated);
             } else {
@@ -132,7 +133,7 @@ public class TranslationPipeline {
     /**
      * 团队模式翻译管线（完整四级管线 + L4 走多 Agent 协作）
      *
-     * L1: 缓存查询
+     * L1: 缓存查询（分层：仅 team 模式）
      * L2: RAG 语义匹配
      * L3: 实体一致性（提取实体 + 占位符保护）
      * L4: TeamTranslationService 多 Agent 协作翻译
@@ -140,7 +141,7 @@ public class TranslationPipeline {
      * @param text           待翻译文本
      * @param sourceLang     源语言
      * @param targetLang     目标语言
-     * @param engine         翻译引擎
+     * @param mode           翻译质量档位（固定为 TEAM）
      * @param novelType      小说类型
      * @param glossaryTerms  术语表
      * @return 翻译结果，失败返回 null
@@ -149,25 +150,25 @@ public class TranslationPipeline {
             String text,
             String sourceLang,
             String targetLang,
-            String engine,
+            TranslationMode mode,
             String novelType,
             List<Glossary> glossaryTerms) {
 
-        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang, engine);
+        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);
 
-        // L1: 三级缓存查询
-        String cached = cacheService.getCache(cacheKey);
+        // L1: 分层缓存查询
+        String cached = cacheService.getCacheByMode(cacheKey, mode.getName());
         if (cached != null) {
             log.debug("Pipeline 团队模式缓存命中 [{}]", cacheKey.substring(0, Math.min(16, cacheKey.length())));
             return cached;
         }
 
         // L2: RAG 语义匹配
-        RagTranslationResponse ragResult = ragTranslationService.searchSimilar(text, targetLang, engine);
+        RagTranslationResponse ragResult = ragTranslationService.searchSimilar(text, targetLang, mode.getName());
         if (ragResult.isDirectHit()) {
             log.info("Pipeline 团队模式 RAG 直接命中，相似度: {}", ragResult.getSimilarity());
-            String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, engine);
-            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
+            String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, mode.getName());
+            cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), "team");
             return result;
         }
 
@@ -197,7 +198,7 @@ public class TranslationPipeline {
                 log.error("标准直译降级失败: translationClient 未初始化");
                 return null;
             }
-            return executeSegment(text, targetLang, engine);
+            return executeSegment(text, targetLang, mode);
         }
 
         try {
@@ -215,10 +216,10 @@ public class TranslationPipeline {
             }
 
             // 后处理 + 缓存
-            translated = postProcessingService.fixUntranslatedChinese(text, translated, targetLang, engine);
+            translated = postProcessingService.fixUntranslatedChinese(text, translated, targetLang, mode.getName());
             if (shouldCache(text, translated)) {
-                cacheService.putCache(cacheKey, text, translated, sourceLang, targetLang, "ai-team", "");
-                ragTranslationService.storeTranslationMemory(text, translated, targetLang, "ai-team");
+                cacheService.putCache(cacheKey, text, translated, sourceLang, targetLang, mode.getName(), "team");
+                ragTranslationService.storeTranslationMemory(text, translated, targetLang, mode.getName());
             }
 
             return translated;
@@ -231,22 +232,22 @@ public class TranslationPipeline {
     /**
      * 执行单段翻译流程
      */
-    private String executeSegment(String text, String targetLang, String engine) {
-        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang, engine);
+    private String executeSegment(String text, String targetLang, TranslationMode mode) {
+        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);
 
-        // L1: 三级缓存查询
-        String cached = cacheService.getCache(cacheKey);
+        // L1: 分层缓存查询
+        String cached = cacheService.getCacheByMode(cacheKey, mode.getName());
         if (cached != null) {
-            log.debug("Pipeline 缓存命中 [{}]", cacheKey.substring(0, Math.min(16, cacheKey.length())));
+            log.debug("Pipeline 缓存命中 mode={}, key={}", mode.getName(), cacheKey);
             return cached;
         }
 
         // L2: RAG 语义匹配
-        RagTranslationResponse ragResult = ragTranslationService.searchSimilar(text, targetLang, engine);
+        RagTranslationResponse ragResult = ragTranslationService.searchSimilar(text, targetLang, mode.getName());
         if (ragResult.isDirectHit()) {
             log.info("Pipeline RAG 直接命中，相似度: {}", ragResult.getSimilarity());
-            String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, engine);
-            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
+            String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, mode.getName());
+            cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), mode.getName());
             return result;
         }
 
@@ -254,19 +255,19 @@ public class TranslationPipeline {
         if (userId != null && entityConsistencyService.shouldUseConsistency(text)) {
             log.info("Pipeline 启用实体一致性翻译");
             ConsistencyTranslationResult consistencyResult =
-                    entityConsistencyService.translateWithConsistency(text, targetLang, engine, userId, docId);
+                    entityConsistencyService.translateWithConsistency(text, targetLang, mode.getName(), userId, docId);
             if (consistencyResult.isConsistencyApplied() && consistencyResult.getTranslatedText() != null) {
-                String result = postProcessingService.fixUntranslatedChinese(text, consistencyResult.getTranslatedText(), targetLang, engine);
+                String result = postProcessingService.fixUntranslatedChinese(text, consistencyResult.getTranslatedText(), targetLang, mode.getName());
                 if (shouldCache(text, result)) {
-                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
+                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), mode.getName());
                 }
-                ragTranslationService.storeTranslationMemory(text, result, targetLang, engine);
+                ragTranslationService.storeTranslationMemory(text, result, targetLang, mode.getName());
                 return result;
             }
         }
 
         // L4: 直译
-        String rawJson = translationClient.translate(text, targetLang, engine, false);
+        String rawJson = translationClient.translate(text, targetLang, mode.getName(), false);
         String result = ExternalResponseUtil.extractDataField(rawJson);
 
         if (result == null) {
@@ -280,10 +281,10 @@ public class TranslationPipeline {
         }
 
         // 后处理 + 缓存
-        result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, engine);
+        result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, mode.getName());
         if (shouldCache(text, result)) {
-            cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
-            ragTranslationService.storeTranslationMemory(text, result, targetLang, engine);
+            cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), mode.getName());
+            ragTranslationService.storeTranslationMemory(text, result, targetLang, mode.getName());
         } else {
             log.debug("Pipeline 译文与原文一致，跳过缓存");
         }
@@ -297,11 +298,11 @@ public class TranslationPipeline {
      *
      * @param text       待翻译文本
      * @param targetLang 目标语言
-     * @param engine     翻译引擎
+     * @param mode       翻译质量档位
      * @return 翻译结果，失败时返回原文
      */
-    public String executeFast(String text, String targetLang, String engine) {
-        return executeFast(text, targetLang, engine, false);
+    public String executeFast(String text, String targetLang, TranslationMode mode) {
+        return executeFast(text, targetLang, mode, false);
     }
 
     /**
@@ -309,23 +310,23 @@ public class TranslationPipeline {
      *
      * @param text       待翻译文本
      * @param targetLang 目标语言
-     * @param engine     翻译引擎
+     * @param mode       翻译质量档位
      * @param html       是否启用 HTML 翻译模式（仅对 MTranServer 有效）
      * @return 翻译结果，失败时返回原文
      */
-    public String executeFast(String text, String targetLang, String engine, boolean html) {
-        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang, engine);
+    public String executeFast(String text, String targetLang, TranslationMode mode, boolean html) {
+        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);
 
-        // L1: 缓存查询
-        String cached = cacheService.getCache(cacheKey);
+        // L1: 分层缓存查询
+        String cached = cacheService.getCacheByMode(cacheKey, mode.getName());
         if (cached != null) {
-            log.debug("Pipeline 快速模式缓存命中");
+            log.debug("Pipeline 快速模式缓存命中 mode={}", mode.getName());
             return cached;
         }
 
         // L4: 直译（跳过 RAG 和一致性，快速模式直连 MTranServer）
         try {
-            String rawJson = translationClient.translate(text, targetLang, engine, html, true);
+            String rawJson = translationClient.translate(text, targetLang, mode.getName(), html, true);
             String result = ExternalResponseUtil.extractDataField(rawJson);
 
             if (result != null && !result.isBlank()) {
@@ -333,9 +334,9 @@ public class TranslationPipeline {
                     log.warn("Pipeline 快速模式翻译结果无效，返回原文");
                     return text;
                 }
-                result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, engine);
+                result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, mode.getName());
                 if (shouldCache(text, result)) {
-                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, engine, "");
+                    cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), mode.getName());
                 }
                 return result;
             }
