@@ -27,7 +27,7 @@ spring:
           min-idle: 2
   sql:
     init:
-      schema-locations: classpath:schema.sql
+      schema-locations: classpath:sql/schema.sql
       mode: always
   threads:
     virtual:
