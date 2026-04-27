@@ -16,30 +16,36 @@ import org.springframework.stereotype.Component;
 public class TranslationLimitProperties {
 
     /** 免费用户每日翻译次数限制 */
-    private int freeDailyLimit = 100;
+    private int freeDailyLimit = 500;
 
     /** 专业用户每日翻译次数限制 */
-    private int proDailyLimit = 1000;
+    private int proDailyLimit = 5000;
+
+    /** Max 用户每日翻译次数限制 */
+    private int maxDailyLimit = Integer.MAX_VALUE;
 
     /** 免费用户最大并发数 */
-    private int freeConcurrencyLimit = 5;
+    private int freeConcurrencyLimit = 1;
 
     /** 专业用户最大并发数 */
-    private int proConcurrencyLimit = 20;
+    private int proConcurrencyLimit = 3;
+
+    /** Max 用户最大并发数 */
+    private int maxConcurrencyLimit = 5;
 
     /** 匿名用户最大并发数 */
-    private int anonymousConcurrencyLimit = 3;
+    private int anonymousConcurrencyLimit = 1;
 
     // ==================== 字符配额配置 ====================
 
     /** 免费用户月度字符包 */
-    private long freeMonthlyChars = 10_000;
+    private long freeMonthlyChars = 100_000;
 
     /** 专业用户月度字符包 */
-    private long proMonthlyChars = 50_000;
+    private long proMonthlyChars = 500_000;
 
     /** Max 用户月度字符包 */
-    private long maxMonthlyChars = 200_000;
+    private long maxMonthlyChars = 2_000_000;
 
     /** 快速模式系数（消耗更少） */
     private double fastModeMultiplier = 0.5;

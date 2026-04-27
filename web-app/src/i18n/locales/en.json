@@ -281,11 +281,9 @@
         "name": "Free",
         "price": "¥0",
         "features": [
-          "100 translations per day",
-          "5 concurrent translations",
-          "10,000 characters per month",
-          "Basic translation engine",
-          "Glossary management"
+          "100,000 characters per month",
+          "500 translations per day",
+          "10 concurrent translations"
         ],
         "current": "Current Plan"
       },
@@ -296,13 +294,9 @@
         "priceYearly": "¥39/month",
         "yearlyTotal": "¥468/year",
         "features": [
-          "1,000 translations per day",
-          "20 concurrent translations",
-          "50,000 characters per month",
-          "AI translation + neural network",
-          "Translation memory",
-          "3 collaboration projects",
-          "Priority support"
+          "500,000 characters per month",
+          "5,000 translations per day",
+          "50 concurrent translations"
         ],
         "subscribe": "Subscribe to Pro",
         "popular": "Most Popular"
@@ -314,14 +308,9 @@
         "priceYearly": "¥79/month",
         "yearlyTotal": "¥948/year",
         "features": [
+          "2,000,000 characters per month",
           "Unlimited translations",
-          "50 concurrent translations",
-          "200,000 characters per month",
-          "All translation engines",
-          "Translation memory",
-          "Unlimited collaboration projects",
-          "Dedicated support",
-          "API access"
+          "100 concurrent translations"
         ],
         "subscribe": "Subscribe to Ultimate"
       }

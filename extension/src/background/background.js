@@ -2415,5 +2415,17 @@ class BackgroundManager {
     }
 }
 
+// 导出测试用类（Jest 环境）
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        TranslationServiceManager,
+        ExtensionStateManager,
+        MappingTableManager,
+        ContextMenuManager,
+        ShortcutManager,
+        BackgroundManager
+    };
+}
+
 // 初始化后台管理器
 const backgroundManager = new BackgroundManager();

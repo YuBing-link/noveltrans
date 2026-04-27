@@ -83,6 +83,7 @@ public class UserLevelThrottledTranslationClient {
 
     private Semaphore freeUserSemaphore;
     private Semaphore proUserSemaphore;
+    private Semaphore maxUserSemaphore;
     private Semaphore anonymousUserSemaphore;
 
     /**
@@ -112,6 +113,7 @@ public class UserLevelThrottledTranslationClient {
     public void init() {
         this.freeUserSemaphore = new Semaphore(limitProperties.getFreeConcurrencyLimit());
         this.proUserSemaphore = new Semaphore(limitProperties.getProConcurrencyLimit());
+        this.maxUserSemaphore = new Semaphore(limitProperties.getMaxConcurrencyLimit());
         this.anonymousUserSemaphore = new Semaphore(limitProperties.getAnonymousConcurrencyLimit());
     }
 
@@ -311,9 +313,13 @@ public class UserLevelThrottledTranslationClient {
         int pythonCount = pythonRequestCount.get();
         int mTranCount = mTranRequestCount.get();
 
-        // 冷启动阶段：样本不足时，轮流使用
+        // 冷启动阶段：fast 模式优先走 MTran（快速），expert 模式交替收集样本
         if (pythonCount < MIN_REQUESTS_FOR_STATS && mTranCount < MIN_REQUESTS_FOR_STATS) {
-            // 两者样本都不足，简单轮流
+            if (fastMode) {
+                // fast 模式：优先用 MTran，第 3 次开始轮询到 Python 收集样本
+                return (pythonCount + mTranCount) >= 3 && (pythonCount + mTranCount) % 2 == 0;
+            }
+            // expert 模式：简单轮流收集样本
             return (pythonCount + mTranCount) % 2 == 0;
         }
         if (pythonCount < MIN_REQUESTS_FOR_STATS) {
@@ -553,7 +559,9 @@ public class UserLevelThrottledTranslationClient {
             CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
             String userLevel = userDetails.getUserLevel();
 
-            if ("pro".equalsIgnoreCase(userLevel) || "premium".equalsIgnoreCase(userLevel)) {
+            if ("max".equalsIgnoreCase(userLevel)) {
+                return maxUserSemaphore;
+            } else if ("pro".equalsIgnoreCase(userLevel) || "premium".equalsIgnoreCase(userLevel)) {
                 return proUserSemaphore;
             } else {
                 // 默认为免费用户

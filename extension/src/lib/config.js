@@ -423,3 +423,8 @@ function getFlagEmoji(countryCode) {
 if (typeof self !== 'undefined') {
     self.GlobalConfig = GlobalConfig;
 }
+
+// 导出 CommonJS（Jest 测试环境）
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { GlobalConfig, languages, getFlagEmoji };
+}

@@ -210,7 +210,11 @@
       "Bash(git stash *)",
       "Bash(pnpm build *)",
       "Bash(git branch *)",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(mvn dependency:build-classpath -q -DincludeScope=test -Dmdep.outputFile=/dev/stdout)",
+      "Bash(npm test *)",
+      "Bash(docker-compose stop *)",
+      "Bash(docker-compose rm *)"
     ]
   }
 }

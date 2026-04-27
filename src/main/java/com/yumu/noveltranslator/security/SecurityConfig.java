@@ -18,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import jakarta.servlet.DispatcherType;
 
 import java.util.List;
 
@@ -54,8 +55,8 @@ public class SecurityConfig {
         if (allowedOrigins != null && !allowedOrigins.isBlank()) {
             origins = List.of(allowedOrigins.split(","));
         } else {
-            // 开发环境默认允许本地前端端口
-            origins = List.of("http://localhost:5173", "http://localhost:3000");
+            // 开发环境默认允许本地端口（项目通过 nginx 7341 端口访问）
+            origins = List.of("http://localhost:7341");
         }
 
         CorsConfiguration config = new CorsConfiguration();
@@ -80,6 +81,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
             .authorizeHttpRequests(authz -> authz
+                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(SecurityPermitAllPaths.PERMIT_ALL_PATHS.toArray(new String[0])).permitAll()
                 // 翻译端点必须认证：防止匿名请求消耗配额和费用

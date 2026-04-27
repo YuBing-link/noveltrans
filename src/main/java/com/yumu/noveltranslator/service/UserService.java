@@ -85,9 +85,14 @@ public class UserService {
         response.setUsedThisMonth(usedThisMonth);
         response.setRemainingChars(remaining);
 
-        int concurrency = "pro".equalsIgnoreCase(level) || "max".equalsIgnoreCase(level)
-            ? limitProperties.getProConcurrencyLimit()
-            : limitProperties.getFreeConcurrencyLimit();
+        int concurrency;
+        if ("max".equalsIgnoreCase(level)) {
+            concurrency = limitProperties.getMaxConcurrencyLimit();
+        } else if ("pro".equalsIgnoreCase(level)) {
+            concurrency = limitProperties.getProConcurrencyLimit();
+        } else {
+            concurrency = limitProperties.getFreeConcurrencyLimit();
+        }
         response.setConcurrencyLimit(concurrency);
 
         double fastMult = limitProperties.getFastModeMultiplier();

@@ -26,6 +26,11 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
         logger.error("Unauthorized error: {}", authException.getMessage());
 
+        // 响应已提交则跳过，防止 Undertow "response already committed" 错误
+        if (response.isCommitted()) {
+            return;
+        }
+
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
@@ -37,5 +42,6 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.writeValue(response.getOutputStream(), body);
+        response.flushBuffer();
     }
 }

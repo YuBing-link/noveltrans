@@ -66,6 +66,7 @@ ENGINE_REGISTRY: Dict[str, tuple] = {
     "google": ("translate_openai", True, 1),
     "deepseek": ("translate_openai", True, 1),
     "mtran": ("translate_openai", True, 1),
+    "fast": ("translate_openai", True, 1),
     # 未来可扩展其他引擎，例如:
     # "anthropic": ("translate_anthropic", True, 2),
     # "ollama": ("translate_ollama", False, 3),
@@ -79,6 +80,7 @@ ENGINE_ALIASES = {
     "libre": "openai",
     "baidu": "openai",
     "youdao": "openai",
+    "fast": "openai",
 }
 
 # 自动生成候选引擎列表（按优先级排序）

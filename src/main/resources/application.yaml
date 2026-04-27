@@ -98,11 +98,13 @@ translate-server:
   host: ${TRANSLATE_SERVER_HOST:llm-engine}
   port: ${TRANSLATE_SERVER_PORT:8000}
   limit:
-    free-daily-limit: 100        # 免费用户每日翻译次数
-    pro-daily-limit: 1000        # 专业用户每日翻译次数
-    free-concurrency-limit: 5    # 免费用户最大并发数
-    pro-concurrency-limit: 20    # 专业用户最大并发数
-    anonymous-concurrency-limit: 3  # 匿名用户最大并发数
+    free-daily-limit: 500        # 免费用户每日翻译次数
+    pro-daily-limit: 5000        # 专业用户每日翻译次数
+    max-daily-limit: 999999999   # Max 用户每日翻译次数（无限制）
+    free-concurrency-limit: 1    # 免费用户最大并发数
+    pro-concurrency-limit: 3     # 专业用户最大并发数
+    max-concurrency-limit: 5     # Max 用户最大并发数
+    anonymous-concurrency-limit: 1  # 匿名用户最大并发数
   verification:
     code:
       validity: 5
