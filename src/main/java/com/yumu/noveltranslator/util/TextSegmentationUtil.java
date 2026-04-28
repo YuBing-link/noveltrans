@@ -107,14 +107,8 @@ public class TextSegmentationUtil {
         for (int i = endPos - 1; i >= startPos; i--) {
             char c = text.charAt(i);
             if (isSentenceEnding(c)) {
-                // 移动到句子结束符之后
-                int sentenceEnd = i + 1;
-                // 跳过连续的空白字符
-                while (sentenceEnd < text.length() &&
-                       Character.isWhitespace(text.charAt(sentenceEnd))) {
-                    sentenceEnd++;
-                }
-                return sentenceEnd;
+                // 返回句子结束符之后的位置，保留换行符在当前段末尾
+                return i + 1;
             }
         }
         return -1; // 未找到合适的分割点
@@ -134,12 +128,8 @@ public class TextSegmentationUtil {
         // 查找换行符作为段落边界
         for (int i = endPos - 1; i >= startPos; i--) {
             if (text.charAt(i) == '\n') {
-                // 找到换行符后跳过连续的换行符
-                int newlineEnd = i + 1;
-                while (newlineEnd < text.length() && text.charAt(newlineEnd) == '\n') {
-                    newlineEnd++;
-                }
-                return newlineEnd;
+                // 返回换行符之后的位置，保留换行在当前段末尾
+                return i + 1;
             }
         }
         return -1; // 未找到合适的分割点

@@ -47,7 +47,13 @@ function HomePage() {
 
     await translateApi.streamTranslate(
       { text: sourceText, sourceLang, targetLang, engine, mode: engine === 'ai' ? 'expert' : 'fast' },
-      (chunk) => { if (!streamAbortRef.current) setTranslatedText(prev => prev + chunk); },
+      (chunk) => {
+        if (!streamAbortRef.current) {
+          // 还原后端为 SSE 安全而替换的换行占位符
+          const restored = chunk.replace(/§NL§/g, '\n');
+          setTranslatedText(prev => prev + restored);
+        }
+      },
       () => { setCostTime(Date.now() - startTime); setLoading(false); },
       (err) => { toastError(err); setLoading(false); },
     );
@@ -214,10 +220,17 @@ function HomePage() {
             <div className="flex-1 p-6 relative overflow-y-auto">
               {loading ? (
                 <div className="space-y-2">
-                  <p className="text-[17px] leading-relaxed text-text-primary whitespace-pre-wrap break-words">
-                    {translatedText || <span className="text-text-placeholder/40">{t('home.actions.translating')}</span>}
+                  <div className="text-[17px] leading-relaxed text-text-primary whitespace-pre-wrap break-words pr-16">
+                    {translatedText ? translatedText.split('\n').map((line, i) => (
+                      <span key={i}>
+                        {line}
+                        {i < translatedText.split('\n').length - 1 && <br />}
+                      </span>
+                    )) : (
+                      <span className="text-text-placeholder/40">{t('home.actions.translating')}</span>
+                    )}
                     <span className="text-accent inline-block animate-pulse ml-0.5">▋</span>
-                  </p>
+                  </div>
                   {progressPercent > 0 && (
                     <div className="mt-4">
                       <div className="flex items-center justify-between text-[12px] text-text-tertiary mb-1">
@@ -238,7 +251,14 @@ function HomePage() {
                 </div>
               ) : translatedText ? (
                 <div>
-                  <p className="text-[17px] leading-relaxed text-text-primary whitespace-pre-wrap pr-16">{translatedText}</p>
+                  <div className="text-[17px] leading-relaxed text-text-primary whitespace-pre-wrap break-words pr-16">
+                    {translatedText.split('\n').map((line, i) => (
+                      <span key={i}>
+                        {line}
+                        {i < translatedText.split('\n').length - 1 && <br />}
+                      </span>
+                    ))}
+                  </div>
                   <div className="mt-4 flex items-center gap-2 text-[12px] text-text-tertiary">
                     {engine === 'ai' ? (
                       <>

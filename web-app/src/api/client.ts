@@ -123,7 +123,8 @@ export async function streamFetch(
 
       for (const line of lines) {
         if (!line.startsWith('data:')) continue;
-        const data = line.slice(5).trim();
+        // 只去掉 'data: ' 前缀，保留内部空白（如段落分隔符 \n\n）
+        const data = line.length > 6 && line[5] === ' ' ? line.slice(6) : line.slice(5);
         if (data === '[DONE]') {
           onDone();
           return;

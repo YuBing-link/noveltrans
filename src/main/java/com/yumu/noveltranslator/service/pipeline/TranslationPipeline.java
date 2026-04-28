@@ -122,8 +122,8 @@ public class TranslationPipeline {
                 result.append(segment);
             }
             // Add paragraph separator between segments (but not after the last one)
-            if (i < segments.size() - 1 && !result.toString().endsWith("\n")) {
-                result.append("\n");
+            if (i < segments.size() - 1) {
+                result.append("\n\n");
             }
         }
 

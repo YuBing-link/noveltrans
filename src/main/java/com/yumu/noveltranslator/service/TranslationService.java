@@ -474,28 +474,61 @@ public class TranslationService {
                         cacheService, ragTranslationService, entityConsistencyService,
                         userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
-                for (int i = 0; i < segments.size(); i++) {
-                    // 发送心跳保持连接活跃
+                // 先用 \n\n+ 将全文拆为逻辑段落
+                String[] logicalParagraphs = text.split("\n\n+");
+                log.info("流式翻译: 全文拆分为 {} 个逻辑段落", logicalParagraphs.length);
+
+                StringBuilder fullResult = new StringBuilder();
+
+                for (int i = 0; i < logicalParagraphs.length; i++) {
                     SseEmitterUtil.sendHeartbeat(emitter);
 
-                    String segment = segments.get(i);
-                    String extracted;
-                    if ("fast".equals(modeString)) {
-                        // 快速模式：直连 MTranServer，避免轮询浪费
-                        extracted = pipeline.executeFast(segment, target, mode);
-                    } else {
-                        // 专家模式：完整四级管线（RAG + 实体一致性 + 轮询）
-                        extracted = pipeline.execute(segment, target, mode);
+                    String para = logicalParagraphs[i];
+                    if (para.isBlank()) {
+                        fullResult.append("\n\n");
+                        continue;
                     }
 
-                    if (extracted == null || extracted.trim().isEmpty()) {
-                        log.warn("流式翻译失败，使用原文兜底：索引 {}", i);
-                        extracted = segment;
+                    // 段落内按 \n 逐行翻译，保持原文单行换行结构
+                    String[] lines = para.split("\n", -1);
+                    StringBuilder paraResult = new StringBuilder();
+
+                    log.info("[流式翻译] 段落包含 {} 行", lines.length);
+
+                    for (int j = 0; j < lines.length; j++) {
+                        String line = lines[j];
+                        if (line.isEmpty()) {
+                            paraResult.append("\n");
+                            continue;
+                        }
+
+                        String translated;
+                        if ("fast".equals(modeString)) {
+                            translated = pipeline.executeFast(line, target, mode);
+                        } else {
+                            translated = pipeline.execute(line, target, mode);
+                        }
+
+                        if (translated == null || translated.isBlank()) {
+                            translated = line;
+                        }
+
+                        if (j > 0) paraResult.append("\n");
+                        paraResult.append(translated);
                     }
 
-                    // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
-                    String sanitized = TextCleaningUtil.sanitizeHtml(extracted);
-                    SseEmitterUtil.sendData(emitter, sanitized);
+                    log.info("[流式翻译] 段落结果行数: {} (与原文一致)", paraResult.toString().split("\n", -1).length);
+
+                    if (i > 0) fullResult.append("\n\n");
+                    fullResult.append(paraResult);
+
+                    // 流式发送当前段落结果（含段间分隔符）
+                    // §NL§ = 单换行, §NL§§NL§ = 段落分隔
+                    String chunk = TextCleaningUtil.sanitizeHtml(paraResult.toString()).replace("\n", "§NL§");
+                    if (i > 0) {
+                        chunk = "§NL§§NL§" + chunk;
+                    }
+                    SseEmitterUtil.sendData(emitter, chunk);
                 }
 
                 SseEmitterUtil.sendDone(emitter);

@@ -39,24 +39,22 @@ public class TranslationPostProcessingService {
      */
     public String fixUntranslatedChinese(String sourceText, String translatedText, String targetLang, String engine) {
         var segments = detectChineseSegments(translatedText);
-        if (segments.isEmpty()) {
-            log.debug("[后处理] 未检测到残留中文");
-            return translatedText;
-        }
+        if (!segments.isEmpty()) {
+            log.info("[后处理] 检测到 {} 段残留中文: {}", segments.size(), segments);
 
-        log.info("[后处理] 检测到 {} 段残留中文: {}", segments.size(), segments);
-
-        try {
-            String remedied = remediateSegments(segments, targetLang, engine);
-            if (remedied != null) {
-                String result = applyRemediation(translatedText, segments, remedied);
-                log.info("[后处理] 补救完成，原文长度={}, 修复后长度={}", translatedText.length(), result.length());
-                return result;
+            try {
+                String remedied = remediateSegments(segments, targetLang, engine);
+                if (remedied != null) {
+                    translatedText = applyRemediation(translatedText, segments, remedied);
+                    log.info("[后处理] 补救完成，原文长度={}, 修复后长度={}", translatedText.length(), translatedText.length());
+                }
+            } catch (Exception e) {
+                log.warn("[后处理] 补救失败: {}，保留原始译文", e.getMessage());
             }
-        } catch (Exception e) {
-            log.warn("[后处理] 补救失败: {}，保留原始译文", e.getMessage());
         }
 
+        // 注意：在逐行翻译场景下（streamTextTranslate），行级结构由 TranslationService 处理
+        // 后处理只负责检测残留中文，不做任何结构重排
         return translatedText;
     }
 
@@ -118,6 +116,7 @@ public class TranslationPostProcessingService {
 
     /**
      * 将补救翻译结果应用到原文
+     * 关键修复：使用逐个替换，避免 String.replace() 的全局替换导致内容混乱
      */
     private String applyRemediation(String translatedText, java.util.List<String> segments, String remedied) {
         String result = translatedText;
@@ -127,7 +126,11 @@ public class TranslationPostProcessingService {
             String original = segments.get(i);
             String translated = (i < remediedSegments.length) ? remediedSegments[i].trim() : original;
             if (!translated.isBlank()) {
-                result = result.replace(original, translated);
+                // 只替换第一次出现，避免全局替换导致内容混乱
+                int idx = result.indexOf(original);
+                if (idx >= 0) {
+                    result = result.substring(0, idx) + translated + result.substring(idx + original.length());
+                }
             }
         }
         return result;
