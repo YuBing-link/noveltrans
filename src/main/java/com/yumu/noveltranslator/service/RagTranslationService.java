@@ -564,6 +564,24 @@ public class RagTranslationService {
         return sb.toString();
     }
 
+    /**
+     * 清空所有 RAG 翻译记忆（调试用）
+     */
+    public void clearAllTranslationMemory() {
+        try {
+            translationMemoryService.remove(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>());
+            log.info("MySQL translation_memory 表已清空");
+        } catch (Exception e) {
+            log.warn("MySQL translation_memory 清空失败：{}", e.getMessage());
+        }
+        try {
+            stringRedisTemplate.delete(stringRedisTemplate.keys("tm:*"));
+            log.info("Redis RAG 向量索引已清空");
+        } catch (Exception e) {
+            log.warn("Redis RAG 向量索引清空失败：{}", e.getMessage());
+        }
+    }
+
     private RagTranslationResponse buildEmptyResponse() {
         RagTranslationResponse response = new RagTranslationResponse();
         response.setDirectHit(false);

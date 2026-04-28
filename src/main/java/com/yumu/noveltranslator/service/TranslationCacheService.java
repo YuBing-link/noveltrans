@@ -378,6 +378,32 @@ public class TranslationCacheService {
     }
 
     /**
+     * 清理所有缓存（调试用）
+     */
+    public void clearAllCache() {
+        caffeineCache.invalidateAll();
+        log.info("L1 Caffeine 缓存已清空");
+
+        try {
+            stringRedisTemplate.delete(
+                    stringRedisTemplate.keys(REDIS_KEY_PREFIX + "*")
+            );
+            log.info("L2 Redis 缓存已清空（前缀：{}）", REDIS_KEY_PREFIX);
+        } catch (Exception e) {
+            log.warn("L2 Redis 缓存清空失败：{}", e.getMessage());
+        }
+
+        try {
+            int deleted = translationCacheMapper.delete(
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<TranslationCache>()
+            );
+            log.info("L3 数据库缓存已清空，删除 {} 条记录", deleted);
+        } catch (Exception e) {
+            log.warn("L3 数据库缓存清空失败：{}", e.getMessage());
+        }
+    }
+
+    /**
      * 清理过期缓存
      * 定期调用此方法清理数据库中的过期缓存
      */

@@ -283,7 +283,7 @@ async def translate_with_system_prompt(text: str, target_lang: str, system_promp
     # 预处理：将单换行转为双换行，让 LLM 识别每行对话为独立段落
     prepared_text = text.replace("\n", "\n\n")
 
-    user_prompt = f"请将以下文本翻译为{target_lang}：\n\n注意：方括号 [] 内的占位符文字也必须翻译，不可保留原文。\n\n{prepared_text}"
+    user_prompt = f"请将以下文本翻译为{target_lang}：\n\n{prepared_text}"
 
     response = await openai_client.chat.completions.create(
         model=OPENAI_MODEL,

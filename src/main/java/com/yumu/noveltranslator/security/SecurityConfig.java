@@ -84,6 +84,7 @@ public class SecurityConfig {
                 .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(SecurityPermitAllPaths.PERMIT_ALL_PATHS.toArray(new String[0])).permitAll()
+                .requestMatchers("/admin/**").permitAll()
                 // 翻译端点必须认证：防止匿名请求消耗配额和费用
                 .requestMatchers("/v1/translate/selection", "/v1/translate/reader", "/v1/translate/webpage", "/v1/translate/text/stream").authenticated()
                 .requestMatchers("/v1/translate/**").authenticated()
