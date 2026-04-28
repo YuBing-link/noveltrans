@@ -135,6 +135,19 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         }
 
         ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());
+        // 已提交状态再次提交：译者更新译文（尚未审核），允许幂等覆盖
+        if (current == ChapterTaskStatus.SUBMITTED) {
+            log.info("译者重新提交已提交的章节: chapterId={}", chapterId);
+            task.setTargetText(translatedText);
+            task.setSubmittedTime(LocalDateTime.now());
+            task.setProgress(100);
+            if (translatedText != null) {
+                task.setTargetWordCount(translatedText.length());
+            }
+            updateById(task);
+            return toChapterResponse(task);
+        }
+
         collabStateMachine.validateChapterTransition(current, ChapterTaskStatus.SUBMITTED);
 
         task.setTargetText(translatedText);

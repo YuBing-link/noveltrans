@@ -5,6 +5,7 @@
 import asyncio
 import logging
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -226,15 +227,18 @@ async def api_key_middleware(request: Request, call_next):
 # 4. 翻译引擎实现
 # =============================================================================
 # 系统 prompt：专业小说翻译角色
-SYSTEM_PROMPT = """你是一位专业的小说翻译家，精通多国语言，拥有丰富的文学翻译经验。
+SYSTEM_PROMPT = """你是一位专业的翻译家，精通多国语言，拥有丰富的翻译经验。
 
 翻译原则：
-1. 忠实原文：准确传达原文的含义，不增不减
-2. 文学风格：保留原文的文学风格、修辞手法和情感色彩
+1. 完整翻译：翻译文本中的所有内容，包括方括号 []、尖括号 <>、花括号 {} 等所有符号内的说明文字
+2. 忠实原文：准确传达原文的含义，不增不减
 3. 语言流畅：译文自然流畅，符合目标语言的表达习惯
 4. 文化适应：对文化特定元素进行恰当的本地化处理
-5. 保持格式：保留原文中的段落结构、标点符号和特殊格式
+5. 保持格式：保留原文中的段落结构和标点符号，但括号内的文字必须翻译
 6. 人名地名：专有名词的翻译保持一致性
+
+重要：方括号 []、尖括号 <>、花括号 {} 内的占位符文字（如 [指标]、[公司名称]、[日期]）也必须翻译为目标语言，不可保留原文。
+注意：格式为 [{N}] 的数字占位符（如 [{0}]、[{1}]）是系统标记，绝对不能修改或删除。
 
 请直接输出翻译结果，不要添加任何解释、注释或额外内容。"""
 
@@ -279,7 +283,7 @@ async def translate_with_system_prompt(text: str, target_lang: str, system_promp
     # 预处理：将单换行转为双换行，让 LLM 识别每行对话为独立段落
     prepared_text = text.replace("\n", "\n\n")
 
-    user_prompt = f"请将以下文本翻译为{target_lang}：\n\n{prepared_text}"
+    user_prompt = f"请将以下文本翻译为{target_lang}：\n\n注意：方括号 [] 内的占位符文字也必须翻译，不可保留原文。\n\n{prepared_text}"
 
     response = await openai_client.chat.completions.create(
         model=OPENAI_MODEL,
@@ -508,17 +512,18 @@ async def translate_with_placeholders_api(req: PlaceholderTranslateRequest):
     placeholder_list = ", ".join(f"[{{{p}}}]" for p in unique_placeholders)
 
     # 构建带占位符保护指令的 system prompt
-    system_prompt = f"""你是一位专业的小说翻译家，精通多国语言。
+    system_prompt = f"""你是一位专业的翻译家，精通多国语言。
 
 翻译原则：
-1. 忠实原文：准确传达原文的含义，不增不减
-2. 文学风格：保留原文的文学风格、修辞手法和情感色彩
+1. 完整翻译：翻译文本中的所有内容，包括方括号 [] 内的说明文字
+2. 忠实原文：准确传达原文的含义，不增不减
 3. 语言流畅：译文自然流畅，符合目标语言的表达习惯
 4. 文化适应：对文化特定元素进行恰当的本地化处理
-5. 保持格式：保留原文中的段落结构、标点符号和特殊格式
+5. 保持格式：保留原文中的段落结构和标点符号
 
 重要：文本中包含格式为 [{{N}}] 的占位符（如 {placeholder_list}）。
 这些占位符**绝对不能被翻译、修改或删除**。请在翻译结果中原样保留它们。
+但普通方括号 []、尖括号 <>、花括号 {{}} 内的说明文字（非占位符）必须翻译为目标语言。
 
 请直接输出翻译结果，不要添加任何解释、注释或额外内容。"""
 

@@ -116,7 +116,9 @@ public class TranslationPipeline {
             String segment = segments.get(i);
             String translated = executeSegment(segment, targetLang, mode);
             if (translated != null && !translated.isBlank()) {
-                result.append(translated);
+                // Strip trailing whitespace from translated segment — separator added explicitly below
+                String cleaned = translated.stripTrailing();
+                result.append(cleaned);
             } else {
                 // Translation failed, keep original segment
                 result.append(segment);

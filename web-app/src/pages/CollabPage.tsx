@@ -99,6 +99,10 @@ function CollabPage() {
   const [commentContent, setCommentContent] = useState('');
   const [comments, setComments] = useState<CommentResponse[]>([]);
 
+  // Delete project
+  const [deleteProjectOpen, setDeleteProjectOpen] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
+
   // Pagination state
   const [projectPage, setProjectPage] = useState(1);
   const [projectTotalPages, setProjectTotalPages] = useState(1);
@@ -357,6 +361,22 @@ function CollabPage() {
     }
   };
 
+  const handleDeleteProject = async () => {
+    if (!selectedProjectId) return;
+    setDeletingProject(true);
+    try {
+      await collabApi.deleteProject(selectedProjectId);
+      success(t('collab.messages.projectDeleted', { defaultValue: '项目已删除' }));
+      setDeleteProjectOpen(false);
+      setSelectedProjectId(null);
+      loadProjects();
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : t('collab.messages.deleteFailed', { defaultValue: '删除失败' }));
+    } finally {
+      setDeletingProject(false);
+    }
+  };
+
   const handleOpenComments = (chapter: ChapterTaskResponse) => {
     setSelectedChapter(chapter);
     setCommentsOpen(true);
@@ -609,6 +629,7 @@ function CollabPage() {
           onInvite={() => { setInviteOpen(true); setJoinMode('input'); }}
           onGenerateInvite={handleGenerateInvite}
           onRemoveMember={handleRemoveMember}
+          onDeleteProject={() => setDeleteProjectOpen(true)}
           t={t}
         />
       )}
@@ -1169,6 +1190,30 @@ function CollabPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Project */}
+      <Modal open={deleteProjectOpen} onClose={() => setDeleteProjectOpen(false)} title={t('collab.actions.deleteProject', { defaultValue: '删除项目' })} size="sm">
+        <div className="space-y-4">
+          <div className="text-sm text-text-secondary">
+            <p>{t('collab.deleteProject.confirmText', { defaultValue: '确定要删除项目「{name}」吗？此操作不可撤销，所有关联的章节、成员和评论都将被删除。', values: { name: projects.find(p => p.id === selectedProjectId)?.name || '' } })}</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setDeleteProjectOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-text-primary border border-border rounded-button hover:bg-surface-secondary transition-button"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              onClick={handleDeleteProject}
+              disabled={deletingProject}
+              className="px-4 py-2 text-sm font-medium text-white bg-red rounded-button hover:bg-red-hover transition-button disabled:opacity-50"
+            >
+              {deletingProject ? t('common.loading') : t('collab.actions.deleteProject', { defaultValue: '删除项目' })}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -1233,6 +1278,7 @@ interface ProjectDetailViewProps {
   onInvite: () => void;
   onGenerateInvite: () => void;
   onRemoveMember: (memberId: number) => void;
+  onDeleteProject: () => void;
   t: ReturnType<typeof useTranslation>['t'];
 }
 
@@ -1242,7 +1288,7 @@ function ProjectDetailView({
   chapterPage, chapterTotalPages, memberPage, memberTotalPages,
   onChapterPageChange, onMemberPageChange,
   onBack, onAddChapter, onUploadNovel,
-  onAssign, onReview, onComments, onInvite, onGenerateInvite, onRemoveMember,
+  onAssign, onReview, onComments, onInvite, onGenerateInvite, onRemoveMember, onDeleteProject,
   t,
 }: ProjectDetailViewProps) {
   const navigate = useNavigate();
@@ -1275,17 +1321,28 @@ function ProjectDetailView({
     <div className="bg-surface-secondary rounded-card border border-border">
       {/* Header */}
       <div className="p-4 border-b border-border">
-        <div className="flex items-center gap-3 mb-2">
-          <button
-            onClick={onBack}
-            className="p-1.5 rounded-full hover:bg-surface-secondary transition-button text-text-secondary"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <h2 className="text-lg font-semibold text-text-primary">{project.name}</h2>
-          <Badge color={project.status === 'ACTIVE' ? 'green' : 'gray'}>
-            {project.status === 'ACTIVE' ? t('collab.projectStatus.active', { defaultValue: '进行中' }) : project.status}
-          </Badge>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 mb-2">
+            <button
+              onClick={onBack}
+              className="p-1.5 rounded-full hover:bg-surface-secondary transition-button text-text-secondary"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <h2 className="text-lg font-semibold text-text-primary">{project.name}</h2>
+            <Badge color={project.status === 'ACTIVE' ? 'green' : 'gray'}>
+              {project.status === 'ACTIVE' ? t('collab.projectStatus.active', { defaultValue: '进行中' }) : project.status}
+            </Badge>
+          </div>
+          {canManage && (
+            <button
+              onClick={onDeleteProject}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red border border-red/30 rounded-button hover:bg-red/5 transition-button"
+              title={t('collab.actions.deleteProject', { defaultValue: '删除项目' })}
+            >
+              <Trash2 className="w-3.5 h-3.5" /> {t('collab.actions.deleteProject', { defaultValue: '删除项目' })}
+            </button>
+          )}
         </div>
         <p className="text-sm text-text-tertiary ml-9">
           {getLangName(t, project.sourceLang)} → {getLangName(t, project.targetLang)} · {project.memberCount} {t('collab.fields.members', { defaultValue: '成员' })} · {project.totalChapters} {t('collab.fields.chapters', { defaultValue: '章节' })}

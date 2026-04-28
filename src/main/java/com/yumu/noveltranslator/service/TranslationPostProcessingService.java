@@ -38,6 +38,13 @@ public class TranslationPostProcessingService {
      * @return 修复后的译文
      */
     public String fixUntranslatedChinese(String sourceText, String translatedText, String targetLang, String engine) {
+        // 日语使用 CJK 统一表意文字（汉字），与中文共享 Unicode 范围，
+        // 后处理的中文检测会产生大量误报（現代社会、目標、本当 等均为合法日语），直接跳过
+        if (isJapaneseTarget(targetLang)) {
+            log.debug("[后处理] 目标语言为日语，跳过残留中文检测（避免汉字误报）");
+            return translatedText;
+        }
+
         var segments = detectChineseSegments(translatedText);
         if (!segments.isEmpty()) {
             log.info("[后处理] 检测到 {} 段残留中文: {}", segments.size(), segments);
@@ -60,6 +67,7 @@ public class TranslationPostProcessingService {
 
     /**
      * 检测译文中连续的中文字符段
+     * 日语目标语言使用排除法：日语使用 CJK 统一表意文字（汉字），需排除常见日语汉字
      */
     private java.util.List<String> detectChineseSegments(String text) {
         java.util.List<String> segments = new java.util.ArrayList<>();
@@ -68,6 +76,35 @@ public class TranslationPostProcessingService {
             segments.add(matcher.group());
         }
         return segments.stream().distinct().toList();
+    }
+
+    /**
+     * 判断目标语言是否为日语（日语使用 CJK 统一表意文字，与中文共享 Unicode 范围）
+     */
+    private static boolean isJapaneseTarget(String targetLang) {
+        return targetLang != null && (targetLang.equalsIgnoreCase("ja") || targetLang.equalsIgnoreCase("japanese"));
+    }
+
+    /**
+     * 日语常见独有/高频汉字（简化判断：含假名或日语特有汉字则跳过）
+     * 完整策略：如果片段中包含平假名/片假名，则视为日语而非残留中文
+     */
+    private static final Pattern JAPANESE_KANA = Pattern.compile("[぀-ゟ゠-ヿㇰ-ㇿ]");
+
+    /**
+     * 判断一个片段是否应视为日语（非残留中文）
+     */
+    private boolean isJapaneseSegment(String segment, String targetLang) {
+        if (!isJapaneseTarget(targetLang)) {
+            return false;
+        }
+        // 包含假名 → 日语
+        if (JAPANESE_KANA.matcher(segment).find()) {
+            return true;
+        }
+        // 日语中纯汉字的片段很难区分，但结合目标语言为日语，
+        // 纯汉字片段很可能是正常的日文汉字，不应视为残留中文
+        return true;
     }
 
     /**

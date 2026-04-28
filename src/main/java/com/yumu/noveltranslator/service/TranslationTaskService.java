@@ -158,6 +158,13 @@ public class TranslationTaskService {
                         translated = batchText; // fallback to original text
                     }
                     if (translated != null && !translated.isEmpty()) {
+                        // 补回原文批次中的换行符以保持格式对齐
+                        if (!translated.endsWith("\n") && !translated.endsWith("\r")) {
+                            String trailingNewline = getTrailingNewline(batchText);
+                            if (!trailingNewline.isEmpty()) {
+                                translated += trailingNewline;
+                            }
+                        }
                         translatedContent.append(translated);
                     }
                     batchStart = batchEnd;
@@ -779,6 +786,25 @@ public class TranslationTaskService {
         } else {
             throw new IOException("暂不支持 " + fileType.toUpperCase() + " 格式，仅支持 TXT 文件");
         }
+    }
+
+    /**
+     * 提取字符串末尾的所有换行符
+     * 用于在翻译后恢复原文的格式
+     */
+    private static String getTrailingNewline(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        int end = text.length();
+        while (end > 0) {
+            char c = text.charAt(end - 1);
+            if (c != '\n' && c != '\r') {
+                break;
+            }
+            end--;
+        }
+        return text.substring(end);
     }
 
     /**
