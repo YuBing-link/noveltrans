@@ -70,7 +70,7 @@ public class ExternalTranslateController {
                 request.getSourceLang() != null ? request.getSourceLang() : "auto",
                 request.getTargetLang(),
                 request.getEngine() != null ? request.getEngine() : "google",
-                "fast"
+                request.getMode() != null ? request.getMode() : "fast"
             );
 
             String result = translationService.selectionTranslate(selectionReq).getTranslation();
@@ -108,6 +108,8 @@ public class ExternalTranslateController {
             return Result.error("批量翻译最多支持 50 条文本");
         }
 
+        String mode = request.getMode() != null ? request.getMode() : "fast";
+
         // 简单循环翻译
         var results = request.getTexts().stream().map(text -> {
             try {
@@ -116,7 +118,7 @@ public class ExternalTranslateController {
                     request.getSourceLang() != null ? request.getSourceLang() : "auto",
                     request.getTargetLang(),
                     request.getEngine() != null ? request.getEngine() : "google",
-                    "fast"
+                    mode
                 );
                 String translated = translationService.selectionTranslate(selectionReq).getTranslation();
                 ExternalTranslateResponse resp = new ExternalTranslateResponse();
@@ -144,12 +146,12 @@ public class ExternalTranslateController {
     @GetMapping("/models")
     public Result<List<Map<String, Object>>> getModels() {
         List<Map<String, Object>> models = List.of(
-            Map.of("id", "google", "name", "Google Translate", "type", "free"),
-            Map.of("id", "mymemory", "name", "MyMemory", "type", "free"),
-            Map.of("id", "libre", "name", "LibreTranslate", "type", "free"),
-            Map.of("id", "baidu", "name", "Baidu Translate", "type", "api_key"),
-            Map.of("id", "deepl", "name", "DeepL", "type", "api_key"),
-            Map.of("id", "openai", "name", "OpenAI", "type", "api_key")
+            Map.of("id", "google", "name", "Google Translate", "type", "free", "modes", List.of("fast", "expert", "team")),
+            Map.of("id", "mymemory", "name", "MyMemory", "type", "free", "modes", List.of("fast", "expert", "team")),
+            Map.of("id", "libre", "name", "LibreTranslate", "type", "free", "modes", List.of("fast", "expert", "team")),
+            Map.of("id", "baidu", "name", "Baidu Translate", "type", "api_key", "modes", List.of("fast", "expert", "team")),
+            Map.of("id", "deepl", "name", "DeepL", "type", "api_key", "modes", List.of("fast", "expert", "team")),
+            Map.of("id", "openai", "name", "OpenAI", "type", "api_key", "modes", List.of("fast", "expert", "team"))
         );
         return Result.ok(models);
     }

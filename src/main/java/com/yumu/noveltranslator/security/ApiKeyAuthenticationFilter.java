@@ -13,8 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -66,25 +64,28 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         apiKey.setLastUsedAt(LocalDateTime.now());
         apiKeyMapper.updateById(apiKey);
 
-        // 设置认证信息
-        UserDetails userDetails = new User(
-            "api_key_" + apiKey.getUserId(),
-            "",
-            java.util.Collections.emptyList()
-        );
+        // 加载用户并设置 CustomUserDetails 认证信息
+        var apiUser = userMapper.selectById(apiKey.getUserId());
+        if (apiUser == null) {
+            logger.warn("API Key 关联的用户不存在: userId={}", apiKey.getUserId());
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "用户不存在");
+            return;
+        }
+
+        // Set tenant context for API Key auth
+        if (apiUser.getTenantId() != null) {
+            TenantContext.setTenantId(apiUser.getTenantId());
+        }
+
+        // 设置认证信息（使用 CustomUserDetails 以兼容 SecurityUtil）
+        CustomUserDetails userDetails = new CustomUserDetails(apiUser);
         UsernamePasswordAuthenticationToken authToken =
             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authToken);
 
         // 在 request attribute 中标记这是 API Key 认证
         request.setAttribute("apiKeyId", apiKey.getId());
-        request.setAttribute("authenticatedUserId", apiKey.getUserId());
-
-        // Set tenant context for API Key auth
-        var apiUser = userMapper.selectById(apiKey.getUserId());
-        if (apiUser != null && apiUser.getTenantId() != null) {
-            TenantContext.setTenantId(apiUser.getTenantId());
-        }
+        request.setAttribute("authenticatedUserId", apiUser.getId());
 
         chain.doFilter(request, response);
     }

@@ -115,7 +115,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private String parseJwt(HttpServletRequest request) {
         String headerAuth = request.getHeader("Authorization");
         if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
-            return headerAuth.substring(7);
+            String token = headerAuth.substring(7);
+            // 跳过 API Key 格式的 token，交给 ApiKeyAuthenticationFilter 处理
+            if (token.startsWith("nt_sk_")) {
+                return null;
+            }
+            return token;
         }
         return null;
     }

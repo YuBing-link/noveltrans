@@ -12,7 +12,8 @@ public class NovelTranslatorTenantLineHandler implements TenantLineHandler {
         "translation_cache",
         "email_verification_code",
         "user",
-        "collab_invite_code"
+        "collab_invite_code",
+        "api_keys"
     );
 
     @Override

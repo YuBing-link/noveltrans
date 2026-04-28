@@ -119,6 +119,20 @@ public class WebApiKeyController {
         return Result.ok(Map.of("id", key.getId(), "apiKey", newKey));
     }
 
+    /**
+     * 查看 API Key 真实值（不掩码）
+     * GET /user/api-keys/{id}/reveal
+     */
+    @GetMapping("/{id}/reveal")
+    public Result<Map<String, Object>> revealApiKey(@PathVariable Long id) {
+        Long userId = SecurityUtil.getRequiredUserId();
+        ApiKey key = apiKeyMapper.selectById(id);
+        if (key == null || !key.getUserId().equals(userId)) {
+            return Result.error("API Key 不存在");
+        }
+        return Result.ok(Map.of("id", key.getId(), "apiKey", key.getApiKey()));
+    }
+
     private String generateApiKey() {
         StringBuilder sb = new StringBuilder("nt_sk_");
         for (int i = 0; i < 32; i++) {

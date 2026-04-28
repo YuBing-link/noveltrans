@@ -12,4 +12,5 @@ export const apiKeyApi = {
   create: (name: string) => api.post<ApiKeyItem>('/user/api-keys', { name }),
   delete: (id: number) => api.delete<null>(`/user/api-keys/${id}`),
   reset: (id: number) => api.post<ApiKeyItem>(`/user/api-keys/${id}/reset`),
+  reveal: (id: number) => api.get<{ id: number; apiKey: string }>(`/user/api-keys/${id}/reveal`),
 };

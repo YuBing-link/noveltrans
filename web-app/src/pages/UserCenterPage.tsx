@@ -169,6 +169,8 @@ function ApiKeysTab() {
   const { t } = useTranslation();
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [showKey, setShowKey] = useState<number | null>(null);
+  const [revealedKeys, setRevealedKeys] = useState<Map<number, string>>(new Map());
+  const [revealing, setRevealing] = useState<number | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -203,6 +205,28 @@ function ApiKeysTab() {
     catch { toastError(t('userCenter.apiKeys.copyFailed')); }
   };
 
+  const handleToggleShow = async (key: ApiKeyItem) => {
+    if (showKey === key.id) {
+      setShowKey(null);
+      return;
+    }
+    const cached = revealedKeys.get(key.id);
+    if (cached) {
+      setShowKey(key.id);
+      return;
+    }
+    setRevealing(key.id);
+    try {
+      const { data } = await apiKeyApi.reveal(key.id);
+      setRevealedKeys(prev => new Map(prev).set(key.id, data.apiKey));
+      setShowKey(key.id);
+    } catch {
+      toastError(t('userCenter.apiKeys.revealFailed'));
+    } finally {
+      setRevealing(null);
+    }
+  };
+
   return (
     <div className="p-5">
       <h2 className="text-[15px] font-semibold text-text-primary mb-4">API Keys</h2>
@@ -229,13 +253,15 @@ function ApiKeysTab() {
               </div>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-[13px] font-mono text-text-primary truncate">
-                  {showKey === key.id ? key.apiKey : key.apiKey.slice(0, 8) + '••••'}
+                  {showKey === key.id
+                    ? (revealedKeys.get(key.id) || key.apiKey)
+                    : key.apiKey.slice(0, 8) + '••••'}
                 </code>
                 <span className="text-[12px] text-text-tertiary whitespace-nowrap">{t('userCenter.apiKeys.usage', { count: key.totalUsage })}</span>
-                <button onClick={() => setShowKey(showKey === key.id ? null : key.id)} className="p-1 text-text-tertiary hover:text-text-primary">
+                <button onClick={() => handleToggleShow(key)} disabled={revealing === key.id} className="p-1 text-text-tertiary hover:text-text-primary disabled:opacity-30">
                   {showKey === key.id ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
-                <button onClick={() => handleCopy(key.apiKey)} className="p-1 text-text-tertiary hover:text-text-primary"><Copy className="w-4 h-4" /></button>
+                <button onClick={() => handleCopy(revealedKeys.get(key.id) || key.apiKey)} className="p-1 text-text-tertiary hover:text-text-primary"><Copy className="w-4 h-4" /></button>
                 <button onClick={() => handleDelete(key.id)} className="p-1 text-text-tertiary hover:text-red"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>
