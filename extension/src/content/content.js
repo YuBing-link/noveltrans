@@ -207,6 +207,14 @@ class DOMWalker {
       '[role="dialog"]', '[role="alert"]',
       '.header', '.nav', '.navigation', '.menu', '.navbar',
       '.footer', '.sidebar', '.side-bar',
+      // Cookie/隐私/同意弹窗 — 模糊匹配 class/id
+      '[class*="cookie"]', '[class*="Cookie"]', '[id*="cookie"]', '[id*="Cookie"]',
+      '[class*="consent"]', '[class*="Consent"]', '[id*="consent"]', '[id*="Consent"]',
+      '[class*="gdpr"]', '[class*="GDPR"]', '[id*="gdpr"]', '[id*="GDPR"]',
+      '[class*="privacy"]', '[class*="Privacy"]', '[id*="privacy"]', '[id*="Privacy"]',
+      '[class*="banner"]', '[class*="Banner"]',
+      '[class*="notice"]', '[class*="Notice"]',
+      '[class*="notification"]', '[class*="Notification"]',
       '.cookie', '.cookies', '.gdpr', '.consent', '.cookie-banner',
       '.modal', '.popup', '.overlay', '.notification', '.toast',
       '.tooltip', '.dropdown', '.submenu',
@@ -231,6 +239,11 @@ class DOMWalker {
         let ancestor = parent;
         while (ancestor && ancestor !== document.body) {
           if (ancestor.matches(nonContentSelectors)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          // 检测固定定位元素（cookie 弹窗通常用 fixed/sticky）
+          const positionStyle = ancestor.style?.position || window.getComputedStyle(ancestor).position;
+          if (positionStyle === 'fixed' || positionStyle === 'sticky') {
             return NodeFilter.FILTER_REJECT;
           }
           ancestor = ancestor.parentElement;
@@ -2134,6 +2147,12 @@ class TranslationApplier {
     const skipSelectors = [
       'header', 'nav', 'footer', 'aside',
       '[role="dialog"]', '[role="alert"]', '[role="banner"]',
+      // Cookie/隐私/同意弹窗 — 模糊匹配
+      '[class*="cookie"]', '[class*="Cookie"]', '[id*="cookie"]', '[id*="Cookie"]',
+      '[class*="consent"]', '[class*="Consent"]', '[id*="consent"]', '[id*="Consent"]',
+      '[class*="gdpr"]', '[class*="GDPR"]', '[id*="gdpr"]', '[id*="GDPR"]',
+      '[class*="privacy"]', '[class*="Privacy"]', '[id*="privacy"]', '[id*="Privacy"]',
+      '[class*="banner"]', '[class*="Banner"]',
       '.cookie', '.cookies', '.gdpr', '.consent',
       '.sidebar', '.side-bar', '.nav', '.navigation',
       '.modal', '.popup', '.overlay', '.notification',
@@ -2152,12 +2171,17 @@ class TranslationApplier {
             return NodeFilter.FILTER_REJECT;
           }
           // 检查祖先元素是否在排除区域内
-          let parent = node.parentElement;
-          while (parent && parent !== document.body) {
-            if (parent.matches(skipSelectors)) {
+          let parent2 = node.parentElement;
+          while (parent2 && parent2 !== document.body) {
+            if (parent2.matches(skipSelectors)) {
               return NodeFilter.FILTER_REJECT;
             }
-            parent = parent.parentElement;
+            // 检测固定定位元素（cookie 弹窗通常用 fixed/sticky）
+            const positionStyle = parent2.style?.position || window.getComputedStyle(parent2).position;
+            if (positionStyle === 'fixed' || positionStyle === 'sticky') {
+              return NodeFilter.FILTER_REJECT;
+            }
+            parent2 = parent2.parentElement;
           }
           return NodeFilter.FILTER_ACCEPT;
         }
