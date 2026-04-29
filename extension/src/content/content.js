@@ -185,6 +185,73 @@ class DOMWalker {
     this.conservativeFilter = this.createConservativeFilter();
   }
 
+  // 检测当前页面是否为反爬/验证页面
+  isAntiBotPage() {
+    // Cloudflare 特征选择器
+    const cloudflareSelectors = [
+      '#cf-wrapper', '#challenge-running', '#challenge-body-text',
+      '.cf-browser-verification', '.cf-content', '#cf-please-wait',
+      '#challenge-stage', '#turnstile-wrapper'
+    ];
+    for (const sel of cloudflareSelectors) {
+      if (document.querySelector(sel)) return true;
+    }
+
+    // Turnstile 特征
+    if (document.querySelector('[data-sitekey]')) {
+      const turnstileScript = document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]');
+      if (turnstileScript) return true;
+    }
+    if (document.querySelector('.cf-turnstile, #cf-turnstile, turnstile-captcha')) return true;
+
+    // PerimeterX / HUMAN 特征
+    const perimeterXSelectors = [
+      '#px-captcha', '.px-captcha', '#px-captcha-modal',
+      '.px-block-overlay', '.px-captcha-container'
+    ];
+    for (const sel of perimeterXSelectors) {
+      if (document.querySelector(sel)) return true;
+    }
+
+    // Akamai / Bot Manager 特征
+    if (document.querySelector('#akamai-botbarker, .ak-bot, .akamai-container')) return true;
+
+    // 验证页常见文本模式
+    const bodyText = document.body.textContent.substring(0, 3000).toLowerCase();
+    const antiBotPatterns = [
+      /just a moment/i,
+      /verifying.*you are.*human/i,
+      /checking.*your browser/i,
+      /please verify.*human/i,
+      /security check/i,
+      /ddos protection/i,
+      /please wait.*while.*verify/i,
+      /verify.*connection.*security/i,
+      /enable cookies/i,
+      /complete.*security.*challenge/i,
+      /attention.*required/i,
+      /access denied.*blocked/i,
+      /before you continue.*verify/i,
+      /proving.*not.*robot/i,
+      /prove.*human/i
+    ];
+    for (const pattern of antiBotPatterns) {
+      if (pattern.test(bodyText)) return true;
+    }
+
+    // 链接密度极低 + 文本极短的页面可能是验证页
+    const allLinks = document.querySelectorAll('a[href]').length;
+    const totalText = document.body.textContent.trim().length;
+    if (totalText > 0 && totalText < 200 && allLinks === 0) {
+      // 页面内容极少且无链接，可能是验证页
+      if (/cloudflare|captcha|challenge|verification/i.test(document.title)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   // 创建默认过滤器（宽松版 - 减少过滤规则以识别更多内容）
   createDefaultFilter() {
     return {
@@ -427,7 +494,7 @@ class DOMWalker {
     return true;
   }
 
-  // 检查文本是否可见（宽松版 - 修复 offsetParent 和 fontSize 问题）
+  // 检查文本是否可见（宽松版 - 修复 offsetParent 和 fontSize 问题，含 honeypot 检测）
   isVisibleTextLoose(element) {
     const style = window.getComputedStyle(element);
 
@@ -438,10 +505,38 @@ class DOMWalker {
       return false;
     }
 
-    // 恢复 fontSize === 0 检查（font-size:0 是常见的隐藏文本技术）
+    // Honeypot 检测：极小字号（防 0.1px 绕过）
     const fontSize = parseFloat(style.fontSize);
-    if (fontSize === 0) {
+    if (fontSize < 1) {
       return false;
+    }
+
+    // Honeypot 检测：极低透明度（防 0.05 绕过）
+    const opacity = parseFloat(style.opacity);
+    if (opacity < 0.1) {
+      return false;
+    }
+
+    // Honeypot 检测：文本颜色与背景色完全相同
+    const color = style.color.replace(/\s+/g, '');
+    const bgColor = style.backgroundColor.replace(/\s+/g, '');
+    if (color && bgColor && color === bgColor) {
+      return false;
+    }
+
+    // Honeypot 检测：元素被其他覆盖层遮挡
+    try {
+      const rect = element.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      if (rect.width > 0 && rect.height > 0) {
+        const topElement = document.elementFromPoint(centerX, centerY);
+        if (topElement && topElement !== element && !element.contains(topElement) && !topElement.contains(element)) {
+          return false;
+        }
+      }
+    } catch (e) {
+      // elementFromPoint 可能在某些情况下失败，静默忽略
     }
 
     // 必须有实际渲染尺寸
@@ -1525,9 +1620,133 @@ class DOMWalker {
     return null;
   }
 
+  // 计算元素的链接密度（链接文本长度 / 总文本长度）
+  getLinkDensity(element) {
+    const textContent = element.textContent.trim();
+    if (!textContent.length) return 0;
+    let linkTextLength = 0;
+    const links = element.querySelectorAll('a');
+    for (const link of links) {
+      linkTextLength += link.textContent.trim().length;
+    }
+    return linkTextLength / textContent.length;
+  }
+
+  // 在 Readability 主容器之外辅助提取其余内容（UI 文本、按钮、标题等）
+  collectTextOutsideContainer(mainContainer, filter = this.defaultFilter, batchSize = 100) {
+    const outsideNodes = [];
+
+    // 跳过整个子树的标签
+    const skipTags = new Set(['NAV', 'FOOTER']);
+    // header 只在不在 article/main 内时跳过
+    const skipHeaderOutside = true;
+
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: (node) => {
+          if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+
+          // 跳过主内容容器内的节点（这些已由主路径处理）
+          if (mainContainer && mainContainer.contains(parent)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // 跳过 nav 整个子树
+          if (parent.closest('nav, [role="navigation"], [role="menubar"]')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // footer 整个子树跳过
+          if (parent.closest('footer')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // header 在 article/main 外时跳过
+          if (skipHeaderOutside && parent.closest('header') && !parent.closest('article, main')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // 反爬/广告选择器
+          if (this.isObviousAd(parent)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // 链接密度 > 30% → 跳过（导航/菜单特征）
+          const linkDensity = this.getLinkDensity(parent);
+          if (linkDensity > 0.3) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // 可见性检查
+          if (!this.isVisibleTextLoose(parent)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      },
+      false
+    );
+
+    let currentNode;
+    while ((currentNode = walker.nextNode())) {
+      outsideNodes.push(currentNode);
+    }
+
+    // 按类型分组
+    const titleNodes = [];
+    const paragraphNodes = [];
+    const otherNodes = [];
+
+    for (const node of outsideNodes) {
+      const parent = node.parentElement;
+      if (!parent) continue;
+      const tagName = parent.tagName;
+
+      if (['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tagName)) {
+        titleNodes.push(node);
+      } else if (tagName === 'P' && node.textContent.trim().length > 10) {
+        paragraphNodes.push(node);
+      } else {
+        otherNodes.push(node);
+      }
+    }
+
+    const viewportHeight = window.innerHeight;
+    const firstScreen = [];
+    const belowFold = [];
+
+    const classify = (nodes) => {
+      for (const node of nodes) {
+        const position = this.getTextPosition(node);
+        if (position && position.y < viewportHeight) {
+          firstScreen.push(node);
+        } else {
+          belowFold.push(node);
+        }
+      }
+    };
+
+    classify(titleNodes);
+    classify(paragraphNodes);
+    classify(otherNodes);
+
+    return {
+      firstScreenOther: this.batchNodes(firstScreen, batchSize),
+      belowFoldOther: this.batchNodes(belowFold, batchSize),
+      total: outsideNodes.length
+    };
+  }
+
   // 结合 Readability 和 TreeWalker 的内容识别方法
+  // Readability 优先提取主内容，再辅助提取其余内容
   collectTextByPhaseWithReadability(filter = this.defaultFilter, batchSize = 100) {
-    console.log('[DOMWalker] 开始混合模式内容识别 (Readability + TreeWalker)');
+    console.log('[DOMWalker] 开始 Readability 优先内容识别');
 
     const mainContentArea = this.findMainContentAreaWithReadability();
     const readabilityResult = {
@@ -1538,115 +1757,100 @@ class DOMWalker {
 
     console.log('[DOMWalker] Readability 识别结果:', readabilityResult);
 
-    const allTextNodes = [];
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT,
-      filter,
-      false
-    );
+    // Readability 成功：只在主容器内收集文本
+    if (mainContentArea) {
+      const mainTextNodes = [];
+      const mainWalker = document.createTreeWalker(
+        mainContentArea,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode: (node) => {
+            if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+            const parent = node.parentElement;
+            if (!parent) return NodeFilter.FILTER_REJECT;
+            // 跳过脚本、样式、已翻译
+            if (parent.tagName === 'SCRIPT' ||
+                parent.tagName === 'STYLE' ||
+                parent.classList.contains('extreme-translated') ||
+                parent.hasAttribute('data-translation-ignore')) {
+              return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        },
+        false
+      );
 
-    let currentNode;
-    while ((currentNode = walker.nextNode())) {
-      if (currentNode.textContent.trim().length > 0) {
-        allTextNodes.push(currentNode);
+      let currentNode;
+      while ((currentNode = mainWalker.nextNode())) {
+        mainTextNodes.push(currentNode);
       }
-    }
 
-    const titleNodes = [];
-    const mainContentNodes = [];
-    const paragraphNodes = [];
-    const otherContentNodes = [];
+      // 按类型分组
+      const titleNodes = [];
+      const mainContentNodes = [];
+      const paragraphNodes = [];
 
-    allTextNodes.forEach(node => {
-      const parent = node.parentElement;
-      if (!parent) return;
-
-      // 跳过导航元素（nav 及其子元素）
-      if (parent.closest('nav, [role="navigation"], [role="menubar"]')) {
-        return;
+      for (const node of mainTextNodes) {
+        const parent = node.parentElement;
+        const tagName = parent?.tagName;
+        if (['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tagName)) {
+          titleNodes.push(node);
+        } else if (tagName === 'P' && node.textContent.trim().length > 10) {
+          paragraphNodes.push(node);
+        } else {
+          mainContentNodes.push(node);
+        }
       }
 
-      // 跳过不在内容容器内的 header/footer 元素
-      if (!mainContentArea || !mainContentArea.contains(parent)) {
-        if (parent.closest('header:not(article header), footer:not(article footer)')) {
-          if (!parent.closest('article, main')) {
-            return;
+      // 按视口位置分首屏/屏下
+      const viewportHeight = window.innerHeight;
+      const firstScreenTitles = [];
+      const firstScreenMain = [];
+      const firstScreenParagraphs = [];
+      const belowFoldTitles = [];
+      const belowFoldMain = [];
+      const belowFoldParagraphs = [];
+
+      const classify = (nodes, firstArr, belowArr) => {
+        for (const node of nodes) {
+          const position = this.getTextPosition(node);
+          if (position && position.y < viewportHeight) {
+            firstArr.push(node);
+          } else {
+            belowArr.push(node);
           }
         }
-      }
+      };
 
-      const tagName = parent.tagName;
-      const textDensity = this.getTextDensity(parent);
-      const isInMainContent = mainContentArea && mainContentArea.contains(parent);
-      const hasSemanticContainer = parent.closest('article') ||
-                                  parent.closest('main') ||
-                                  parent.closest('section[role="main"]') ||
-                                  parent.closest('[itemprop="articleBody"]');
+      classify(titleNodes, firstScreenTitles, belowFoldTitles);
+      classify(mainContentNodes, firstScreenMain, belowFoldMain);
+      classify(paragraphNodes, firstScreenParagraphs, belowFoldParagraphs);
 
-      const isHighDensity = textDensity > 0.3;
-      const isArticle = this.isArticleContent(parent);
+      // 辅助提取主容器外的其余内容
+      const outsideResult = this.collectTextOutsideContainer(mainContentArea, filter, batchSize);
 
-      if (['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tagName)) {
-        titleNodes.push(node);
-      } else if (isInMainContent || hasSemanticContainer) {
-        mainContentNodes.push(node);
-      } else if (isArticle && (isHighDensity || node.textContent.trim().length > 50)) {
-        mainContentNodes.push(node);
-      } else if (tagName === 'P' && node.textContent.trim().length > 10) {
-        paragraphNodes.push(node);
-      } else {
-        // 不再将导航元素单独分类，全部归入其他内容
-        otherContentNodes.push(node);
-      }
-    });
-
-    console.log('[DOMWalker] 文本节点分组完成:', {
-      title: titleNodes.length,
-      mainContent: mainContentNodes.length,
-      paragraph: paragraphNodes.length,
-      other: otherContentNodes.length
-    });
-
-    const viewportHeight = window.innerHeight;
-    const firstScreenTitles = [];
-    const firstScreenMain = [];
-    const firstScreenParagraphs = [];
-    const firstScreenOther = [];
-    const belowFoldTitles = [];
-    const belowFoldMain = [];
-    const belowFoldParagraphs = [];
-    const belowFoldOther = [];
-
-    const classifyByViewport = (nodes, firstScreenArray, belowFoldArray) => {
-      nodes.forEach(node => {
-        const position = this.getTextPosition(node);
-        if (position && position.y < viewportHeight) {
-          firstScreenArray.push(node);
-        } else {
-          belowFoldArray.push(node);
-        }
+      console.log('[DOMWalker] 文本节点分组完成:', {
+        mainContent: mainTextNodes.length,
+        outside: outsideResult.total
       });
-    };
 
-    classifyByViewport(titleNodes, firstScreenTitles, belowFoldTitles);
-    classifyByViewport(mainContentNodes, firstScreenMain, belowFoldMain);
-    classifyByViewport(paragraphNodes, firstScreenParagraphs, belowFoldParagraphs);
-    classifyByViewport(otherContentNodes, firstScreenOther, belowFoldOther);
+      return {
+        firstScreenTitles: this.batchNodes(firstScreenTitles, batchSize),
+        firstScreenMain: this.batchNodes(firstScreenMain, batchSize),
+        firstScreenParagraphs: this.batchNodes(firstScreenParagraphs, batchSize),
+        firstScreenOther: outsideResult.firstScreenOther,
+        belowFoldMain: this.batchNodes(belowFoldMain, batchSize),
+        belowFoldTitles: this.batchNodes(belowFoldTitles, batchSize),
+        belowFoldParagraphs: this.batchNodes(belowFoldParagraphs, batchSize),
+        belowFoldOther: outsideResult.belowFoldOther,
+        total: mainTextNodes.length + outsideResult.total
+      };
+    }
 
-    // 返回与传统方法兼容的格式（使用 batchNodes 分批）
-    return {
-      firstScreenTitles: this.batchNodes([...firstScreenTitles], batchSize),
-      firstScreenMain: this.batchNodes([...firstScreenMain], batchSize),
-      firstScreenParagraphs: this.batchNodes([...firstScreenParagraphs], batchSize),
-      firstScreenOther: this.batchNodes([...firstScreenOther], batchSize),
-      belowFoldTitles: this.batchNodes([...belowFoldTitles], batchSize),
-      belowFoldMain: this.batchNodes([...belowFoldMain], batchSize),
-      belowFoldParagraphs: this.batchNodes([...belowFoldParagraphs], batchSize),
-      belowFoldOther: this.batchNodes([...belowFoldOther], batchSize),
-      readabilityResult,  // 包含 Readability 识别结果信息
-      total: allTextNodes.length
-    };
+    // Readability 失败：回退到传统方法
+    console.log('[DOMWalker] Readability 未能识别主内容，回退到传统方法');
+    return this.collectTextByPhase(filter, batchSize);
   }
 }
 
@@ -4257,6 +4461,16 @@ class TranslationService {
         if (this.isTranslating) {
             console.log('⚠️ 翻译已在进行中，忽略重复请求');
             sendResponse({ success: false, error: '翻译已在进行中，请稍候...' });
+            return;
+        }
+
+        // 反爬页面检测：如果页面是验证页/反爬页，直接拒绝翻译
+        if (this.domWalker.isAntiBotPage()) {
+            console.log('⚠️ 检测到反爬/验证页面，跳过翻译');
+            sendResponse({
+                success: false,
+                error: '此页面需要完成安全验证。请手动完成验证后再尝试翻译。'
+            });
             return;
         }
 
