@@ -2,6 +2,8 @@
 
 A SaaS translation platform for web novel authors and translators — batch-translate long-form content with RAG-powered translation memory, team collaboration, and Stripe billing.
 
+> [中文版](README.zh.md)
+
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=spring)](https://spring.io/projects/spring-boot)

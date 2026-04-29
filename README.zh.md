@@ -1,99 +1,219 @@
-# NovelTranslator - 双语小说翻译系统
+# NovelTrans
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.org/projects/jdk/21/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
-[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
-[![MySQL](https://img.shields.io/badge/MySQL-8.0-blue.svg)](https://www.mysql.com/)
-[![Redis Stack](https://img.shields.io/badge/Redis%20Stack-7-red.svg)](https://redis.io/docs/latest/develop/data-structures/search/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://docs.docker.com/compose/)
+面向网文作者和译者的 SaaS 翻译平台 — 基于 RAG 翻译记忆、多智能体协作翻译、团队协作和 Stripe 计费。
 
-一套完整的双语小说翻译系统，包含 Chrome 浏览器扩展、React + TypeScript Web 管理端、Spring Boot 后端、LLM 翻译微服务和 Nginx 网关。支持三大翻译模式、四级缓存体系、RAG 语义检索翻译记忆、实体一致性翻译和 SSE 流式响应。
+> [English README](README.md)
 
-[English README](README.md)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=spring)](https://spring.io/projects/spring-boot)
+[![React](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
 
-## 系统架构
+## ✨ 核心特性
+
+- **长篇内容翻译** — AI 驱动的多智能体协作翻译（译者 + 术语专家 + 润色师），专为长篇小说设计
+- **翻译记忆复用** — Redis HNSW 向量语义检索，自动匹配相似历史翻译，减少 60-80% 的 LLM API 调用
+- **团队协作** — 项目管理、章节分配、审核批准工作流
+- **三大交付渠道** — React Web 仪表盘、Chrome 扩展（MV3，三种翻译模式）、外部 REST API（API Key 认证）
+- **订阅商业化** — Stripe Checkout + 计费门户 + Webhook，三档计划（FREE / PRO / MAX）带用量配额
+
+## 🛠️ 快速开始
+
+### 前置依赖
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| Docker | 24+ | 容器运行时 |
+| Docker Compose | 2.20+ | 容器编排 |
+| npm | 9+ | 前端构建 |
+
+### 1. 克隆并配置
+
+```bash
+git clone https://github.com/YuBing-link/noveltrans.git
+cd noveltrans
+
+cp .env.example .env
+# 编辑 .env，填写 MySQL、Stripe 和 LLM 凭据
+```
+
+### 2. 构建前端
+
+```bash
+cd web-app
+npm install
+npm run build
+cd ..
+```
+
+### 3. 启动所有服务
+
+```bash
+docker compose up -d
+```
+
+首次启动可能需要 5-10 分钟（Maven 依赖下载 + Ollama 模型拉取）。
+
+### 4. 验证
+
+```bash
+docker compose ps                    # 所有容器应健康运行
+curl http://localhost:7341/health    # 后端健康检查
+```
+
+在浏览器中打开 [http://localhost:7341](http://localhost:7341)。
+
+## 📦 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| **后端** | Java 21, Spring Boot 3.2, MyBatis-Plus, Undertow |
+| **前端** | React 19, TypeScript 5, Vite 8, TailwindCSS 4.2, i18next |
+| **Chrome 扩展** | Manifest V3, Content Scripts, IndexedDB |
+| **翻译引擎** | Python 3.11, FastAPI, OpenAI SDK, AgentScope（多智能体） |
+| **神经翻译机器** | MTranServer — 自研神经翻译引擎 |
+| **数据库** | MySQL 8.0, Redis Stack（RediSearch + HNSW 向量） |
+| **Embedding** | Ollama (bge-m3) / OpenAI text-embedding-3-small |
+| **支付** | Stripe Checkout, 计费门户, Webhook |
+| **网关** | Nginx（统一入口，端口 7341） |
+| **测试** | JUnit 5, Mockito, Vitest, Playwright, k6 |
+
+## 🏗️ 项目结构
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌────────────────┐     ┌───────────────────┐     ┌──────────────────┐
-│ Chrome 扩展   │────▶│  Nginx 网关   │────▶│ Spring Boot    │────▶│ Python / MTran    │────▶│ OpenAI 兼容 API   │
-│ Manifest V3  │     │  端口 7341    │     │ 端口 8080       │     │ 引擎 8000 / 8989  │     │ / Claude / Ollama│
-└──────────────┘     └──────────────┘     └───────┬────────┘     └───────────────────┘     └──────────────────┘
-                                  │
-                    ┌─────────────┼──────────────┐
-                    ▼             ▼              ▼
-                MySQL 8.0    Redis Stack 7    Caffeine
-                (持久存储)   (HNSW向量检索)   (进程内缓存)
-┌──────────────┐
-│ Web 管理端    │
-│ React+TS+Vite│
-│ 端口 7341    │
-└──────────────┘
+noveltrans/
+├── src/main/java/          # Spring Boot 后端（Java 21）
+├── src/test/java/          # 单元测试 + 集成测试（80+ 类）
+├── web-app/                # React Web 仪表盘（TypeScript + Vite）
+├── extension/              # Chrome 浏览器扩展（MV3）
+├── services/translate-engine/  # Python 翻译微服务 + 多智能体管线
+├── nginx/                  # Nginx 网关配置
+├── load-test/              # k6 负载测试脚本
+├── docker-compose.yml      # 全栈编排（7 个容器）
+└── .env.example            # 环境变量模板
 ```
 
-## 核心特性
+## 🔌 API 速览
 
-### RAG 翻译记忆检索
-- **向量语义检索**：基于 Redis Stack HNSW 向量索引，将翻译原文编码为 1536 维 Embedding 向量，通过 KNN 搜索历史翻译记忆
+所有 API 请求均通过 Nginx **端口 7341** 转发。
+
+| 端点 | 方法 | 认证 | 说明 |
+|------|------|------|------|
+| `/api/user/login` | POST | 公开 | 邮箱/密码登录，返回 JWT |
+| `/api/subscription/checkout` | POST | JWT | 创建 Stripe Checkout 会话 |
+| `/v1/translate/webpage` | POST | 已认证 | 网页翻译（SSE 流式） |
+| `/v1/translate/reader` | POST | 已认证 | 文章提取 + 翻译 |
+| `/v1/external/translate` | POST | API Key | 外部 REST API 文本翻译 |
+| `/api/collab/projects` | POST | JWT | 创建团队协作项目 |
+| `/webhook/stripe` | POST | Webhook 签名 | Stripe 事件处理 |
+
+完整 API 文档：参见 `API_DOCUMENTATION.md`
+
+## 🔑 环境变量
+
+| 变量 | 说明 | 必填 |
+|------|------|------|
+| `MYSQL_HOST` / `MYSQL_PASSWORD` | MySQL 连接 | 是 |
+| `REDIS_HOST` / `REDIS_PASSWORD` | Redis 连接 | 是 |
+| `JWT_SECRET` | JWT 签名密钥（至少 32 字符） | 是 |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP 邮箱验证 | 是 |
+| `STRIPE_SECRET_KEY` | Stripe 密钥（`sk_test_` 或 `sk_live_`） | 是 |
+| `STRIPE_WEBHOOK_SECRET` | Webhook 签名验证 | 是 |
+| `LLM_API_KEY` / `LLM_BASE_URL` | LLM 翻译引擎凭据 | 可选 |
+| `MTRAN_PORT` / `MTRAN_API_KEY` | MTranServer 神经翻译机器 | 可选 |
+| `EMBEDDING_PROVIDER` | `openai` 或 `ollama`（RAG 向量） | 是 |
+| `TRANSLATE_SERVICE_API_KEY` | 内部服务间认证 | 是 |
+
+完整列表参见 `.env.example`。
+
+## 📊 架构
+
+```
+                    ┌─────────────────────────────────────┐
+                    │       Nginx（端口 7341）             │
+                    │   SPA + API 反向代理 + CORS         │
+                    └──────────┬──────────────────────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+              ▼                ▼                ▼
+     ┌────────────┐   ┌────────────┐   ┌─────────────┐
+     │  React SPA │   │ Spring Boot│   │  外部客户端  │
+     │ (web-app)  │   │  (Java 21) │   │ (API Key)   │
+     └────────────┘   └──────┬─────┘   └─────────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+         ┌────────┐   ┌──────────┐   ┌──────────────┐
+         │ MySQL  │   │  Redis   │   │ Python FastAPI│
+         │  8.0   │   │ (缓存 +  │   │ + MTranServer│
+         │        │   │  向量)   │   │ (神经翻译)    │
+         └────────┘   └──────────┘   └──────────────┘
+```
+
+### 翻译管线
+
+```
+新的翻译请求
+  │
+  ├── L1: Caffeine 本地缓存（10 分钟 TTL）
+  ├── L2: Redis 分布式缓存（30 分钟 TTL）
+  ├── L3: MySQL 持久化缓存（24 小时 TTL）
+  ├── L4: RAG 语义匹配（永久）← 向量相似度搜索
+  └── L5: 直接 LLM / MTranServer 翻译（降级）
+```
+
+### 详细技术说明
+
+<details>
+<summary>点击展开：RAG 翻译记忆检索</summary>
+
+- **向量语义检索**：基于 Redis Stack HNSW 向量索引，将翻译原文编码为 Embedding 向量，通过 KNN 搜索历史翻译记忆
 - **四级缓存链路**：Caffeine (L1) → Redis (L2) → MySQL (L3) → RAG 语义检索 (L4) → 翻译引擎
 - **质量筛选**：入库前自动过滤空译文、长度异常、广告关键词、特殊字符过多等低质量翻译
 - **双路降级策略**：Redis KNN 不可用时自动降级为 MySQL 余弦相似度计算
 - **用户隔离**：KNN 查询按 `user_id` + `target_lang` 过滤，避免数据串扰
+</details>
 
-### 统一翻译管线
-- **单一管线组件**：`TranslationPipeline` 封装四级翻译管线逻辑（缓存 → RAG → 实体一致性 → 直译），消除三个 Service 类中的重复管线代码
+<details>
+<summary>点击展开：统一翻译管线</summary>
+
+- **单一管线组件**：`TranslationPipeline` 封装四级翻译管线逻辑，消除重复代码
 - **策略模式**：可配置管线阶段 — `execute()` 执行完整管线，`executeFast()` 仅缓存 + 直译
-- **后处理集成**：所有翻译路径均包含 `fixUntranslatedChinese()` 后处理，检测并修正残留中文字符
-- **质量校验**：静态 `isValidTranslation()` 和 `shouldCache()` 方法确保所有调用方执行一致的质量检查
+- **后处理集成**：所有翻译路径均包含 `fixUntranslatedChinese()` 后处理
+- **质量校验**：静态 `isValidTranslation()` 和 `shouldCache()` 方法确保一致的质量检查
+</details>
 
-### 翻译引擎架构
-- **OpenAI 兼容 API**：支持 OpenAI GPT、Claude（兼容层）、本地 Ollama、DeepSeek 等任意兼容端点
+<details>
+<summary>点击展开：翻译引擎架构</summary>
+
+- **OpenAI 兼容 API**：支持 OpenAI GPT、Claude、本地 Ollama、DeepSeek 等任意兼容端点
 - **专业小说翻译 Prompt**：6 条翻译原则，确保文学翻译质量
 - **双引擎容错**：LLM 翻译引擎 + MTranServer 轻量引擎双向降级，健康检查 + 冷却隔离
 - **概率轮询路由**：基于历史成功率 + 响应时间的智能引擎选择
+</details>
 
-### 四级缓存体系
-| 层级 | 组件 | 过期时间 | 职责 |
-|------|------|----------|------|
-| L1 | Caffeine | 10 分钟 | 进程内热点缓存 |
-| L2 | Redis | 30 分钟 | 分布式缓存 |
-| L3 | MySQL | 24 小时 | 持久化缓存 |
-| L4 | RAG 向量检索 | 永久 | 语义相似度匹配 |
+<details>
+<summary>点击展开：缓存体系防护</summary>
 
 - **缓存穿透防护**：空值占位 + 短暂过期策略
 - **缓存击穿防护**：`ConcurrentHashMap` 同 key 并发加锁
 - **缓存雪崩防护**：过期时间随机抖动
+</details>
 
-### 后端工程
-- **SSE 流式翻译**：浏览器端渐进式渲染，大段文本翻译体验流畅
-- **虚拟线程并发**：Java 21 Virtual Threads + Semaphore 用户级限流
-- **实体一致性翻译**：长文本自动提取命名实体 → 术语库合并 → 占位符替换 → 翻译 → 实体恢复，确保专有名词一致性
-- **异步文档翻译**：大文件异步任务 + 进度追踪
-- **Undertow 服务器**：高性能非阻塞 Web 服务器
+<details>
+<summary>点击展开：安全体系</summary>
 
-### 前端
-- **Chrome 扩展**：DOM 遍历分析 → 文本注册表 → SSE 流式回写 → 原位替换，保持页面布局不变
-- **Web 管理端 (React + TypeScript + Vite)**：DeepL 风格翻译界面，支持文档管理、翻译历史和用户设置
-- **阅读模式**：集成 Mozilla Readability 提取正文，生成干净阅读视图
-- **划词翻译**：悬浮提示框即时翻译选中文本
-- **客户端缓存**：IndexedDB + 内存双级缓存 + 请求去重
-
-### 安全体系
-- **JWT + API Key 双重认证**：支持 Spring Security + JWT Token 和 `nt_sk_xxxx` 格式 API Key 两种认证方式，共享同一翻译管线
-- **翻译端点强制认证**：所有 `/v1/translate/**` 端点必须携带有效 JWT 或 API Key，防止未授权访问和配额滥用
-- **JWT Token 校验**：无效或过期的 Token 返回 401 JSON 响应，不再静默放行
-- **API Key 管理**：通过 `/user/api-keys` 接口生成、查看、重置、删除 API Key，前缀 `nt_sk_` + 32 位随机字符，列表展示掩码脱敏
+- **JWT + API Key 双重认证**：共享同一翻译管线
+- **翻译端点强制认证**：所有 `/v1/translate/**` 端点必须携带有效 JWT 或 API Key
+- **API Key 管理**：`nt_sk_xxxx` 格式前缀 + 32 位随机字符，列表展示掩码脱敏
 - **BCrypt 密码加密**：用户密码哈希存储
 - **邮箱验证**：注册/密码重置双重验证
-- **分级限流**：匿名用户 (3) / 免费用户 (5) / Pro 用户 (20) 差异化并发限制
+- **分级限流**：匿名用户 / 免费用户 / Pro 用户差异化并发限制
+</details>
 
-### 字符配额系统
-- **三档用户**：Free (每月 1 万字), Pro (每月 5 万字), Max (每月 20 万字)
-- **模式系数**：快速模式 ×0.5（节省配额）, 专家模式 ×1.0, 团队模式 ×2.0
-- **按请求扣减**：`消耗 = ceil(译文字符 × 模式系数)`，翻译开始前预检查配额
-- **按天追踪**：`quota_usage` 表按天记录消耗，按月汇总
-- **每月自动重置**：定时任务每月 1 号 0 点清理过期记录
-- **文档上传预估**：根据文件大小预检查配额
+<details>
+<summary>点击展开：字符配额系统</summary>
 
 | 档位 | 月字符包 | 快速 (×0.5) | 专家 (×1.0) | 团队 (×2.0) |
 |------|----------|-------------|-------------|-------------|
@@ -101,176 +221,41 @@
 | **Pro** | 50,000 | 等效 10 万字原文 | 等效 5 万字原文 | 等效 2.5 万字原文 |
 | **Max** | 200,000 | 等效 40 万字原文 | 等效 20 万字原文 | 等效 10 万字原文 |
 
-## 快速启动
+- **模式系数**：快速模式 ×0.5（节省配额）, 专家模式 ×1.0, 团队模式 ×2.0
+- **按请求扣减**：翻译开始前预检查配额
+- **按天追踪**：`quota_usage` 表按天记录消耗，按月汇总
+- **每月自动重置**：定时任务每月 1 号 0 点清理过期记录
+</details>
 
-### 方式一：Docker Compose（推荐，一键启动）
+## 🗺️ 路线图
 
-```bash
-# 克隆仓库
-git clone https://github.com/your-org/novelTranslator.git
-cd novelTranslator
+- [x] 用户注册和邮箱验证
+- [x] Stripe 订阅计费（FREE / PRO / MAX）
+- [x] RAG 翻译记忆（Redis HNSW）
+- [x] 多智能体协作翻译
+- [x] 团队协作工作区
+- [x] Chrome 扩展（三种翻译模式）
+- [x] 外部 REST API（API Key 认证）
+- [ ] WebSocket 实时翻译进度推送
+- [ ] 文档格式支持（PDF、EPUB）
+- [ ] 机器翻译质量评分看板
 
-# 一键启动所有服务（MySQL、Redis、MTranServer、LLM 引擎、后端、Nginx）
-docker compose up -d
-```
+## 🤝 贡献
 
-启动后访问：
-- **Web 管理端**：http://localhost:7341
-- **后端 API**：http://localhost:7341/v1
-- **健康检查**：http://localhost:7341/health
+欢迎提交 Bug 修复、文档改进和新的翻译引擎集成。
 
-### 方式二：手动启动
+1. Fork 本仓库
+2. 创建你的功能分支（`git checkout -b feature/your-feature`）
+3. 提交你的修改
+4. 推送到分支
+5. 发起 Pull Request
 
-#### 前置条件
-- Java 21（Temurin / OpenJDK）
-- Maven 3.9+
-- MySQL 8.0
-- Redis 7（推荐 Redis Stack）
-- Python 3.11+（翻译微服务）
+较大的改动请先开 Issue 讨论方案。
 
-#### 1. 启动 MySQL 和 Redis
+## 📄 许可证
 
-```bash
-docker run -d --name mysql -p 3306:3306 \
-  -e MYSQL_ROOT_PASSWORD=root \
-  -e MYSQL_DATABASE=novel_translator \
-  mysql:8.0
+[MIT](LICENSE)
 
-docker run -d --name redis-stack -p 6379:6379 redis/redis-stack-server:latest
-```
+---
 
-#### 2. 启动后端
-
-```bash
-export JWT_SECRET="your-secret-key-here"
-export MYSQL_HOST=localhost
-export REDIS_HOST=localhost
-
-mvn clean package -DskipTests
-java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar
-# 后端运行在 http://localhost:8080
-```
-
-#### 3. 启动翻译引擎
-
-```bash
-pip install fastapi uvicorn openai
-
-export OPENAI_API_KEY="sk-xxx"
-export OPENAI_BASE_URL="https://api.deepseek.com/v1"
-export OPENAI_MODEL="deepseek-chat"
-
-python services/translate-engine/translate_server.py
-# 引擎运行在 http://localhost:8000
-```
-
-#### 4. 安装浏览器扩展
-
-1. 打开 Chrome，进入 `chrome://extensions/`
-2. 开启"开发者模式"
-3. 点击"加载已解压的扩展程序"，选择 `extension/` 目录
-
-#### 5. 启动 Web 管理端（可选）
-
-```bash
-cd web-app
-npm install
-npm run dev
-# Web 管理端运行在 http://localhost:5173
-```
-
-## 项目结构
-
-```
-novelTranslator/
-├── extension/                    # Chrome 扩展（Manifest V3）
-│   ├── manifest.json
-│   └── src/
-│       ├── background/           #   后台服务 Worker（消息路由、API 调用）
-│       ├── content/              #   内容脚本（网页翻译、阅读模式、划词翻译）
-│       ├── popup/                #   弹出窗口 UI
-│       ├── options/              #   设置页面
-│       └── lib/                  #   第三方库（Readability、DOMPurify）
-├── web-app/                      # Web 管理端（React + TypeScript + Vite）
-│   ├── src/
-│   │   ├── App.tsx               #   根组件
-│   │   └── main.tsx              #   入口文件
-│   ├── index.html
-│   └── vite.config.ts
-├── src/main/java/                # Spring Boot 后端（Java 21）
-│   └── com/yumu/noveltranslator/
-│       ├── controller/           #   REST API 控制器
-│       ├── service/              #   业务逻辑层
-│       │   └── pipeline/         #     统一翻译管线
-│       ├── mapper/               #   MyBatis-Plus 数据访问
-│       ├── entity/               #   数据实体
-│       ├── dto/                  #   数据传输对象
-│       ├── config/               #   配置类（Redis 向量索引、安全、线程池）
-│       ├── security/             #   Spring Security + JWT
-│       ├── enums/                #   枚举（错误码、引擎、状态）
-│       └── util/                 #   工具类
-├── services/translate-engine/    # Python 翻译微服务
-│   └── translate_server.py       #   FastAPI + OpenAI SDK + 引擎降级链
-├── nginx/                        # Nginx 网关配置
-│   └── nginx.conf
-├── docker-compose.yml            # Docker 一键部署编排
-└── pom.xml                       # Maven 构建配置
-```
-
-## API 文档
-
-- [API_ENDPOINTS.md](API_ENDPOINTS.md) - 三种翻译模式的请求/响应示例
-- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - 完整后端 API 参考
-
-### API 速查
-
-| 接口 | 方法 | 说明 | 认证 |
-|------|------|------|------|
-| `/v1/translate/webpage` | POST | 网页批量翻译（SSE 流式） | 是 |
-| `/v1/translate/reader` | POST | 阅读模式文章翻译 | 是 |
-| `/v1/translate/selection` | POST | 划词翻译 | 是 |
-| `/v1/translate/text` | POST | 纯文本翻译 | 是 |
-| `/v1/translate/document` | POST | 异步文档翻译 | 是 |
-| `/v1/translate/rag` | POST | RAG 语义检索翻译记忆 | 是 |
-| `/user/register` | POST | 用户注册 | 否 |
-| `/user/login` | POST | 用户登录 | 否 |
-| `/user/profile` | GET/PUT | 获取/更新用户信息 | 是 |
-| `/user/quota` | GET | 查看字符配额使用情况 | 是 |
-| `/user/api-keys` | GET/POST | 列出/创建 API Key | 是 |
-| `/user/api-keys/{id}` | DELETE | 删除 API Key | 是 |
-| `/user/api-keys/{id}/reset` | POST | 重置（重新生成）API Key | 是 |
-| `/user/glossaries` | GET/POST | 术语库增删查 | 是 |
-| `/user/preferences` | GET/PUT | 获取/更新用户偏好设置 | 是 |
-
-## 环境变量
-
-| 变量 | 说明 | 默认值 | 必填 |
-|------|------|--------|------|
-| `JWT_SECRET` | JWT 签名密钥 | 无 | 是 |
-| `MYSQL_HOST` | MySQL 主机 | localhost | 否 |
-| `REDIS_HOST` | Redis 主机 | localhost | 否 |
-| `TRANSLATION_OPENAI_API_KEY` | 后端翻译 API 密钥 | 无 | 是 |
-| `OPENAI_API_KEY` | 微服务 API 密钥 | 无 | 是 |
-| `OPENAI_BASE_URL` | API 基础 URL | https://api.openai.com | 否 |
-| `OPENAI_MODEL` | 翻译模型 | gpt-4o-mini | 否 |
-| `EMBEDDING_PROVIDER` | Embedding 提供商 | openai | 否 |
-| `EMBEDDING_OPENAI_API_KEY` | Embedding API 密钥 | 无 | RAG 需要 |
-| `MTRAN_HOST` | MTranServer 主机 | localhost | 否 |
-| `MTRAN_PORT` | MTranServer 端口 | 8989 | 否 |
-
-## 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| **后端** | Java 21, Spring Boot 3.2.0, Undertow, Spring Security, WebFlux |
-| **数据库** | MySQL 8.0, MyBatis-Plus 3.5.5 |
-| **缓存** | Caffeine (L1), Redis Stack 7 / Lettuce (L2), MySQL (L3) |
-| **向量检索** | RediSearch HNSW, OpenAI text-embedding-3-small (1536 维) |
-| **微服务** | Python 3.11, FastAPI, OpenAI SDK, MTranServer |
-| **前端** | Chrome Extension (Manifest V3), React + TypeScript + Vite, Thymeleaf |
-| **网关** | Nginx 1.28 |
-| **构建部署** | Maven, Docker Compose |
-
-## License
-
-本项目采用 [MIT License](LICENSE) 开源协议。
+**最后更新**：2026-04-29
