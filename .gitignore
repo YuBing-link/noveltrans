@@ -57,3 +57,6 @@ mtran-models/
 # Claude Code config
 .claude/
 CLAUDE.md
+
+# Internal docs
+PORTFOLIO.md
