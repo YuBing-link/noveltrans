@@ -215,6 +215,13 @@ class DOMWalker {
       '[class*="banner"]', '[class*="Banner"]',
       '[class*="notice"]', '[class*="Notice"]',
       '[class*="notification"]', '[class*="Notification"]',
+      // 常见 CMP（同意管理平台）类名模式
+      '[class*="cmp-app"]', '[class*="cmpui"]', '[class*="didomi"]', '[class*="cookiebot"]',
+      '[class*="onetrust"]', '[class*="sourcepoint"]', '[class*="usercentrics"]',
+      '[class*="evidon"]', '[class*="trustarc"]', '[class*="termsfeed"]',
+      '[class*="Osano"]', '[class*="quantcast"]', '[class*="cybot"]',
+      '[id*="onetrust"]', '[id*="cookiebot"]', '[id*="didomi"]',
+      '[data-cookiebanner]', '[data-consent]', '[data-gdpr]',
       '.cookie', '.cookies', '.gdpr', '.consent', '.cookie-banner',
       '.modal', '.popup', '.overlay', '.notification', '.toast',
       '.tooltip', '.dropdown', '.submenu',
@@ -241,10 +248,17 @@ class DOMWalker {
           if (ancestor.matches(nonContentSelectors)) {
             return NodeFilter.FILTER_REJECT;
           }
-          // 检测固定定位元素（cookie 弹窗通常用 fixed/sticky）
+          // 检测定位元素（cookie 弹窗通常用 fixed/sticky/absolute）
           const positionStyle = ancestor.style?.position || window.getComputedStyle(ancestor).position;
           if (positionStyle === 'fixed' || positionStyle === 'sticky') {
             return NodeFilter.FILTER_REJECT;
+          }
+          // 检测 absolute 定位 + 高 z-index（覆盖层模式）
+          if (positionStyle === 'absolute') {
+            const zIndex = parseInt(window.getComputedStyle(ancestor).zIndex, 10);
+            if (!isNaN(zIndex) && zIndex >= 100) {
+              return NodeFilter.FILTER_REJECT;
+            }
           }
           ancestor = ancestor.parentElement;
         }
@@ -276,6 +290,56 @@ class DOMWalker {
         // 跳过已翻译的内容
         if (parent.classList.contains('extreme-translated')) {
           return NodeFilter.FILTER_REJECT;
+        }
+
+        // 基于内容检测：跳过 cookie/隐私同意文本（内联在文章内容中）
+        const text = node.textContent;
+        const cookieConsentPatterns = [
+          'cookies, device or similar',
+          'cookies are set by',
+          'online identifiers',
+          'privacy preferences center',
+          'manage privacy preferences',
+          'your privacy choices',
+          'accept all cookies',
+          'reject all cookies',
+          'necessary cookies',
+          'advertising partners',
+          'targeted advertising',
+          'build your interest map',
+          'experience targeted advertising',
+          'personal data can',
+          'fraudulent activity',
+          'bot ad clicks',
+          'cookie preferences'
+        ];
+        const lowerText = text.toLowerCase();
+        if (cookieConsentPatterns.some(pattern => lowerText.includes(pattern))) {
+          return NodeFilter.FILTER_REJECT;
+        }
+
+        // 基于内容检测：跳过侧栏/推荐/视频等非文章内容
+        const sidebarContentPatterns = [
+          'related stories',
+          'most viewed',
+          'most popular',
+          'trending now',
+          "editor's pick",
+          'you may also like',
+          'read more',
+          'photo gallery',
+          'video gallery',
+          'share this article',
+          'follow us on',
+          'subscribe to'
+        ];
+        const trimmedLower = node.textContent.trim().toLowerCase();
+        if (sidebarContentPatterns.some(pattern => trimmedLower.startsWith(pattern) || trimmedLower.includes(pattern))) {
+          // 检查是否为侧栏/推荐内容（文本密度低）
+          const textDensity = this.getTextDensity(parent);
+          if (textDensity < 0.5) {
+            return NodeFilter.FILTER_REJECT;
+          }
         }
 
         return NodeFilter.FILTER_ACCEPT;
@@ -2176,12 +2240,39 @@ class TranslationApplier {
             if (parent2.matches(skipSelectors)) {
               return NodeFilter.FILTER_REJECT;
             }
-            // 检测固定定位元素（cookie 弹窗通常用 fixed/sticky）
+            // 检测定位元素（cookie 弹窗通常用 fixed/sticky）
             const positionStyle = parent2.style?.position || window.getComputedStyle(parent2).position;
             if (positionStyle === 'fixed' || positionStyle === 'sticky') {
               return NodeFilter.FILTER_REJECT;
             }
+            // 检测 absolute 定位 + 高 z-index（覆盖层模式）
+            if (positionStyle === 'absolute') {
+              const zIndex = parseInt(window.getComputedStyle(parent2).zIndex, 10);
+              if (!isNaN(zIndex) && zIndex >= 100) {
+                return NodeFilter.FILTER_REJECT;
+              }
+            }
             parent2 = parent2.parentElement;
+          }
+          // 基于内容检测：跳过 cookie/隐私同意文本
+          const cookiePatterns = [
+            'cookies, device or similar', 'cookies are set by', 'online identifiers',
+            'privacy preferences', 'your privacy choices', 'accept all cookies',
+            'reject all cookies', 'necessary cookies', 'advertising partners',
+            'targeted advertising', 'fraudulent activity', 'bot ad clicks'
+          ];
+          const lowerText = node.textContent.toLowerCase();
+          if (cookiePatterns.some(p => lowerText.includes(p))) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          // 基于内容检测：跳过侧栏/推荐内容
+          const sidebarPatterns = [
+            'related stories', 'most viewed', 'most popular', 'trending now',
+            "editor's pick", 'you may also like', 'photo gallery', 'video gallery'
+          ];
+          const trimmedLower = node.textContent.trim().toLowerCase();
+          if (sidebarPatterns.some(p => trimmedLower.startsWith(p) || trimmedLower.includes(p))) {
+            return NodeFilter.FILTER_REJECT;
           }
           return NodeFilter.FILTER_ACCEPT;
         }
