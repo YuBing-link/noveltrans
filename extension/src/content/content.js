@@ -242,6 +242,12 @@ class DOMWalker {
         const parent = node.parentElement;
         if (!parent) return NodeFilter.FILTER_REJECT;
 
+        // 跳过视觉上隐藏的元素
+        const computedStyle = window.getComputedStyle(parent);
+        if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden' || computedStyle.opacity === '0') {
+          return NodeFilter.FILTER_REJECT;
+        }
+
         // 检查祖先元素是否在非内容区域内
         let ancestor = parent;
         while (ancestor && ancestor !== document.body) {
@@ -259,6 +265,11 @@ class DOMWalker {
             if (!isNaN(zIndex) && zIndex >= 100) {
               return NodeFilter.FILTER_REJECT;
             }
+          }
+          // 祖先元素如果也是隐藏的，跳过
+          const ancestorStyle = window.getComputedStyle(ancestor);
+          if (ancestorStyle.display === 'none' || ancestorStyle.visibility === 'hidden') {
+            return NodeFilter.FILTER_REJECT;
           }
           ancestor = ancestor.parentElement;
         }
@@ -2234,25 +2245,38 @@ class TranslationApplier {
           if (node.textContent.trim().length === 0) {
             return NodeFilter.FILTER_REJECT;
           }
+          // 跳过视觉上隐藏的元素
+          const parent2 = node.parentElement;
+          if (parent2) {
+            const computedStyle = window.getComputedStyle(parent2);
+            if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden' || computedStyle.opacity === '0') {
+              return NodeFilter.FILTER_REJECT;
+            }
+          }
           // 检查祖先元素是否在排除区域内
-          let parent2 = node.parentElement;
-          while (parent2 && parent2 !== document.body) {
-            if (parent2.matches(skipSelectors)) {
+          let ancestor = parent2;
+          while (ancestor && ancestor !== document.body) {
+            if (ancestor.matches(skipSelectors)) {
               return NodeFilter.FILTER_REJECT;
             }
             // 检测定位元素（cookie 弹窗通常用 fixed/sticky）
-            const positionStyle = parent2.style?.position || window.getComputedStyle(parent2).position;
+            const positionStyle = ancestor.style?.position || window.getComputedStyle(ancestor).position;
             if (positionStyle === 'fixed' || positionStyle === 'sticky') {
               return NodeFilter.FILTER_REJECT;
             }
             // 检测 absolute 定位 + 高 z-index（覆盖层模式）
             if (positionStyle === 'absolute') {
-              const zIndex = parseInt(window.getComputedStyle(parent2).zIndex, 10);
+              const zIndex = parseInt(window.getComputedStyle(ancestor).zIndex, 10);
               if (!isNaN(zIndex) && zIndex >= 100) {
                 return NodeFilter.FILTER_REJECT;
               }
             }
-            parent2 = parent2.parentElement;
+            // 祖先元素如果也是隐藏的，跳过
+            const ancestorStyle = window.getComputedStyle(ancestor);
+            if (ancestorStyle.display === 'none' || ancestorStyle.visibility === 'hidden') {
+              return NodeFilter.FILTER_REJECT;
+            }
+            ancestor = ancestor.parentElement;
           }
           // 基于内容检测：跳过 cookie/隐私同意文本
           const cookiePatterns = [
@@ -2321,9 +2345,28 @@ class TranslationApplier {
     if (['script', 'style', 'noscript', 'svg', 'img', 'input', 'button', 'select', 'textarea'].includes(tag)) {
       return;
     }
+
+    // 跳过内联布局元素（导航栏、面包屑、标签等），使用直接翻译代替双语
+    const inlineContextTags = ['nav', 'a', 'li'];
+    const parentTag = parentElement.tagName?.toLowerCase();
+    if (inlineContextTags.includes(parentTag)) {
+      this.applyDirectTranslation(textNode, translatedText);
+      return;
+    }
+    // 检查祖先是否有 nav/header/footer 等内联上下文
+    if (parentElement.closest('nav, header, footer, .breadcrumb, .breadcrumbs, nav *, header *, footer *')) {
+      this.applyDirectTranslation(textNode, translatedText);
+      return;
+    }
+
+    // 跳过视觉上隐藏的元素
+    const computedStyle = window.getComputedStyle(parentElement);
+    if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden' || computedStyle.opacity === '0') {
+      return;
+    }
+
     // 跳过只有单个文本节点的纯容器（如 logo 区），避免破坏子元素
     if (parentElement.children.length > 0 && parentElement.childNodes.length <= parentElement.children.length + 1) {
-      // 父元素有子元素且文本节点不多，不清空整个父元素
       this.applyDirectTranslation(textNode, translatedText);
       return;
     }
@@ -2342,7 +2385,6 @@ class TranslationApplier {
     }
 
     // 只清除文本内容，保留其他元素的结构
-    // 创建容器包裹原文和译文
     const bilingualWrapper = document.createElement('span');
     bilingualWrapper.className = 'extreme-bilingual-text';
 
