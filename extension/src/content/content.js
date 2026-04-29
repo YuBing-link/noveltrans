@@ -1051,6 +1051,37 @@ class DOMWalker {
     };
   }
 
+  // 计算 DOM 路径签名 — 用于精确定位文本节点
+  computeDomPath(node) {
+    if (!node || !node.parentElement) return '';
+    const parts = [];
+    let el = node.parentElement;
+    while (el && el !== document.documentElement) {
+      const tag = el.tagName.toLowerCase();
+      // 计算同级同标签索引
+      let index = 0;
+      let sibling = el.previousElementSibling;
+      while (sibling) {
+        if (sibling.tagName === el.tagName) index++;
+        sibling = sibling.previousElementSibling;
+      }
+      const selector = index > 0 ? `${tag}[${index}]` : tag;
+      parts.unshift(selector);
+      el = el.parentElement;
+    }
+    // 加上文本节点在父元素中的索引
+    const parent = node.parentElement;
+    if (parent) {
+      let textIndex = 0;
+      for (const child of parent.childNodes) {
+        if (child === node) break;
+        if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) textIndex++;
+      }
+      parts.push(`#text[${textIndex}]`);
+    }
+    return parts.join('>');
+  }
+
   // 查找主体内容容器（智能识别）
   findMainContentContainer() {
     // 1. 优先查找常见的主体内容容器选择器
@@ -1653,9 +1684,20 @@ class TextRegistry {
 
   // 注册单个文本
   registerText(id, original, context, position, metadata = {}) {
-    // 注意：不再合并重复文本 — 每个ID对应独立DOM节点
-    // 后端会发送每个ID的翻译，所以每个ID都必须存在于registry中
-    // 重复内容的翻译应用由applySingleTranslation处理（原文=译文时自动跳过）
+    // 重复检测：使用 DOM 路径 + 内容组合键，而非仅内容
+    // 相同内容但不同 DOM 位置的文本应视为独立条目
+    const domPath = metadata.domPath || '';
+    const dedupKey = domPath ? `${domPath}::${original}` : original;
+
+    if (this.duplicateMap.has(dedupKey)) {
+      const existingId = this.duplicateMap.get(dedupKey);
+      const existingEntry = this.entries.get(existingId);
+      if (existingEntry) {
+        // 将新 ID 映射到同一条目（真正的重复：同位置同内容）
+        this.entries.set(id, existingEntry);
+        return id;
+      }
+    }
 
     // 字数低于50字的文本不上传context，设置为null
     const textLength = original.trim().length;
@@ -1663,6 +1705,9 @@ class TextRegistry {
 
     const entry = this.createTextEntry(id, original, finalContext, position, metadata);
     this.entries.set(id, entry);
+
+    // 按 DOM 路径 + 内容去重
+    this.duplicateMap.set(dedupKey, id);
 
     // 如果是关键路径，加入关键路径集合
     if (metadata.isCritical) {
@@ -2227,12 +2272,50 @@ class TranslationApplier {
       const decodedTranslation = decodeHtml(sanitizedTranslation);
 
       // 查找原始文本节点
+      // 查找原始文本节点
       const originalNode = this.findOriginalTextNode(entry);
 
       if (!originalNode) {
-        console.warn(`找不到文本ID ${entry.id} 对应的原始节点`);
-        entry.status = 'error';
-        return false;
+        // 如果找不到原始节点，尝试通过原文内容匹配查找
+        console.warn(`找不到文本ID ${entry.id} 对应的原始节点，尝试备用查找...`);
+
+        // 备用策略：通过原文内容在所有文本节点中查找
+        const allTextNodes = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+          acceptNode: (node) => {
+            const text = node.textContent.trim();
+            if (!text) return NodeFilter.FILTER_REJECT;
+            // 检查是否包含原文
+            if (text.includes(entry.original) || entry.original.includes(text)) {
+              return NodeFilter.FILTER_ACCEPT;
+            }
+            return NodeFilter.FILTER_REJECT;
+          }
+        });
+
+        let fallbackNode = null;
+        let candidate;
+        while ((candidate = allTextNodes.nextNode()) && !fallbackNode) {
+          fallbackNode = candidate;
+        }
+
+        if (fallbackNode) {
+          console.log(`[Fallback] 找到备用节点用于 ${entry.id}`);
+          // 标记备用节点
+          const parentElement = fallbackNode.parentElement;
+          if (parentElement && !parentElement.hasAttribute('data-nt-id')) {
+            const nodeId = 'nt-' + Date.now() + '-' + (this._nextNodeId++);
+            parentElement.setAttribute('data-nt-id', nodeId);
+          }
+          // 更新映射
+          const storedId = parentElement?.getAttribute('data-nt-id');
+          if (storedId) {
+            this.nodeIdMap.set(entry.id, { nodeId: storedId, node: fallbackNode, parent: parentElement });
+          }
+        } else {
+          console.warn(`[Fallback] 仍然找不到 ${entry.id} 的节点，跳过翻译`);
+          entry.status = 'error';
+          return false;
+        }
       }
 
       // 为原始文本节点的父元素标记唯一ID，便于后续可靠定位
@@ -2287,16 +2370,28 @@ class TranslationApplier {
         return null;
       }
 
-      // 策略1：通过节点ID标记快速定位（最可靠）
+      // 策略1：通过 DOM 路径签名精确定位（最可靠，适用于重复内容）
+      const domPath = entry.metadata?.domPath;
+      if (domPath) {
+        const node = this.resolveDomPath(domPath);
+        if (node && node.nodeType === Node.TEXT_NODE) {
+          // 验证内容匹配
+          if (node.textContent.trim() === entry.original.trim() ||
+              node.textContent.replace(/\s+/g, '').includes(entry.original.replace(/\s+/g, '')) ||
+              entry.original.replace(/\s+/g, '').includes(node.textContent.replace(/\s+/g, ''))) {
+            return node;
+          }
+        }
+      }
+
+      // 策略2：通过节点ID标记快速定位
       const stored = this.nodeIdMap.get(entry.id);
       if (stored) {
         if (stored.node && stored.node.nodeType === Node.TEXT_NODE) {
-          // 直接引用仍然有效
           if (stored.node.textContent === entry.original) {
             return stored.node;
           }
         }
-        // 通过 DOM 查询定位
         if (stored.nodeId) {
           const markedEl = document.querySelector(`[data-nt-id="${stored.nodeId}"]`);
           if (markedEl) {
@@ -2310,7 +2405,7 @@ class TranslationApplier {
         }
       }
 
-      // 策略2：通过内容匹配查找（降级方案）
+      // 策略3：通过内容匹配查找（降级方案）
       const allTextNodes = this.getAllTextNodes();
 
       // 精确匹配
@@ -2332,6 +2427,59 @@ class TranslationApplier {
       return null;
     } catch (error) {
       console.error('查找原始文本节点时出错:', error);
+      return null;
+    }
+  }
+
+  // 根据 DOM 路径签名查找对应的文本节点
+  resolveDomPath(domPath) {
+    if (!domPath) return null;
+    try {
+      const parts = domPath.split('>');
+      // 最后一部分是 text node 标识，移除它
+      if (parts[parts.length - 1].startsWith('#text')) {
+        parts.pop();
+      }
+      if (parts.length === 0) return null;
+
+      // 从根开始遍历路径
+      let el = document.documentElement;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const bracketIdx = part.indexOf('[');
+        const tag = bracketIdx > 0 ? part.substring(0, bracketIdx) : part;
+        const index = bracketIdx > 0 ? parseInt(part.substring(bracketIdx + 1, part.length - 1)) : 0;
+
+        // 找到第 index 个同名子元素（从当前 el 开始）
+        let found = null;
+        let count = 0;
+        const children = el.children;
+        for (let j = 0; j < children.length; j++) {
+          if (children[j].tagName.toLowerCase() === tag) {
+            if (count === index) {
+              found = children[j];
+              break;
+            }
+            count++;
+          }
+        }
+        if (!found) return null;
+        el = found;
+      }
+
+      // 找到文本节点
+      const textIndexMatch = domPath.match(/#text\[(\d+)\]$/);
+      const targetTextIndex = textIndexMatch ? parseInt(textIndexMatch[1]) : 0;
+      let textIdx = 0;
+      for (const child of el.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) {
+          if (textIdx === targetTextIndex) return child;
+          textIdx++;
+        }
+      }
+      // 降级：返回第一个符合条件的文本节点
+      return el.childNodes.length > 0 ? el.childNodes[0] : null;
+    } catch (e) {
       return null;
     }
   }
@@ -4593,6 +4741,9 @@ class TranslationService {
                         const detectedLang = this.detectTextLanguage(textContent);
                         const isPreTranslated = targetLang && this.isTargetLanguage(detectedLang, targetLang);
 
+                        // 计算 DOM 路径签名，用于后续精确查找
+                        const domPath = this.domWalker.computeDomPath(node);
+
                         allTexts.push({
                             id: `text_${textId++}`,
                             original: textContent,
@@ -4602,7 +4753,8 @@ class TranslationService {
                                 ...evaluation.metadata,
                                 importance: importance,
                                 detectedLang: detectedLang,
-                                preTranslated: isPreTranslated
+                                preTranslated: isPreTranslated,
+                                domPath: domPath
                             }
                         });
                     }
