@@ -301,12 +301,26 @@ async function handleTranslate() {
       // 切换到显示原文
       console.log('切换到显示原文');
 
-      await browser.tabs.sendMessage(currentTabId, {
+      const response = await browser.tabs.sendMessage(currentTabId, {
         action: 'toggleDisplayMode'
       });
 
-      // 临时更新UI
-      await setCurrentPageStatus(PageStatus.TRANSLATED_SHOWING_ORIGINAL);
+      // 根据 content script 返回的实际模式更新本地状态
+      if (response && response.success && response.displayMode) {
+        switch (response.displayMode) {
+          case 'original':
+            await setCurrentPageStatus(PageStatus.TRANSLATED_SHOWING_ORIGINAL);
+            break;
+          case 'translation':
+          case 'bilingual':
+          default:
+            await setCurrentPageStatus(PageStatus.TRANSLATED_SHOWING_TRANSLATION);
+            break;
+        }
+      } else {
+        // 备用方案：假设切换成功
+        await setCurrentPageStatus(PageStatus.TRANSLATED_SHOWING_ORIGINAL);
+      }
 
       pendingTranslation = false;
 
@@ -314,12 +328,26 @@ async function handleTranslate() {
       // 切换到显示译文
       console.log('切换到显示译文');
 
-      await browser.tabs.sendMessage(currentTabId, {
+      const response = await browser.tabs.sendMessage(currentTabId, {
         action: 'toggleDisplayMode'
       });
 
-      // 临时更新UI
-      await setCurrentPageStatus(PageStatus.TRANSLATED_SHOWING_TRANSLATION);
+      // 根据 content script 返回的实际模式更新本地状态
+      if (response && response.success && response.displayMode) {
+        switch (response.displayMode) {
+          case 'translation':
+          case 'bilingual':
+            await setCurrentPageStatus(PageStatus.TRANSLATED_SHOWING_TRANSLATION);
+            break;
+          case 'original':
+          default:
+            await setCurrentPageStatus(PageStatus.TRANSLATED_SHOWING_ORIGINAL);
+            break;
+        }
+      } else {
+        // 备用方案：假设切换成功
+        await setCurrentPageStatus(PageStatus.TRANSLATED_SHOWING_TRANSLATION);
+      }
 
       pendingTranslation = false;
     }

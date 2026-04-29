@@ -142,6 +142,44 @@ let mutationObserver = null;
 // DOMWalker 模块 - 智能DOM遍历和节点过滤
 class DOMWalker {
   constructor() {
+    // 多语言 Cookie/隐私同意弹窗检测模式（按优先级排序，常用在前）
+    this.cookiePatterns = [
+      // English - 高频
+      'cookies are set', 'set by advertising', 'online identifiers',
+      'privacy preferences', 'your privacy choices', 'accept all cookies',
+      'reject all cookies', 'necessary cookies', 'advertising partners',
+      'targeted advertising', 'build your interest map', 'cookie preferences',
+      'experience targeted advertising', 'fraudulent activity', 'bot ad clicks',
+      'cookies, device or similar',
+      // English - 补充
+      'personal data can', 'interests based on what you', 'content based on what you',
+      'recognize your browser', 'genuine reviews vanish', 'negatively reviews of merchants',
+      'cookie consent', 'consent to the use', 'agree to the use',
+      // English - 短句模式（catch 被分割的文本节点）
+      'cookies are set by', 'these cookies are', 'cookies are usually',
+      'run without these cookies', 'cannot turn them off',
+      'using cookies, we can', 'calculate the amount of access',
+      'source of traffic in order', 'measure and improve the performance',
+      'visitors navigate the site', 'information collected by these cookies',
+      'if you do not allow these cookies', 'experience targeted advertising on different',
+      'we will not know when you visited',
+      // Chinese (Simplified)
+      '使用cookie', '使用cookie技术', '接受所有cookie', '拒绝所有cookie',
+      '隐私设置', 'cookie偏好设置', '必要cookie', '我们使用cookie',
+      '继续访问即表示您同意', '同意并接受', 'cookie政策',
+      // Japanese
+      'cookieを使用', 'すべてのcookieに同意', 'cookieの設定',
+      'プライバシー設定', 'cookieポリシー', '同意する',
+      // German
+      'cookies akzeptieren', 'alle cookies', 'notwendige cookies',
+      'datenschutzeinstellungen', 'cookie-einstellungen', 'ablehnen',
+      'werbung partners', 'zielgruppenorientierte werbung',
+      // French
+      'accepter les cookies', 'cookies necessaires', 'preferences en matiere de cookies',
+      'parametres de confidentialite', 'cookies publicitaires', 'refuser les cookies',
+      'politique relative aux cookies'
+    ];
+
     this.defaultFilter = this.createDefaultFilter();
     this.aggressiveFilter = this.createAggressiveFilter();
     this.conservativeFilter = this.createConservativeFilter();
@@ -204,18 +242,13 @@ class DOMWalker {
     const ignoreTags = new Set(['HEADER', 'FOOTER', 'NAV', 'NOSCRIPT']);
 
     // 第二层：class/id 启发式排除（非内容区域）
-    const unlikelyCandidates = /-ad|ai2html|banner|breadcrumbs|combx|comment|community|cover-wrap|disqus|extra|gdpr|legended|outbrain|promo|related|remark|replies|rss|shoutbox|sidebar|skip|social|sponsor|supplemental|ad-break|agegate|pagination|pager|popup|tweet|twitter|cookie|consent|ccpa|overlay|modal|dialog|tooltip|toast|notification|fixed-bar|sticky|menu|navbar|navigation|advertisement|ad\b|sponsor|recommended|trending|logo|brand|breadcrumb/i;
+    // 注意：只过滤明确的广告/功能性元素，避免误杀 related-stories 等合法内容
+    const unlikelyCandidates = /-ad\b|ai2html|breadcrumbs|combx|disqus|outbrain|shoutbox|skip\b|tweet|twitter|ad-break|agegate|popup|fixed-bar|advertisement\b/i;
 
-    const okMaybe = /and|article|body|column|content|main|shadow|story|post|text/i;
+    const okMaybe = /and|article|body|column|content|main|shadow|story|post|text|related|sidebar|gallery|menu|navigation/i;
 
-    // 第三层：Cookie/隐私同意文本内容检测
-    const cookiePatterns = [
-      'cookies, device or similar', 'cookies are set by', 'online identifiers',
-      'privacy preferences', 'your privacy choices', 'accept all cookies',
-      'reject all cookies', 'necessary cookies', 'advertising partners',
-      'targeted advertising', 'fraudulent activity', 'bot ad clicks',
-      'build your interest map', 'experience targeted advertising', 'cookie preferences'
-    ];
+    // 第三层：Cookie/隐私同意文本内容检测（引用构造函数中的多语言模式）
+    const cookiePatterns = this.cookiePatterns;
 
     // 第四层：侧栏/推荐内容检测
     const sidebarPatterns = [
@@ -270,12 +303,21 @@ class DOMWalker {
             }
           }
 
-          // 定位弹窗检测
+        // 定位弹窗检测（不管是否在内容容器内都要检查）
           const positionStyle = ancestor.style?.position || ancestorStyle.position;
           if (positionStyle === 'fixed' || positionStyle === 'sticky') {
             return NodeFilter.FILTER_REJECT;
           }
           if (positionStyle === 'absolute') {
+            // 所有 absolute 定位的覆盖层都过滤，不只是高 z-index 的
+            const rect = ancestor.getBoundingClientRect();
+            // 覆盖整个视口或底部的 absolute 元素通常是 cookie/consent banner
+            if (rect.bottom >= window.innerHeight - 20 ||
+                rect.top <= 0 ||
+                rect.width >= window.innerWidth * 0.8) {
+              return NodeFilter.FILTER_REJECT;
+            }
+            // 原有的高 z-index 检查
             const zIndex = parseInt(ancestorStyle.zIndex, 10);
             if (!isNaN(zIndex) && zIndex >= 100) {
               return NodeFilter.FILTER_REJECT;
@@ -387,15 +429,37 @@ class DOMWalker {
 
   // 检查文本是否可见（宽松版 - 修复 offsetParent 和 fontSize 问题）
   isVisibleTextLoose(element) {
-    // 修复：使用更宽松的检查，避免过滤掉 position: fixed 元素
-    const hasSize = element.offsetHeight > 0 || element.offsetWidth > 0;
+    const style = window.getComputedStyle(element);
+
+    // 基本可见性检查
+    if (style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.opacity === '0') {
+      return false;
+    }
+
+    // 恢复 fontSize === 0 检查（font-size:0 是常见的隐藏文本技术）
+    const fontSize = parseFloat(style.fontSize);
+    if (fontSize === 0) {
+      return false;
+    }
+
+    // 必须有实际渲染尺寸
+    const hasSize = element.offsetHeight > 0 && element.offsetWidth > 0;
     if (!hasSize) {
-      // 即使没有 offsetParent，只要有尺寸就认为是可见的
       if (!element.offsetParent) {
-        // 检查是否是 fixed/sticky 定位
-        const style = window.getComputedStyle(element);
+        // fixed/sticky 元素可能没有 offsetParent，但需检查是否在视口内
         if (style.position === 'fixed' || style.position === 'sticky') {
-          // 定位元素可能是可见的
+          const rect = element.getBoundingClientRect();
+          // 被移出视口的元素视为隐藏
+          if (rect.top < -1000 || rect.left < -1000 ||
+              rect.top > window.innerHeight + 1000 ||
+              rect.left > window.innerWidth + 1000) {
+            return false;
+          }
+          if (rect.width === 0 || rect.height === 0) {
+            return false;
+          }
         } else {
           return false;
         }
@@ -404,14 +468,16 @@ class DOMWalker {
       }
     }
 
-    const style = window.getComputedStyle(element);
-    if (style.display === 'none' ||
-        style.visibility === 'hidden' ||
-        style.opacity === '0') {
+    // 检查现代 CSS 隐藏技术
+    const clipPath = style.clipPath || style.webkitClipPath;
+    if (clipPath && (clipPath.includes('inset(100') || clipPath.includes('circle(0'))) {
+      return false;
+    }
+    const clip = style.clip;
+    if (clip && clip.includes('rect(0, 0, 0, 0)')) {
       return false;
     }
 
-    // 移除 fontSize === 0 的检查，因为某些特殊布局可能使用 0 字体但仍有内容
     return true;
   }
 
@@ -419,6 +485,23 @@ class DOMWalker {
   isObviousAd(element) {
     const className = String(element.className?.baseVal || element.getAttribute?.('class') || element.className || '').toLowerCase();
     const id = (element.id || '').toLowerCase();
+
+    // Cookie/同意弹窗容器检测（高频选择器，覆盖 OneTrust、Cookiebot、Quantcast 等主流方案）
+    if (element.closest([
+      '#onetrust-consent-sdk', '#onetrust-banner-sdk', '#onetrust-pc-sdk',
+      '.onetrust-consent-sdk', '.onetrust-banner', '.onetrust-pc-sdk',
+      '#cookiebanner', '.cookie-banner', '.cookie-consent', '.cookie-notice', '.cookie-notification',
+      '.cc-window', '.cc-banner', '.cc-compliance', '.cc-banner-wrapper',
+      '#cybot-cookiebot-dialog', '.cookiebot-dialog',
+      '.quantcast-consent', '.qc-cmp-ui-container',
+      '#didomi-notice', '.didomi-popup', '.didomi-consent-banner',
+      '.consent-banner', '.consent-notice', '.consent-overlay',
+      '.privacy-consent-banner', '.gdpr-banner', '.eu-cookie',
+      '.cookie-policy-banner', '.cookie-alert', '.cookie-acceptance',
+      '[data-cookieconsent]', '[data-gdpr]', '[data-eu-cookie]'
+    ].join(','))) {
+      return true;
+    }
 
     // 广告选择器
     const obviousAdSelectors = [
@@ -1448,6 +1531,20 @@ class DOMWalker {
       const parent = node.parentElement;
       if (!parent) return;
 
+      // 跳过导航元素（nav 及其子元素）
+      if (parent.closest('nav, [role="navigation"], [role="menubar"]')) {
+        return;
+      }
+
+      // 跳过不在内容容器内的 header/footer 元素
+      if (!mainContentArea || !mainContentArea.contains(parent)) {
+        if (parent.closest('header:not(article header), footer:not(article footer)')) {
+          if (!parent.closest('article, main')) {
+            return;
+          }
+        }
+      }
+
       const tagName = parent.tagName;
       const textDensity = this.getTextDensity(parent);
       const isInMainContent = mainContentArea && mainContentArea.contains(parent);
@@ -1948,6 +2045,9 @@ class TranslationApplier {
     this.autoCloseTimer = null;  // 双语模式自动关闭计时器
     this.userInteracted = false;  // 用户是否与页面交互
     this.isProgressCompleted = false;  // 进度条是否已完成
+    this.nodeIdMap = new Map(); // 节点ID映射，用于可靠定位
+    this._nextNodeId = 1;
+    this.displayMode = 'bilingual'; // 三态显示模式：'bilingual' | 'original' | 'translation'
   }
 
   // 注入双语显示样式（在翻译开始时调用）
@@ -2066,6 +2166,45 @@ class TranslationApplier {
   }
 
   // 应用单个翻译 - 直接替换原始文本节点
+  // 检查译文是否包含 cookie/同意弹窗内容，命中则返回空字符串
+  sanitizeCookieContent(text) {
+    const lower = text.toLowerCase().trim();
+    // 必须包含 cookie + 至少一个同意/广告/隐私关键词，才是 cookie 同意文案
+    if (!lower.includes('cookie') && !lower.includes('gdpr') && !lower.includes('consent')) {
+      return text;
+    }
+    // 同意/广告/隐私关键词（命中 1 个即判为 cookie 文案）
+    const consentKeywords = [
+      'advertising partners', 'targeted advertising', 'interest map',
+      'online identifiers', 'device or similar', 'bot ad clicks',
+      'privacy preferences', 'privacy choices', 'cookie preferences',
+      'necessary cookies', 'reject all cookies', 'accept all cookies',
+      'set by advertising', 'experience targeted advertising',
+      'calculate the amount of access', 'source of traffic',
+      'visitors navigate the site', 'recognize your browser',
+      'we will not know when you visited', 'cannot turn them off',
+      'consent to the use', 'agree to the use',
+      'information collected by these cookies', 'collected by these cookies',
+      'these cookies are usually', 'these cookies are set',
+      'if you do not allow these cookies', 'do not allow these cookies',
+      'websites run without these cookies',
+      'privacy policy', 'cookie policy', 'privacy notice',
+      '隐私设置', 'cookie偏好设置', '隐私政策', '接受所有cookie', '拒绝所有cookie',
+      'すべてのcookie', 'cookieの設定', 'プライバシー設定',
+      'alle cookies', 'notwendige cookies', 'datenschutzeinstellungen',
+      'cookies necessaires', 'parametres de confidentialite'
+    ];
+
+    for (const keyword of consentKeywords) {
+      if (lower.includes(keyword)) {
+        console.warn('[CookieSanitize] 检测到 cookie 同意内容，已拦截:', text.substring(0, 80) + '...');
+        return '';
+      }
+    }
+
+    return text;
+  }
+
   applySingleTranslation(entry, translatedText, bilingualDisplay = false) {
     try {
       // 检查输入参数的有效性
@@ -2077,9 +2216,17 @@ class TranslationApplier {
         return false;
       }
 
+      // 主动清理译文中混入的 cookie/同意弹窗内容
+      const sanitizedTranslation = this.sanitizeCookieContent(translatedText);
+      if (sanitizedTranslation === '') {
+        console.warn(`[CookieSanitize] 跳过条目 ${entry.id}，译文为 cookie 内容`);
+        entry.status = 'skipped';
+        return false;
+      }
+
       // 检查翻译是否与原文相同（避免重复内容破坏布局）
       const normalizedOriginal = (entry.original || '').trim().toLowerCase();
-      const normalizedTranslation = (translatedText || '').trim().toLowerCase();
+      const normalizedTranslation = (sanitizedTranslation || '').trim().toLowerCase();
       if (normalizedOriginal && normalizedOriginal === normalizedTranslation) {
         // 翻译与原文相同，跳过不处理
         entry.status = 'skipped';
@@ -2092,7 +2239,7 @@ class TranslationApplier {
         el.innerHTML = text;
         return el.value;
       };
-      const decodedTranslation = decodeHtml(translatedText);
+      const decodedTranslation = decodeHtml(sanitizedTranslation);
 
       // 查找原始文本节点
       const originalNode = this.findOriginalTextNode(entry);
@@ -2101,6 +2248,18 @@ class TranslationApplier {
         console.warn(`找不到文本ID ${entry.id} 对应的原始节点`);
         entry.status = 'error';
         return false;
+      }
+
+      // 为原始文本节点的父元素标记唯一ID，便于后续可靠定位
+      const parentElement = originalNode.parentElement;
+      if (parentElement && !parentElement.hasAttribute('data-nt-id')) {
+        const nodeId = 'nt-' + Date.now() + '-' + (this._nextNodeId++);
+        parentElement.setAttribute('data-nt-id', nodeId);
+        this.nodeIdMap.set(entry.id, { nodeId, node: originalNode, parent: parentElement });
+      } else if (parentElement) {
+        // 元素已有 ID，更新映射
+        const existingId = parentElement.getAttribute('data-nt-id');
+        this.nodeIdMap.set(entry.id, { nodeId: existingId, node: originalNode, parent: parentElement });
       }
 
       // 保存原始文本节点引用，便于后续恢复
@@ -2143,29 +2302,43 @@ class TranslationApplier {
         return null;
       }
 
-      // 通过位置信息和文本内容匹配原始节点
+      // 策略1：通过节点ID标记快速定位（最可靠）
+      const stored = this.nodeIdMap.get(entry.id);
+      if (stored) {
+        if (stored.node && stored.node.nodeType === Node.TEXT_NODE) {
+          // 直接引用仍然有效
+          if (stored.node.textContent === entry.original) {
+            return stored.node;
+          }
+        }
+        // 通过 DOM 查询定位
+        if (stored.nodeId) {
+          const markedEl = document.querySelector(`[data-nt-id="${stored.nodeId}"]`);
+          if (markedEl) {
+            for (const child of markedEl.childNodes) {
+              if (child.nodeType === Node.TEXT_NODE &&
+                  child.textContent.trim() === entry.original.trim()) {
+                return child;
+              }
+            }
+          }
+        }
+      }
+
+      // 策略2：通过内容匹配查找（降级方案）
       const allTextNodes = this.getAllTextNodes();
 
-      // 首先尝试精确匹配
+      // 精确匹配
       for (const node of allTextNodes) {
         if (node && node.textContent && entry.original && node.textContent.trim() === entry.original.trim()) {
           return node;
         }
       }
 
-      // 如果精确匹配失败，尝试模糊匹配（考虑可能的空白字符差异）
+      // 模糊匹配（空白字符差异）
       for (const node of allTextNodes) {
         if (node && node.textContent && entry.original &&
             node.textContent.replace(/\s+/g, '') === entry.original.replace(/\s+/g, '')) {
-          return node;
-        }
-      }
-
-      // 如果还是找不到，尝试部分匹配
-      for (const node of allTextNodes) {
-        if (node && node.textContent && entry.original &&
-            (entry.original.includes(node.textContent.trim()) ||
-            node.textContent.trim().includes(entry.original.trim()))) {
           return node;
         }
       }
@@ -2182,16 +2355,38 @@ class TranslationApplier {
   getAllTextNodes() {
     const textNodes = [];
     const ignoreTags = new Set(['HEADER', 'FOOTER', 'NAV', 'NOSCRIPT']);
+    // Cookie/隐私同意模式（多语言，包含短句和单词级匹配）
     const cookiePatterns = [
-      'cookies, device or similar', 'cookies are set by', 'online identifiers',
+      // 长句模式
+      'cookies are set', 'set by advertising', 'online identifiers',
       'privacy preferences', 'your privacy choices', 'accept all cookies',
       'reject all cookies', 'necessary cookies', 'advertising partners',
-      'targeted advertising', 'fraudulent activity', 'bot ad clicks'
+      'targeted advertising', 'build your interest map', 'cookie preferences',
+      'experience targeted advertising', 'fraudulent activity', 'bot ad clicks',
+      'cookies, device or similar',
+      'personal data can', 'interests based on what you', 'content based on what you',
+      'recognize your browser', 'genuine reviews vanish', 'negatively reviews of merchants',
+      'cookie consent', 'consent to the use', 'agree to the use',
+      '使用cookie', '接受所有cookie', '拒绝所有cookie', '隐私设置',
+      'cookie偏好设置', '必要 cookie', '我们使用cookie',
+      'cookieを使用', 'すべてのcookieに同意', 'cookieの設定',
+      'cookies akzeptieren', 'alle cookies', 'notwendige cookies',
+      'accepter les cookies', 'cookies necessaires', 'parametres de confidentialite',
+      // 单词/短句模式（catch 被分割的文本节点）
+      'cookies are set by', 'these cookies are', 'cookies are usually',
+      'run without these cookies', 'cannot turn them off',
+      'using cookies, we can', 'calculate the amount of access',
+      'source of traffic in order', 'measure and improve the performance',
+      'visitors navigate the site', 'information collected by these cookies',
+      'if you do not allow these cookies', 'experience targeted advertising on different',
+      'we will not know when you visited'
     ];
     const sidebarPatterns = [
       'related stories', 'most viewed', 'most popular', 'trending now',
       "editor's pick", 'you may also like', 'photo gallery', 'video gallery'
     ];
+    const unlikelyCandidates = /-ad|ai2html|banner|breadcrumbs|combx|comment|community|cover-wrap|disqus|extra|gdpr|legended|outbrain|promo|related|remark|replies|rss|shoutbox|sidebar|skip|social|sponsor|supplemental|ad-break|agegate|pagination|pager|popup|tweet|twitter|cookie|consent|ccpa|overlay|modal|dialog|tooltip|toast|notification|fixed-bar|sticky|menu|navbar|navigation|advertisement|ad\b|sponsor|recommended|trending|logo|brand|breadcrumb/i;
+    const okMaybe = /and|article|body|column|content|main|shadow|story|post|text/i;
 
     const walker = document.createTreeWalker(
       document.body,
@@ -2234,10 +2429,61 @@ class TranslationApplier {
               return NodeFilter.FILTER_REJECT;
             }
             if (positionStyle === 'absolute') {
+              // 所有 absolute 定位的覆盖层都过滤，不只是高 z-index 的
+              const rect = ancestor.getBoundingClientRect();
+              // 覆盖整个视口或底部的 absolute 元素通常是 cookie/consent banner
+              if (rect.bottom >= window.innerHeight - 20 ||
+                  rect.top <= 0 ||
+                  rect.width >= window.innerWidth * 0.8) {
+                return NodeFilter.FILTER_REJECT;
+              }
               const zIndex = parseInt(ancestorStyle.zIndex, 10);
               if (!isNaN(zIndex) && zIndex >= 100) return NodeFilter.FILTER_REJECT;
             }
             ancestor = ancestor.parentElement;
+          }
+
+          // 尊重 translate="no" 和 notranslate 类
+          if (parent.getAttribute('translate') === 'no' || parent.classList.contains('notranslate')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // Cookie/同意弹窗容器检测（内联，与 isObviousAd 同步）
+          if (parent.closest([
+            '#onetrust-consent-sdk', '#onetrust-banner-sdk', '#onetrust-pc-sdk',
+            '.onetrust-consent-sdk', '.onetrust-banner', '.onetrust-pc-sdk',
+            '#cookiebanner', '.cookie-banner', '.cookie-consent', '.cookie-notice', '.cookie-notification',
+            '.cc-window', '.cc-banner', '.cc-compliance', '.cc-banner-wrapper',
+            '#cybot-cookiebot-dialog', '.cookiebot-dialog',
+            '.quantcast-consent', '.qc-cmp-ui-container',
+            '#didomi-notice', '.didomi-popup', '.didomi-consent-banner',
+            '.consent-banner', '.consent-notice', '.consent-overlay',
+            '.privacy-consent-banner', '.gdpr-banner', '.eu-cookie',
+            '.cookie-policy-banner', '.cookie-alert', '.cookie-acceptance',
+            '[data-cookieconsent]', '[data-gdpr]', '[data-eu-cookie]'
+          ].join(','))) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // 跳过明显的广告元素（内联检查，因为 isObviousAd 在 DOMWalker 类中）
+          const adClasses = ['ad', 'ads', 'advert', 'advertisement', 'banner-ads', 'ad-banner', 'ad-container'];
+          const parentClass = (parent.className || '').toLowerCase();
+          const parentId = (parent.id || '').toLowerCase();
+          if (adClasses.some(c => parentClass.includes(c) || parentId.includes(c)) ||
+              parent.hasAttribute('data-ad') || parent.hasAttribute('data-ad-slot') ||
+              parent.hasAttribute('data-sponsored')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // class/id 启发式排除（仅在祖先遍历中没有找到内容容器时，过滤明显的非内容元素）
+          if (!insideContent) {
+            const matchStr = (parent.className || '') + ' ' + (parent.id || '');
+            // 只过滤最确定的非内容模式，避免误杀 related-stories 等 legitimate 内容
+            const strictReject = /-ad\b|ai2html|combx|disqus|outbrain|shoutbox|skip|tweet|twitter|ad-break|agegate|advertisement\b/i;
+            const okMaybe = /related|story|post|text|article|body|column|content|main|shadow/i;
+            if (strictReject.test(matchStr) && !okMaybe.test(matchStr)) {
+              return NodeFilter.FILTER_REJECT;
+            }
           }
 
           // 内容检测
@@ -2549,23 +2795,22 @@ class TranslationApplier {
     });
   }
 
-  // 切换显示模式（原文/译文）
-  // 切换显示模式：显示原文 ↔ 显示双语 ↔ 显示译文
-  // 新架构：原文始终保留，译文在平行 wrapper 中
+  // 切换显示模式：双语 → 纯译文 → 仅原文 → 双语（三态循环）
+  // 原文始终保留在 DOM 中，译文在平行 wrapper 中
   toggleDisplayMode() {
-    console.log('toggleDisplayMode: 开始执行');
+    console.log('toggleDisplayMode: 开始执行, 当前模式:', this.displayMode);
 
     // 防止重复快速点击
     const currentTime = Date.now();
     if (this.lastToggleTime && (currentTime - this.lastToggleTime) < 500) {
       console.log('toggleDisplayMode: 切换操作过于频繁，忽略此次请求');
-      return;
+      return this.displayMode;
     }
     this.lastToggleTime = currentTime;
 
     if (this.isSwitchingMode) {
       console.log('toggleDisplayMode: 切换模式正在进行中，忽略新的切换请求');
-      return;
+      return this.displayMode;
     }
 
     this.isSwitchingMode = true;
@@ -2576,23 +2821,68 @@ class TranslationApplier {
 
       if (wrappers.length === 0 && translatedElements.length === 0) {
         console.log('toggleDisplayMode: 没有找到已翻译的内容');
-        return;
+        return this.displayMode;
       }
 
-      // 判断当前状态：wrapper 可见 = 双语模式，wrapper 隐藏 = 只显示原文
-      const firstWrapper = wrappers[0];
-      const isTranslationVisible = firstWrapper ? firstWrapper.style.display !== 'none' : true;
+      // 三态循环：bilingual → translation → original → bilingual
+      switch (this.displayMode) {
+        case 'bilingual':
+          // 双语 → 纯译文：隐藏原文（清空已翻译元素的原始文本节点），仅显示译文 wrapper
+          translatedElements.forEach(el => {
+            for (const child of el.childNodes) {
+              if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) {
+                el.setAttribute('data-hidden-original-text', child.textContent);
+                child.textContent = '';
+                break;
+              }
+            }
+          });
+          wrappers.forEach(w => { w.style.display = ''; });
+          this.displayMode = 'translation';
+          console.log('toggleDisplayMode: 切换到纯译文模式');
+          break;
 
-      if (isTranslationVisible) {
-        // 当前显示双语 → 隐藏译文，只显示原文
-        wrappers.forEach(w => w.style.display = 'none');
-        console.log('toggleDisplayMode: 切换到只显示原文');
-      } else {
-        // 当前只显示原文 → 显示译文（双语）
-        wrappers.forEach(w => w.style.display = '');
-        console.log('toggleDisplayMode: 切换到双语模式');
+        case 'translation':
+          // 纯译文 → 仅原文：隐藏译文 wrapper，恢复原文
+          wrappers.forEach(w => { w.style.display = 'none'; });
+          translatedElements.forEach(el => {
+            const hiddenOriginal = el.getAttribute('data-hidden-original-text');
+            if (hiddenOriginal) {
+              for (const child of el.childNodes) {
+                if (child.nodeType === Node.TEXT_NODE && !child.textContent.trim()) {
+                  child.textContent = hiddenOriginal;
+                  break;
+                }
+              }
+              el.removeAttribute('data-hidden-original-text');
+            }
+          });
+          this.displayMode = 'original';
+          console.log('toggleDisplayMode: 切换到仅原文模式');
+          break;
+
+        case 'original':
+        default:
+          // 仅原文 → 双语：显示译文 wrapper，恢复原文
+          wrappers.forEach(w => { w.style.display = ''; });
+          translatedElements.forEach(el => {
+            const hiddenOriginal = el.getAttribute('data-hidden-original-text');
+            if (hiddenOriginal) {
+              for (const child of el.childNodes) {
+                if (child.nodeType === Node.TEXT_NODE && !child.textContent.trim()) {
+                  child.textContent = hiddenOriginal;
+                  break;
+                }
+              }
+              el.removeAttribute('data-hidden-original-text');
+            }
+          });
+          this.displayMode = 'bilingual';
+          console.log('toggleDisplayMode: 切换到双语模式');
+          break;
       }
 
+      return this.displayMode;
     } finally {
       this.isSwitchingMode = false;
     }
@@ -2722,8 +3012,8 @@ class TranslationApplier {
         }
       }
 
-      // 5. 保留连续空格（使用 &nbsp; 替代）
-      translated = translated.replace(/ {2,}/g, match => '&nbsp;'.repeat(match.length));
+      // 5. 保留连续空格（使用不间断空格字符替代，textContent 可正确渲染）
+      translated = translated.replace(/ {2,}/g, match => ' '.repeat(match.length));
 
       return leadingSpaces + translated + trailingSpaces;
     } catch (error) {
@@ -3567,16 +3857,17 @@ class TranslationService {
                     break;
 
         case 'toggleDisplayMode':
-                    // 处理显示模式切换（原文/译文）
+                    // 处理显示模式切换（原文/双语/纯译文三态）
                     console.log('接收到 toggleDisplayMode 消息');
                     try {
-                        this.translationApplier.toggleDisplayMode();
+                        const newMode = this.translationApplier.toggleDisplayMode();
 
                         sendResponse({
                             success: true,
-                            message: '显示模式已切换'
+                            message: '显示模式已切换',
+                            displayMode: newMode
                         });
-                        console.log('toggleDisplayMode 方法已调用');
+                        console.log('toggleDisplayMode 方法已调用, 新模式:', newMode);
                     } catch (error) {
                         console.error('切换显示模式时发生错误:', error);
                         sendResponse({ success: false, error: error.message });
@@ -3640,16 +3931,18 @@ class TranslationService {
                 return restoredElements.length > 0 ? 'original' : 'original';
             }
 
-            // 有翻译 wrapper
+            // 有翻译 wrapper，使用 displayMode 状态变量判断（比 style.display 更可靠）
             if (wrappers.length > 0) {
-                // 检查第一个 wrapper 是否可见
-                const firstWrapper = wrappers[0];
-                const isVisible = firstWrapper.style.display !== 'none';
-
-                if (isVisible) {
-                    return 'bilingual_mode'; // 双语模式
-                } else {
-                    return 'showing_original'; // 只显示原文
+                const mode = this.translationApplier.displayMode;
+                switch (mode) {
+                    case 'bilingual':
+                        return 'bilingual_mode';
+                    case 'original':
+                        return 'showing_original';
+                    case 'translation':
+                        return 'showing_translation';
+                    default:
+                        return 'bilingual_mode';
                 }
             }
 
@@ -3738,13 +4031,17 @@ class TranslationService {
             }
         });
 
-        // 清理翻译标记
+        // 清理翻译标记和节点ID标记
         document.querySelectorAll('.extreme-translated').forEach(el => {
             el.classList.remove('extreme-translated');
             el.removeAttribute('data-original-text');
             el.removeAttribute('data-translated-text');
             el.removeAttribute('data-bilingual-mode');
+            el.removeAttribute('data-nt-id');
         });
+
+        // 清空节点映射
+        this.translationApplier.nodeIdMap.clear();
     }
 
     // 处理应用翻译请求（由后台主动发送翻译结果）
@@ -3855,7 +4152,7 @@ class TranslationService {
 
             // 使用DOMWalker分析DOM结构并生成映射表（已按5,10,20,30,50分批）
             const scanResult = this.domWalker.collectTextByPhaseWithReadability(this.domWalker.aggressiveFilter);  // 混合模式：Readability + TreeWalker（使用宽松过滤器）
-            const mappingTable = this.generateMappingTable(scanResult);
+            const mappingTable = this.generateMappingTable(scanResult, targetLang);
 
             if (!mappingTable || mappingTable.totalTexts === 0) {
                 throw new Error('未找到可翻译的文本内容');
@@ -3867,6 +4164,31 @@ class TranslationService {
             // 将所有文本合并到一个数组中并注册到TextRegistry
             const allTexts = mappingTable.batches.flat();
             this.registerTextsToRegistry(allTexts);
+
+            // 预翻译：目标语言的文本直接显示原文，不需要后端翻译
+            const preTranslatedEntries = allTexts.filter(t => t.metadata?.preTranslated);
+            for (const entry of preTranslatedEntries) {
+                const regEntry = this.textRegistry.entries.get(entry.id);
+                if (regEntry) {
+                    // 直接应用原文作为"译文"（因为是目标语言，无需翻译）
+                    // 不调用 applySingleTranslation 以避免"原文=译文"检查被跳过
+                    regEntry.translated = entry.original;
+                    regEntry.isTranslated = true;
+                    regEntry.status = 'pre-translated';
+                    this.translationApplier.currentTranslations.set(entry.id, entry.original);
+                    const stored = this.translationApplier.findOriginalTextNode(regEntry);
+                    if (stored) {
+                        if (bilingual) {
+                            this.translationApplier.applyBilingualTranslation(stored, entry.original, entry.original);
+                        } else {
+                            this.translationApplier.applyDirectTranslation(stored, entry.original);
+                        }
+                    }
+                }
+            }
+            if (preTranslatedEntries.length > 0) {
+                console.log(`✅ 预翻译 ${preTranslatedEntries.length} 条目标语言文本（跳过翻译）`);
+            }
 
             // 创建映射表并发送到 background 进行流式翻译
             const startTime = Date.now();
@@ -4246,7 +4568,7 @@ class TranslationService {
     }
 
     // 生成映射表（按5, 10, 20, 30, 50, 50, 50...分批，评分高优先，清洗文本）
-    generateMappingTable(scanResult) {
+    generateMappingTable(scanResult, targetLang = null) {
         console.log('🔍 开始分析DOM结构...');
 
         const allTexts = [];
@@ -4282,6 +4604,10 @@ class TranslationService {
                         textContent = textContent.trim();
 
                         // 按评分高低排序
+                        // 逐文本语言检测：标记已为目标语言的文本（跳过翻译）
+                        const detectedLang = this.detectTextLanguage(textContent);
+                        const isPreTranslated = targetLang && this.isTargetLanguage(detectedLang, targetLang);
+
                         allTexts.push({
                             id: `text_${textId++}`,
                             original: textContent,
@@ -4289,7 +4615,9 @@ class TranslationService {
                             position: evaluation.position,
                             metadata: {
                                 ...evaluation.metadata,
-                                importance: importance
+                                importance: importance,
+                                detectedLang: detectedLang,
+                                preTranslated: isPreTranslated
                             }
                         });
                     }
@@ -4378,6 +4706,8 @@ class TranslationService {
                     tagName: entry.metadata?.tagName || '',
                     className: entry.metadata?.className || '',
                     id: entry.metadata?.id || '',
+                    detectedLang: entry.metadata?.detectedLang || 'unknown',
+                    preTranslated: entry.metadata?.preTranslated || false,
                     batchNumber: batchIndex,  // 记录批次编号
                     batchPosition: entryIndex  // 记录在批次中的位置
                 };
@@ -4513,6 +4843,85 @@ class TranslationService {
     }
 
     // 检测页面语言
+    /**
+     * 判断检测到的语言是否已经是目标语言
+     * 例如：detectedLang='zh', targetLang='zh' → true（跳过翻译）
+     *       detectedLang='en', targetLang='zh' → false（需要翻译）
+     */
+    isTargetLanguage(detectedLang, targetLang) {
+        if (!detectedLang || detectedLang === 'unknown' || detectedLang === 'mixed') return false;
+
+        // 目标语言映射
+        const langMap = {
+            'zh': ['zh'],
+            'zh-CN': ['zh'],
+            'zh-TW': ['zh'],
+            'en': ['en'],
+            'ja': ['ja'],
+            'ko': ['ko'],
+            'fr': ['en', 'fr', 'de', 'es', 'it', 'pt'],
+            'de': ['en', 'fr', 'de', 'es', 'it', 'pt'],
+            'es': ['en', 'fr', 'de', 'es', 'it', 'pt'],
+            'ru': ['ru'],
+            'auto': []
+        };
+
+        const targetLanguages = langMap[targetLang] || [];
+        // sourceLang='auto' 时不做预翻译判断（全部发送翻译）
+        if (targetLanguages.length === 0) return false;
+
+        return targetLanguages.includes(detectedLang);
+    }
+
+    /**
+     * 基于字符组成的简单语言检测（逐文本级别）
+     * 检测 CJK（中日韩）、拉丁字母为主、西里尔字母等
+     * 返回语言代码：'zh', 'ja', 'ko', 'en', 'ru', 'mixed', 'unknown'
+     */
+    detectTextLanguage(text) {
+        if (!text || text.trim().length === 0) return 'unknown';
+
+        const trimmed = text.trim();
+        const sample = trimmed.substring(0, 200);
+
+        let cjkCount = 0;
+        let jaHiragana = 0;
+        let jaKatakana = 0;
+        let koHangul = 0;
+        let cyrillic = 0;
+        let latin = 0;
+        let totalAlpha = 0;
+
+        for (const ch of sample) {
+            const code = ch.codePointAt(0);
+            if ((code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3400 && code <= 0x4DBF) ||
+                (code >= 0x20000 && code <= 0x2EBEF)) {
+                cjkCount++;
+            }
+            if (code >= 0x3040 && code <= 0x309F) jaHiragana++;
+            if (code >= 0x30A0 && code <= 0x30FF) jaKatakana++;
+            if ((code >= 0xAC00 && code <= 0xD7AF) || (code >= 0x1100 && code <= 0x11FF)) koHangul++;
+            if ((code >= 0x0400 && code <= 0x04FF) || (code >= 0x0500 && code <= 0x052F)) cyrillic++;
+            if ((code >= 0x0041 && code <= 0x005A) || (code >= 0x0061 && code <= 0x007A)) latin++;
+            if (/\p{Letter}/u.test(ch)) totalAlpha++;
+        }
+
+        if (totalAlpha === 0) return 'unknown';
+
+        const cjkRatio = cjkCount / totalAlpha;
+        const jaRatio = (jaHiragana + jaKatakana) / totalAlpha;
+        const koRatio = koHangul / totalAlpha;
+        const cyrillicRatio = cyrillic / totalAlpha;
+        const latinRatio = latin / totalAlpha;
+
+        if (jaRatio > 0.05) return 'ja';
+        if (koRatio > 0.05) return 'ko';
+        if (cjkRatio > 0.1) return 'zh';
+        if (cyrillicRatio > 0.3) return 'ru';
+        if (latinRatio > 0.5) return 'en';
+        return 'mixed';
+    }
+
     detectLanguage() {
         // 优先使用HTML lang属性
         const htmlLang = document.documentElement.lang;
