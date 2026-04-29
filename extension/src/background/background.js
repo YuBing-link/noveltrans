@@ -672,7 +672,7 @@ class MappingTableManager {
             remainingTexts,
             allTexts: textIds,
             targetLang: settings.target_lang || 'zh',
-            sourceLang: mappingTable.language || 'auto',
+            sourceLang: mappingTable.sourceLang || mappingTable.language || 'auto',
             service: settings.engine || GlobalConfig.DEFAULT_SETTINGS.engine,
             strategy: 'priority-first',
             estimatedTime: Math.ceil(textIds.length / 100) + 5, // 预估秒数
@@ -1327,7 +1327,8 @@ class BackgroundManager {
                         const result = await this.mappingManager.processMappingTable(
                             {
                                 ...request.mappingTable,
-                                textRegistry: textRegistry
+                                textRegistry: textRegistry,
+                                sourceLang: request.sourceLang || 'auto'  // 使用请求中的sourceLang，覆盖页面级语言
                             },
                             tabId
                         );

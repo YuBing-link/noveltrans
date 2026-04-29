@@ -4190,15 +4190,39 @@ class TranslationService {
                 console.log(`✅ 预翻译 ${preTranslatedEntries.length} 条目标语言文本（跳过翻译）`);
             }
 
+            // 过滤预翻译条目：不发送给后端，避免后端基于页面语言跳过翻译
+            const nonPreTranslatedTexts = allTexts.filter(t => !t.metadata?.preTranslated);
+            const filteredBatches = [];
+            let fi = 0;
+            const fbSize = [10, 20, 50, 100, 100];
+            for (let i = 0; i < fbSize.length && fi < nonPreTranslatedTexts.length; i++) {
+                const b = nonPreTranslatedTexts.slice(fi, fi + fbSize[i]);
+                if (b.length > 0) filteredBatches.push(b);
+                fi += fbSize[i];
+            }
+            while (fi < nonPreTranslatedTexts.length) {
+                const b = nonPreTranslatedTexts.slice(fi, fi + 100);
+                filteredBatches.push(b);
+                fi += 100;
+            }
+
+            // 语言统计日志
+            const langCounts = {};
+            allTexts.forEach(t => {
+                const lang = t.metadata?.detectedLang || 'unknown';
+                langCounts[lang] = (langCounts[lang] || 0) + 1;
+            });
+            console.log(`[LangDetect] 文本语言分布:`, langCounts, `| 预翻译跳过: ${allTexts.length - nonPreTranslatedTexts.length} 条`);
+
             // 创建映射表并发送到 background 进行流式翻译
+            // 注意：移除页面级 language 字段，避免后端基于页面语言跳过非目标语言文本块
             const startTime = Date.now();
             const response = await browser.runtime.sendMessage({
                 action: 'uploadMappingTableStream',
                 mappingTable: {
-                    totalTexts: mappingTable.totalTexts,
-                    batches: mappingTable.batches,  // 发送批次数组
-                    batchCount: mappingTable.batchCount,
-                    language: mappingTable.language,
+                    totalTexts: nonPreTranslatedTexts.length,
+                    batches: filteredBatches,
+                    batchCount: filteredBatches.length,
                     url: mappingTable.url,
                     timestamp: mappingTable.timestamp
                 },
