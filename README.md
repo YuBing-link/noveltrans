@@ -163,6 +163,10 @@ New Translation Request
   └── L5: Direct LLM / MTranServer translation (fallback)
 ```
 
+## ⚠️ Known Issues
+
+- **Chrome extension DOM recognition** — The extension's webpage DOM text node identification has issues with certain page layouts (e.g., shadow DOM, deeply nested SPA components). A refactor of the content detection strategy is in progress.
+
 ## 🗺️ Roadmap
 
 - [x] User authentication and email verification
