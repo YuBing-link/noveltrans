@@ -71,7 +71,7 @@ curl http://localhost:7341/health    # 后端健康检查
 | **前端** | React 19, TypeScript 5, Vite 8, TailwindCSS 4.2, i18next |
 | **Chrome 扩展** | Manifest V3, Content Scripts, IndexedDB |
 | **翻译引擎** | Python 3.11, FastAPI, OpenAI SDK, AgentScope（多智能体） |
-| **神经翻译机器** | MTranServer — 自研神经翻译引擎 |
+| **神经翻译机器** | MTranServer — 轻量级开源翻译引擎 |
 | **数据库** | MySQL 8.0, Redis Stack（RediSearch + HNSW 向量） |
 | **Embedding** | Ollama (bge-m3) / OpenAI text-embedding-3-small |
 | **支付** | Stripe Checkout, 计费门户, Webhook |

@@ -71,7 +71,7 @@ Open [http://localhost:7341](http://localhost:7341) in your browser.
 | **Frontend** | React 19, TypeScript 5, Vite 8, TailwindCSS 4.2, i18next |
 | **Chrome Extension** | Manifest V3, Content Scripts, IndexedDB |
 | **Translation Engine** | Python 3.11, FastAPI, OpenAI SDK, AgentScope (multi-agent) |
-| **Neural Translation Machine** | MTranServer — proprietary neural translation engine |
+| **Neural Translation Machine** | MTranServer — lightweight open-source translation engine |
 | **Database** | MySQL 8.0, Redis Stack (RediSearch + HNSW vectors) |
 | **Embeddings** | Ollama (bge-m3) / OpenAI text-embedding-3-small |
 | **Payments** | Stripe Checkout, Billing Portal, Webhooks |
