@@ -1653,21 +1653,9 @@ class TextRegistry {
 
   // 注册单个文本
   registerText(id, original, context, position, metadata = {}) {
-    // 检查重复
-    if (this.isDuplicate(original)) {
-      const existingId = this.duplicateMap.get(original);
-      if (existingId) {
-        // 更新现有条目的上下文和位置信息
-        const existingEntry = this.entries.get(existingId);
-        if (existingEntry) {
-          // 字数低于50字的文本不上传context
-          const textLength = original.trim().length;
-          existingEntry.context = textLength < 50 ? null : context;
-          existingEntry.position = { ...existingEntry.position, ...position };
-        }
-        return existingId; // 返回已存在的ID
-      }
-    }
+    // 注意：不再合并重复文本 — 每个ID对应独立DOM节点
+    // 后端会发送每个ID的翻译，所以每个ID都必须存在于registry中
+    // 重复内容的翻译应用由applySingleTranslation处理（原文=译文时自动跳过）
 
     // 字数低于50字的文本不上传context，设置为null
     const textLength = original.trim().length;
@@ -1675,9 +1663,6 @@ class TextRegistry {
 
     const entry = this.createTextEntry(id, original, finalContext, position, metadata);
     this.entries.set(id, entry);
-
-    // 记录重复项
-    this.duplicateMap.set(original, id);
 
     // 如果是关键路径，加入关键路径集合
     if (metadata.isCritical) {
