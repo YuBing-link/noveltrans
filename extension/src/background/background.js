@@ -671,7 +671,7 @@ class MappingTableManager {
             priorityTexts,
             remainingTexts,
             allTexts: textIds,
-            targetLang: settings.target_lang || 'zh',
+            targetLang: mappingTable.targetLang || settings.target_lang || 'zh',
             sourceLang: mappingTable.sourceLang || mappingTable.language || 'auto',
             service: settings.engine || GlobalConfig.DEFAULT_SETTINGS.engine,
             strategy: 'priority-first',
@@ -1328,7 +1328,8 @@ class BackgroundManager {
                             {
                                 ...request.mappingTable,
                                 textRegistry: textRegistry,
-                                sourceLang: request.sourceLang || 'auto'  // 使用请求中的sourceLang，覆盖页面级语言
+                                sourceLang: request.sourceLang || 'auto',  // 使用请求中的sourceLang，覆盖页面级语言
+                                targetLang: request.targetLang || 'zh'     // 使用请求中的targetLang，优先于存储设置
                             },
                             tabId
                         );
