@@ -4165,64 +4165,23 @@ class TranslationService {
             const allTexts = mappingTable.batches.flat();
             this.registerTextsToRegistry(allTexts);
 
-            // 预翻译：目标语言的文本直接显示原文，不需要后端翻译
-            const preTranslatedEntries = allTexts.filter(t => t.metadata?.preTranslated);
-            for (const entry of preTranslatedEntries) {
-                const regEntry = this.textRegistry.entries.get(entry.id);
-                if (regEntry) {
-                    // 直接应用原文作为"译文"（因为是目标语言，无需翻译）
-                    // 不调用 applySingleTranslation 以避免"原文=译文"检查被跳过
-                    regEntry.translated = entry.original;
-                    regEntry.isTranslated = true;
-                    regEntry.status = 'pre-translated';
-                    this.translationApplier.currentTranslations.set(entry.id, entry.original);
-                    const stored = this.translationApplier.findOriginalTextNode(regEntry);
-                    if (stored) {
-                        if (bilingual) {
-                            this.translationApplier.applyBilingualTranslation(stored, entry.original, entry.original);
-                        } else {
-                            this.translationApplier.applyDirectTranslation(stored, entry.original);
-                        }
-                    }
-                }
-            }
-            if (preTranslatedEntries.length > 0) {
-                console.log(`✅ 预翻译 ${preTranslatedEntries.length} 条目标语言文本（跳过翻译）`);
-            }
-
-            // 过滤预翻译条目：不发送给后端，避免后端基于页面语言跳过翻译
-            const nonPreTranslatedTexts = allTexts.filter(t => !t.metadata?.preTranslated);
-            const filteredBatches = [];
-            let fi = 0;
-            const fbSize = [10, 20, 50, 100, 100];
-            for (let i = 0; i < fbSize.length && fi < nonPreTranslatedTexts.length; i++) {
-                const b = nonPreTranslatedTexts.slice(fi, fi + fbSize[i]);
-                if (b.length > 0) filteredBatches.push(b);
-                fi += fbSize[i];
-            }
-            while (fi < nonPreTranslatedTexts.length) {
-                const b = nonPreTranslatedTexts.slice(fi, fi + 100);
-                filteredBatches.push(b);
-                fi += 100;
-            }
-
             // 语言统计日志
             const langCounts = {};
             allTexts.forEach(t => {
                 const lang = t.metadata?.detectedLang || 'unknown';
                 langCounts[lang] = (langCounts[lang] || 0) + 1;
             });
-            console.log(`[LangDetect] 文本语言分布:`, langCounts, `| 预翻译跳过: ${allTexts.length - nonPreTranslatedTexts.length} 条`);
+            console.log(`[LangDetect] 文本语言分布:`, langCounts);
 
             // 创建映射表并发送到 background 进行流式翻译
-            // 注意：移除页面级 language 字段，避免后端基于页面语言跳过非目标语言文本块
+            // 发送所有批次，不预过滤，避免 backend textId 与 frontend registry 不匹配
             const startTime = Date.now();
             const response = await browser.runtime.sendMessage({
                 action: 'uploadMappingTableStream',
                 mappingTable: {
-                    totalTexts: nonPreTranslatedTexts.length,
-                    batches: filteredBatches,
-                    batchCount: filteredBatches.length,
+                    totalTexts: mappingTable.totalTexts,
+                    batches: mappingTable.batches,
+                    batchCount: mappingTable.batchCount,
                     url: mappingTable.url,
                     timestamp: mappingTable.timestamp
                 },
@@ -4285,6 +4244,23 @@ class TranslationService {
             if (!entry) {
                 console.warn(`未找到文本ID ${textId} 的条目`);
                 return false;
+            }
+
+            // 预翻译条目：后端可能仍然发送，直接使用原文
+            if (entry.metadata?.preTranslated) {
+                entry.status = 'pre-translated';
+                entry.isTranslated = true;
+                entry.translated = entry.original;
+                this.translationApplier.currentTranslations.set(textId, entry.original);
+                const stored = this.translationApplier.findOriginalTextNode(entry);
+                if (stored) {
+                    if (bilingual) {
+                        this.translationApplier.applyBilingualTranslation(stored, entry.original, entry.original);
+                    } else {
+                        this.translationApplier.applyDirectTranslation(stored, entry.original);
+                    }
+                }
+                return true;
             }
 
             // 实时应用翻译
