@@ -51,5 +51,8 @@ test-results/
 # Runtime data
 uploads/
 
+# MTranServer models (downloaded language packs)
+mtran-models/
+
 # Claude Code config
 .claude/

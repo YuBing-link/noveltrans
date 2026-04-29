@@ -17,8 +17,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 
@@ -49,25 +49,33 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        // CORS 白名单：仅允许配置的可信域名访问，禁止 "*" 与 allowCredentials 同时使用
+        // CORS 白名单：严格校验 Origin，防止跨域攻击
         String allowedOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
         List<String> origins;
         if (allowedOrigins != null && !allowedOrigins.isBlank()) {
             origins = List.of(allowedOrigins.split(","));
         } else {
-            // 开发环境默认允许本地端口（项目通过 nginx 7341 端口访问）
-            origins = List.of("http://localhost:7341");
+            // 开发环境：本地端口 + Chrome 扩展
+            origins = List.of(
+                "http://localhost:7341",
+                "chrome-extension://imhobepmmpncjlobbicamollfjldiodi"
+            );
         }
+        final List<String> allowedOriginsList = origins;
 
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(origins);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true);
-        config.setMaxAge(3600L);
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
+        return (HttpServletRequest request) -> {
+            String origin = request.getHeader("Origin");
+            if (origin == null || !allowedOriginsList.contains(origin)) {
+                return null; // 拒绝非白名单源
+            }
+            CorsConfiguration config = new CorsConfiguration();
+            config.setAllowedOriginPatterns(List.of(origin));
+            config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+            config.setAllowedHeaders(List.of("*"));
+            config.setAllowCredentials(true);
+            config.setMaxAge(3600L);
+            return config;
+        };
     }
 
     @Bean

@@ -159,6 +159,16 @@ const GlobalConfig = {
         }
     },
 
+    // 获取用户的 JWT token（优先使用）
+    getAuthToken: async function() {
+        try {
+            const result = await browser.storage.local.get(['auth_token']);
+            return result.auth_token || null;
+        } catch {
+            return null;
+        }
+    },
+
     // 统一的后端 API 调用函数
     callBackendAPI: async function(mode, data, engine = null, apiKey = null) {
         const apiUrl = this.getApiUrl(mode);
@@ -168,7 +178,11 @@ const GlobalConfig = {
             'Content-Type': 'application/json'
         };
 
-        if (apiKey) {
+        // 优先使用用户的 JWT token 认证，其次使用引擎 API key
+        const authToken = await this.getAuthToken();
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+        } else if (apiKey) {
             headers['Authorization'] = `Bearer ${apiKey}`;
         }
 
@@ -228,7 +242,11 @@ const GlobalConfig = {
             'Accept': 'text/event-stream'
         };
 
-        if (apiKey) {
+        // 优先使用用户的 JWT token 认证，其次使用引擎 API key
+        const authToken = await this.getAuthToken();
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+        } else if (apiKey) {
             headers['Authorization'] = `Bearer ${apiKey}`;
         }
 

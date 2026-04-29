@@ -3325,6 +3325,10 @@ class TranslationService {
         });
 
         window.addEventListener('userLoggedOut', () => {
+            // 仅在已知登录页域名下才清除扩展登录态，防止误触发
+            if (!window.location.href.includes('localhost:7341')) {
+                return;
+            }
             browser.runtime.sendMessage({
                 action: 'clearAuthToken'
             }).catch(() => {});
@@ -4646,10 +4650,11 @@ window.addEventListener('beforeunload', () => {
             });
             console.log('[NovelTrans] 登录态已同步到扩展');
         } else {
-            // web 端未登录，清除扩展登录态
-            browser.runtime.sendMessage({
-                action: 'clearAuthToken'
-            }).catch(() => {});
+            // web 端未登录，不应清除扩展已保存的登录态
+            // 扩展的登录态应由扩展自身（popup/背景脚本）管理
+            // browser.runtime.sendMessage({
+            //     action: 'clearAuthToken'
+            // }).catch(() => {});
         }
     } catch (e) {
         // 非 web 页面（无 authToken）时静默跳过

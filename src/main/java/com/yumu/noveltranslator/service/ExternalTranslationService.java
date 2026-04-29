@@ -57,13 +57,13 @@ public class ExternalTranslationService {
         requestBody.put("html", html);
 
         try {
-            // 增加超时时间到 60 秒，因为翻译服务可能需要更长时间处理
+            // MTranServer 偶尔响应慢，设置 15 秒超时后降级到 Python 服务
             String responseBody = webClient.post()
                     .uri("/translate")
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block(Duration.ofSeconds(60));
+                    .block(Duration.ofSeconds(15));
 
             return JSONObject.parseObject(responseBody);
         } catch (WebClientResponseException e) {
@@ -73,7 +73,7 @@ public class ExternalTranslationService {
             String errorMsg = e.getMessage() != null ? e.getMessage() : "未知错误";
             // 检查是否是超时错误
             if (errorMsg.contains("Timeout") || errorMsg.contains("timeout") || errorMsg.contains("timed out")) {
-                log.error("外部翻译引擎响应超时（>60 秒），请检查服务性能或网络连接。文本长度：{}", text != null ? text.length() : 0, e);
+                log.error("外部翻译引擎响应超时（>15 秒），降级到 Python 服务。文本长度：{}", text != null ? text.length() : 0, e);
                 throw new RuntimeException("外部翻译引擎响应超时，请检查服务性能：" + e.getMessage(), e);
             }
             // 检查是否是连接失败

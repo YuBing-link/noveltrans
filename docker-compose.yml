@@ -34,6 +34,8 @@ services:
     image: xxnuo/mtranserver:latest
     ports:
       - "8989:8989"
+    volumes:
+      - ./mtran-models/mtran:/root/.config/mtran  # 持久化翻译模型
     dns:
       - 8.8.8.8
       - 8.8.4.4
