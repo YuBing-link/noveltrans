@@ -2296,23 +2296,29 @@ class TranslationApplier {
         display: inline !important;
         white-space: pre-line !important;
       }
+      /* 隐藏类 — 用于切换显示/隐藏 */
+      .ext-hidden {
+        display: none !important;
+      }
       /* 块级上下文的译文 */
       .extreme-translation-wrapper .ext-bilingual-translated {
         display: block !important;
-        color: rgba(128, 128, 128, 0.65) !important;
-        font-size: 0.85em !important;
+        color: rgba(30, 30, 30, 0.9) !important;
+        font-size: 1em !important;
         line-height: 1.4 !important;
         margin: 0 !important;
         padding: 0 !important;
+        white-space: normal !important;
       }
       /* 内联上下文的译文 */
       .extreme-translation-wrapper .ext-bilingual-translated-inline {
         display: inline !important;
-        color: rgba(128, 128, 128, 0.65) !important;
-        font-size: 0.88em !important;
+        color: rgba(30, 30, 30, 0.9) !important;
+        font-size: 1em !important;
         line-height: inherit !important;
         margin: 0 !important;
         padding: 0 !important;
+        white-space: normal !important;
       }
     `;
     document.head.appendChild(style);
@@ -2842,7 +2848,7 @@ class TranslationApplier {
     return textNodes;
   }
 
-  // 应用直接翻译（简化版 - 直接替换文本）
+  // 应用直接翻译（创建可切换结构：原文 span + 译文 wrapper）
   applyDirectTranslation(textNode, translatedText) {
     // 保存原始文本内容
     const originalText = textNode.textContent;
@@ -2850,12 +2856,37 @@ class TranslationApplier {
     // 格式保护器：保留原始格式
     const formattedText = this.protectFormat(originalText, translatedText);
 
-    // 直接替换文本
-    textNode.textContent = formattedText;
+    const parentElement = textNode.parentElement;
+    if (!parentElement) return;
+
+    // 确保双语样式已注入（包含 .ext-hidden 类）
+    this.injectBilingualStyles();
+
+    // 用 span 包裹原文
+    const originalSpan = document.createElement('span');
+    originalSpan.className = 'ext-original-text';
+    originalSpan.textContent = originalText;
+    parentElement.insertBefore(originalSpan, textNode);
+    parentElement.removeChild(textNode);
+
+    // 创建译文 wrapper
+    const translatedWrapper = document.createElement('span');
+    translatedWrapper.className = 'notranslate extreme-translation-wrapper';
+    translatedWrapper.setAttribute('data-extreme-translation', 'bilingual');
+    const translatedSpan = document.createElement('span');
+    translatedSpan.className = 'ext-bilingual-translated';
+    translatedSpan.textContent = formattedText;
+    translatedWrapper.appendChild(translatedSpan);
+    parentElement.insertBefore(translatedWrapper, originalSpan.nextSibling);
+
+    // 单语模式：默认隐藏原文 span，显示译文
+    if (!parentElement.hasAttribute('data-bilingual-mode') ||
+        parentElement.getAttribute('data-bilingual-mode') === 'false') {
+      originalSpan.classList.add('ext-hidden');
+    }
 
     // 标记元素为已翻译
-    const parentElement = textNode.parentElement;
-    if (parentElement && !parentElement.classList.contains('extreme-translated')) {
+    if (!parentElement.classList.contains('extreme-translated')) {
       parentElement.classList.add('extreme-translated');
       parentElement.setAttribute('data-original-text', originalText);
       parentElement.setAttribute('data-translated-text', formattedText);
@@ -2918,8 +2949,15 @@ class TranslationApplier {
       translatedWrapper.appendChild(translatedSpan);
     }
 
-    // 关键：插入到原文本节点后面，不删除原文
-    parentElement.insertBefore(translatedWrapper, textNode.nextSibling);
+    // 关键：用 span 包裹原文（便于后续切换显隐），然后插入译文 wrapper
+    const originalSpan = document.createElement('span');
+    originalSpan.className = 'ext-original-text';
+    originalSpan.textContent = originalText;
+    parentElement.insertBefore(originalSpan, textNode);
+    parentElement.removeChild(textNode);
+
+    // 插入译文 wrapper 到原文 span 后面
+    parentElement.insertBefore(translatedWrapper, originalSpan.nextSibling);
 
     // 标记父元素（仅首次翻译时）
     if (!parentElement.classList.contains('extreme-translated')) {
@@ -3076,36 +3114,92 @@ class TranslationApplier {
     }, 900); // 0.5s delay + 0.4s fade out
   }
 
+  // 内部：应用显示模式（统一管理原文/译文的显隐）
+  // 状态：'bilingual'(原文+译文) | 'translation'(仅译文) | 'original'(仅原文)
+  _applyDisplayMode(mode) {
+    const translatedElements = document.querySelectorAll('.extreme-translated');
+    if (translatedElements.length === 0) return;
+
+    this.injectBilingualStyles();
+
+    translatedElements.forEach(el => {
+      let origSpan = el.querySelector('.ext-original-text');
+      let wrapper = el.querySelector('.extreme-translation-wrapper');
+
+      // 兼容旧翻译：没有 span/wrapper 结构，需要创建
+      if (!origSpan || !wrapper) {
+        const originalText = el.getAttribute('data-original-text');
+        const translatedText = el.getAttribute('data-translated-text');
+
+        if (originalText && translatedText) {
+          // 清除旧的内容，重建 span+wrapper 结构
+          // 先清空 el 的所有子节点
+          while (el.firstChild) {
+            el.removeChild(el.firstChild);
+          }
+          // 创建原文 span
+          origSpan = document.createElement('span');
+          origSpan.className = 'ext-original-text';
+          origSpan.textContent = originalText;
+          el.appendChild(origSpan);
+          // 创建译文 wrapper
+          wrapper = document.createElement('span');
+          wrapper.className = 'notranslate extreme-translation-wrapper';
+          wrapper.setAttribute('data-extreme-translation', 'bilingual');
+          const transSpan = document.createElement('span');
+          transSpan.className = 'ext-bilingual-translated';
+          transSpan.textContent = translatedText;
+          wrapper.appendChild(transSpan);
+          el.appendChild(wrapper);
+          console.log(`[_applyDisplayMode] 为旧翻译元素重建了 span+wrapper 结构`);
+        } else {
+          console.warn(`[_applyDisplayMode] 元素缺少原文/译文数据`, el);
+          return;
+        }
+      }
+
+      // 应用显隐
+      if (mode === 'bilingual') {
+        origSpan.classList.remove('ext-hidden');
+        wrapper.classList.remove('ext-hidden');
+      } else if (mode === 'translation') {
+        origSpan.classList.add('ext-hidden');
+        wrapper.classList.remove('ext-hidden');
+      } else if (mode === 'original') {
+        origSpan.classList.remove('ext-hidden');
+        wrapper.classList.add('ext-hidden');
+      }
+    });
+
+    this.displayMode = mode;
+  }
+
   // 切换所有翻译的显示模式（双语/单语）
-  // 新架构：原文始终在 DOM 中，只需控制 wrapper 显示/隐藏
   toggleAllBilingualDisplay(showBilingual = true) {
     console.log(`toggleAllBilingualDisplay: 切换到 ${showBilingual ? '双语模式' : '单语模式'}`);
 
     try {
-      if (showBilingual) {
-        this.injectBilingualStyles();
-      }
+      const translatedElements = document.querySelectorAll('.extreme-translated');
 
-      const wrappers = document.querySelectorAll('.extreme-translation-wrapper');
-      if (wrappers.length === 0) {
+      if (translatedElements.length === 0) {
         console.log('toggleAllBilingualDisplay: 没有找到翻译内容');
         this.requestReTranslateWithBilingualMode(showBilingual);
         return;
       }
 
-      wrappers.forEach(w => {
-        w.style.display = showBilingual ? '' : 'none';
-      });
+      if (showBilingual) {
+        this._applyDisplayMode('bilingual');
+      } else {
+        this._applyDisplayMode('translation');
+      }
 
-      // 更新双语模式标记
-      document.querySelectorAll('.extreme-translated').forEach(el => {
+      translatedElements.forEach(el => {
         el.setAttribute('data-bilingual-mode', showBilingual ? 'true' : 'false');
       });
 
-      console.log(`toggleAllBilingualDisplay: 已切换 ${wrappers.length} 个翻译 wrapper`);
+      console.log(`toggleAllBilingualDisplay: 已切换, mode=${this.displayMode}`);
       this.updateTranslationStatus(showBilingual ? 'bilingual_mode' : 'single_mode');
 
-      // 向popup发送双语显示切换消息
       browser.runtime.sendMessage({
         action: 'bilingualDisplayToggled',
         showBilingual: showBilingual
@@ -3132,8 +3226,7 @@ class TranslationApplier {
     });
   }
 
-  // 切换显示模式：双语 → 纯译文 → 仅原文 → 双语（三态循环）
-  // 原文始终保留在 DOM 中，译文在平行 wrapper 中
+  // 切换显示模式：译文 ↔ 原文（两态切换）
   toggleDisplayMode() {
     console.log('toggleDisplayMode: 开始执行, 当前模式:', this.displayMode);
 
@@ -3153,76 +3246,41 @@ class TranslationApplier {
     this.isSwitchingMode = true;
 
     try {
-      const wrappers = document.querySelectorAll('.extreme-translation-wrapper');
       const translatedElements = document.querySelectorAll('.extreme-translated');
 
-      if (wrappers.length === 0 && translatedElements.length === 0) {
+      if (translatedElements.length === 0) {
         console.log('toggleDisplayMode: 没有找到已翻译的内容');
         return this.displayMode;
       }
 
-      // 三态循环：bilingual → translation → original → bilingual
-      switch (this.displayMode) {
-        case 'bilingual':
-          // 双语 → 纯译文：隐藏原文（清空已翻译元素的原始文本节点），仅显示译文 wrapper
-          translatedElements.forEach(el => {
-            for (const child of el.childNodes) {
-              if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) {
-                el.setAttribute('data-hidden-original-text', child.textContent);
-                child.textContent = '';
-                break;
-              }
-            }
-          });
-          wrappers.forEach(w => { w.style.display = ''; });
-          this.displayMode = 'translation';
-          console.log('toggleDisplayMode: 切换到纯译文模式');
-          break;
-
-        case 'translation':
-          // 纯译文 → 仅原文：隐藏译文 wrapper，恢复原文
-          wrappers.forEach(w => { w.style.display = 'none'; });
-          translatedElements.forEach(el => {
-            const hiddenOriginal = el.getAttribute('data-hidden-original-text');
-            if (hiddenOriginal) {
-              for (const child of el.childNodes) {
-                if (child.nodeType === Node.TEXT_NODE && !child.textContent.trim()) {
-                  child.textContent = hiddenOriginal;
-                  break;
-                }
-              }
-              el.removeAttribute('data-hidden-original-text');
-            }
-          });
-          this.displayMode = 'original';
-          console.log('toggleDisplayMode: 切换到仅原文模式');
-          break;
-
-        case 'original':
-        default:
-          // 仅原文 → 双语：显示译文 wrapper，恢复原文
-          wrappers.forEach(w => { w.style.display = ''; });
-          translatedElements.forEach(el => {
-            const hiddenOriginal = el.getAttribute('data-hidden-original-text');
-            if (hiddenOriginal) {
-              for (const child of el.childNodes) {
-                if (child.nodeType === Node.TEXT_NODE && !child.textContent.trim()) {
-                  child.textContent = hiddenOriginal;
-                  break;
-                }
-              }
-              el.removeAttribute('data-hidden-original-text');
-            }
-          });
-          this.displayMode = 'bilingual';
+      // 根据当前模式切换
+      if (this.displayMode === 'bilingual' || this.displayMode === 'translation') {
+        // 双语或单语译文 → 切换到仅原文
+        this._applyDisplayMode('original');
+        console.log('toggleDisplayMode: 切换到显示原文模式');
+      } else {
+        // 仅原文 → 回到译文（双语或单语由 bilingual mode 属性决定）
+        const isBilingual = this._isBilingualMode();
+        if (isBilingual) {
+          this._applyDisplayMode('bilingual');
           console.log('toggleDisplayMode: 切换到双语模式');
-          break;
+        } else {
+          this._applyDisplayMode('translation');
+          console.log('toggleDisplayMode: 切换到显示译文模式');
+        }
       }
 
       return this.displayMode;
     } finally {
       this.isSwitchingMode = false;
     }
+  }
+
+  // 检查当前是否处于双语模式
+  _isBilingualMode() {
+    const firstEl = document.querySelector('.extreme-translated');
+    if (!firstEl) return false;
+    return firstEl.getAttribute('data-bilingual-mode') === 'true';
   }
 
   // 通知UI更新翻译状态
@@ -4193,8 +4251,8 @@ class TranslationService {
                     }
                     break;
 
-        case 'toggleDisplayMode':
-                    // 处理显示模式切换（原文/双语/纯译文三态）
+                case 'toggleDisplayMode':
+                    // 处理显示模式切换（原文/译文两态）
                     console.log('接收到 toggleDisplayMode 消息');
                     try {
                         const newMode = this.translationApplier.toggleDisplayMode();
@@ -4351,6 +4409,20 @@ class TranslationService {
     // 恢复所有已翻译的元素为原文
     // 平行兄弟策略：原文从未删除，只需移除翻译 wrapper
     async restoreAllTranslatedElements() {
+        // 先恢复被 toggleDisplayMode 隐藏的原文
+        document.querySelectorAll('.extreme-translated').forEach(el => {
+            const hiddenOriginal = el.getAttribute('data-hidden-original-text');
+            if (hiddenOriginal) {
+                for (const child of el.childNodes) {
+                    if (child.nodeType === Node.TEXT_NODE) {
+                        child.textContent = hiddenOriginal;
+                        break;
+                    }
+                }
+                el.removeAttribute('data-hidden-original-text');
+            }
+        });
+
         // 移除所有翻译 wrapper（平行兄弟元素）
         const translationWrappers = document.querySelectorAll('.extreme-translation-wrapper');
         translationWrappers.forEach(w => w.remove());
@@ -5059,6 +5131,7 @@ class TranslationService {
                     id: entry.metadata?.id || '',
                     detectedLang: entry.metadata?.detectedLang || 'unknown',
                     preTranslated: entry.metadata?.preTranslated || false,
+                    domPath: entry.metadata?.domPath || '',
                     batchNumber: batchIndex,  // 记录批次编号
                     batchPosition: entryIndex  // 记录在批次中的位置
                 };
