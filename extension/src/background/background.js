@@ -2198,10 +2198,10 @@ class BackgroundManager {
                     // 将切换显示模式的请求转发到对应的标签页
                     try {
                         if (sender.tab && sender.tab.id) {
-                            // 直接向发送者（content script）发送响应
-                            sendResponse({ success: true, message: '切换显示模式请求已接收' });
-
-                            // 不需要额外的转发逻辑，因为消息已经在handleMessage外的异步处理中
+                            const response = await browser.tabs.sendMessage(sender.tab.id, {
+                                action: 'toggleDisplayMode'
+                            });
+                            sendResponse(response);
                         } else {
                             sendResponse({ success: false, error: '无法识别标签页' });
                         }

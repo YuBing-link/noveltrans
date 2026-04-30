@@ -46,6 +46,41 @@ logger.info(f"配置加载: OPENAI_BASE_URL={OPENAI_BASE_URL}")
 logger.info(f"配置加载: OPENAI_MODEL={OPENAI_MODEL}")
 logger.info(f"配置加载: OPENAI_API_KEY={'已设置' if OPENAI_API_KEY else '未设置'}")
 
+# =============================================================================
+# 语言代码到自然语言名称映射
+# 用于 LLM prompt，避免使用 "zh"、"ja" 等缩写导致模型混淆目标语言
+# =============================================================================
+LANG_CODE_TO_NAME = {
+    "zh": "简体中文",
+    "zh-TW": "繁体中文",
+    "zh-CN": "简体中文",
+    "zh-HK": "繁体中文",
+    "en": "English",
+    "ja": "日本語",
+    "ko": "한국어",
+    "fr": "français",
+    "de": "Deutsch",
+    "es": "español",
+    "pt": "português",
+    "ru": "русский",
+    "ar": "العربية",
+    "it": "italiano",
+    "nl": "Nederlands",
+    "th": "ภาษาไทย",
+    "vi": "Tiếng Việt",
+    "id": "Bahasa Indonesia",
+    "ms": "Bahasa Melayu",
+    "hi": "हिन्दी",
+    "tr": "Türkçe",
+    "pl": "polski",
+    "uk": "українська",
+}
+
+
+def resolve_target_lang_name(target_lang: str) -> str:
+    """将语言代码转换为自然语言名称，用于 LLM prompt。"""
+    return LANG_CODE_TO_NAME.get(target_lang, target_lang)
+
 # 初始化 OpenAI 异步客户端
 openai_client = AsyncOpenAI(
     api_key=OPENAI_API_KEY or "sk-placeholder",
@@ -283,7 +318,7 @@ async def translate_with_system_prompt(text: str, target_lang: str, system_promp
     # 预处理：将单换行转为双换行，让 LLM 识别每行对话为独立段落
     prepared_text = text.replace("\n", "\n\n")
 
-    user_prompt = f"请将以下文本翻译为{target_lang}：\n\n{prepared_text}"
+    user_prompt = f"请将以下文本翻译为{resolve_target_lang_name(target_lang)}：\n\n{prepared_text}"
 
     response = await openai_client.chat.completions.create(
         model=OPENAI_MODEL,
@@ -440,7 +475,7 @@ async def translate_entities_api(req: EntityTranslationRequestModel):
     start_time = time.perf_counter()
 
     try:
-        prompt = ENTITY_TRANSLATION_PROMPT.format(target_lang=req.target_lang)
+        prompt = ENTITY_TRANSLATION_PROMPT.format(target_lang=resolve_target_lang_name(req.target_lang))
         # 将实体列表展示给 LLM
         entities_str = ", ".join(req.entities)
         user_content = f"需要翻译的实体列表：{entities_str}\n\n请直接返回 JSON 对象。"
