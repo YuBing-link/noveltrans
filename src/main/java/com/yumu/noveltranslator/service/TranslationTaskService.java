@@ -2,11 +2,13 @@ package com.yumu.noveltranslator.service;
 
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
+import com.yumu.noveltranslator.entity.Glossary;
 import com.yumu.noveltranslator.entity.TranslationHistory;
 import com.yumu.noveltranslator.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
+import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
 import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
@@ -47,6 +49,7 @@ public class TranslationTaskService {
     private final TranslationTaskMapper translationTaskMapper;
     private final TranslationHistoryMapper translationHistoryMapper;
     private final DocumentMapper documentMapper;
+    private final GlossaryMapper glossaryMapper;
     private final TranslationStateMachine stateMachine;
     private final UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
     private final TranslationCacheService cacheService;
@@ -128,9 +131,12 @@ public class TranslationTaskService {
                 Long userId = task.getUserId();
                 String docId = "doc_" + doc.getId();
 
+                // 加载用户术语表
+                List<Glossary> glossaryTerms = loadGlossaryTermsForUser(userId, content);
+
                 TranslationPipeline pipeline = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
-                    userLevelThrottledTranslationClient, postProcessingService, userId, docId);
+                    userLevelThrottledTranslationClient, postProcessingService, null, userId, docId, glossaryTerms);
 
                 while (batchStart < total) {
                     StringBuilder batch = new StringBuilder();
@@ -252,6 +258,27 @@ public class TranslationTaskService {
         history.setCreateTime(LocalDateTime.now());
 
         translationHistoryMapper.insert(history);
+    }
+
+    /**
+     * 加载用户术语表中在原文中出现的词条
+     */
+    private List<Glossary> loadGlossaryTermsForUser(Long userId, String sourceText) {
+        try {
+            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Glossary> query =
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+            query.eq(Glossary::getUserId, userId);
+            query.eq(Glossary::getDeleted, 0);
+            List<Glossary> allTerms = glossaryMapper.selectList(query);
+
+            // 过滤只保留在原文中出现的术语
+            return allTerms.stream()
+                    .filter(term -> sourceText.contains(term.getSourceWord()))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("加载术语表失败: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /**

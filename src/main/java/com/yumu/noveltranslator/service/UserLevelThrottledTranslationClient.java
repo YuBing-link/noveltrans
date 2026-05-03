@@ -2,6 +2,7 @@ package com.yumu.noveltranslator.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.yumu.noveltranslator.entity.Glossary;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -145,7 +147,7 @@ public class UserLevelThrottledTranslationClient {
         try {
             if (userSemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 try {
-                    return doTranslateRequest(text, targetLang, engine);
+                    return doTranslateRequest(text, targetLang, engine, List.of());
                 } catch (Exception e) {
                     // Python 不可达，降级到 MTranServer
                     log.warn("专家模式 Python 翻译失败，降级到 MTranServer: {}", e.getMessage());
@@ -184,6 +186,21 @@ public class UserLevelThrottledTranslationClient {
      * @return 翻译结果 JSON
      */
     public String translate(String text, String targetLang, String engine, boolean html, boolean fastMode) {
+        return translate(text, targetLang, engine, html, fastMode, List.of());
+    }
+
+    /**
+     * 翻译请求（支持快速/专家模式 + 术语表）
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     * @param engine 翻译引擎
+     * @param html 是否启用 HTML 翻译模式
+     * @param fastMode 快速模式：true=大模型 30% 概率，false=大模型 70% 概率
+     * @param glossaryTerms 术语表词条
+     * @return 翻译结果 JSON
+     */
+    public String translate(String text, String targetLang, String engine, boolean html, boolean fastMode, List<Glossary> glossaryTerms) {
         Semaphore userSemaphore = getUserSemaphore();
 
         try {
@@ -194,8 +211,24 @@ public class UserLevelThrottledTranslationClient {
                     if (html) {
                         return doExternalTranslationRequest(text, targetLang, html);
                     }
+                    // 有术语表时强制走 Python 服务（MTranServer 不支持术语表）
+                    if (glossaryTerms != null && !glossaryTerms.isEmpty()) {
+                        log.info("[术语表路由] 强制使用 Python 服务（术语表大小={}）", glossaryTerms.size());
+                        try {
+                            return doTranslateRequest(text, targetLang, engine, glossaryTerms);
+                        } catch (Exception e) {
+                            // Python 不可达，降级到 MTranServer（无术语表）
+                            log.warn("术语表模式 Python 翻译失败，降级到 MTranServer（术语表将不生效）: {}", e.getMessage());
+                            try {
+                                return doExternalTranslationRequest(text, targetLang);
+                            } catch (Exception e2) {
+                                log.error("MTranServer 也失败: {}", e2.getMessage());
+                                throw new RuntimeException("所有翻译引擎均失败: " + e.getMessage() + "; " + e2.getMessage(), e2);
+                            }
+                        }
+                    }
                     // 基于优秀率概率轮询（fast=30% 大模型，expert=70% 大模型）
-                    return translateWithRoundRobin(text, targetLang, engine, fastMode);
+                    return translateWithRoundRobin(text, targetLang, engine, fastMode, glossaryTerms);
                 } finally {
                     userSemaphore.release();
                 }
@@ -229,7 +262,7 @@ public class UserLevelThrottledTranslationClient {
      * - fastMode=true:  Python 大模型概率上限 30%
      * - fastMode=false: Python 大模型概率上限 70%
      */
-    private String translateWithRoundRobin(String text, String targetLang, String engine, boolean fastMode) {
+    private String translateWithRoundRobin(String text, String targetLang, String engine, boolean fastMode, List<Glossary> glossaryTerms) {
         // 检查并重置过期统计
         resetStatsIfNeeded();
 
@@ -241,7 +274,7 @@ public class UserLevelThrottledTranslationClient {
             log.info("[轮询路由] 选择 Python 大模型（fastMode={}, pythonCount={}, mTranCount={}, textLength={}）",
                     fastMode, pythonRequestCount.get(), mTranRequestCount.get(), text.length());
             try {
-                return doTranslateRequest(text, targetLang, engine);
+                return doTranslateRequest(text, targetLang, engine, glossaryTerms);
             } catch (Exception e) {
                 // Python 服务（所有引擎）失败，降级到 MTranServer（本地引擎）
                 log.warn("Python 服务翻译失败，降级到 MTranServer: {}", e.getMessage());
@@ -264,7 +297,7 @@ public class UserLevelThrottledTranslationClient {
                 // MTranServer 失败，降级到 Python 服务
                 log.warn("MTranServer 翻译失败，降级到 Python 服务：{}", e.getMessage());
                 try {
-                    return doTranslateRequest(text, targetLang, engine);
+                    return doTranslateRequest(text, targetLang, engine, List.of());
                 } catch (Exception e2) {
                     // Python 服务（所有引擎）也失败，抛出异常
                     log.error("Python 服务翻译也失败：{}", e2.getMessage());
@@ -290,7 +323,7 @@ public class UserLevelThrottledTranslationClient {
     private String translateWithFallback(String text, String targetLang, String engine) {
         try {
             log.debug("尝试 Python 服务翻译 [engine={}]", engine);
-            return doTranslateRequest(text, targetLang, engine);
+            return doTranslateRequest(text, targetLang, engine, List.of());
         } catch (Exception e) {
             // Python 服务失败，降级到 MTranServer
             log.warn("Python 服务翻译失败，降级到 MTranServer: {}", e.getMessage());
@@ -409,7 +442,7 @@ public class UserLevelThrottledTranslationClient {
     /**
      * 执行 HTTP 翻译请求（Python 服务）
      */
-    private String doTranslateRequest(String text, String targetLang, String engine) throws Exception {
+    private String doTranslateRequest(String text, String targetLang, String engine, List<Glossary> glossaryTerms) throws Exception {
         long startTime = System.currentTimeMillis();
         boolean success = false;
         try {
@@ -418,6 +451,15 @@ public class UserLevelThrottledTranslationClient {
             bodyMap.put("target_lang", targetLang);
             bodyMap.put("engine", "openai");
             bodyMap.put("fallback", true);
+
+            // 注入术语表
+            if (glossaryTerms != null && !glossaryTerms.isEmpty()) {
+                List<Map<String, String>> terms = glossaryTerms.stream()
+                        .map(g -> Map.of("source", g.getSourceWord(), "target", g.getTargetWord()))
+                        .toList();
+                bodyMap.put("glossaryTerms", terms);
+            }
+
             String jsonBody = JSON.toJSONString(bodyMap);
             String result = doPythonServiceRequest(jsonBody, text);
             success = true;

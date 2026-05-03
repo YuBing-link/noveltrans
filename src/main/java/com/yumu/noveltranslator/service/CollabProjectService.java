@@ -197,6 +197,12 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new RuntimeException("文档内容为空");
         }
 
+        // 关联文档（如果项目尚未关联）
+        if (project.getDocumentId() == null) {
+            project.setDocumentId(document.getId());
+            updateById(project);
+        }
+
         // 智能章节分割：优先按章节标题分割，其次按字符数分组
         List<String> chapters = splitIntoChapters(content);
 
@@ -253,11 +259,11 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
 
         // 章节标题正则（中文小说 + 英文小说常见格式）
         java.util.regex.Pattern chapterPattern = java.util.regex.Pattern.compile(
-                "^\\s*(?:" +
+                "^\\s*(?:\\*\\*?)?\\s*(?:" +
                         "(?:第\\s*[零一二三四五六七八九十百千\\d]+\\s*(?:章|节|回|卷|篇))" +
-                        "|(?:chapter\\s+[ivxlcdm\\d]+)" +
+                        "|(?:chapter\\s+[ivxlcdm\\d]+\\s*[:：]?\\s*.*)" +
                         "|(?:ch\\.?\\s*\\d+)" +
-                        "|(?:part\\s+[ivxlcdm\\d]+)" +
+                        "|(?:part\\s+[ivxlcdm\\d]+\\s*[:：]?\\s*.*)" +
                         "|(?:(?:[一二三四五六七八九十]+)、)" +
                         ")",
                 java.util.regex.Pattern.CASE_INSENSITIVE

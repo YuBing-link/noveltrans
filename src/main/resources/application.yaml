@@ -97,6 +97,7 @@ translation:
 translate-server:
   host: ${TRANSLATE_SERVER_HOST:llm-engine}
   port: ${TRANSLATE_SERVER_PORT:8000}
+  api-key: "${TRANSLATE_SERVICE_API_KEY:}"  # 服务间认证 Key
   limit:
     free-daily-limit: 500        # 免费用户每日翻译次数
     pro-daily-limit: 5000        # 专业用户每日翻译次数

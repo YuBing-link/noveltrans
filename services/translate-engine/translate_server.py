@@ -391,6 +391,11 @@ class TranslateRequest(BaseModel):
     target_lang: str = Field(default="zh", description="目标语言代码，如 zh, en, ja 等")
     engine: str = Field(default="openai", description="指定翻译引擎，或 'auto' 自动选择")
     fallback: bool = Field(default=True, description="是否启用引擎降级")
+    glossary_terms: list[dict[str, str]] | None = Field(
+        default=None,
+        alias="glossaryTerms",
+        description="术语表 [{source: '', target: ''}]",
+    )
 
 class TranslateResponse(BaseModel):
     code: int
@@ -455,7 +460,8 @@ async def extract_entities_api(req: EntityExtractionRequest):
         entities = json.loads(cleaned)
         logger.info(f"[实体提取] json.loads 成功, entities_count={len(entities) if isinstance(entities, list) else 'not-list'}")
         if not isinstance(entities, list):
-            raise ValueError(f"LLM 返回的不是列表格式，原始响应: {result[:200]}")
+            logger.warning(f"[实体提取] LLM 返回非列表格式，降级为空列表。原始响应前100字符: {result[:100]}")
+            entities = []
 
         # 去重
         seen = set()
@@ -469,6 +475,12 @@ async def extract_entities_api(req: EntityExtractionRequest):
         cost_ms = (time.perf_counter() - start_time) * 1000
         logger.info(f"实体提取成功: 提取 {len(unique_entities)} 个实体, cost_ms={cost_ms:.1f}")
         return EntityExtractionResponse(code=200, entities=unique_entities)
+
+    except json.JSONDecodeError as e:
+        # LLM 返回非 JSON 格式时，降级为空列表，不中断翻译流程
+        logger.warning(f"[实体提取] LLM 返回非 JSON 格式，降级为空列表: {str(e)}")
+        cost_ms = (time.perf_counter() - start_time) * 1000
+        return EntityExtractionResponse(code=200, entities=[])
 
     except Exception as e:
         logger.error(f"实体提取失败: {e}")
@@ -654,7 +666,7 @@ async def translate_api(req: TranslateRequest):
     """
     logger.info(
         f"收到翻译请求: engine={req.engine}, target_lang={req.target_lang}, "
-        f"text_length={len(req.text)}"
+        f"text_length={len(req.text)}, glossary_count={len(req.glossary_terms) if req.glossary_terms else 0}"
     )
     start_time = time.perf_counter()
 
@@ -686,20 +698,25 @@ async def translate_api(req: TranslateRequest):
             detail="所有翻译引擎均不可用，请稍后重试",
         )
 
+    # 构建系统 prompt：如果有术语表，注入到 prompt 中
+    system_prompt = SYSTEM_PROMPT
+    if req.glossary_terms and len(req.glossary_terms) > 0:
+        glossary_lines = ["\n术语表（术语翻译优先级最高，必须遵守）："]
+        for term in req.glossary_terms:
+            source = term.get("source", "")
+            target = term.get("target", "")
+            if source and target:
+                glossary_lines.append(f"- {source} → {target}")
+        glossary_lines.append("")
+        system_prompt = SYSTEM_PROMPT + "\n".join(glossary_lines)
+
     last_error = "无"
 
     # 逐个尝试候选引擎
     for eng_name in candidates:
         try:
-            # 获取翻译函数
-            func_name = ENGINE_REGISTRY[eng_name][0]
-            translator_func = globals().get(func_name)
-            if not translator_func:
-                logger.warning(f"引擎 {eng_name} 的翻译函数 {func_name} 未找到，跳过")
-                continue
-
-            # 执行翻译
-            result = await translator_func(req.text, req.target_lang)
+            # 执行翻译（使用自定义 system prompt 支持术语表）
+            result = await translate_with_system_prompt(req.text, req.target_lang, system_prompt)
 
             # 记录成功
             cost_ms = (time.perf_counter() - start_time) * 1000
