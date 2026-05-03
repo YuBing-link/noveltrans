@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS `collab_project` (
     `name` VARCHAR(255) NOT NULL COMMENT '项目名称',
     `description` TEXT COMMENT '项目描述',
     `owner_id` BIGINT NOT NULL COMMENT '项目所有者ID',
+    `document_id` BIGINT DEFAULT NULL COMMENT '关联的上传文档ID',
     `source_lang` VARCHAR(50) NOT NULL COMMENT '源语言',
     `target_lang` VARCHAR(50) NOT NULL COMMENT '目标语言',
     `status` VARCHAR(50) NOT NULL DEFAULT 'DRAFT' COMMENT '项目状态: DRAFT/ACTIVE/COMPLETED/ARCHIVED',
