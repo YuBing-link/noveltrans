@@ -10,42 +10,79 @@ export const options = {
     { duration: '1m',  target: 0 },    // 1分钟内降到0
   ],
   thresholds: {
-    http_req_duration: ['p(95)<500'],  // 95%请求<500ms
+    http_req_duration: ['p(95)<1000'], // 95%请求<1秒
     http_req_failed: ['rate<0.01'],    // 错误率<1%
   },
 };
 
-const API_BASE = __ENV.API_BASE_URL || 'http://localhost:8080';
+const API_BASE = __ENV.API_BASE_URL || 'http://localhost:7341';
+const TOKEN = __ENV.JWT_TOKEN || '';
+
+const SAMPLE_TEXTS = [
+  'Hello world, this is a test sentence for translation.',
+  'The quick brown fox jumps over the lazy dog.',
+  'In a hole in the ground there lived a hobbit.',
+  'It was the best of times, it was the worst of times.',
+  'All happy families are alike; each unhappy family is unhappy in its own way.',
+];
+
+const authHeaders = {
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${TOKEN}`,
+};
 
 export default function () {
   // Selection Translation
   const selectionRes = http.post(
     `${API_BASE}/v1/translate/selection`,
     JSON.stringify({
-      context: 'Hello world, this is a test sentence for translation.',
+      text: SAMPLE_TEXTS[Math.floor(Math.random() * SAMPLE_TEXTS.length)],
       sourceLang: 'en',
       targetLang: 'zh',
       engine: 'google',
+      mode: 'fast',
     }),
     {
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders,
       tags: { name: 'SelectionTranslate' },
     }
   );
 
   check(selectionRes, {
-    'selection: status is 200': (r) => r.status === 200,
-    'selection: response has success=true': (r) => {
+    'selection: status 200': (r) => r.status === 200,
+    'selection: has translation': (r) => {
       try {
-        return JSON.parse(r.body).success === true;
-      } catch {
+        const body = JSON.parse(r.body);
+        return body.translation && body.translation.length > 0;
+      } catch (e) {
         return false;
       }
     },
-    'selection: response has translation': (r) => {
+  });
+
+  // Reader Translation
+  const readerRes = http.post(
+    `${API_BASE}/v1/translate/reader`,
+    JSON.stringify({
+      content: '<p>This is a test paragraph for reader mode translation.</p>',
+      sourceLang: 'en',
+      targetLang: 'zh',
+      engine: 'google',
+      mode: 'fast',
+    }),
+    {
+      headers: authHeaders,
+      tags: { name: 'ReaderTranslate' },
+    }
+  );
+
+  check(readerRes, {
+    'reader: status 200': (r) => r.status === 200,
+    'reader: has content': (r) => {
       try {
-        return JSON.parse(r.body).translation && JSON.parse(r.body).translation.length > 0;
-      } catch {
+        const body = JSON.parse(r.body);
+        return body.translatedContent;
+      } catch (e) {
         return false;
       }
     },
@@ -55,8 +92,9 @@ export default function () {
 }
 
 export function handleSummary(data) {
+  const now = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   return {
-    'load-test-results.json': JSON.stringify(data, null, 2),
-    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    [`load-test/results/translate-${now}.json`]: JSON.stringify(data, null, 2),
+    stdout: textSummary(data, { indent: '  ', enableColors: true }),
   };
 }

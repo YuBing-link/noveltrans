@@ -46,6 +46,12 @@ logger.info(f"配置加载: OPENAI_BASE_URL={OPENAI_BASE_URL}")
 logger.info(f"配置加载: OPENAI_MODEL={OPENAI_MODEL}")
 logger.info(f"配置加载: OPENAI_API_KEY={'已设置' if OPENAI_API_KEY else '未设置'}")
 
+# Mock 模式：返回模拟翻译，不调用外部 API（用于压测）
+TRANSLATION_MOCK = os.getenv("TRANSLATION_MOCK", "").lower() == "true"
+if TRANSLATION_MOCK:
+    logger.info("Mock mode enabled: all translation requests will return simulated responses")
+logger.info(f"配置加载: TRANSLATION_MOCK={TRANSLATION_MOCK}")
+
 # =============================================================================
 # 语言代码到自然语言名称映射
 # 用于 LLM prompt，避免使用 "zh"、"ja" 等缩写导致模型混淆目标语言
@@ -258,6 +264,14 @@ async def api_key_middleware(request: Request, call_next):
 
     return await call_next(request)
 
+
+def _mock_translate(text: str, target_lang: str) -> str:
+    """模拟翻译：在原文前加目标语言前缀，保留换行和结构"""
+    lang_name = LANG_CODE_TO_NAME.get(target_lang, target_lang)
+    lines = text.split('\n')
+    return '\n'.join(f"[{lang_name}] {line}" if line.strip() else line for line in lines)
+
+
 # =============================================================================
 # 4. 翻译引擎实现
 # =============================================================================
@@ -446,6 +460,11 @@ async def extract_entities_api(req: EntityExtractionRequest):
     logger.info(f"收到实体提取请求: source_lang={req.source_lang}, text_length={len(req.text)}")
     start_time = time.perf_counter()
 
+    # Mock 模式：返回空实体列表
+    if TRANSLATION_MOCK:
+        cost_ms = (time.perf_counter() - start_time) * 1000
+        return {"code": 200, "data": [], "cost_ms": round(cost_ms, 2)}
+
     try:
         logger.info(f"[实体提取] 开始调用 LLM, text_length={len(req.text)}")
         result = await translate_with_system_prompt(
@@ -560,6 +579,17 @@ async def translate_with_placeholders_api(req: PlaceholderTranslateRequest):
     )
     start_time = time.perf_counter()
 
+    # Mock 模式：直接返回模拟响应
+    if TRANSLATION_MOCK:
+        result = _mock_translate(req.text, req.target_lang)
+        cost_ms = (time.perf_counter() - start_time) * 1000
+        return PlaceholderTranslateResponse(
+            code=200,
+            data=result,
+            engine="mock",
+            cost_ms=round(cost_ms, 2),
+        )
+
     # 提取文本中的占位符
     import re
     placeholders = re.findall(r'\[\{(\d+)\}\]', req.text)
@@ -669,6 +699,18 @@ async def translate_api(req: TranslateRequest):
         f"text_length={len(req.text)}, glossary_count={len(req.glossary_terms) if req.glossary_terms else 0}"
     )
     start_time = time.perf_counter()
+
+    # Mock 模式：直接返回模拟响应
+    if TRANSLATION_MOCK:
+        result = _mock_translate(req.text, req.target_lang)
+        cost_ms = (time.perf_counter() - start_time) * 1000
+        return TranslateResponse(
+            code=200,
+            data=result,
+            engine="mock",
+            cost_ms=round(cost_ms, 2),
+            is_fallback=False,
+        )
 
     # 解析引擎别名（将前端引擎名映射为后端实际引擎名）
     req.engine = ENGINE_ALIASES.get(req.engine, req.engine)
@@ -818,6 +860,18 @@ async def translate_team(req: TeamTranslateRequest):
     完成翻译、审校、润色，返回最终译文。
     """
     start_time = time.perf_counter()
+
+    # Mock 模式：直接返回模拟响应
+    if TRANSLATION_MOCK:
+        result = _mock_translate(req.text, req.target_lang)
+        cost_ms = (time.perf_counter() - start_time) * 1000
+        return TeamTranslateResponse(
+            code=200,
+            data=result,
+            cost_ms=round(cost_ms, 2),
+            novel_type=req.novel_type,
+            chunk_count=1,
+        )
 
     try:
         from agents.pipeline import translate_chapter

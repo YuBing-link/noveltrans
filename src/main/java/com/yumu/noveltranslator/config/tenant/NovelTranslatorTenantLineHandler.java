@@ -13,7 +13,10 @@ public class NovelTranslatorTenantLineHandler implements TenantLineHandler {
         "email_verification_code",
         "user",
         "collab_invite_code",
-        "api_keys"
+        "api_keys",
+        "stripe_customer",
+        "stripe_subscription",
+        "user_plan_history"
     );
 
     @Override

@@ -29,23 +29,16 @@ services:
       timeout: 5s
       retries: 3
 
-  # MTranServer 本地翻译小模型
+  # MTranServer Mock（轻量模拟，用于压测）
   mtran-server:
-    image: xxnuo/mtranserver:latest
+    build: ./services/mtran-mock
     ports:
       - "8989:8989"
-    volumes:
-      - ./mtran-models/mtran:/root/.config/mtran  # 持久化翻译模型
-    environment:
-      # Linux Docker 网关代理（FlClashCore 运行在宿主机 7890 端口）
-      - HTTP_PROXY=http://172.18.0.1:7890
-      - HTTPS_PROXY=http://172.18.0.1:7890
-      - http_proxy=http://172.18.0.1:7890
-      - https_proxy=http://172.18.0.1:7890
-      # 本地翻译请求不走代理
-      - NO_PROXY=localhost,127.0.0.1,::1
-      - no_proxy=localhost,127.0.0.1,::1
-      - API_KEY=${MTRAN_API_KEY}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8989/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
 
   # Python 翻译微服务
   llm-engine:
@@ -58,6 +51,7 @@ services:
       - OPENAI_BASE_URL=${LLM_BASE_URL}
       - OPENAI_MODEL=${LLM_MODEL}
       - TRANSLATE_SERVICE_API_KEY=${TRANSLATE_SERVICE_API_KEY}
+      - TRANSLATION_MOCK=${TRANSLATION_MOCK:-false}
     ports:
       - "8000:8000"
 
