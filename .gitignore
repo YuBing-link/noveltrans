@@ -60,3 +60,7 @@ CLAUDE.md
 
 # Internal docs
 PORTFOLIO.md
+
+# Images
+*.png
+!extension/src/assets/icons/*.png
