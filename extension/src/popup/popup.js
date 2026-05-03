@@ -32,6 +32,24 @@ async function getCurrentTabId() {
 }
 
 /**
+ * 查询 content script 的实际显示状态
+ * @param {number} tabId - 标签页ID
+ * @returns {boolean|null} _showingTranslation 值，失败返回 null
+ */
+async function queryContentScriptState(tabId) {
+  try {
+    const response = await browser.tabs.sendMessage(tabId, { action: 'getDisplayMode' });
+    if (response && response.success) {
+      return response.showingTranslation;
+    }
+    return null;
+  } catch (error) {
+    console.log('无法查询 content script 状态:', error.message);
+    return null;
+  }
+}
+
+/**
  * 从会话存储加载页面状态
  * @param {number} tabId - 标签页ID
  * @returns {string} 页面状态
@@ -1013,7 +1031,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 加载当前页面状态
   if (currentTabId) {
     currentPageStatus = await loadPageStatus(currentTabId);
-    console.log('加载页面状态:', currentPageStatus);
+    console.log('加载页面状态 (storage):', currentPageStatus);
+
+    // 查询 content script 的实际状态，优先使用真实状态
+    const scriptState = await queryContentScriptState(currentTabId);
+    if (scriptState !== null) {
+      // 以 content script 的实际 DOM 状态为准
+      const realStatus = scriptState
+        ? PageStatus.TRANSLATED_SHOWING_TRANSLATION
+        : PageStatus.TRANSLATED_SHOWING_ORIGINAL;
+      if (realStatus !== currentPageStatus) {
+        console.log('popup 状态与 content script 不一致，已同步:', currentPageStatus, '→', realStatus);
+        currentPageStatus = realStatus;
+      }
+    }
+
     updateTranslateButton();
   }
 

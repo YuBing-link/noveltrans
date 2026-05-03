@@ -303,11 +303,14 @@ const GlobalConfig = {
                 buffer = lines.pop() || '';
 
                 for (const line of lines) {
-                    if (!line.trim() || !line.startsWith('data:')) continue;
+                    const trimmedLine = line.trim();
+                    if (!trimmedLine || !trimmedLine.startsWith('data:')) continue;
 
-                    const data = line.slice(line.indexOf('{')).trim();
+                    // 提取 data: 前缀后的内容
+                    const payload = trimmedLine.slice(5).trim();
 
-                    if (data === '[DONE]') {
+                    // 先检查 [DONE] 和 ERROR: 标记（纯文本格式，不含 {}）
+                    if (payload === '[DONE]') {
                         if (onComplete) {
                             onComplete({
                                 success: true,
@@ -319,25 +322,39 @@ const GlobalConfig = {
                         return { success: true, translations, engine: requestBody.engine };
                     }
 
-                    if (data.startsWith('ERROR:')) {
-                        const errorMsg = data.slice(6).trim();
+                    if (payload.startsWith('ERROR:')) {
+                        const errorMsg = payload.slice(6).trim();
                         if (onError) onError(new Error(errorMsg));
                         throw new Error(`翻译错误：${errorMsg}`);
                     }
 
-                    try {
-                        const result = JSON.parse(data);
-                        const { textId, original, translation } = result;
-                        chunkCount++;
-                        translations.push({ textId, original, translation });
+                    // JSON 格式的翻译数据（{ textId, original, translation }）
+                    if (payload.startsWith('{')) {
+                        try {
+                            const result = JSON.parse(payload);
+                            const { textId, original, translation } = result;
+                            chunkCount++;
+                            translations.push({ textId, original, translation });
 
-                        if (onTranslationChunk) {
-                            onTranslationChunk({ textId, original, translation });
+                            if (onTranslationChunk) {
+                                onTranslationChunk({ textId, original, translation });
+                            }
+                        } catch (parseError) {
+                            console.warn('⚠️ SSE 消息解析失败:', payload);
                         }
-                    } catch (parseError) {
-                        // 跳过无法解析的行
+                    } else {
+                        // 未知格式，跳过
+                        console.warn('⚠️ 未知 SSE 消息格式:', payload);
                     }
                 }
+            }
+
+            // SSE 连接结束后的数据校验
+            if (translations.length === 0) {
+                const errorMsg = `SSE 连接已关闭但未收到任何翻译数据（共 ${textRegistry?.length || 'unknown'} 条待翻译文本）`;
+                console.error('❌ [SSE]', errorMsg);
+                if (onError) onError(new Error(errorMsg));
+                return { success: false, error: errorMsg };
             }
 
             if (onComplete) {

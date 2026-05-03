@@ -349,9 +349,13 @@ public class TranslationService {
                 TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
                 int totalCount = items.size();
 
+                log.info("[SSE流式翻译] 开始处理，文本数量: {}, 引擎: {}, fastMode: {}", totalCount, req.getEngine(), req.getFastMode());
+
                 TranslationPipeline pipeline = new TranslationPipeline(
                         cacheService, ragTranslationService, entityConsistencyService,
                         userLevelThrottledTranslationClient, postProcessingService, userId, null);
+
+                log.info("[SSE流式翻译] Pipeline 初始化完成");
 
                 // 限制并发数，避免超过 DeepSeek 限流（10 req/s）和用户级别并发限制
                 int maxConcurrency = 5;
@@ -414,8 +418,12 @@ public class TranslationService {
                     }
                 });
 
+                log.info("[SSE流式翻译] 所有翻译线程已启动，等待完成 ({} 个文本)", totalCount);
+
                 // 等待所有翻译完成
                 barrier.await();
+
+                log.info("[SSE流式翻译] 所有翻译已完成，发送 [DONE] 信号");
 
                 // 翻译完成，停止心跳
                 heartbeatDone.countDown();

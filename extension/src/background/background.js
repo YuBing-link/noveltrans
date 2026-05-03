@@ -1389,6 +1389,21 @@ class BackgroundManager {
                                         totalTextCount: textCount
                                     });
 
+                                    // 校验翻译结果：SSE 连接可能提前关闭导致未收到任何数据
+                                    if (!batchResult.translations || batchResult.translations.length === 0) {
+                                        console.error('❌ [流式] SSE 连接关闭但未收到任何翻译数据，可能是后端服务异常或认证失效');
+
+                                        try {
+                                            await browser.tabs.sendMessage(tabId, {
+                                                action: 'streamTranslationError',
+                                                error: '翻译服务未返回数据，请检查后端服务状态或重新登录'
+                                            });
+                                        } catch (pushError) {
+                                            logger.warn('⚠️ [流式] 无法发送错误通知:', pushError.message);
+                                        }
+                                        return;
+                                    }
+
                                     // 记录状态
                                     this.stateManager.recordTranslation(tabId, 'stream_translation', {
                                         size: textCount,
@@ -1519,6 +1534,16 @@ class BackgroundManager {
                                 batchDuration: `${batchDuration}ms`,
                                 batchSize: request.mappingTable.textRegistry.length
                             });
+
+                            // 校验翻译结果
+                            if (!batchResult.translations || batchResult.translations.length === 0) {
+                                console.error('❌ [模式1] 批量翻译未返回任何数据');
+                                sendResponse({
+                                    success: false,
+                                    error: '翻译服务未返回数据，请检查后端服务状态或重新登录'
+                                });
+                                return true;
+                            }
 
                             // 记录状态
                             this.stateManager.recordTranslation(tabId, 'batch_translation', {
