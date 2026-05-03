@@ -24,6 +24,7 @@ import com.yumu.noveltranslator.mapper.UserPlanHistoryMapper;
 import com.yumu.noveltranslator.properties.StripeProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -367,6 +368,7 @@ public class SubscriptionService {
             );
 
             if (subRecord == null) {
+                // 插入新记录 — 并发 webhook 可能触发 DuplicateKeyException（唯一索引兜底）
                 subRecord = new StripeSubscription();
                 subRecord.setUserId(userId);
                 subRecord.setStripeCustomerId(customer.getStripeCustomerId());
@@ -386,7 +388,21 @@ public class SubscriptionService {
                         LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodEnd()), ZoneId.systemDefault()));
                 }
 
-                stripeSubscriptionMapper.insert(subRecord);
+                try {
+                    stripeSubscriptionMapper.insert(subRecord);
+                } catch (DuplicateKeyException e) {
+                    // 另一条线程已插入成功，重新查询获取记录
+                    subRecord = stripeSubscriptionMapper.selectOne(
+                        new LambdaQueryWrapper<StripeSubscription>()
+                            .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
+                    );
+                    if (subRecord == null) {
+                        log.error("DuplicateKeyException caught but re-query returned null for subscriptionId {}", subscriptionId);
+                        return; // 异常情况，不处理
+                    }
+                    log.info("checkout.session.completed: duplicate insert caught, re-queried existing record for subscriptionId {}", subscriptionId);
+                }
+
                 log.info("Created subscription record for user {}, plan {}, subscriptionId {}", userId, plan, subscriptionId);
             }
 
