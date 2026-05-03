@@ -8,6 +8,7 @@ import com.yumu.noveltranslator.entity.TranslationHistory;
 import com.yumu.noveltranslator.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
+import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
 import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
@@ -48,6 +49,9 @@ class TranslationTaskServiceTest {
     private DocumentMapper documentMapper;
 
     @Mock
+    private GlossaryMapper glossaryMapper;
+
+    @Mock
     private TranslationStateMachine stateMachine;
 
     @Mock
@@ -70,8 +74,8 @@ class TranslationTaskServiceTest {
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskService(
-                translationTaskMapper, translationHistoryMapper, documentMapper, stateMachine,
-                userLevelThrottledTranslationClient, cacheService, ragTranslationService,
+                translationTaskMapper, translationHistoryMapper, documentMapper, glossaryMapper,
+                stateMachine, userLevelThrottledTranslationClient, cacheService, ragTranslationService,
                 entityConsistencyService, postProcessingService);
     }
 

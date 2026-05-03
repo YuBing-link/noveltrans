@@ -5,6 +5,7 @@ import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationHistory;
 import com.yumu.noveltranslator.entity.TranslationTask;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
+import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
 import com.yumu.noveltranslator.service.state.TranslationStateMachine;
@@ -50,6 +51,8 @@ class TranslationTaskServiceExtendedTest {
     @Mock
     private DocumentMapper documentMapper;
     @Mock
+    private GlossaryMapper glossaryMapper;
+    @Mock
     private UserLevelThrottledTranslationClient translationClient;
     @Mock
     private TranslationCacheService cacheService;
@@ -67,7 +70,7 @@ class TranslationTaskServiceExtendedTest {
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskService(
-                translationTaskMapper, translationHistoryMapper, documentMapper,
+                translationTaskMapper, translationHistoryMapper, documentMapper, glossaryMapper,
                 stateMachine, translationClient, cacheService, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();

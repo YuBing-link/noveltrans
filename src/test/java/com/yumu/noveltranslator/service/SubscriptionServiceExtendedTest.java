@@ -21,6 +21,8 @@ import com.yumu.noveltranslator.mapper.StripeSubscriptionMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.mapper.UserPlanHistoryMapper;
 import com.yumu.noveltranslator.properties.StripeProperties;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -62,14 +64,20 @@ class SubscriptionServiceExtendedTest {
     private UserMapper userMapper;
     @Mock
     private UserPlanHistoryMapper userPlanHistoryMapper;
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
 
     private SubscriptionService subscriptionService;
 
     @BeforeEach
     void setUp() {
+        ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+        lenient().when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
+
         subscriptionService = new SubscriptionService(
                 stripeProperties, stripeCustomerMapper, stripeSubscriptionMapper,
-                userMapper, userPlanHistoryMapper);
+                userMapper, userPlanHistoryMapper, stringRedisTemplate);
     }
 
     // ============ cancelSubscription 补充分支 ============

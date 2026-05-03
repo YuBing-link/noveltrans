@@ -15,16 +15,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.util.List;
-
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -309,6 +312,82 @@ class WebDocumentControllerTest {
 
             mockMvc.perform(get("/user/documents/1/download"))
                 .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("下载成功 - 用户拥有文档且文件存在")
+        void 下载文档成功() throws Exception {
+            setupSecurityContext();
+
+            Document doc = createTestDocument();
+            doc.setStatus("completed");
+            when(documentService.getDocumentById(1L, 1L)).thenReturn(doc);
+
+            Path fakePath = Path.of("/uploads/test_translated.txt");
+            byte[] fileContent = "translated content".getBytes();
+
+            try (var mockedFiles = mockStatic(Files.class)) {
+                mockedFiles.when(() -> Files.exists(any(Path.class)))
+                    .thenReturn(true);
+                mockedFiles.when(() -> Files.readAllBytes(fakePath))
+                    .thenReturn(fileContent);
+
+                mockMvc.perform(get("/user/documents/1/download"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Content-Type", "text/plain"))
+                    .andExpect(content().bytes(fileContent));
+            }
+        }
+
+        @Test
+        @DisplayName("文件不存在 - 文档存在但磁盘文件缺失")
+        void 下载文档文件不存在() throws Exception {
+            setupSecurityContext();
+
+            Document doc = createTestDocument();
+            doc.setStatus("completed");
+            when(documentService.getDocumentById(1L, 1L)).thenReturn(doc);
+
+            try (var mockedFiles = mockStatic(Files.class)) {
+                // Document exists in DB, but Files.exists returns false for the path
+                mockedFiles.when(() -> Files.exists(any(Path.class)))
+                    .thenReturn(false);
+
+                mockMvc.perform(get("/user/documents/1/download"))
+                    .andExpect(status().isNotFound());
+            }
+        }
+
+        @Test
+        @DisplayName("无权下载 - 用户不拥有文档时服务层返回null")
+        void 下载文档无权操作() throws Exception {
+            setupSecurityContext();
+
+            // User 1 tries to download, but the document belongs to another user
+            // Service returns null because getDocumentById filters by userId
+            when(documentService.getDocumentById(1L, 1L)).thenReturn(null);
+
+            mockMvc.perform(get("/user/documents/1/download"))
+                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("读取文件时发生IOException返回500")
+        void 下载文档发生IO异常() throws Exception {
+            setupSecurityContext();
+
+            Document doc = createTestDocument();
+            when(documentService.getDocumentById(1L, 1L)).thenReturn(doc);
+
+            try (var mockedFiles = mockStatic(Files.class)) {
+                mockedFiles.when(() -> Files.exists(any(Path.class)))
+                    .thenReturn(true);
+                mockedFiles.when(() -> Files.readAllBytes(any(Path.class)))
+                    .thenThrow(new IOException("disk read error"));
+
+                mockMvc.perform(get("/user/documents/1/download"))
+                    .andExpect(status().isInternalServerError());
+            }
         }
     }
 }

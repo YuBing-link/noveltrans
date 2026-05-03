@@ -22,7 +22,7 @@ class TeamTranslationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TeamTranslationService("localhost", 8000);
+        service = new TeamTranslationService("localhost", 8000, "test-api-key");
     }
 
     @Nested
