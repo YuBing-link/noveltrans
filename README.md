@@ -165,7 +165,7 @@ New Translation Request
 
 ## ⚠️ Known Issues
 
-- **Chrome extension translation engine selection not connected** — When you select "Google Translate" or another engine in the Chrome extension popup, all translation still goes through the LLM-based translation engine. The engine selector UI works but the selected engine value is not wired to the actual translation request.
+- **Chrome extension translation engine selection not connected** — When you select "Google Translate" or another engine in the Chrome extension popup, all translation still goes through the LLM-based translation engine. The engine selector UI works but the selected engine value is not wired to the actual translation request. This does not affect project functionality.
 
 ## 🗺️ Roadmap
 
