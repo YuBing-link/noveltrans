@@ -36,14 +36,15 @@ services:
       - "8989:8989"
     volumes:
       - ./mtran-models/mtran:/root/.config/mtran  # 持久化翻译模型
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
     environment:
-      - HTTP_PROXY=http://host.docker.internal:7890
-      - HTTPS_PROXY=http://host.docker.internal:7890
-      - http_proxy=http://host.docker.internal:7890
-      - https_proxy=http://host.docker.internal:7890
+      # Linux Docker 网关代理（FlClashCore 运行在宿主机 7890 端口）
+      - HTTP_PROXY=http://172.18.0.1:7890
+      - HTTPS_PROXY=http://172.18.0.1:7890
+      - http_proxy=http://172.18.0.1:7890
+      - https_proxy=http://172.18.0.1:7890
+      # 本地翻译请求不走代理
+      - NO_PROXY=localhost,127.0.0.1,::1
+      - no_proxy=localhost,127.0.0.1,::1
       - API_KEY=${MTRAN_API_KEY}
 
   # Python 翻译微服务
@@ -60,32 +61,35 @@ services:
     ports:
       - "8000:8000"
 
+
   # Ollama Embedding 服务（本地向量模型 + GPU 加速）
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    # GPU 加速向量计算（需 NVIDIA GPU + Container Toolkit）
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    # 启动时自动拉取 bge-m3 Q8 量化向量模型（635MB，轻量版）
-    entrypoint: >
-      sh -c "ollama serve &
-             sleep 5 &&
-             ollama pull bge-m3:latest 2>/dev/null || true &&
-             wait"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:11434/api/tags > /dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+  # 默认禁用，如需使用请取消注释，并在 .env 中设置 EMBEDDING_PROVIDER=ollama
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   # GPU 加速向量计算（需 NVIDIA GPU + Container Toolkit）
+  #   # 如有 NVIDIA GPU + Container Toolkit，取消 deploy 配置
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - driver: nvidia
+  #   #           count: 1
+  #   #           capabilities: [gpu]
+  #   # 启动时自动拉取 bge-m3 Q8 量化向量模型（635MB，轻量版）
+  #   entrypoint: >
+  #     sh -c "ollama serve &
+  #            sleep 5 &&
+  #            ollama pull bge-m3:latest 2>/dev/null || true &&
+  #            wait"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "wget -qO- http://localhost:11434/api/tags > /dev/null 2>&1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
 
   # Spring Boot 后端
   backend:
@@ -117,10 +121,12 @@ services:
       - MAIL_USERNAME=${MAIL_USERNAME}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - PYTHON_TRANSLATE_URL=http://llm-engine:8000/translate
+      - TRANSLATE_SERVICE_API_KEY=${TRANSLATE_SERVICE_API_KEY}
       - TRANSLATION_UPLOAD_DIR=/app/uploads
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
       - EMBEDDING_OPENAI_API_KEY=${EMBEDDING_OPENAI_API_KEY}
       - EMBEDDING_OPENAI_BASE_URL=${EMBEDDING_OPENAI_BASE_URL}
+      - EMBEDDING_OPENAI_MODEL=${EMBEDDING_OPENAI_MODEL:-text-embedding-3-small}
       - EMBEDDING_OLLAMA_BASE_URL=http://ollama:11434
       - EMBEDDING_OLLAMA_MODEL=bge-m3
       # Stripe 支付
@@ -148,8 +154,9 @@ services:
         condition: service_healthy
       mtran-server:
         condition: service_started
-      ollama:
-        condition: service_started
+      # 如需本地 Embedding，取消注释 ollama 服务及下行：
+      # ollama:
+      #   condition: service_started
 
   # Nginx 网关
   nginx:

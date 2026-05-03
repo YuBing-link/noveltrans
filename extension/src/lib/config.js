@@ -246,8 +246,13 @@ const GlobalConfig = {
         const authToken = await this.getAuthToken();
         if (authToken) {
             headers['Authorization'] = `Bearer ${authToken}`;
+            console.log(`[Config] 调用 ${mode}: url=${apiUrl}, auth=Bearer(前50字符: ${authToken.substring(0, 50)}...)`);
         } else if (apiKey) {
             headers['Authorization'] = `Bearer ${apiKey}`;
+            console.log(`[Config] 调用 ${mode}: url=${apiUrl}, auth=apiKey`);
+        } else {
+            console.warn('⚠️ 认证缺失: 未找到 JWT token 且无 API key。请通过扩展 Popup 登录账号。');
+            console.warn(`[Config] 调用 ${mode}: url=${apiUrl}, auth=NONE`);
         }
 
         headers['X-Translation-Engine'] = requestBody.engine;

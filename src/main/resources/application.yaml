@@ -129,8 +129,8 @@ embedding:
   provider: ${EMBEDDING_PROVIDER:openai}  # openai | ollama
   openai:
     api-key: "${EMBEDDING_OPENAI_API_KEY:}"
-    base-url: "https://api.openai.com"
-    model: "text-embedding-3-small"
+    base-url: "${EMBEDDING_OPENAI_BASE_URL:https://api.openai.com}"
+    model: "${EMBEDDING_OPENAI_MODEL:text-embedding-3-small}"
   ollama:
     base-url: "http://localhost:11434"
     model: "bge-m3"

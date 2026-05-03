@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Node Translation Test</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 8px; }
+        .test-section h3 { margin-top: 0; }
+        .original { background: #f0f0f0; padding: 10px; margin: 5px 0; border-radius: 4px; }
+        .result { background: #e8f5e9; padding: 10px; margin: 5px 0; border-radius: 4px; }
+        .pass { color: green; font-weight: bold; }
+        .fail { color: red; font-weight: bold; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; }
+        #results { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Multi-Node Translation Fix Test</h1>
+    <p>This page tests the fix for text duplication when sourceNodes contains multiple text nodes.</p>
+
+    <div class="test-section">
+        <h3>Test Element 1: Mixed text + inline elements</h3>
+        <div id="test1" class="original">
+            <p>Hello <b>bold text</b> world <i>italic text</i> end.</p>
+        </div>
+        <button onclick="runTest1()">Run Test 1: Multi-node translation</button>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Element 2: Single text node (should use old path)</h3>
+        <div id="test2" class="original">
+            <p>Simple plain text without inline elements.</p>
+        </div>
+        <button onclick="runTest2()">Run Test 2: Single-node translation</button>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Element 3: Multiple paragraphs</h3>
+        <div id="test3" class="original">
+            <p>First paragraph with <b>bold</b> words.</p>
+            <p>Second paragraph with <i>italic</i> words.</p>
+        </div>
+        <button onclick="runTest3()">Run Test 3: Multi-paragraph</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        // Mock browser API for standalone testing
+        window.browser = {
+            runtime: {
+                sendMessage: async () => ({}),
+                onMessage: { addListener: () => {} }
+            },
+            storage: {
+                local: { get: async () => ({}), set: async () => {} },
+                sync: { get: async () => ({}), set: async () => {} }
+            }
+        };
+    </script>
+    <script src="../../src/lib/browser-polyfill.js"></script>
+    <script src="../../src/lib/config.js"></script>
+    <script src="../../src/lib/purify.js"></script>
+    <script src="../../src/lib/Readability.js"></script>
+    <script src="../../src/content/read.js"></script>
+    <script src="../../src/content/selection.js"></script>
+    <script src="../../src/content/content.js"></script>
+    <script>
+        let testCount = 0;
+        function logTest(name, passed, detail) {
+            testCount++;
+            const div = document.createElement('div');
+            div.className = 'test-section';
+            div.innerHTML = `<h3>Test #${testCount}: ${name}</h3>
+                <p class="${passed ? 'pass' : 'fail'}">${passed ? 'PASS' : 'FAIL'}</p>
+                <div class="result"><pre>${detail}</pre></div>`;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function runTest1() {
+            const el = document.getElementById('test1');
+            const p = el.querySelector('p');
+            const sourceNodes = [...p.childNodes];
+            const textNodes = sourceNodes.filter(n => n.nodeType === Node.TEXT_NODE);
+
+            const detail = `sourceNodes: ${sourceNodes.length} items\n` +
+                `textNodes: ${textNodes.length} items\n` +
+                `Text content: "${textNodes.map(n => n.textContent).join(' | ')}"`;
+            logTest('Multi-node detection (should have 2+ text nodes)', textNodes.length >= 2, detail);
+        }
+
+        function runTest2() {
+            const el = document.getElementById('test2');
+            const p = el.querySelector('p');
+            const sourceNodes = [...p.childNodes];
+            const textNodes = sourceNodes.filter(n => n.nodeType === Node.TEXT_NODE);
+
+            const detail = `sourceNodes: ${sourceNodes.length} items\n` +
+                `textNodes: ${textNodes.length} items`;
+            logTest('Single-node detection (should have exactly 1 text node)', textNodes.length === 1, detail);
+        }
+
+        function runTest3() {
+            const el = document.getElementById('test3');
+            const paragraphs = [...el.querySelectorAll('p')];
+            const p1Nodes = [...paragraphs[0].childNodes].filter(n => n.nodeType === Node.TEXT_NODE);
+            const p2Nodes = [...paragraphs[1].childNodes].filter(n => n.nodeType === Node.TEXT_NODE);
+
+            const detail = `paragraphs: ${paragraphs.length}\n` +
+                `p1 text nodes: ${p1Nodes.length}, p2 text nodes: ${p2Nodes.length}`;
+            logTest('Multi-paragraph (each with inline elements)', paragraphs.length === 2 && p1Nodes.length >= 1 && p2Nodes.length >= 1, detail);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TranslationApplier Unit Test</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .pass { color: green; font-weight: bold; }
+        .fail { color: red; font-weight: bold; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>TranslationApplier applySingleTranslation Test</h1>
+    <div id="results"></div>
+    <div id="test-container">
+        <h3>Test DOM (before translation)</h3>
+        <div id="target"><p>Hello <b>bold world</b> how are you</p></div>
+    </div>
+
+    <script>
+        window.browser = {
+            runtime: {
+                sendMessage: async () => ({ translated: "你好**粗体世界**你好吗", success: true }),
+                onMessage: { addListener: () => {} },
+                getURL: () => ''
+            },
+            storage: {
+                local: { get: async () => ({}), set: async () => {} },
+                sync: { get: async () => ({}), set: async () => {} }
+            }
+        };
+    </script>
+    <script src="../../src/lib/browser-polyfill.js"></script>
+    <script src="../../src/lib/config.js"></script>
+    <script src="../../src/lib/purify.js"></script>
+    <script src="../../src/lib/Readability.js"></script>
+    <script src="../../src/content/read.js"></script>
+    <script src="../../src/content/selection.js"></script>
+    <script src="../../src/content/content.js"></script>
+    <script>
+        function log(name, passed, detail) {
+            const div = document.createElement('div');
+            div.innerHTML = `<h3>${name}</h3>
+                <p class="${passed ? 'pass' : 'fail'}">${passed ? 'PASS' : 'FAIL'}</p>
+                <pre>${detail}</pre>`;
+            document.getElementById('results').appendChild(div);
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const applier = new TranslationApplier();
+
+                // Test 1: serializeForTranslation
+                const target = document.querySelector('#target p');
+                const sourceNodes = [...target.childNodes];
+                const [processed, placeholderMap] = applier.serializeForTranslation(sourceNodes);
+
+                log('serializeForTranslation',
+                    placeholderMap.size > 0 && processed.includes('{{'),
+                    `Input: "${processed}"\nPlaceholders: ${placeholderMap.size}\nMap: ${JSON.stringify([...placeholderMap.entries()])}`
+                );
+
+                // Test 2: restoreFromTranslation
+                const mockTranslated = '你好{{1}}粗体世界{{2}}你好吗';
+                const restored = applier.restoreFromTranslation(mockTranslated, placeholderMap);
+
+                log('restoreFromTranslation',
+                    restored.includes('<b>') || restored.includes('<i>') || restored.includes('粗体'),
+                    `Restored HTML: "${restored}"`
+                );
+
+                // Test 3: isMultiNodeSource detection
+                const textNodeCount = sourceNodes.filter(n => n.nodeType === Node.TEXT_NODE).length;
+                const isMultiNodeSource = textNodeCount > 1;
+
+                log('isMultiNodeSource detection',
+                    isMultiNodeSource === true,
+                    `textNodeCount: ${textNodeCount}, isMultiNodeSource: ${isMultiNodeSource}`
+                );
+
+                // Test 4: cleanOriginal extraction
+                const cleanOriginal = sourceNodes.map(n => n.textContent).join('');
+                const expectedClean = 'Hello bold world how are you';
+                log('cleanOriginal extraction',
+                    cleanOriginal === expectedClean,
+                    `Clean: "${cleanOriginal}"\nExpected: "${expectedClean}"`
+                );
+
+                // Test 5: applyMultiNodeTranslation (direct mode)
+                const testEl = document.createElement('div');
+                testEl.innerHTML = '<p>Test <b>bold</b> text</p>';
+                document.body.appendChild(testEl);
+                const p = testEl.querySelector('p');
+                const pSourceNodes = [...p.childNodes];
+                const pCleanOriginal = pSourceNodes.map(n => n.textContent).join('');
+
+                applier.applyMultiNodeTranslation(p, pCleanOriginal, '测试<b>粗体</b>文本', false);
+
+                const hasOriginal = p.querySelector('.ext-original-text');
+                const hasWrapper = p.querySelector('.extreme-translation-wrapper');
+                const hasBold = p.innerHTML.includes('<b>');
+                const isHidden = hasOriginal?.classList.contains('ext-hidden');
+
+                log('applyMultiNodeTranslation (direct mode)',
+                    hasOriginal && hasWrapper && hasBold && isHidden,
+                    `innerHTML: "${p.innerHTML}"\nHas original: ${!!hasOriginal}\nHas wrapper: ${!!hasWrapper}\nHidden: ${isHidden}`
+                );
+
+                // Test 6: applyMultiNodeTranslation (bilingual mode)
+                const testEl2 = document.createElement('div');
+                testEl2.innerHTML = '<p>Test <b>bold</b> text</p>';
+                document.body.appendChild(testEl2);
+                const p2 = testEl2.querySelector('p');
+                const p2SourceNodes = [...p2.childNodes];
+                const p2CleanOriginal = p2SourceNodes.map(n => n.textContent).join('');
+
+                applier.applyMultiNodeTranslation(p2, p2CleanOriginal, '测试<b>粗体</b>文本', true);
+
+                const hasOriginal2 = p2.querySelector('.ext-original-text');
+                const hasWrapper2 = p2.querySelector('.extreme-translation-wrapper');
+                const notHidden2 = !hasOriginal2?.classList.contains('ext-hidden');
+
+                log('applyMultiNodeTranslation (bilingual mode)',
+                    hasOriginal2 && hasWrapper2 && notHidden2,
+                    `innerHTML: "${p2.innerHTML}"\nHas original: ${!!hasOriginal2}\nVisible: ${notHidden2}`
+                );
+
+                // Test 7: No duplication check
+                const origText = hasOriginal?.textContent || '';
+                const wrapText = hasWrapper?.textContent || '';
+                const noDup = origText === '' || !wrapText.includes(origText);
+
+                log('No duplication check',
+                    noDup,
+                    `Original: "${origText}"\nWrapper: "${wrapText}"\nNo dup: ${noDup}`
+                );
+            }, 500);
+        });
+    </script>
+</body>
+</html>

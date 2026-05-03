@@ -359,11 +359,13 @@ public class TranslationService {
                 var barrier = new java.util.concurrent.CountDownLatch(totalCount);
 
                 for (WebpageTranslateRequest.TextItem item : items) {
+                    // 用 final 局部变量捕获当前迭代的 item，防止 lambda 闭包在多线程环境下共享循环变量
+                    final WebpageTranslateRequest.TextItem currentItem = item;
                     Thread.startVirtualThread(() -> {
                         try {
                             semaphore.acquire();
-                            String id = item.getId() == null ? "" : item.getId();
-                            String original = item.getOriginal() == null ? "" : item.getOriginal();
+                            String id = currentItem.getId() == null ? "" : currentItem.getId();
+                            String original = currentItem.getOriginal() == null ? "" : currentItem.getOriginal();
                             String cleanText = TextCleaningUtil.cleanText(original);
 
                             // fastMode=true（默认）使用 MTranServer，fastMode=false（专家模式）使用 DeepSeek
@@ -383,10 +385,10 @@ public class TranslationService {
                             eventData.put("translation", sanitized);
                             SseEmitterUtil.sendData(emitter, JSON.toJSONString(eventData));
                         } catch (Exception e) {
-                            log.error("翻译失败 - ID: {}, 错误: {}", item.getId(), e.getMessage());
+                            log.error("翻译失败 - ID: {}, 错误: {}", currentItem.getId(), e.getMessage());
                             Map<String, Object> errorData = new HashMap<>(3);
-                            errorData.put("textId", item.getId());
-                            String orig = item.getOriginal() == null ? "" : item.getOriginal();
+                            errorData.put("textId", currentItem.getId());
+                            String orig = currentItem.getOriginal() == null ? "" : currentItem.getOriginal();
                             errorData.put("original", orig);
                             errorData.put("translation", TextCleaningUtil.sanitizeHtml(orig));
                             SseEmitterUtil.sendData(emitter, JSON.toJSONString(errorData));

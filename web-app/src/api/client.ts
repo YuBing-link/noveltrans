@@ -13,6 +13,12 @@ export class ApiError extends Error {
   }
 }
 
+// 保存 token 并通知扩展同步认证状态
+function saveAuth(token: string) {
+  localStorage.setItem('authToken', token);
+  window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: { token } }));
+}
+
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<ApiResult<T>> {
   const token = localStorage.getItem('authToken');
   const headers: Record<string, string> = {
@@ -46,7 +52,7 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<Api
 
   // Handle token refresh from response
   if (data.token) {
-    localStorage.setItem('authToken', data.token);
+    saveAuth(data.token);
   }
 
   return data;
@@ -75,7 +81,7 @@ export const api = {
     if (!data.success) {
       throw new ApiError(data.code || 'ERROR', data.message || '上传失败');
     }
-    if (data.token) localStorage.setItem('authToken', data.token);
+    if (data.token) saveAuth(data.token);
     return data;
   },
 };
