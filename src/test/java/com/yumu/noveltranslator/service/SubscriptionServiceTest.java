@@ -18,6 +18,7 @@ import com.yumu.noveltranslator.mapper.StripeSubscriptionMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.mapper.UserPlanHistoryMapper;
 import com.yumu.noveltranslator.properties.StripeProperties;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -26,6 +27,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +40,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class SubscriptionServiceTest {
 
     @Mock
@@ -54,13 +58,16 @@ class SubscriptionServiceTest {
     @Mock
     private UserPlanHistoryMapper userPlanHistoryMapper;
 
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
+
     private SubscriptionService subscriptionService;
 
     @BeforeEach
     void setUp() {
         subscriptionService = new SubscriptionService(
                 stripeProperties, stripeCustomerMapper, stripeSubscriptionMapper,
-                userMapper, userPlanHistoryMapper);
+                userMapper, userPlanHistoryMapper, stringRedisTemplate);
     }
 
     // ==================== getSubscriptionStatus ====================

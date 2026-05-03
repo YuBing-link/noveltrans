@@ -150,5 +150,140 @@ class TranslationPostProcessingServiceTest {
 
             assertEquals("The cat sat on the mat", result);
         }
+
+        @Test
+        void 段落在文本中不存在则跳过() throws Exception {
+            Method method = TranslationPostProcessingService.class
+                    .getDeclaredMethod("applyRemediation", String.class, List.class, String.class);
+            method.setAccessible(true);
+
+            // Segment not present in translated text -- should leave text unchanged
+            String translated = "Hello world";
+            List<String> segments = List.of("一只猫");
+            String remedied = "a cat";
+
+            @SuppressWarnings("unchecked")
+            String result = (String) method.invoke(service, translated, segments, remedied);
+
+            assertEquals("Hello world", result);
+        }
+
+        @Test
+        void 补救段为空字符串则跳过替换() throws Exception {
+            Method method = TranslationPostProcessingService.class
+                    .getDeclaredMethod("applyRemediation", String.class, List.class, String.class);
+            method.setAccessible(true);
+
+            // First remedied segment is empty (blank), so it should be skipped
+            String translated = "The cat is 一只猫 and 狗";
+            List<String> segments = List.of("一只猫", "狗");
+            String remedied = "\ndog";
+
+            @SuppressWarnings("unchecked")
+            String result = (String) method.invoke(service, translated, segments, remedied);
+
+            // "一只猫" not replaced (empty remediation), "狗" replaced with "dog"
+            assertEquals("The cat is 一只猫 and dog", result);
+        }
+
+        @Test
+        void 补救段少于段落数则用原文填充() throws Exception {
+            Method method = TranslationPostProcessingService.class
+                    .getDeclaredMethod("applyRemediation", String.class, List.class, String.class);
+            method.setAccessible(true);
+
+            String translated = "The 猫 sat on the 垫子";
+            List<String> segments = List.of("猫", "垫子");
+            // Only one line of remedied text -- second segment should use original
+            String remedied = "cat";
+
+            @SuppressWarnings("unchecked")
+            String result = (String) method.invoke(service, translated, segments, remedied);
+
+            assertEquals("The cat sat on the 垫子", result);
+        }
+    }
+
+    @Nested
+    @DisplayName("日语段落判断")
+    class IsJapaneseSegmentTests {
+
+        private Method isJapaneseSegmentMethod;
+
+        @BeforeEach
+        void setUpMethod() throws Exception {
+            isJapaneseSegmentMethod = TranslationPostProcessingService.class
+                    .getDeclaredMethod("isJapaneseSegment", String.class, String.class);
+            isJapaneseSegmentMethod.setAccessible(true);
+        }
+
+        private boolean invokeIsJapaneseSegment(String segment, String targetLang) throws Exception {
+            return (Boolean) isJapaneseSegmentMethod.invoke(service, segment, targetLang);
+        }
+
+        @Test
+        void 非日语目标返回false() throws Exception {
+            assertFalse(invokeIsJapaneseSegment("現代社会", "en"));
+            assertFalse(invokeIsJapaneseSegment("hello", "en"));
+        }
+
+        @Test
+        void 日语目标含假名返回true() throws Exception {
+            assertTrue(invokeIsJapaneseSegment("こんにちは", "ja"));
+            assertTrue(invokeIsJapaneseSegment("カテゴリー", "japanese"));
+            assertTrue(invokeIsJapaneseSegment("食べる", "ja"));
+        }
+
+        @Test
+        void 日语目标纯汉字也返回true() throws Exception {
+            // Pure kanji with target=ja: returns true because we can't distinguish
+            // Japanese kanji from Chinese in this case
+            assertTrue(invokeIsJapaneseSegment("現代社会", "ja"));
+            assertTrue(invokeIsJapaneseSegment("目標", "japanese"));
+        }
+
+        @Test
+        void 日语目标空字符串返回true() throws Exception {
+            // Empty string has no kana, but target is ja, so returns true
+            assertTrue(invokeIsJapaneseSegment("", "ja"));
+        }
+    }
+
+    @Nested
+    @DisplayName("日语目标语言跳过处理")
+    class JapaneseTargetSkipTests {
+
+        @Test
+        void 日语ja跳过中文检测直接返回() {
+            String source = "猫が座っている";
+            String translated = "The cat is sitting";
+
+            String result = service.fixUntranslatedChinese(source, translated, "ja", "google");
+
+            // Should return translated text unchanged
+            assertEquals("The cat is sitting", result);
+        }
+
+        @Test
+        void 日语japanese跳过中文检测直接返回() {
+            String source = "猫が座っている";
+            String translated = "The cat is sitting";
+
+            String result = service.fixUntranslatedChinese(source, translated, "japanese", "google");
+
+            assertEquals("The cat is sitting", result);
+        }
+
+        @Test
+        void 日语目标即使有中文也不处理() {
+            // Text with CJK characters that would be detected as Chinese for other langs
+            String source = "目標を達成する";
+            String translated = "Goal 達成 achieved";
+
+            String result = service.fixUntranslatedChinese(source, translated, "ja", "openai");
+
+            // Japanese target: CJK characters are ignored, text returned unchanged
+            assertEquals("Goal 達成 achieved", result);
+        }
     }
 }

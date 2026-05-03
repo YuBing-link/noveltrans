@@ -2,6 +2,8 @@ package com.yumu.noveltranslator.service;
 
 import com.yumu.noveltranslator.mapper.QuotaUsageMapper;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -13,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.LocalDate;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -28,11 +31,14 @@ class QuotaServiceTest {
     @Mock
     private TranslationLimitProperties limitProperties;
 
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
+
     private QuotaService quotaService;
 
     @BeforeEach
     void setUp() {
-        quotaService = new QuotaService(quotaUsageMapper, limitProperties);
+        quotaService = new QuotaService(quotaUsageMapper, limitProperties, stringRedisTemplate);
     }
 
     @Nested
@@ -192,6 +198,9 @@ class QuotaServiceTest {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
             when(limitProperties.getExpertModeMultiplier()).thenReturn(1.0);
             when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
+            ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+            when(valueOps.setIfAbsent(anyString(), anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
 
             boolean result = quotaService.tryConsumeChars(1L, "free", 2_000L, "expert");
 
@@ -204,6 +213,9 @@ class QuotaServiceTest {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
             when(limitProperties.getExpertModeMultiplier()).thenReturn(1.0);
             when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(9_000L);
+            ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+            when(valueOps.setIfAbsent(anyString(), anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
 
             boolean result = quotaService.tryConsumeChars(1L, "free", 2_000L, "expert");
 
@@ -216,6 +228,9 @@ class QuotaServiceTest {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
             when(limitProperties.getTeamModeMultiplier()).thenReturn(2.0);
             when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
+            ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+            when(valueOps.setIfAbsent(anyString(), anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
 
             // team模式: 2000 * 2.0 = 4000, 剩余 7000 >= 4000 成功
             boolean result = quotaService.tryConsumeChars(1L, "free", 2_000L, "team");
