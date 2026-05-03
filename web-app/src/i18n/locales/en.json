@@ -289,10 +289,10 @@
       },
       "pro": {
         "name": "Pro",
-        "price": "¥49/month",
-        "priceMonthly": "¥49/month",
-        "priceYearly": "¥39/month",
-        "yearlyTotal": "¥468/year",
+        "price": "$5.99/month",
+        "priceMonthly": "$5.99/month",
+        "priceYearly": "$4.79/month",
+        "yearlyTotal": "$57.48/year",
         "features": [
           "500,000 characters per month",
           "5,000 translations per day",
@@ -303,10 +303,10 @@
       },
       "ultimate": {
         "name": "Ultimate",
-        "price": "¥99/month",
-        "priceMonthly": "¥99/month",
-        "priceYearly": "¥79/month",
-        "yearlyTotal": "¥948/year",
+        "price": "$20/month",
+        "priceMonthly": "$20/month",
+        "priceYearly": "$16/month",
+        "yearlyTotal": "$192/year",
         "features": [
           "2,000,000 characters per month",
           "Unlimited translations",

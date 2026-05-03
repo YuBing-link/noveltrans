@@ -384,10 +384,10 @@ export const PLAN_CONFIGS = {
   },
   PRO: {
     name: '专业版',
-    price: '¥49/月',
-    priceMonthly: '¥49/月',
-    priceYearly: '¥39/月',
-    yearlyTotal: '¥468/年',
+    price: '$5.99/月',
+    priceMonthly: '$5.99/月',
+    priceYearly: '$4.79/月',
+    yearlyTotal: '$57.48/年',
     features: [
       '每日 1,000 次翻译',
       '20 并发翻译',
@@ -402,10 +402,10 @@ export const PLAN_CONFIGS = {
   },
   MAX: {
     name: '旗舰版',
-    price: '¥99/月',
-    priceMonthly: '¥99/月',
-    priceYearly: '¥79/月',
-    yearlyTotal: '¥948/年',
+    price: '$20/月',
+    priceMonthly: '$20/月',
+    priceYearly: '$16/月',
+    yearlyTotal: '$192/年',
     features: [
       '无限翻译次数',
       '50 并发翻译',

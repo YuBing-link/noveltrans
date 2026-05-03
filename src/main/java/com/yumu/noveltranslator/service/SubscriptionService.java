@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
@@ -25,6 +26,7 @@ import com.yumu.noveltranslator.properties.StripeProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +48,7 @@ public class SubscriptionService {
     private final StripeSubscriptionMapper stripeSubscriptionMapper;
     private final UserMapper userMapper;
     private final UserPlanHistoryMapper userPlanHistoryMapper;
+    private final StringRedisTemplate stringRedisTemplate;
 
     // ==================== 用户端 API ====================
 
@@ -163,7 +166,6 @@ public class SubscriptionService {
             SubscriptionUpdateParams.Item removeItem = SubscriptionUpdateParams.Item.builder()
                 .setId(oldItemId)
                 .setDeleted(true)
-                .setClearUsage(true)
                 .build();
 
             // 添加新的价格项
@@ -200,7 +202,7 @@ public class SubscriptionService {
             stripeSubscriptionMapper.updateById(existingSub);
 
             // 更新用户等级
-            updateUserLevel(existingSub.getUserId(), newPlan.getValue(), "subscription_upgrade");
+            updateUserLevel(existingSub.getUserId(), newPlan.getValue(), "subscription_upgrade", "upgrade_" + existingSub.getStripeSubscriptionId() + "_" + newPriceId);
 
             log.info("Upgraded subscription {} for user {}: {} -> {}, priceId {}",
                 existingSub.getStripeSubscriptionId(), existingSub.getUserId(),
@@ -367,6 +369,12 @@ public class SubscriptionService {
                     .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
             );
 
+            // 幂等检查：是否已处理过该 event
+            if (subRecord != null && event.getId().equals(subRecord.getLastWebhookEventId())) {
+                log.info("checkout.session.completed: already processed event {}, skipping", event.getId());
+                return;
+            }
+
             if (subRecord == null) {
                 // 插入新记录 — 并发 webhook 可能触发 DuplicateKeyException（唯一索引兜底）
                 subRecord = new StripeSubscription();
@@ -388,8 +396,15 @@ public class SubscriptionService {
                         LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodEnd()), ZoneId.systemDefault()));
                 }
 
+                // 在插入前就设置 event_id，确保插入成功的记录已经携带 event_id
+                // 这样 DuplicateKeyException catch 路径中 re-query 拿到的记录已经有 event_id，
+                // 后续的 IS NULL claim 会正确返回 0
+                subRecord.setLastWebhookEventId(event.getId());
+                boolean insertSucceeded = false;
+
                 try {
                     stripeSubscriptionMapper.insert(subRecord);
+                    insertSucceeded = true;
                 } catch (DuplicateKeyException e) {
                     // 另一条线程已插入成功，重新查询获取记录
                     subRecord = stripeSubscriptionMapper.selectOne(
@@ -403,14 +418,29 @@ public class SubscriptionService {
                     log.info("checkout.session.completed: duplicate insert caught, re-queried existing record for subscriptionId {}", subscriptionId);
                 }
 
+                // 只有 DuplicateKeyException 路径（insertSucceeded=false）才需要原子 claim
+                // 插入成功的线程已经通过 insert 拥有了 event_id，无需再次 claim
+                if (!insertSucceeded) {
+                    int claimed = atomicClaimEventId(subRecord.getId(), event.getId());
+                    if (claimed == 0) {
+                        log.info("checkout.session.completed: event {} already claimed by concurrent thread, skipping", event.getId());
+                        return;
+                    }
+                }
+
                 log.info("Created subscription record for user {}, plan {}, subscriptionId {}", userId, plan, subscriptionId);
+            } else {
+                // 记录已存在（比如 subscription.updated 先于 checkout.session.completed 到达），
+                // 需要原子性地 claim 该 event 的处理权，防止并发重复处理
+                int claimed = atomicClaimEventId(subRecord.getId(), event.getId());
+                if (claimed == 0) {
+                    log.info("checkout.session.completed: event {} already claimed by concurrent thread for existing record, skipping", event.getId());
+                    return;
+                }
             }
 
-            subRecord.setLastWebhookEventId(event.getId());
-            stripeSubscriptionMapper.updateById(subRecord);
-
             // 更新 userLevel
-            updateUserLevel(userId, plan.getValue(), "checkout.session.completed");
+            updateUserLevel(userId, plan.getValue(), "checkout.session.completed", event.getId());
 
         } catch (StripeException e) {
             log.error("checkout.session.completed: Stripe API error for session {}: {}", session.getId(), e.getMessage(), e);
@@ -450,50 +480,64 @@ public class SubscriptionService {
             return;
         }
 
-        // 幂等检查
-        if (event.getId().equals(subRecord.getLastWebhookEventId())) {
+        // 原子幂等检查 + 更新：lastWebhookEventId 为 NULL 或与当前 event 不同时才更新
+        int rows = stripeSubscriptionMapper.update(null,
+            new LambdaUpdateWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getId, subRecord.getId())
+                .and(w -> w
+                    .isNull(StripeSubscription::getLastWebhookEventId)
+                    .or()
+                    .ne(StripeSubscription::getLastWebhookEventId, event.getId())
+                )
+                .set(StripeSubscription::getStatus, stripeSub.getStatus())
+                .set(StripeSubscription::getCancelAtPeriodEnd, stripeSub.getCancelAtPeriodEnd())
+                .set(StripeSubscription::getStripePriceId, stripeSub.getItems().getData().get(0).getPrice().getId())
+                .set(StripeSubscription::getLastWebhookEventId, event.getId())
+        );
+
+        if (rows == 0) {
             log.info("subscription.updated: already processed event {}, skipping", event.getId());
             return;
         }
 
-        String oldStatus = subRecord.getStatus();
-        String newStatus = stripeSub.getStatus();
+        // 更新 period 等时间字段（仅更新未被原子更新覆盖的字段）
+        LambdaUpdateWrapper<StripeSubscription> timeUpdate = new LambdaUpdateWrapper<StripeSubscription>()
+            .eq(StripeSubscription::getId, subRecord.getId());
 
-        // 更新状态
-        subRecord.setStatus(newStatus);
-        subRecord.setCancelAtPeriodEnd(stripeSub.getCancelAtPeriodEnd());
-        subRecord.setStripePriceId(stripeSub.getItems().getData().get(0).getPrice().getId());
-
+        boolean hasTimeUpdate = false;
         if (stripeSub.getCurrentPeriodStart() != null) {
-            subRecord.setCurrentPeriodStart(
+            timeUpdate.set(StripeSubscription::getCurrentPeriodStart,
                 LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodStart()), ZoneId.systemDefault()));
+            hasTimeUpdate = true;
         }
         if (stripeSub.getCurrentPeriodEnd() != null) {
-            subRecord.setCurrentPeriodEnd(
+            timeUpdate.set(StripeSubscription::getCurrentPeriodEnd,
                 LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodEnd()), ZoneId.systemDefault()));
+            hasTimeUpdate = true;
         }
-
         if (stripeSub.getCanceledAt() != null) {
-            subRecord.setCanceledAt(
+            timeUpdate.set(StripeSubscription::getCanceledAt,
                 LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCanceledAt()), ZoneId.systemDefault()));
+            hasTimeUpdate = true;
         }
 
-        subRecord.setLastWebhookEventId(event.getId());
-        stripeSubscriptionMapper.updateById(subRecord);
+        if (hasTimeUpdate) {
+            stripeSubscriptionMapper.update(null, timeUpdate);
+        }
 
         // 同步 userLevel
+        String newStatus = stripeSub.getStatus();
         if ("active".equals(newStatus) || "trialing".equals(newStatus)) {
-            // 从 metadata 或现有记录获取 plan
-            updateUserLevel(subRecord.getUserId(), subRecord.getPlan(), "subscription.updated -> " + newStatus);
+            updateUserLevel(subRecord.getUserId(), subRecord.getPlan(), "subscription.updated -> " + newStatus, event.getId());
         } else if ("past_due".equals(newStatus)) {
             log.warn("subscription {}: past_due, not downgrading yet (grace period)", subscriptionId);
         } else if ("canceled".equals(newStatus) || "unpaid".equals(newStatus)) {
-            updateUserLevel(subRecord.getUserId(), "FREE", "subscription.updated -> " + newStatus);
+            updateUserLevel(subRecord.getUserId(), "FREE", "subscription.updated -> " + newStatus, event.getId());
         } else if ("paused".equals(newStatus)) {
             log.info("subscription {}: paused, keeping userLevel unchanged", subscriptionId);
         }
 
-        log.info("Updated subscription {} status: {} -> {}", subscriptionId, oldStatus, newStatus);
+        log.info("Updated subscription {} status -> {}", subscriptionId, newStatus);
     }
 
     /**
@@ -528,18 +572,26 @@ public class SubscriptionService {
             return;
         }
 
-        // 幂等检查
-        if (event.getId().equals(subRecord.getLastWebhookEventId())) {
+        // 原子幂等检查 + 更新：lastWebhookEventId 为 NULL 或与当前 event 不同时才更新
+        int rows = stripeSubscriptionMapper.update(null,
+            new LambdaUpdateWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getId, subRecord.getId())
+                .and(w -> w
+                    .isNull(StripeSubscription::getLastWebhookEventId)
+                    .or()
+                    .ne(StripeSubscription::getLastWebhookEventId, event.getId())
+                )
+                .set(StripeSubscription::getStatus, "canceled")
+                .set(StripeSubscription::getLastWebhookEventId, event.getId())
+        );
+
+        if (rows == 0) {
             log.info("subscription.deleted: already processed event {}, skipping", event.getId());
             return;
         }
 
-        subRecord.setStatus("canceled");
-        subRecord.setLastWebhookEventId(event.getId());
-        stripeSubscriptionMapper.updateById(subRecord);
-
         // 降级为 FREE
-        updateUserLevel(subRecord.getUserId(), "FREE", "subscription.deleted");
+        updateUserLevel(subRecord.getUserId(), "FREE", "subscription.deleted", event.getId());
         log.info("Subscription {} deleted, user {} downgraded to FREE", subscriptionId, subRecord.getUserId());
     }
 
@@ -698,6 +750,38 @@ public class SubscriptionService {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("无效的计费周期: " + billingCycle + "，可选值: monthly, yearly");
         }
+    }
+
+    /**
+     * 原子性地设置 lastWebhookEventId：只有当前值为 NULL 时才设置（用于 claim 事件处理权）
+     */
+    private int atomicClaimEventId(Long subscriptionRecordId, String eventId) {
+        return stripeSubscriptionMapper.update(null,
+            new LambdaUpdateWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getId, subscriptionRecordId)
+                .isNull(StripeSubscription::getLastWebhookEventId)
+                .set(StripeSubscription::getLastWebhookEventId, eventId)
+        );
+    }
+
+    /**
+     * 基于 Redis SETNX 的事件级幂等检查，防止不同 event_id 的交叉并发重复处理
+     * @return true = 首次处理，false = 已处理过
+     */
+    private boolean markEventProcessed(String eventId) {
+        String key = "webhook:event_processed:" + eventId;
+        Boolean success = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", java.time.Duration.ofHours(24));
+        return Boolean.TRUE.equals(success);
+    }
+
+    private void updateUserLevel(Long userId, String newLevel, String reason, String eventId) {
+        // 事件级幂等检查：同一个 event_id 只能触发一次 updateUserLevel
+        if (eventId != null && !markEventProcessed(eventId)) {
+            log.info("updateUserLevel: event {} already processed, skipping", eventId);
+            return;
+        }
+
+        updateUserLevel(userId, newLevel, reason);
     }
 
     private void updateUserLevel(Long userId, String newLevel, String reason) {

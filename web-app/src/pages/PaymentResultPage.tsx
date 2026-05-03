@@ -27,9 +27,24 @@ function PaymentResultPage() {
 
     const sessionId = searchParams.get('session_id');
     if (!sessionId) {
-      setStatus('error');
-      setMessage(t('payment.error.description'));
-      setLoading(false);
+      // session_id 缺失时，直接查询用户当前订阅状态
+      subscriptionApi.getStatus()
+        .then((res) => {
+          if (res.data && res.data.status === 'active') {
+            setStatus('success');
+            setMessage(t('payment.success.description'));
+          } else if (res.data && res.data.plan === 'FREE') {
+            setStatus('error');
+            setMessage(t('payment.error.description'));
+          }
+        })
+        .catch(() => {
+          setStatus('error');
+          setMessage(t('payment.error.action'));
+        })
+        .finally(() => {
+          setLoading(false);
+        });
       return;
     }
 
