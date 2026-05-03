@@ -10,7 +10,7 @@ import java.util.List;
 @Mapper
 public interface DocumentMapper extends BaseMapper<Document> {
 
-    @Select("SELECT * FROM document WHERE user_id = #{userId} AND deleted = 0 ORDER BY create_time DESC")
+    @Select("SELECT * FROM document WHERE user_id = #{userId} AND deleted = 0 AND (mode IS NULL OR mode != 'team') ORDER BY create_time DESC")
     List<Document> findByUserId(Long userId);
 
     @Select("SELECT * FROM document WHERE id = #{id} AND deleted = 0")

@@ -12,7 +12,6 @@ function DocumentPage() {
   const { success, error: toastError } = useToast();
   const [sourceLang, setSourceLang] = useState('auto');
   const [targetLang, setTargetLang] = useState('zh');
-  const [mode, setMode] = useState('fast');
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,7 +31,7 @@ function DocumentPage() {
 
   useEffect(() => { loadDocuments(); }, []);
   useEffect(() => { loadDocuments(); }, [page]);
-  useEffect(() => { setPage(1); }, [sourceLang, targetLang, mode]);
+  useEffect(() => { setPage(1); }, [sourceLang, targetLang]);
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -63,7 +62,7 @@ function DocumentPage() {
 
     setUploading(true);
     try {
-      await documentApi.upload(file, { sourceLang, targetLang, mode });
+      await documentApi.upload(file, { sourceLang, targetLang, mode: 'expert' });
       success('文件上传成功，开始翻译');
       loadDocuments();
     } catch (err) {
@@ -71,7 +70,7 @@ function DocumentPage() {
     } finally {
       setUploading(false);
     }
-  }, [sourceLang, targetLang, mode]);
+  }, [sourceLang, targetLang]);
 
   const handleDelete = async (docId: number) => {
     try { await documentApi.delete(docId); success('已删除'); loadDocuments(); }
@@ -160,18 +159,6 @@ function DocumentPage() {
               {LANGUAGE_CODES.filter(c => c !== 'auto').map(code => (
                 <option key={code} value={code}>{t(`common.languages.${code}`)}</option>
               ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="text-[12px] text-text-tertiary whitespace-nowrap">{t('document.translationMode')}:</span>
-            <select
-              value={mode}
-              onChange={e => setMode(e.target.value)}
-              className="bg-transparent text-text-primary text-[13px] cursor-pointer hover:text-accent transition-colors focus:outline-none border-none flex-1 sm:flex-initial"
-            >
-              <option value="fast">{t('document.modes.fast')}</option>
-              <option value="expert">{t('document.modes.expert')}</option>
             </select>
           </div>
         </div>

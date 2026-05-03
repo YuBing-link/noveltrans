@@ -58,6 +58,9 @@ public class EntityConsistencyService {
     @Value("${translation.python.url:http://llm-engine:8000/translate}")
     private String pythonTranslateUrl;
 
+    @Value("${translation.python.api-key:}")
+    private String pythonApiKey;
+
     private final DocumentEntityCache documentEntityCache;
     private final GlossaryMapper glossaryMapper;
     private final UserPreferenceMapper userPreferenceMapper;
@@ -297,12 +300,15 @@ public class EntityConsistencyService {
         body.put("target_lang", targetLang);
 
         String jsonBody = JSON.toJSONString(body);
-        HttpRequest request = HttpRequest.newBuilder()
+        var reqBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .timeout(Duration.ofSeconds(30))
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
-                .build();
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
+        if (pythonApiKey != null && !pythonApiKey.isEmpty()) {
+            reqBuilder.header("X-Service-Key", pythonApiKey);
+        }
+        HttpRequest request = reqBuilder.build();
 
         HttpResponse<String> response;
         try {
@@ -339,12 +345,15 @@ public class EntityConsistencyService {
         body.put("target_lang", targetLang);
 
         String jsonBody = JSON.toJSONString(body);
-        HttpRequest request = HttpRequest.newBuilder()
+        var reqBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .timeout(Duration.ofSeconds(30))
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
-                .build();
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
+        if (pythonApiKey != null && !pythonApiKey.isEmpty()) {
+            reqBuilder.header("X-Service-Key", pythonApiKey);
+        }
+        HttpRequest request = reqBuilder.build();
 
         HttpResponse<String> response = sendWithRetry(request, 2);
         String responseBody = response.body();

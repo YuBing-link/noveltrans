@@ -106,14 +106,7 @@ describe('DocumentPage', () => {
       mockGetList.mockResolvedValueOnce({ data: { list: [], total: 0 } })
       renderDocumentPage()
       const selects = screen.getAllByRole('combobox')
-      expect(selects).toHaveLength(3) // source, target, mode
-    })
-
-    it('renders mode selector with fast and expert options', () => {
-      mockGetList.mockResolvedValueOnce({ data: { list: [], total: 0 } })
-      renderDocumentPage()
-      expect(screen.getByText('document.modes.fast')).toBeInTheDocument()
-      expect(screen.getByText('document.modes.expert')).toBeInTheDocument()
+      expect(selects).toHaveLength(2) // source, target
     })
   })
 

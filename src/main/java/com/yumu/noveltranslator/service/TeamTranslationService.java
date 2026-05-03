@@ -29,12 +29,16 @@ public class TeamTranslationService {
 
     public TeamTranslationService(
             @Value("${translate-server.host:localhost}") String host,
-            @Value("${translate-server.port:8000}") int port) {
-        this.webClient = WebClient.builder()
+            @Value("${translate-server.port:8000}") int port,
+            @Value("${translate-server.api-key:}") String apiKey) {
+        var builder = WebClient.builder()
                 .baseUrl("http://%s:%d".formatted(host, port))
                 .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(512 * 1024))
-                .build();
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(512 * 1024));
+        if (apiKey != null && !apiKey.isEmpty()) {
+            builder.defaultHeader("X-Service-Key", apiKey);
+        }
+        this.webClient = builder.build();
     }
 
     /**

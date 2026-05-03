@@ -51,6 +51,7 @@ public class TranslationPipeline {
     private final TeamTranslationService teamTranslationService;
     private final Long userId;
     private final String docId;
+    private final List<Glossary> glossaryTerms;
 
     /**
      * 创建翻译管线实例（标准模式，L4 走直译）
@@ -64,7 +65,7 @@ public class TranslationPipeline {
             Long userId,
             String docId) {
         this(cacheService, ragTranslationService, entityConsistencyService, translationClient,
-             postProcessingService, null, userId, docId);
+             postProcessingService, null, userId, docId, List.of());
     }
 
     /**
@@ -81,6 +82,23 @@ public class TranslationPipeline {
             TeamTranslationService teamTranslationService,
             Long userId,
             String docId) {
+        this(cacheService, ragTranslationService, entityConsistencyService, translationClient,
+             postProcessingService, teamTranslationService, userId, docId, List.of());
+    }
+
+    /**
+     * 创建翻译管线实例（完整构造，支持术语表）
+     */
+    public TranslationPipeline(
+            TranslationCacheService cacheService,
+            RagTranslationService ragTranslationService,
+            EntityConsistencyService entityConsistencyService,
+            UserLevelThrottledTranslationClient translationClient,
+            TranslationPostProcessingService postProcessingService,
+            TeamTranslationService teamTranslationService,
+            Long userId,
+            String docId,
+            List<Glossary> glossaryTerms) {
         this.cacheService = cacheService;
         this.ragTranslationService = ragTranslationService;
         this.entityConsistencyService = entityConsistencyService;
@@ -89,6 +107,7 @@ public class TranslationPipeline {
         this.teamTranslationService = teamTranslationService;
         this.userId = userId;
         this.docId = docId;
+        this.glossaryTerms = glossaryTerms != null ? glossaryTerms : List.of();
     }
 
     /**
@@ -268,8 +287,8 @@ public class TranslationPipeline {
             }
         }
 
-        // L4: 直译
-        String rawJson = translationClient.translate(text, targetLang, mode.getName(), false);
+        // L4: 直译（注入术语表）
+        String rawJson = translationClient.translate(text, targetLang, mode.getName(), false, !glossaryTerms.isEmpty(), glossaryTerms);
         String result = ExternalResponseUtil.extractDataField(rawJson);
 
         if (result == null) {
@@ -326,9 +345,11 @@ public class TranslationPipeline {
             return cached;
         }
 
-        // L4: 直译（跳过 RAG 和一致性，快速模式直连 MTranServer）
+        // L4: 直译（跳过 RAG 和一致性，快速模式直连 MTranServer，注入术语表）
+        // 有术语表时强制走 Python 服务（MTranServer 不支持术语表）
         try {
-            String rawJson = translationClient.translate(text, targetLang, mode.getName(), html, true);
+            boolean hasGlossary = !glossaryTerms.isEmpty();
+            String rawJson = translationClient.translate(text, targetLang, mode.getName(), html, !hasGlossary, glossaryTerms);
             String result = ExternalResponseUtil.extractDataField(rawJson);
 
             if (result != null && !result.isBlank()) {

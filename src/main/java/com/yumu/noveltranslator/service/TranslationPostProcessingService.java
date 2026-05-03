@@ -33,6 +33,9 @@ public class TranslationPostProcessingService {
     @Value("${translation.python.url:http://llm-engine:8000/translate}")
     private String pythonTranslateUrl;
 
+    @Value("${translation.python.api-key:}")
+    private String pythonApiKey;
+
     /**
      * 检测并修复译文中的残留中文
      * @return 修复后的译文
@@ -124,12 +127,15 @@ public class TranslationPostProcessingService {
         body.put("fallback", true);
 
         String jsonBody = JSON.toJSONString(body);
-        HttpRequest request = HttpRequest.newBuilder()
+        var reqBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .timeout(Duration.ofSeconds(60))
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
-                .build();
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
+        if (pythonApiKey != null && !pythonApiKey.isEmpty()) {
+            reqBuilder.header("X-Service-Key", pythonApiKey);
+        }
+        HttpRequest request = reqBuilder.build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         String responseBody = response.body();
