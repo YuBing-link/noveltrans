@@ -435,6 +435,50 @@ class TextCleaningUtilExtendedTest {
     }
 
     @Nested
+    @DisplayName("HTML 净化 sanitizeHtml")
+    class SanitizeHtmlTests {
+
+        @Test
+        @DisplayName("null 输入返回 null")
+        void sanitizeHtml_null_returnsNull() {
+            assertNull(TextCleaningUtil.sanitizeHtml(null));
+        }
+
+        @Test
+        @DisplayName("空字符串返回空")
+        void sanitizeHtml_empty_returnsEmpty() {
+            assertEquals("", TextCleaningUtil.sanitizeHtml(""));
+        }
+
+        @Test
+        @DisplayName("移除 script 标签")
+        void sanitizeHtml_removesScript() {
+            String input = "<p>Hello</p><script>alert('xss')</script>";
+            String result = TextCleaningUtil.sanitizeHtml(input);
+            assertFalse(result.contains("<script>"));
+            assertTrue(result.contains("<p>Hello</p>"));
+        }
+
+        @Test
+        @DisplayName("保留安全标签")
+        void sanitizeHtml_keepsSafeTags() {
+            String input = "<h1>Title</h1><p>Text</p><ul><li>Item</li></ul>";
+            String result = TextCleaningUtil.sanitizeHtml(input);
+            assertTrue(result.contains("<h1>Title</h1>"));
+            assertTrue(result.contains("<p>Text</p>"));
+            assertTrue(result.contains("<li>Item</li>"));
+        }
+
+        @Test
+        @DisplayName("移除 javascript: 协议")
+        void sanitizeHtml_removesJavascriptProtocol() {
+            String input = "<a href=\"javascript:alert(1)\">link</a>";
+            String result = TextCleaningUtil.sanitizeHtml(input);
+            assertFalse(result.contains("javascript:"));
+        }
+    }
+
+    @Nested
     @DisplayName("检测不可见字符")
     class HasInvisibleCharsTests {
 
