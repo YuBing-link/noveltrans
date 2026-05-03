@@ -6,7 +6,6 @@
     <title>阅读模式</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
     <style>
-        /* ========== 模板内联样式（基础） ========== */
         @font-face {
             font-family: 'remixicon';
             src: url('https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.woff2') format('woff2'),
@@ -15,7 +14,6 @@
             font-style: normal;
             font-display: swap;
         }
-
         [class^="ri-"], [class*=" ri-"] {
             font-family: 'remixicon' !important;
             font-style: normal;
@@ -27,113 +25,111 @@
             -moz-osx-font-smoothing: grayscale;
             display: inline-block;
         }
-
-        /* 基础动画 */
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes slideInLeft { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* 遮罩层 */
-        .reader-overlay-backdrop {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000001;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-        }
-
-        .reader-overlay-backdrop.visible {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        /* 设置面板背景色 */
-        .reader-settings-panel {
-            background: #f8fafc !important;
-            background-color: #f8fafc !important;
-        }
-
-        /* 目录侧边栏背景色 */
-        .reader-toc-sidebar {
-            background: #f8fafc !important;
-            background-color: #f8fafc !important;
-        }
+        @keyframes nt-fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes nt-slide-down { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
-    <!-- 阅读模式覆盖层 - 小说阅读器风格 -->
     <div id="extreme-reader-overlay" class="novel-theme-light">
-        <!-- 顶部工具栏 -->
+        <!-- 顶部工具栏：极简 4 元素 -->
         <div class="reader-toolbar">
             <div class="reader-toolbar-left">
                 <button id="reader-back-btn" class="reader-back-button" title="退出阅读模式 (ESC)">
                     <i class="ri-arrow-left-line"></i>
-                    <span>返回</span>
                 </button>
-                <div id="reader-title" class="reader-toolbar-title">阅读模式</div>
-                <button id="reader-bookmark-btn" class="bookmark-btn" title="添加书签">
-                    <i class="ri-bookmark-line"></i>
-                </button>
+                <div id="reader-title" class="reader-toolbar-title"></div>
             </div>
             <div class="reader-toolbar-right">
-                <!-- 原文/译文切换按钮 -->
-                <div class="reader-control-group" id="reader-lang-switch-group" style="display: none;">
-                    <button id="reader-switch-language" class="reader-icon-button" title="切换原文/译文">
-                        <i class="ri-translate"></i>
-                        <span id="reader-lang-text" style="font-size: 12px; margin-left: 4px;">译文</span>
-                    </button>
-                </div>
-                <!-- 翻译按钮 -->
-                <div class="reader-control-group">
-                    <button id="reader-translate-btn" class="reader-icon-button" title="翻译文章">
-                        <i class="ri-translate"></i>
-                    </button>
-                </div>
-                <!-- 目录按钮 -->
-                <div class="reader-control-group">
-                    <button id="reader-toc-btn" class="reader-icon-button" title="目录">
-                        <i class="ri-menu-2-line"></i>
-                    </button>
-                </div>
-                <!-- 主题按钮 -->
-                <div class="reader-control-group">
-                    <button id="reader-theme-btn" class="reader-icon-button" title="主题切换">
-                        <i class="ri-palette-line"></i>
-                    </button>
-                </div>
-                <!-- 设置按钮 -->
-                <div class="reader-control-group">
-                    <button id="reader-settings-btn" class="reader-icon-button" title="阅读设置">
-                        <i class="ri-settings-3-line"></i>
-                    </button>
-                </div>
-                <!-- 更多菜单按钮（备用） -->
-                <div class="reader-control-group" style="display: none;">
-                    <button id="reader-more-btn" class="reader-icon-button" title="更多选项">
-                        <i class="ri-more-fill"></i>
-                    </button>
-                </div>
+                <button id="reader-font-minus" class="reader-icon-button" title="减小字号">
+                    <span class="font-label">A</span><span class="font-minus">⁻</span>
+                </button>
+                <button id="reader-font-plus" class="reader-icon-button" title="增大字号">
+                    <span class="font-label">A</span><span class="font-plus">⁺</span>
+                </button>
+                <button id="reader-more-btn" class="reader-icon-button" title="更多选项">
+                    <i class="ri-more-2-fill"></i>
+                </button>
             </div>
         </div>
 
-        <!-- 底部控制栏 -->
-        <div class="reader-bottom-bar">
-            <div class="reader-progress-container">
-                <div class="reader-progress-track" id="reader-progress-track">
-                    <div class="reader-progress-fill" id="reader-progress-fill"></div>
+        <!-- 阅读进度条 -->
+        <div class="reader-progress-bar">
+            <div class="reader-progress-fill"></div>
+        </div>
+
+        <!-- 浮动设置面板（从工具栏下方弹出） -->
+        <div id="reader-settings-panel" class="reader-settings-panel">
+            <!-- 主题 -->
+            <div class="settings-section">
+                <div class="settings-section-title">主题</div>
+                <div class="theme-options">
+                    <div class="theme-option active" data-theme="light"><i class="ri-sun-line"></i><span>日间</span></div>
+                    <div class="theme-option" data-theme="sepia"><i class="ri-book-open-line"></i><span>护眼</span></div>
+                    <div class="theme-option" data-theme="eyecare"><i class="ri-leaf-line"></i><span>绿色</span></div>
+                    <div class="theme-option" data-theme="dark"><i class="ri-moon-line"></i><span>夜间</span></div>
+                    <div class="theme-option" data-theme="paper"><i class="ri-article-line"></i><span>纸质</span></div>
                 </div>
-                <span class="reader-progress-text" id="reader-progress-text">0%</span>
+            </div>
+            <!-- 字体 -->
+            <div class="settings-section">
+                <div class="settings-section-title">字体</div>
+                <div class="font-options">
+                    <div class="font-option active" data-font="serif"><span style="font-family: Georgia, serif;">衬线</span></div>
+                    <div class="font-option" data-font="sans"><span style="font-family: -apple-system, sans-serif;">无衬线</span></div>
+                    <div class="font-option" data-font="kai"><span style="font-family: KaiTi, serif;">楷体</span></div>
+                </div>
+            </div>
+            <!-- 字号 -->
+            <div class="settings-section">
+                <div class="settings-section-title">字号</div>
+                <div class="slider-control">
+                    <input type="range" id="font-size-range" min="14" max="32" step="1" value="18">
+                    <div class="slider-value"><span id="font-size-value">18px</span></div>
+                </div>
+            </div>
+            <!-- 行距 -->
+            <div class="settings-section">
+                <div class="settings-section-title">行距</div>
+                <div class="slider-control">
+                    <input type="range" id="line-height-range" min="1.2" max="2.5" step="0.1" value="1.9">
+                    <div class="slider-value"><span id="line-height-value">1.9</span></div>
+                </div>
+            </div>
+            <!-- 宽度 -->
+            <div class="settings-section">
+                <div class="settings-section-title">内容宽度</div>
+                <div class="slider-control">
+                    <input type="range" id="max-width-range" min="600" max="900" step="20" value="680">
+                    <div class="slider-value"><span id="max-width-value">680px</span></div>
+                </div>
+            </div>
+            <!-- 对齐 -->
+            <div class="settings-section">
+                <div class="settings-section-title">对齐</div>
+                <div class="align-options">
+                    <div class="align-option" data-align="left"><i class="ri-align-left"></i></div>
+                    <div class="align-option active" data-align="justify"><i class="ri-align-justify"></i></div>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="first-indent-check">
+                    <span>首行缩进</span>
+                </label>
+            </div>
+            <!-- 分隔线 -->
+            <div class="settings-divider"></div>
+            <!-- 功能按钮 -->
+            <div class="settings-section">
+                <button id="reader-tts-btn" class="settings-action-btn"><i class="ri-volume-up-line"></i><span>开始朗读</span></button>
+                <button id="reader-toc-btn" class="settings-action-btn"><i class="ri-menu-2-line"></i><span>目录</span></button>
+                <button id="reader-bookmark-btn" class="settings-action-btn"><i class="ri-bookmark-line"></i><span>书签</span></button>
             </div>
         </div>
+
+        <!-- 遮罩层（设置面板打开时） -->
+        <div class="reader-backdrop" id="settings-backdrop"></div>
 
         <!-- 目录侧边栏 -->
-        <div class="reader-overlay-backdrop" id="toc-backdrop"></div>
+        <div class="reader-backdrop" id="toc-backdrop"></div>
         <div id="reader-toc-sidebar" class="reader-toc-sidebar">
             <div class="toc-header">
                 <span class="toc-title">目录</span>
@@ -142,141 +138,15 @@
             <div id="toc-content" class="toc-content"></div>
         </div>
 
-        <!-- 设置面板 - 全屏侧滑式 -->
-        <div class="reader-overlay-backdrop" id="settings-backdrop"></div>
-        <div id="reader-settings-panel" class="reader-settings-panel">
-            <div class="settings-panel-header">
-                <span class="settings-panel-title">阅读设置</span>
-                <button id="settings-close-btn" class="settings-panel-close"><i class="ri-close-line"></i></button>
-            </div>
-            <div class="settings-panel-content">
-                <!-- 主题设置 -->
-                <div class="settings-section">
-                    <div class="settings-section-title">
-                        <i class="ri-palette-line"></i> 主题
-                    </div>
-                    <div class="theme-options">
-                        <div class="theme-option active" data-theme="light">
-                            <i class="ri-sun-line"></i>
-                            <span class="theme-option-label">日间</span>
-                        </div>
-                        <div class="theme-option" data-theme="sepia">
-                            <i class="ri-book-open-line"></i>
-                            <span class="theme-option-label">护眼</span>
-                        </div>
-                        <div class="theme-option" data-theme="eyecare">
-                            <i class="ri-leaf-line"></i>
-                            <span class="theme-option-label">绿色</span>
-                        </div>
-                        <div class="theme-option" data-theme="dark">
-                            <i class="ri-moon-line"></i>
-                            <span class="theme-option-label">夜间</span>
-                        </div>
-                        <div class="theme-option" data-theme="paper">
-                            <i class="ri-article-line"></i>
-                            <span class="theme-option-label">纸质</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 字体设置 -->
-                <div class="settings-section">
-                    <div class="settings-section-title">
-                        <i class="ri-font-size"></i> 字体
-                    </div>
-                    <div class="font-options">
-                        <div class="font-option active" data-font="serif">
-                            <span class="font-option-preview" style="font-family: Georgia, serif;">宋体</span>
-                            <span class="font-option-label">适合长文阅读</span>
-                        </div>
-                        <div class="font-option" data-font="sans">
-                            <span class="font-option-preview" style="font-family: -apple-system, sans-serif;">黑体</span>
-                            <span class="font-option-label">清晰现代</span>
-                        </div>
-                        <div class="font-option" data-font="kai">
-                            <span class="font-option-preview" style="font-family: KaiTi, serif;">楷体</span>
-                            <span class="font-option-label">书法风格</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 字号设置 -->
-                <div class="settings-section">
-                    <div class="settings-section-title">
-                        <i class="ri-text"></i> 字号
-                    </div>
-                    <div class="slider-control">
-                        <div class="slider-track">
-                            <div class="slider-fill" style="width: 50%;"></div>
-                            <div class="slider-thumb" style="left: 50%;" id="font-size-thumb"></div>
-                        </div>
-                        <div class="slider-labels">
-                            <span>小</span>
-                            <span>大</span>
-                        </div>
-                        <div class="slider-value"><span id="font-size-value">18px</span></div>
-                    </div>
-                </div>
-
-                <!-- 行距设置 -->
-                <div class="settings-section">
-                    <div class="settings-section-title">
-                        <i class="ri-line-height"></i> 行距
-                    </div>
-                    <div class="slider-control">
-                        <div class="slider-track">
-                            <div class="slider-fill" style="width: 60%;"></div>
-                            <div class="slider-thumb" style="left: 60%;" id="line-height-thumb"></div>
-                        </div>
-                        <div class="slider-labels">
-                            <span>密</span>
-                            <span>疏</span>
-                        </div>
-                        <div class="slider-value"><span id="line-height-value">1.9</span></div>
-                    </div>
-                </div>
-
-                <!-- 宽度设置 -->
-                <div class="settings-section">
-                    <div class="settings-section-title">
-                        <i class="ri-layout-width"></i> 内容宽度
-                    </div>
-                    <div class="slider-control">
-                        <div class="slider-track">
-                            <div class="slider-fill" style="width: 40%;"></div>
-                            <div class="slider-thumb" style="left: 40%;" id="max-width-thumb"></div>
-                        </div>
-                        <div class="slider-labels">
-                            <span>窄</span>
-                            <span>宽</span>
-                        </div>
-                        <div class="slider-value"><span id="max-width-value">680px</span></div>
-                    </div>
-                </div>
-
-                <!-- 对齐设置 -->
-                <div class="settings-section">
-                    <div class="settings-section-title">
-                        <i class="ri-align-justify"></i> 文字对齐
-                    </div>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="first-indent-check" checked>
-                        <span>首行缩进</span>
-                    </label>
-                </div>
-
-                <!-- 功能设置 -->
-                <div class="settings-section">
-                    <div class="settings-section-title">
-                        <i class="ri-settings-3-line"></i> 功能
-                    </div>
-                    <button id="reader-tts-btn" class="reader-chapter-btn" style="width: 100%; justify-content: center;">
-                        <i class="ri-volume-up-line"></i>
-                        <span>开始朗读</span>
-                    </button>
-                </div>
-            </div>
-        </div>
+        <!-- 翻译按钮（内容区底部居中） -->
+        <button id="reader-translate-btn" class="reader-translate-fab" title="翻译文章">
+            <i class="ri-translate-line"></i>
+            <span>翻译</span>
+        </button>
+        <button id="reader-switch-language" class="reader-translate-fab" style="display:none;" title="切换原文/译文">
+            <i class="ri-translate"></i>
+            <span id="reader-lang-text">译文</span>
+        </button>
 
         <!-- 内容容器 -->
         <div id="reader-content" class="reader-content-container">
@@ -288,7 +158,6 @@
                     <div class="spinner-ring"></div>
                 </div>
                 <div class="loading-text">正在提取文章内容...</div>
-                <div class="loading-hint">使用 Readability 智能识别页面内容</div>
             </div>
         </div>
 
