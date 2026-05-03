@@ -187,7 +187,6 @@ class ReaderModeManager {
 
     // 创建备用覆盖层（当模板加载失败时使用）
     createFallbackOverlay() {
-        // 重要：先移除任何已存在的 overlay（防止重复）
         const existingOverlays = document.querySelectorAll('#extreme-reader-overlay');
         if (existingOverlays.length > 0) {
             console.log('[Reader] createFallbackOverlay: 移除', existingOverlays.length, '个已存在的 overlay');
@@ -196,137 +195,106 @@ class ReaderModeManager {
 
         this.overlay = document.createElement('div');
         this.overlay.id = 'extreme-reader-overlay';
-        this.overlay.className = 'extreme-reader-overlay theme-light';
+        this.overlay.className = 'novel-theme-light';
         this.overlay.innerHTML = `
             <div class="reader-toolbar">
                 <div class="reader-toolbar-left">
-                    <button id="reader-back-btn" class="reader-button reader-back-button" title="退出阅读模式 (ESC)">
+                    <button id="reader-back-btn" class="reader-back-button" title="退出阅读模式 (ESC)">
                         <i class="ri-arrow-left-line"></i>
-                        <span>返回</span>
                     </button>
                     <div id="reader-title" class="reader-toolbar-title">阅读模式</div>
                 </div>
                 <div class="reader-toolbar-right">
-                    <!-- 原文/译文切换按钮（有译文时显示） -->
-                    <div class="reader-control-group" id="reader-lang-switch-group" style="display: none;">
-                        <button id="reader-switch-language" class="reader-icon-button" title="切换原文/译文">
-                            <i class="ri-translate"></i>
-                            <span id="reader-lang-text" style="font-size: 12px; margin-left: 4px;">译文</span>
-                        </button>
-                    </div>
-                    <!-- 翻译按钮 -->
-                    <div class="reader-control-group">
-                        <button id="reader-translate-btn" class="reader-icon-button" title="翻译文章">
-                            <i class="ri-translate"></i>
-                        </button>
-                    </div>
-                    <div class="reader-control-group">
-                        <button id="reader-toc-btn" class="reader-icon-button" title="目录">
-                            <i class="ri-menu-2-line"></i>
-                        </button>
-                    </div>
-                    <div class="reader-control-group">
-                        <button id="reader-font-minus" class="reader-icon-button" title="减小字体">
-                            <i class="ri-font-size"></i>
-                        </button>
-                        <button id="reader-font-plus" class="reader-icon-button" title="增大字体">
-                            <i class="ri-font-size"></i>
-                        </button>
-                    </div>
-                    <div class="reader-control-group">
-                        <button id="reader-theme-btn" class="reader-icon-button" title="主题切换">
-                            <i class="ri-palette-line"></i>
-                        </button>
-                    </div>
-                    <div class="reader-control-group">
-                        <button id="reader-settings-btn" class="reader-icon-button" title="阅读设置">
-                            <i class="ri-settings-3-line"></i>
-                        </button>
-                    </div>
-                    <div class="reader-control-group">
-                        <button id="reader-tts-btn" class="reader-icon-button" title="朗读文章">
-                            <i class="ri-volume-up-line"></i>
-                        </button>
-                    </div>
+                    <button id="reader-font-minus" class="reader-icon-button" title="减小字号">
+                        <span class="font-label">A</span><span class="font-minus">⁻</span>
+                    </button>
+                    <button id="reader-font-plus" class="reader-icon-button" title="增大字号">
+                        <span class="font-label">A</span><span class="font-plus">⁺</span>
+                    </button>
+                    <button id="reader-more-btn" class="reader-icon-button" title="更多选项">
+                        <i class="ri-more-2-fill"></i>
+                    </button>
                 </div>
             </div>
-            <div id="reader-progress-bar" class="reader-progress-bar">
+            <div class="reader-progress-bar">
                 <div class="reader-progress-fill"></div>
             </div>
+            <div id="reader-settings-panel" class="reader-settings-panel">
+                <div class="settings-section">
+                    <div class="settings-section-title">主题</div>
+                    <div class="theme-options">
+                        <div class="theme-option active" data-theme="light"><i class="ri-sun-line"></i><span>日间</span></div>
+                        <div class="theme-option" data-theme="sepia"><i class="ri-book-open-line"></i><span>护眼</span></div>
+                        <div class="theme-option" data-theme="eyecare"><i class="ri-leaf-line"></i><span>绿色</span></div>
+                        <div class="theme-option" data-theme="dark"><i class="ri-moon-line"></i><span>夜间</span></div>
+                        <div class="theme-option" data-theme="paper"><i class="ri-article-line"></i><span>纸质</span></div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">字体</div>
+                    <div class="font-options">
+                        <div class="font-option active" data-font="serif"><span style="font-family: Georgia, serif;">衬线</span></div>
+                        <div class="font-option" data-font="sans"><span style="font-family: -apple-system, sans-serif;">无衬线</span></div>
+                        <div class="font-option" data-font="kai"><span style="font-family: KaiTi, serif;">楷体</span></div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">字号</div>
+                    <div class="slider-control">
+                        <input type="range" id="font-size-range" min="14" max="32" step="1" value="${this.readingPreferences.fontSize}">
+                        <div class="slider-value"><span id="font-size-value">${this.readingPreferences.fontSize}px</span></div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">行距</div>
+                    <div class="slider-control">
+                        <input type="range" id="line-height-range" min="1.2" max="2.5" step="0.1" value="${this.readingPreferences.lineHeight}">
+                        <div class="slider-value"><span id="line-height-value">${this.readingPreferences.lineHeight}</span></div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">内容宽度</div>
+                    <div class="slider-control">
+                        <input type="range" id="max-width-range" min="600" max="900" step="20" value="${this.readingPreferences.maxWidth}">
+                        <div class="slider-value"><span id="max-width-value">${this.readingPreferences.maxWidth}px</span></div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">对齐</div>
+                    <div class="align-options">
+                        <div class="align-option" data-align="left"><i class="ri-align-left"></i></div>
+                        <div class="align-option active" data-align="justify"><i class="ri-align-justify"></i></div>
+                    </div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="first-indent-check">
+                        <span>首行缩进</span>
+                    </label>
+                </div>
+                <div class="settings-divider"></div>
+                <div class="settings-section">
+                    <button id="reader-tts-btn" class="settings-action-btn"><i class="ri-volume-up-line"></i><span>开始朗读</span></button>
+                    <button id="reader-toc-btn" class="settings-action-btn"><i class="ri-menu-2-line"></i><span>目录</span></button>
+                    <button id="reader-bookmark-btn" class="settings-action-btn"><i class="ri-bookmark-line"></i><span>书签</span></button>
+                </div>
+            </div>
+            <div class="reader-backdrop" id="settings-backdrop"></div>
+            <div class="reader-backdrop" id="toc-backdrop"></div>
             <div id="reader-toc-sidebar" class="reader-toc-sidebar">
                 <div class="toc-header">
-                    <span>目录</span>
+                    <span class="toc-title">目录</span>
                     <button id="toc-close-btn" class="toc-close-btn"><i class="ri-close-line"></i></button>
                 </div>
                 <div id="toc-content" class="toc-content"></div>
             </div>
-            <div id="reader-settings-panel" class="reader-settings-panel">
-                <div class="settings-header">
-                    <span>阅读设置</span>
-                    <button id="settings-close-btn" class="settings-close-btn"><i class="ri-close-line"></i></button>
-                </div>
-                <div class="settings-content">
-                    <div class="setting-item">
-                        <label>字体风格</label>
-                        <div class="font-family-options">
-                            <button class="font-option active" data-font="serif" title="衬线字体">
-                                <span style="font-family: Georgia, serif;">衬线</span>
-                            </button>
-                            <button class="font-option" data-font="sans" title="无衬线字体">
-                                <span style="font-family: -apple-system, sans-serif;">无衬线</span>
-                            </button>
-                            <button class="font-option" data-font="sans2" title="现代无衬线">
-                                <span style="font-family: 'Segoe UI', sans-serif;">现代</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <label>文字对齐</label>
-                        <div class="text-align-options">
-                            <button class="align-option" data-align="left" title="左对齐">
-                                <i class="ri-align-left"></i>
-                            </button>
-                            <button class="align-option active" data-align="justify" title="两端对齐">
-                                <i class="ri-align-justify"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <label>
-                            <input type="checkbox" id="first-indent-check">
-                            首行缩进
-                        </label>
-                    </div>
-                    <div class="setting-item">
-                        <label>行间距</label>
-                        <input type="range" id="line-height-range" min="1.2" max="2.5" step="0.1" value="${this.readingPreferences.lineHeight}">
-                        <div class="range-value"><span id="line-height-value">${this.readingPreferences.lineHeight}</span></div>
-                    </div>
-                    <div class="setting-item">
-                        <label>内容宽度</label>
-                        <input type="range" id="max-width-range" min="600" max="900" step="20" value="${this.readingPreferences.maxWidth}">
-                        <div class="range-value"><span id="max-width-value">${this.readingPreferences.maxWidth}px</span></div>
-                    </div>
-                </div>
-            </div>
-            <div id="reader-theme-selector" class="reader-theme-selector">
-                <button class="theme-option active" data-theme="light" title="日间模式">
-                    <i class="ri-sun-line"></i>
-                    <span>日间</span>
-                </button>
-                <button class="theme-option" data-theme="sepia" title="护眼模式">
-                    <i class="ri-book-open-line"></i>
-                    <span>护眼</span>
-                </button>
-                <button class="theme-option" data-theme="eyeCare" title="绿色护眼">
-                    <i class="ri-leaf-line"></i>
-                    <span>绿色</span>
-                </button>
-                <button class="theme-option" data-theme="dark" title="夜间模式">
-                    <i class="ri-moon-line"></i>
-                    <span>夜间</span>
-                </button>
-            </div>
+            <!-- 翻译按钮（内容区底部居中） -->
+            <button id="reader-translate-btn" class="reader-translate-fab" title="翻译文章">
+                <i class="ri-translate-line"></i>
+                <span>翻译</span>
+            </button>
+            <button id="reader-switch-language" class="reader-translate-fab" style="display:none;" title="切换原文/译文">
+                <i class="ri-translate"></i>
+                <span id="reader-lang-text">译文</span>
+            </button>
             <div id="reader-content" class="reader-content-container">
                 <div class="loading-container">
                     <div class="loading-spinner">
@@ -336,11 +304,8 @@ class ReaderModeManager {
                         <div class="spinner-ring"></div>
                     </div>
                     <div class="loading-text">正在提取文章内容...</div>
-                    <div class="loading-hint">使用 Readability 智能识别页面内容</div>
                 </div>
             </div>
-
-            <!-- 图片灯箱 -->
             <div id="reader-image-lightbox" class="reader-image-lightbox">
                 <button class="reader-image-lightbox-close"><i class="ri-close-line"></i></button>
                 <img src="" alt="放大图片">
@@ -375,176 +340,70 @@ class ReaderModeManager {
         const style = document.createElement('style');
         style.id = 'reader-mode-styles';
         style.textContent = `
-            /* ========== Remix Icon 字体加载 ========== */
-            @font-face {
-                font-family: 'remixicon';
-                src: url('https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.woff2') format('woff2'),
-                     url('https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.woff') format('woff');
-                font-weight: normal;
-                font-style: normal;
-                font-display: swap;
-            }
+            /* 基础动画（备用，当 CSS 文件未加载时） */
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-            [class^="ri-"], [class*=" ri-"] {
-                font-family: 'remixicon' !important;
-                font-style: normal;
-                font-weight: normal;
-                font-variant: normal;
-                text-transform: none;
-                line-height: 1;
-                -webkit-font-smoothing: antialiased;
-                -moz-osx-font-smoothing: grayscale;
-                display: inline-block;
-            }
-
-            /* ========== 基础动画 ========== */
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-
-            @keyframes slideInRight {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-
-            /* ========== 覆盖层基础 ========== */
             #extreme-reader-overlay {
                 position: fixed;
                 top: 0;
                 left: 0;
                 width: 100%;
                 height: 100dvh;
-                max-height: 100%;
-                background: var(--reader-bg, #f8fafc);
+                background: #f5f4ed;
                 z-index: 999999;
                 overflow-y: scroll;
                 overflow-x: hidden;
-                font-family: var(--reader-font, 'Georgia', 'Times New Roman', 'SimSun', serif);
+                font-family: Georgia, serif;
                 display: block !important;
-                animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+                animation: fadeIn 0.25s ease-out;
                 scroll-behavior: smooth;
-                --transition-speed: 0.3s;
-                /* 隐藏滚动条 */
-                scrollbar-width: none;
-                -ms-overflow-style: none;
             }
 
-            #extreme-reader-overlay::-webkit-scrollbar {
-                display: none;
-            }
-
-            /* ========== 主题变量 ========== */
-            #extreme-reader-overlay.theme-light {
-                --reader-bg: #f8fafc;
-                --reader-text: #334155;
-                --reader-text-secondary: #64748b;
-                --reader-heading: #0f172a;
-                --reader-border: #e2e8f0;
-                --reader-toolbar-bg: rgba(255, 255, 255, 0.95);
-                --reader-toolbar-border: #e2e8f0;
-                --reader-btn-bg: #f1f5f9;
-                --reader-btn-hover: #ffffff;
-                --reader-link: #3b82f6;
-                --reader-code-bg: #f1f5f9;
-                --reader-blockquote-bg: rgba(102, 126, 234, 0.08);
-                --reader-blockquote-border: #667eea;
-                --reader-shadow: rgba(0, 0, 0, 0.08);
-            }
-
-            #extreme-reader-overlay.theme-sepia {
-                --reader-bg: #f4ecd8;
-                --reader-text: #5b4635;
-                --reader-text-secondary: #85715d;
-                --reader-heading: #3d2b1f;
-                --reader-border: #d4c4a8;
-                --reader-toolbar-bg: rgba(244, 236, 216, 0.95);
-                --reader-toolbar-border: #d4c4a8;
-                --reader-btn-bg: #e8dcc4;
-                --reader-btn-hover: #f4ecd8;
-                --reader-link: #b8860b;
-                --reader-code-bg: #e8dcc4;
-                --reader-blockquote-bg: rgba(184, 134, 11, 0.1);
-                --reader-blockquote-border: #b8860b;
-                --reader-shadow: rgba(61, 43, 31, 0.1);
-            }
-
-            #extreme-reader-overlay.theme-eyeCare {
-                --reader-bg: #edf7ed;
-                --reader-text: #2d4a2d;
-                --reader-text-secondary: #5a7a5a;
-                --reader-heading: #1a3a1a;
-                --reader-border: #c4dcc4;
-                --reader-toolbar-bg: rgba(237, 247, 237, 0.95);
-                --reader-toolbar-border: #c4dcc4;
-                --reader-btn-bg: #d4ead4;
-                --reader-btn-hover: #edf7ed;
-                --reader-link: #2e7d32;
-                --reader-code-bg: #d4ead4;
-                --reader-blockquote-bg: rgba(46, 125, 50, 0.1);
-                --reader-blockquote-border: #4caf50;
-                --reader-shadow: rgba(26, 58, 26, 0.08);
-            }
-
-            #extreme-reader-overlay.theme-dark {
-                --reader-bg: #0f172a;
-                --reader-text: #cbd5e1;
-                --reader-text-secondary: #94a3b8;
-                --reader-heading: #e2e8f0;
-                --reader-border: #334155;
-                --reader-toolbar-bg: rgba(15, 23, 42, 0.95);
-                --reader-toolbar-border: #334155;
-                --reader-btn-bg: rgba(51, 65, 85, 0.6);
-                --reader-btn-hover: rgba(74, 85, 104, 0.8);
-                --reader-link: #60a5fa;
-                --reader-code-bg: rgba(30, 41, 59, 0.8);
-                --reader-blockquote-bg: rgba(96, 165, 250, 0.1);
-                --reader-blockquote-border: #60a5fa;
-                --reader-shadow: rgba(0, 0, 0, 0.3);
-            }
-
-            /* ========== 工具栏 ========== */
             .reader-toolbar {
-                position: sticky;
+                position: fixed;
                 top: 0;
-                background: var(--reader-toolbar-bg);
-                padding: 10px 24px;
-                border-bottom: 1px solid var(--reader-toolbar-border);
+                left: 0;
+                width: 100%;
+                background: rgba(250, 249, 245, 0.95);
+                border-bottom: 1px solid #f0eee6;
                 z-index: 1000000;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                backdrop-filter: blur(20px) saturate(180%);
-                box-shadow: 0 1px 3px var(--reader-shadow), 0 4px 12px var(--reader-shadow);
+                padding: 0 16px;
+                height: 48px;
             }
 
             .reader-toolbar-left, .reader-toolbar-right {
                 display: flex;
                 align-items: center;
-                gap: 12px;
+                gap: 4px;
+            }
+
+            .reader-back-button {
+                background: transparent;
+                border: none;
+                width: 36px;
+                height: 36px;
+                border-radius: 8px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+                color: #5e5d59;
             }
 
             .reader-toolbar-title {
-                font-size: 15px;
-                font-weight: 600;
-                color: var(--reader-heading);
-                max-width: 200px;
-                white-space: nowrap;
+                font-size: 14px;
+                font-weight: 500;
+                color: #141413;
+                max-width: 300px;
                 overflow: hidden;
                 text-overflow: ellipsis;
-            }
-
-            .reader-control-group {
-                display: flex;
-                gap: 4px;
-                background: var(--reader-btn-bg);
-                border-radius: 8px;
-                padding: 4px;
+                white-space: nowrap;
+                margin-left: 4px;
             }
 
             .reader-icon-button {
@@ -552,170 +411,98 @@ class ReaderModeManager {
                 height: 36px;
                 border: none;
                 background: transparent;
-                color: var(--reader-text);
+                color: #5e5d59;
                 cursor: pointer;
-                border-radius: 6px;
+                border-radius: 8px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                font-size: 18px;
+                font-size: 15px;
             }
 
             .reader-icon-button:hover {
-                background: var(--reader-btn-hover);
-                color: var(--reader-heading);
-                transform: translateY(-1px);
+                background: #e8e6dc;
+                color: #141413;
             }
 
-            .reader-icon-button.active {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-            }
-
-            .reader-back-button {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                padding: 8px 16px;
-                width: auto;
-                height: 36px;
-                min-width: 80px;
-                gap: 6px;
-            }
-
-            /* ========== 进度条 ========== */
             .reader-progress-bar {
                 position: fixed;
-                top: 0;
+                top: 48px;
                 left: 0;
                 width: 100%;
-                height: 3px;
-                background: transparent;
-                z-index: 1000001;
+                height: 2px;
+                background: #f0eee6;
+                z-index: 999999;
             }
 
             .reader-progress-fill {
                 height: 100%;
                 width: 0%;
-                background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+                background: #c96442;
                 transition: width 0.15s ease-out;
             }
 
-            /* ========== 内容容器 ========== */
             .reader-content-container {
-                padding: 40px 24px;
-                max-width: var(--reader-max-width, 720px);
+                max-width: 680px;
                 margin: 0 auto;
-                color: var(--reader-text, #334155) !important;
-                min-height: calc(100vh - 100px);
-                line-height: var(--reader-line-height, 1.8);
-                background: transparent;
-                font-size: var(--reader-font-size, 18px);
+                padding: 24px 20px 80px;
             }
 
-            /* ========== 文章排版 ========== */
-            .reader-article { font-size: inherit; line-height: inherit; color: var(--reader-text); }
-            .reader-article h1 { font-size: 2.2em; margin: 1.5em 0 1em 0; line-height: 1.3; color: var(--reader-heading); text-align: center; font-weight: 700; border-bottom: 2px solid var(--reader-border); padding-bottom: 0.5em; }
-            .reader-article h2 { font-size: 1.7em; margin: 2em 0 0.8em 0; line-height: 1.35; color: var(--reader-heading); border-bottom: 2px solid var(--reader-border); padding-bottom: 0.5em; font-weight: 600; }
-            .reader-article h3 { font-size: 1.4em; margin: 1.5em 0 0.6em 0; line-height: 1.4; color: var(--reader-heading); font-weight: 600; }
-            .reader-article p { margin: 1.4em 0; text-align: var(--reader-align, justify); color: var(--reader-text); }
-            .reader-article p:first-of-type { text-indent: var(--reader-indent, 0); }
-            .reader-article a { color: var(--reader-link, #3b82f6); text-decoration: none; }
-            .reader-article a:hover { border-bottom: 1px solid var(--reader-link); }
-            .reader-article img { max-width: 100%; height: auto; border-radius: 12px; margin: 1.5em auto; display: block; box-shadow: 0 4px 16px var(--reader-shadow); cursor: zoom-in; }
-            .reader-article img:hover { transform: scale(1.02); }
-            .reader-article blockquote { border-left: 4px solid var(--reader-blockquote-border); margin: 1.8em 0; padding: 1.2em 1.5em; background: var(--reader-blockquote-bg); border-radius: 0 8px 8px 0; font-style: italic; color: var(--reader-text); position: relative; }
-            .reader-article blockquote::before { content: '"'; font-size: 3em; position: absolute; left: 10px; top: -5px; color: var(--reader-text-secondary); font-family: serif; opacity: 0.5; }
-            .reader-article pre { background: var(--reader-code-bg); padding: 1.2em; border-radius: 10px; overflow-x: auto; margin: 1.5em 0; font-size: 0.85em; line-height: 1.6; border: 1px solid var(--reader-border); }
-            .reader-article code { background: var(--reader-code-bg); padding: 0.2em 0.5em; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: var(--reader-heading); }
-            .reader-article pre code { background: none; padding: 0; border: none; }
-            .reader-article ul, .reader-article ol { margin: 1.2em 0; padding-left: 1.8em; }
-            .reader-article li { margin: 0.5em 0; line-height: inherit; }
-            .reader-article table { width: 100%; border-collapse: collapse; margin: 1.5em 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--reader-border); }
-            .reader-article th, .reader-article td { border: 1px solid var(--reader-border); padding: 1em; text-align: left; }
-            .reader-article th { background: var(--reader-btn-bg); font-weight: 600; color: var(--reader-heading); }
-            .reader-article tr:nth-child(even) { background: var(--reader-btn-bg); }
-            .reader-article .article-byline { text-align: center; color: var(--reader-text-secondary); font-size: 0.95em; margin: 1.5em auto 2.5em; font-style: italic; padding: 0.5em; border-top: 1px solid var(--reader-border); border-bottom: 1px solid var(--reader-border); background: var(--reader-btn-bg); max-width: 800px; }
+            .reader-article {
+                font-family: Georgia, serif;
+                font-size: 18px;
+                line-height: 1.8;
+                color: #141413;
+            }
 
-            /* ========== 加载动画 ========== */
-            .loading-container { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; gap: 20px; }
-            .loading-spinner { position: relative; width: 64px; height: 64px; }
-            .spinner-ring { position: absolute; width: 100%; height: 100%; border: 3px solid transparent; border-top-color: #667eea; border-radius: 50%; animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite; }
-            .spinner-ring:nth-child(1) { animation-delay: -0.45s; border-top-color: #667eea; }
-            .spinner-ring:nth-child(2) { animation-delay: -0.3s; border-top-color: #764ba2; }
-            .spinner-ring:nth-child(3) { animation-delay: -0.15s; border-top-color: #f093fb; }
-            .spinner-ring:nth-child(4) { animation-delay: 0s; border-top-color: #f59e0b; }
-            .loading-text { font-size: 16px; color: var(--reader-text); font-weight: 500; }
-            .loading-hint { font-size: 13px; color: var(--reader-text-secondary); }
+            .loading-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 400px;
+                gap: 16px;
+            }
 
-            /* ========== 目录侧边栏 ========== */
-            .reader-toc-sidebar { position: fixed; top: 0; left: -100%; width: 100%; max-width: 280px; height: 100dvh; max-height: 100%; background: #f8fafc !important; background-color: #f8fafc !important; border-right: 1px solid var(--reader-toolbar-border); z-index: 1000002; overflow-y: auto; overflow-x: hidden; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 4px 0 24px var(--reader-shadow); }
-            .reader-toc-sidebar.open { left: 0; }
-            .toc-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--reader-toolbar-border); font-weight: 600; color: var(--reader-heading); position: sticky; top: 0; background: var(--reader-toolbar-bg); z-index: 1; }
-            .toc-close-btn { width: 40px; height: 40px; border: none; background: var(--reader-btn-bg); color: var(--reader-text); border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: all 0.2s ease; }
-            .toc-close-btn:hover { background: var(--reader-btn-hover); transform: rotate(90deg); }
-            .toc-content { padding: 16px 0; }
-            .toc-item { padding: 12px 24px; color: var(--reader-text); cursor: pointer; transition: all 0.2s ease; display: block; text-decoration: none; border-left: 3px solid transparent; font-size: 14px; }
-            .toc-item:hover { background: var(--reader-btn-bg); border-left-color: #667eea; }
-            .toc-item.active { background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-left-color: #667eea; color: #667eea; }
-            .toc-h1 { padding-left: 24px; font-weight: 600; font-size: 15px; }
-            .toc-h2 { padding-left: 40px; font-size: 14px; }
-            .toc-h3 { padding-left: 56px; font-size: 13px; }
+            .loading-spinner {
+                position: relative;
+                width: 36px;
+                height: 36px;
+            }
 
-            /* ========== 设置面板 ========== */
-            .reader-settings-panel { position: fixed; top: 0; right: -100%; width: 100%; max-width: 400px; height: 100dvh; max-height: 100%; background: #f8fafc !important; background-color: #f8fafc !important; border-left: 1px solid var(--reader-toolbar-border); z-index: 1000002; overflow-y: auto; overflow-x: hidden; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: -4px 0 24px var(--reader-shadow); }
-            .reader-settings-panel.open { right: 0; }
-            .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--reader-toolbar-border); font-weight: 600; color: var(--reader-heading); position: sticky; top: 0; background: var(--reader-toolbar-bg); z-index: 1; }
-            .settings-close-btn { width: 40px; height: 40px; border: none; background: var(--reader-btn-bg); color: var(--reader-text); border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: all 0.2s ease; }
-            .settings-close-btn:hover { background: var(--reader-btn-hover); transform: rotate(90deg); }
-            .settings-content { padding: 24px; }
-            .setting-item { margin-bottom: 24px; }
-            .setting-item label { display: block; font-size: 13px; font-weight: 500; color: var(--reader-heading); margin-bottom: 10px; }
-            .font-family-options, .text-align-options { display: flex; gap: 8px; }
-            .font-option, .align-option { flex: 1; padding: 10px; border: 2px solid var(--reader-toolbar-border); background: var(--reader-btn-bg); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; text-align: center; }
-            .font-option:hover, .align-option:hover { border-color: #667eea; background: var(--reader-btn-hover); }
-            .font-option.active, .align-option.active { border-color: #667eea; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); }
-            .font-option span { font-size: 16px; display: block; }
-            input[type="range"] { width: 100%; height: 6px; border-radius: 3px; background: var(--reader-toolbar-border); outline: none; -webkit-appearance: none; }
-            input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #667eea; cursor: pointer; box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4); }
-            .range-value { text-align: center; font-size: 13px; color: var(--reader-text-secondary); margin-top: 6px; }
-            #first-indent-check { margin-right: 8px; }
+            .spinner-ring {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                border: 3px solid transparent;
+                border-top-color: #c96442;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
 
-            /* ========== 主题选择器 ========== */
-            .reader-theme-selector { position: fixed; top: 70px; right: 20px; display: flex; flex-direction: column; gap: 8px; background: var(--reader-toolbar-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--reader-toolbar-border); box-shadow: 0 8px 24px var(--reader-shadow); z-index: 1000003; opacity: 0; visibility: hidden; transform: translateY(-10px); transition: all 0.2s ease; }
-            .reader-theme-selector.open { opacity: 1; visibility: visible; transform: translateY(0); }
-            .theme-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 2px solid var(--reader-toolbar-border); background: var(--reader-btn-bg); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; color: var(--reader-text); font-size: 13px; white-space: nowrap; }
-            .theme-option:hover { border-color: #667eea; }
-            .theme-option.active { border-color: #667eea; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); }
-            .theme-option i { font-size: 18px; }
+            .loading-text {
+                font-size: 14px;
+                color: #5e5d59;
+            }
 
-            /* ========== 图片灯箱 ========== */
-            .reader-image-lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100dvh; background: rgba(0, 0, 0, 0.9); z-index: 1000010; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s ease; }
-            .reader-image-lightbox.open { opacity: 1; visibility: visible; }
-            .reader-image-lightbox img { max-width: 90%; max-height: 90%; object-fit: contain; transform: scale(0.9); transition: transform 0.3s ease; }
-            .reader-image-lightbox.open img { transform: scale(1); }
-            .reader-image-lightbox-close { position: absolute; top: 20px; right: 20px; width: 48px; height: 48px; border: none; background: rgba(255, 255, 255, 0.2); color: white; border-radius: 50%; cursor: pointer; font-size: 28px; display: flex; align-items: center; justify-content: center; }
-            .reader-image-lightbox-close:hover { background: rgba(255, 255, 255, 0.3); }
-
-            /* ========== 通知样式 ========== */
-            .reader-notification { position: fixed; top: 80px; right: 24px; padding: 14px 20px; border-radius: 12px; color: white; z-index: 1000020; animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1); max-width: 320px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
-            .reader-notification-info { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
-            .reader-notification-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-            .reader-notification-error { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-            .reader-notification-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-
-            /* ========== 翻译信息 ========== */
-            .translation-info { text-align: center; color: var(--reader-text-secondary); font-size: 0.9em; margin: 2em 0 2.5em 0; padding: 16px 24px; background: linear-gradient(180deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.05) 100%); border-radius: 12px; border-left: 3px solid #667eea; }
-            .reader-inline-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; margin-left: 8px; }
-
-            /* ========== 响应式设计 ========== */
-            @media (max-width: 768px) {
-                .reader-toolbar { padding: 10px 16px; flex-wrap: wrap; }
-                .reader-toolbar-left, .reader-toolbar-right { gap: 8px; }
-                .reader-toolbar-title { max-width: 150px; }
-                .reader-content-container { padding: 24px 16px; }
-                .reader-article h1 { font-size: 1.8em; }
-                .reader-toc-sidebar, .reader-settings-panel { width: 100%; max-width: 300px; }
+            .reader-translate-fab {
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                padding: 10px 20px;
+                border: 1px solid #f0eee6;
+                border-radius: 20px;
+                background: rgba(250, 249, 245, 0.95);
+                color: #141413;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 500;
+                z-index: 1000001;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.08);
             }
         `;
         document.head.appendChild(style);
@@ -726,17 +513,14 @@ class ReaderModeManager {
         const overlay = this.overlay;
         if (!overlay) return;
 
-        // 应用主题（使用新的小说阅读器主题类名）
         overlay.className = `extreme-reader-overlay novel-theme-${this.readingPreferences.theme}`;
 
-        // 应用 CSS 变量
         overlay.style.setProperty('--reader-font-size', `${this.readingPreferences.fontSize}px`);
         overlay.style.setProperty('--reader-line-height', this.readingPreferences.lineHeight);
         overlay.style.setProperty('--reader-max-width', `${this.readingPreferences.maxWidth}px`);
         overlay.style.setProperty('--reader-align', this.readingPreferences.textAlign);
         overlay.style.setProperty('--reader-indent', this.readingPreferences.showFirstIndent ? '2em' : '0');
 
-        // 应用字体
         const fontFamilies = {
             serif: "'Georgia', '思源宋体', 'SimSun', serif",
             sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif",
@@ -744,50 +528,46 @@ class ReaderModeManager {
         };
         overlay.style.setProperty('--reader-font', fontFamilies[this.readingPreferences.fontFamily]);
 
-        // 更新设置面板 UI
         this.updateSettingsPanelUI();
     }
 
     // 更新设置面板 UI 状态
     updateSettingsPanelUI() {
-        // 字体选项
         document.querySelectorAll('.font-option').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.font === this.readingPreferences.fontFamily);
         });
 
-        // 主题选项
         document.querySelectorAll('.theme-option').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.theme === this.readingPreferences.theme);
         });
 
-        // 首行缩进
+        document.querySelectorAll('.align-option').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.align === this.readingPreferences.textAlign);
+        });
+
         const indentCheck = document.getElementById('first-indent-check');
         if (indentCheck) {
             indentCheck.checked = this.readingPreferences.showFirstIndent;
         }
 
-        // 更新字号滑块
-        this.updateSliderUI('font-size', this.readingPreferences.fontSize, 14, 32, '%');
+        // 更新原生滑块值
+        const fontSizeRange = document.getElementById('font-size-range');
+        if (fontSizeRange) {
+            fontSizeRange.value = this.readingPreferences.fontSize;
+            document.getElementById('font-size-value').textContent = `${this.readingPreferences.fontSize}px`;
+        }
 
-        // 更新行高滑块
-        this.updateSliderUI('line-height', this.readingPreferences.lineHeight, 1.2, 2.5, '');
+        const lineHeightRange = document.getElementById('line-height-range');
+        if (lineHeightRange) {
+            lineHeightRange.value = this.readingPreferences.lineHeight;
+            document.getElementById('line-height-value').textContent = this.readingPreferences.lineHeight;
+        }
 
-        // 更新内容宽度滑块
-        this.updateSliderUI('max-width', this.readingPreferences.maxWidth, 600, 900, 'px');
-    }
-
-    // 更新滑块 UI
-    updateSliderUI(prefix, value, min, max, suffix) {
-        const thumb = document.getElementById(`${prefix}-thumb`);
-        const valueEl = document.getElementById(`${prefix}-value`);
-        const fill = thumb?.parentElement.querySelector('.slider-fill');
-
-        if (!thumb || !valueEl) return;
-
-        const percent = (value - min) / (max - min);
-        thumb.style.left = `${percent * 100}%`;
-        if (fill) fill.style.width = `${percent * 100}%`;
-        valueEl.textContent = `${value}${suffix}`;
+        const maxWidthRange = document.getElementById('max-width-range');
+        if (maxWidthRange) {
+            maxWidthRange.value = this.readingPreferences.maxWidth;
+            document.getElementById('max-width-value').textContent = `${this.readingPreferences.maxWidth}px`;
+        }
     }
 
     // 绑定事件
@@ -859,18 +639,15 @@ class ReaderModeManager {
     setupButtonEventListeners() {
         const buttonEvents = {
             'reader-back-btn': () => this.deactivate(),
-            'reader-theme-btn': () => this.cycleTheme(),
-            'reader-toc-btn': () => this.toggleTocSidebar(),
-            'reader-settings-btn': () => this.toggleSettingsPanel(),
             'reader-more-btn': () => this.toggleSettingsPanel(),
             'reader-tts-btn': () => this.toggleTTS(),
             'reader-translate-btn': () => this.translateArticle(),
             'reader-switch-language': () => this.toggleLanguageView(),
             'toc-close-btn': () => this.closeTocSidebar(),
-            'settings-close-btn': () => this.closeSettingsPanel(),
             'reader-bookmark-btn': () => this.toggleBookmark(),
             'reader-font-minus': () => this.adjustFontSize(-2),
-            'reader-font-plus': () => this.adjustFontSize(2)
+            'reader-font-plus': () => this.adjustFontSize(2),
+            'reader-toc-btn': () => this.toggleTocSidebar()
         };
 
         Object.entries(buttonEvents).forEach(([id, handler]) => {
@@ -904,14 +681,18 @@ class ReaderModeManager {
 
     // 设置设置面板控件
     setupSettingsControls() {
-        // 字体选项
         document.querySelectorAll('.font-option').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.setFontFamily(btn.dataset.font);
             });
         });
 
-        // 首行缩进
+        document.querySelectorAll('.align-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.setTextAlign(btn.dataset.align);
+            });
+        });
+
         const indentCheck = document.getElementById('first-indent-check');
         if (indentCheck) {
             indentCheck.addEventListener('change', (e) => {
@@ -919,116 +700,48 @@ class ReaderModeManager {
             });
         }
 
-        // 字号滑块
-        this.setupFontSizeSlider();
+        // 原生滑块
+        const fontSizeRange = document.getElementById('font-size-range');
+        if (fontSizeRange) {
+            fontSizeRange.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                this.readingPreferences.fontSize = value;
+                document.getElementById('font-size-value').textContent = `${value}px`;
+                this.applyReadingPreferences();
+            });
+            fontSizeRange.addEventListener('change', () => {
+                this.saveReadingPreferences();
+            });
+            fontSizeRange.value = this.readingPreferences.fontSize;
+        }
 
-        // 行高滑块
-        this.setupLineHeightSlider();
+        const lineHeightRange = document.getElementById('line-height-range');
+        if (lineHeightRange) {
+            lineHeightRange.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                this.readingPreferences.lineHeight = value;
+                document.getElementById('line-height-value').textContent = value.toFixed(1);
+                this.applyReadingPreferences();
+            });
+            lineHeightRange.addEventListener('change', () => {
+                this.saveReadingPreferences();
+            });
+            lineHeightRange.value = this.readingPreferences.lineHeight;
+        }
 
-        // 内容宽度滑块
-        this.setupMaxWidthSlider();
-    }
-
-    // 设置字号滑块
-    setupFontSizeSlider() {
-        const thumb = document.getElementById('font-size-thumb');
-        const valueEl = document.getElementById('font-size-value');
-        if (!thumb || !valueEl) return;
-
-        const updateFontSize = (percent) => {
-            const min = 14;
-            const max = 32;
-            const value = Math.round(min + (max - min) * percent);
-            this.readingPreferences.fontSize = value;
-            valueEl.textContent = `${value}px`;
-            this.applyReadingPreferences();
-            this.saveReadingPreferences();
-        };
-
-        // 初始化
-        const initialPercent = (this.readingPreferences.fontSize - 14) / (32 - 14);
-        thumb.style.left = `${initialPercent * 100}%`;
-        const fill = thumb.parentElement.querySelector('.slider-fill');
-        if (fill) fill.style.width = `${initialPercent * 100}%`;
-        valueEl.textContent = `${this.readingPreferences.fontSize}px`;
-
-        // 点击跳转
-        const track = thumb.parentElement;
-        track.addEventListener('click', (e) => {
-            const rect = track.getBoundingClientRect();
-            const percent = (e.clientX - rect.left) / rect.width;
-            thumb.style.left = `${percent * 100}%`;
-            if (fill) fill.style.width = `${percent * 100}%`;
-            updateFontSize(percent);
-        });
-    }
-
-    // 设置行高滑块
-    setupLineHeightSlider() {
-        const thumb = document.getElementById('line-height-thumb');
-        const valueEl = document.getElementById('line-height-value');
-        if (!thumb || !valueEl) return;
-
-        const updateLineHeight = (percent) => {
-            const min = 1.2;
-            const max = 2.5;
-            const value = (min + (max - min) * percent).toFixed(1);
-            this.readingPreferences.lineHeight = parseFloat(value);
-            valueEl.textContent = value;
-            this.applyReadingPreferences();
-            this.saveReadingPreferences();
-        };
-
-        // 初始化
-        const initialPercent = (this.readingPreferences.lineHeight - 1.2) / (2.5 - 1.2);
-        thumb.style.left = `${initialPercent * 100}%`;
-        const fill = thumb.parentElement.querySelector('.slider-fill');
-        if (fill) fill.style.width = `${initialPercent * 100}%`;
-        valueEl.textContent = this.readingPreferences.lineHeight.toFixed(1);
-
-        // 点击跳转
-        const track = thumb.parentElement;
-        track.addEventListener('click', (e) => {
-            const rect = track.getBoundingClientRect();
-            const percent = (e.clientX - rect.left) / rect.width;
-            thumb.style.left = `${percent * 100}%`;
-            if (fill) fill.style.width = `${percent * 100}%`;
-            updateLineHeight(percent);
-        });
-    }
-
-    // 设置内容宽度滑块
-    setupMaxWidthSlider() {
-        const thumb = document.getElementById('max-width-thumb');
-        const valueEl = document.getElementById('max-width-value');
-        if (!thumb || !valueEl) return;
-
-        const updateMaxWidth = (percent) => {
-            const min = 600;
-            const max = 900;
-            const value = Math.round(min + (max - min) * percent);
-            this.readingPreferences.maxWidth = value;
-            valueEl.textContent = `${value}px`;
-            this.applyReadingPreferences();
-            this.saveReadingPreferences();
-        };
-
-        // 初始化
-        const initialPercent = (this.readingPreferences.maxWidth - 600) / (900 - 600);
-        thumb.style.left = `${initialPercent * 100}%`;
-        const fill = thumb.parentElement.querySelector('.slider-fill');
-        if (fill) fill.style.width = `${initialPercent * 100}%`;
-        valueEl.textContent = `${this.readingPreferences.maxWidth}px`;
-
-        // 点击跳转
-        const track = thumb.parentElement;
-        track.addEventListener('click', (e) => {
-            const rect = track.getBoundingClientRect();
-            const percent = (e.clientX - rect.left) / rect.width;
-            thumb.style.left = `${percent * 100}%`;
-            if (fill) fill.style.width = `${percent * 100}%`;
-            updateMaxWidth(percent);
-        });
+        const maxWidthRange = document.getElementById('max-width-range');
+        if (maxWidthRange) {
+            maxWidthRange.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                this.readingPreferences.maxWidth = value;
+                document.getElementById('max-width-value').textContent = `${value}px`;
+                this.applyReadingPreferences();
+            });
+            maxWidthRange.addEventListener('change', () => {
+                this.saveReadingPreferences();
+            });
+            maxWidthRange.value = this.readingPreferences.maxWidth;
+        }
     }
 
     // ========== 字体调整 ==========
@@ -1955,17 +1668,14 @@ class ReaderModeManager {
 
     // ========== 更新切换按钮 ==========
     updateSwitchButton() {
-        const switchGroup = document.getElementById('reader-lang-switch-group');
         const switchBtn = document.getElementById('reader-switch-language');
         const langText = document.getElementById('reader-lang-text');
 
-        if (switchGroup && switchBtn && langText) {
-            // 有译文时才显示切换按钮
+        if (switchBtn && langText) {
             if (this.translatedContent) {
-                switchGroup.style.display = 'flex';
+                switchBtn.style.display = 'flex';
             } else {
-                switchGroup.style.display = 'none';
-                return;
+                switchBtn.style.display = 'none';
             }
 
             if (this.showingTranslated) {
@@ -1982,16 +1692,12 @@ class ReaderModeManager {
 
     // ========== 更新翻译按钮 ==========
     updateTranslateButton() {
-        const translateGroup = document.getElementById('reader-translate-btn')?.parentElement;
         const translateBtn = document.getElementById('reader-translate-btn');
         if (translateBtn) {
-            // 有译文时隐藏翻译按钮（功能已由切换按钮接管）
             if (this.translatedContent) {
-                if (translateGroup) translateGroup.style.display = 'none';
+                translateBtn.style.display = 'none';
             } else {
-                if (translateGroup) translateGroup.style.display = 'flex';
-                translateBtn.classList.remove('active');
-                translateBtn.title = '翻译文章';
+                translateBtn.style.display = 'flex';
             }
         }
     }
@@ -2097,10 +1803,11 @@ class ReaderModeManager {
         console.log('[Reader] overlay 元素:', overlay);
         if (overlay) {
             // 确保主题类已应用（如果未应用，强制应用默认主题）
-            if (!overlay.classList.contains('theme-light') &&
-                !overlay.classList.contains('theme-sepia') &&
-                !overlay.classList.contains('theme-eyeCare') &&
-                !overlay.classList.contains('theme-dark')) {
+            if (!overlay.classList.contains('novel-theme-light') &&
+                !overlay.classList.contains('novel-theme-sepia') &&
+                !overlay.classList.contains('novel-theme-eyecare') &&
+                !overlay.classList.contains('novel-theme-dark') &&
+                !overlay.classList.contains('novel-theme-paper')) {
                 console.log('[Reader] 主题类未应用，强制应用默认主题');
                 this.applyReadingPreferences();
             }
@@ -2469,10 +2176,11 @@ class ReaderModeManager {
         }
 
         const buttonIds = [
-            'reader-back-btn', 'reader-settings-btn', 'reader-more-btn',
+            'reader-back-btn', 'reader-more-btn',
             'reader-tts-btn', 'reader-translate-btn', 'reader-switch-language',
-            'toc-close-btn', 'settings-close-btn', 'reader-bookmark-btn',
-            'reader-theme-btn', 'reader-toc-btn'
+            'toc-close-btn', 'reader-bookmark-btn',
+            'reader-theme-btn', 'reader-toc-btn',
+            'reader-font-minus', 'reader-font-plus'
         ];
 
         buttonIds.forEach(id => {
