@@ -165,7 +165,7 @@ New Translation Request
 
 ## ⚠️ Known Issues
 
-- **Chrome extension DOM recognition** — The extension's webpage DOM text node identification has issues with certain page layouts (e.g., shadow DOM, deeply nested SPA components). A refactor of the content detection strategy is in progress.
+- **Chrome extension translation engine not yet connected** — The translation buttons in the Chrome extension (reader mode, webpage mode, selection mode) are currently silently failing: they do nothing and produce no error. The backend translation API endpoints are ready; the extension-side integration is pending.
 
 ## 🗺️ Roadmap
 
