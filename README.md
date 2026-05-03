@@ -68,7 +68,7 @@ Open [http://localhost:7341](http://localhost:7341) in your browser.
 | Layer | Technology |
 |-------|------------|
 | **Backend** | Java 21, Spring Boot 3.2, MyBatis-Plus, Undertow |
-| **Frontend** | React 19, TypeScript 5, Vite 8, TailwindCSS 4.2, i18next |
+| **Frontend** | React 19, TypeScript 6, Vite 8, TailwindCSS 4.2, i18next |
 | **Chrome Extension** | Manifest V3, Content Scripts, IndexedDB |
 | **Translation Engine** | Python 3.11, FastAPI, OpenAI SDK, AgentScope (multi-agent) |
 | **Neural Translation Machine** | MTranServer — lightweight open-source translation engine |
@@ -89,7 +89,7 @@ noveltrans/
 ├── services/translate-engine/  # Python translation microservice + multi-agent pipeline
 ├── nginx/                  # Nginx gateway configuration
 ├── load-test/              # k6 load testing scripts
-├── docker-compose.yml      # Full-stack orchestration (7 containers)
+├── docker-compose.yml      # Full-stack orchestration (6 containers)
 └── .env.example            # Environment variable template
 ```
 

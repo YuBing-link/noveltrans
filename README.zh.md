@@ -68,7 +68,7 @@ curl http://localhost:7341/health    # 后端健康检查
 | 层级 | 技术 |
 |------|------|
 | **后端** | Java 21, Spring Boot 3.2, MyBatis-Plus, Undertow |
-| **前端** | React 19, TypeScript 5, Vite 8, TailwindCSS 4.2, i18next |
+| **前端** | React 19, TypeScript 6, Vite 8, TailwindCSS 4.2, i18next |
 | **Chrome 扩展** | Manifest V3, Content Scripts, IndexedDB |
 | **翻译引擎** | Python 3.11, FastAPI, OpenAI SDK, AgentScope（多智能体） |
 | **神经翻译机器** | MTranServer — 轻量级开源翻译引擎 |
@@ -89,7 +89,7 @@ noveltrans/
 ├── services/translate-engine/  # Python 翻译微服务 + 多智能体管线
 ├── nginx/                  # Nginx 网关配置
 ├── load-test/              # k6 负载测试脚本
-├── docker-compose.yml      # 全栈编排（7 个容器）
+├── docker-compose.yml      # 全栈编排（6 个容器）
 └── .env.example            # 环境变量模板
 ```
 
