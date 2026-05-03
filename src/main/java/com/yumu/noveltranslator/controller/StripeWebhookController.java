@@ -53,8 +53,8 @@ public class StripeWebhookController {
         Long userId = extractUserId(event);
         if (userId != null) {
             User user = userMapper.selectById(userId);
-            if (user != null && user.getTenantId() != null) {
-                TenantContext.setTenantId(user.getTenantId());
+            if (user != null) {
+                TenantContext.setTenantId(user.getTenantId() != null ? user.getTenantId() : 0L);
             }
         }
 
