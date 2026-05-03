@@ -56,6 +56,8 @@ public class CollabChapterTask {
 
     private LocalDateTime reviewedTime;
 
+    private Integer retryCount;
+
     private LocalDateTime completedTime;
 
     @TableLogic

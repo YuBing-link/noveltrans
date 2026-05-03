@@ -22,4 +22,7 @@ public interface CollabProjectMemberMapper extends BaseMapper<CollabProjectMembe
 
     @Select("SELECT * FROM collab_project_member WHERE project_id = #{projectId} AND user_id = #{userId} AND deleted = 0")
     CollabProjectMember selectByProjectAndUser(@Param("projectId") Long projectId, @Param("userId") Long userId);
+
+    @Select("SELECT COUNT(*) FROM collab_project_member WHERE project_id = #{projectId} AND deleted = 0")
+    int countByProjectId(@Param("projectId") Long projectId);
 }

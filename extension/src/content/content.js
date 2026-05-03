@@ -1939,7 +1939,8 @@ window.addEventListener('beforeunload', () => {
 });
 
 // ===== Web 登录态桥接 =====
-// 通过 postMessage 从页面上下文中读取 localStorage（content script 无法直接访问页面的 localStorage）
+// 通过 CustomEvent 从页面上下文中读取 localStorage（content script 无法直接访问页面的 localStorage）
+// 使用 CustomEvent 而非 postMessage，防止 token 泄露到第三方 iframe
 (function syncAuthToExtension() {
     function requestTokenFromPage() {
         try {
@@ -1959,30 +1960,42 @@ window.addEventListener('beforeunload', () => {
         }
     }
 
-    function handleMessage(event) {
-        if (!event.data || event.data.source !== 'noveltrans-auth-sync') return;
+    function isValidTokenFormat(token) {
+        if (typeof token !== 'string' || token.length === 0) return false;
+        // JWT 风格: header.payload.signature
+        if (token.split('.').length >= 3) return true;
+        // 或至少 20 字符的字母数字/连字符/下划线/点
+        return /^[A-Za-z0-9\-_\.]{20,}$/.test(token);
+    }
 
-        window.removeEventListener('message', handleMessage);
-        const { token, userInfo } = event.data;
+    function handleAuthSync(event) {
+        document.removeEventListener('noveltrans-auth-sync', handleAuthSync);
+        const { token, userInfo } = event.detail;
 
-        if (token) {
-            console.log('[NovelTrans] 从页面获取到 token，正在同步到扩展...');
-            browser.runtime.sendMessage({
-                action: 'setAuthToken',
-                token: token,
-                userInfo: userInfo || {}
-            }).then(() => {
-                console.log('[NovelTrans] 登录态已同步到扩展');
-            }).catch((e) => {
-                console.warn('[NovelTrans] 同步失败:', e.message);
-            });
-        } else {
+        if (!token) {
             console.log('[NovelTrans] 页面未登录（无 authToken）');
+            return;
         }
+
+        if (!isValidTokenFormat(token)) {
+            console.warn('[NovelTrans] 页面传递的 token 格式无效，拒绝同步');
+            return;
+        }
+
+        console.log('[NovelTrans] 从页面获取到 token，正在同步到扩展...');
+        browser.runtime.sendMessage({
+            action: 'setAuthToken',
+            token: token,
+            userInfo: userInfo || {}
+        }).then(() => {
+            console.log('[NovelTrans] 登录态已同步到扩展');
+        }).catch((e) => {
+            console.warn('[NovelTrans] 同步失败:', e.message);
+        });
     }
 
     try {
-        window.addEventListener('message', handleMessage);
+        document.addEventListener('noveltrans-auth-sync', handleAuthSync);
         // 页面加载完成后再请求（确保 localStorage 已准备好）
         if (document.readyState === 'complete') {
             requestTokenFromPage();

@@ -17,9 +17,14 @@
                 </div>
                 <span class="brand-name">NovelTrans</span>
             </div>
-            <button class="icon-btn" id="btn-login" title="登录">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </button>
+            <div class="header-actions">
+                <button class="icon-btn" id="btn-lang-toggle" title="切换语言" style="font-size:13px;padding:4px 6px;">
+                    <span id="lang-icon">🌐</span>
+                </button>
+                <button class="icon-btn" id="btn-login" data-i18n-title="login">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </button>
+            </div>
         </header>
 
         <!-- Main Action -->
@@ -27,12 +32,12 @@
             <button id="btn-translate" class="translate-btn">
                 <div class="btn-content">
                     <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-                    <span class="btn-text">翻译网页</span>
-                    <span class="btn-sub">将当前页面翻译成</span>
+                    <span class="btn-text" data-i18n="translate_webpage">翻译网页</span>
+                    <span class="btn-sub" data-i18n="translate_current_page">将当前页面翻译成</span>
                 </div>
             </button>
             <button class="target-lang-btn" id="btn-target-lang">
-                <span class="target-label">翻译成</span>
+                <span class="target-label" data-i18n="translate_to">翻译成</span>
                 <span class="lang-name" id="target-lang-display">简体中文</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </button>
@@ -42,7 +47,7 @@
         <section class="card service-section">
             <div class="card-header">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
-                <span class="card-title">翻译引擎</span>
+                <span class="card-title" data-i18n="translation_engine">翻译引擎</span>
             </div>
             <button class="service-selector" id="btn-model-select">
                 <div class="service-info">
@@ -57,8 +62,8 @@
         <section class="card quick-settings">
             <div class="setting-item">
                 <div class="setting-left">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/><path d="m21 3-4 4"/><path d="m17 3 4 0"/><path d="m17 7 4-4"/><path d="M3 12a9 9 0 0 0 6.22 8.56"/><path d="m3 21 4-4"/><path d="m7 21-4 0"/><path d="m7 17-4 4"/></svg>
-                    <span class="setting-label">双语对照</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/><path d="m21 3-4 4"/><path d="m17 3 4 0"/><path d="m17 7-4-4"/><path d="M3 12a9 9 0 0 0 6.22 8.56"/><path d="m3 21 4-4"/><path d="m7 21-4 0"/><path d="m7 17-4 4"/></svg>
+                    <span class="setting-label" data-i18n="bilingual_mode">双语对照</span>
                 </div>
                 <label class="toggle-switch">
                     <input type="checkbox" id="bilingual-check" checked>
@@ -68,7 +73,7 @@
             <div class="setting-item">
                 <div class="setting-left">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 8v4"/><path d="m15 11 3-3"/><circle cx="12" cy="12" r="2"/></svg>
-                    <span class="setting-label">专家模式</span>
+                    <span class="setting-label" data-i18n="expert_mode">专家模式</span>
                 </div>
                 <label class="toggle-switch" id="expert-mode-toggle">
                     <input type="checkbox" id="expert-mode-check" disabled>
@@ -85,8 +90,8 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
                 </div>
                 <div class="feature-info">
-                    <span class="feature-title">阅读模式</span>
-                    <span class="feature-sub">提取文章正文，优化阅读体验</span>
+                    <span class="feature-title" data-i18n="reader_mode">阅读模式</span>
+                    <span class="feature-sub" data-i18n="reader_mode_desc">提取文章正文，优化阅读体验</span>
                 </div>
                 <svg class="feature-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </button>
@@ -94,12 +99,13 @@
 
         <!-- Footer -->
         <footer class="app-footer">
-            <span>Version 1.0.0</span>
+            <span data-i18n="version">Version 1.0.0</span>
             <span class="divider-dot">&middot;</span>
-            <span>按 <kbd>Ctrl+Shift+Y</kbd> 翻译</span>
+            <span><kbd>Ctrl+Shift+Y</kbd> <span data-i18n="translate_webpage_short">翻译</span></span>
         </footer>
 
     </div>
+    <script src="../lib/i18n.js"></script>
     <script src="../lib/config.js"></script>
     <script src="../lib/browser-polyfill.js"></script>
     <script src="popup.js"></script>

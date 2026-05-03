@@ -75,8 +75,23 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
                .orderByAsc(CollabChapterTask::getChapterNumber);
         Page<CollabChapterTask> pageParam = new Page<>(page, pageSize);
         Page<CollabChapterTask> resultPage = chapterTaskMapper.selectPage(pageParam, wrapper);
+
+        // 批量加载关联用户，避免 N+1
+        java.util.Set<Long> userIds = new java.util.HashSet<>();
+        for (CollabChapterTask task : resultPage.getRecords()) {
+            if (task.getAssigneeId() != null) userIds.add(task.getAssigneeId());
+            if (task.getReviewerId() != null) userIds.add(task.getReviewerId());
+        }
+        java.util.Map<Long, User> userMap = new java.util.HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(userIds);
+            for (User user : users) {
+                userMap.put(user.getId(), user);
+            }
+        }
+
         List<ChapterTaskResponse> list = resultPage.getRecords().stream()
-                .map(this::toChapterResponse)
+                .map(task -> toChapterResponse(task, userMap))
                 .collect(Collectors.toList());
         return PageResponse.of(page, pageSize, resultPage.getTotal(), list);
     }
@@ -261,6 +276,10 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     }
 
     private ChapterTaskResponse toChapterResponse(CollabChapterTask task) {
+        return toChapterResponse(task, java.util.Map.of());
+    }
+
+    private ChapterTaskResponse toChapterResponse(CollabChapterTask task, java.util.Map<Long, User> userMap) {
         ChapterTaskResponse resp = new ChapterTaskResponse();
         resp.setId(task.getId());
         resp.setChapterNumber(task.getChapterNumber());
@@ -281,14 +300,20 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
 
         // 设置译员名称
         if (task.getAssigneeId() != null) {
-            User assignee = userMapper.selectById(task.getAssigneeId());
+            User assignee = userMap.get(task.getAssigneeId());
+            if (assignee == null) {
+                assignee = userMapper.selectById(task.getAssigneeId());
+            }
             if (assignee != null) {
                 resp.setAssigneeName(assignee.getUsername());
             }
         }
         // 设置审校名称
         if (task.getReviewerId() != null) {
-            User reviewer = userMapper.selectById(task.getReviewerId());
+            User reviewer = userMap.get(task.getReviewerId());
+            if (reviewer == null) {
+                reviewer = userMapper.selectById(task.getReviewerId());
+            }
             if (reviewer != null) {
                 resp.setReviewerName(reviewer.getUsername());
             }

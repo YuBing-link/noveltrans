@@ -20,6 +20,7 @@ import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -39,6 +40,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import jakarta.annotation.PostConstruct;
+
 /**
  * 多 Agent 协作翻译服务
  * 使用 AI 翻译团队（Agentscope 多 Agent）进行章节翻译
@@ -53,9 +56,11 @@ public class MultiAgentTranslationService {
 
     private static final int MAX_CONCURRENT_AGENTS = 5;
     private static final int MAX_RETRY_COUNT = 3;
+    private static final long RETRY_BASE_DELAY_MS = 2000;
+    private static final long RETRY_MAX_DELAY_MS = 30000;
 
     /**
-     * 内存映射跟踪章节重试次数（服务重启后重置）
+     * 内存映射跟踪章节重试次数（服务重启后由 init() 从 DB 恢复）
      */
     private static final Map<Long, Integer> retryCounterMap = new ConcurrentHashMap<>();
 
@@ -70,6 +75,28 @@ public class MultiAgentTranslationService {
     private final RagTranslationService ragTranslationService;
     private final AiGlossaryService aiGlossaryService;
     private final TranslationPostProcessingService postProcessingService;
+
+    /**
+     * 启动时从数据库恢复重试计数
+     */
+    @PostConstruct
+    public void init() {
+        try {
+            List<CollabChapterTask> chaptersWithRetries = chapterTaskMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CollabChapterTask>()
+                            .gt(CollabChapterTask::getRetryCount, 0)
+                            .eq(CollabChapterTask::getDeleted, 0)
+            );
+            for (CollabChapterTask chapter : chaptersWithRetries) {
+                retryCounterMap.put(chapter.getId(), chapter.getRetryCount());
+            }
+            if (!chaptersWithRetries.isEmpty()) {
+                log.info("从数据库恢复 {} 个章节的重试计数", chaptersWithRetries.size());
+            }
+        } catch (Exception e) {
+            log.warn("初始化重试计数失败: {}", e.getMessage());
+        }
+    }
 
     /**
      * 启动多 Agent 协作翻译
@@ -270,7 +297,10 @@ public class MultiAgentTranslationService {
             } else {
                 chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
                 chapter.setReviewComment("翻译异常，等待重试（第 " + (retryCount + 1) + " 次）: " + e.getMessage());
+                // 指数退避，避免立即重试
+                sleepWithBackoff(retryCount, e);
             }
+            chapter.setRetryCount(retryCount);
             chapterTaskMapper.updateById(chapter);
             return false;
         }
@@ -298,7 +328,8 @@ public class MultiAgentTranslationService {
             // 增加重试计数并回退状态
             incrementRetryCount(chapter);
             chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
-            chapter.setReviewComment("翻译中断，自动重试（第 " + (retryCount + 1) + " 次）");
+            chapter.setReviewComment("翻译中断，自动重试（第 " + (retryCount + 2) + " 次）");
+            chapter.setRetryCount(retryCount + 1);
             chapterTaskMapper.updateById(chapter);
             log.info("章节 {} 回退到 UNASSIGNED，准备重试", chapter.getId());
         }
@@ -316,6 +347,60 @@ public class MultiAgentTranslationService {
      */
     private void incrementRetryCount(CollabChapterTask chapter) {
         retryCounterMap.merge(chapter.getId(), 1, Integer::sum);
+    }
+
+    /**
+     * 定时清理卡在 TRANSLATING 状态的章节（每 5 分钟执行一次）
+     */
+    @Scheduled(fixedRate = 300000)
+    public void cleanupStuckChapters() {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
+        List<CollabChapterTask> stuckChapters = chapterTaskMapper.findByStatusAndUpdateTimeBefore(
+                ChapterTaskStatus.TRANSLATING.getValue(), cutoff);
+
+        if (stuckChapters.isEmpty()) {
+            return;
+        }
+
+        log.info("定时清理: 发现 {} 个卡住超过 30 分钟的章节", stuckChapters.size());
+        for (CollabChapterTask chapter : stuckChapters) {
+            int retryCount = getRetryCount(chapter);
+            if (retryCount >= MAX_RETRY_COUNT) {
+                chapter.setStatus(ChapterTaskStatus.REJECTED.getValue());
+                chapter.setReviewComment("翻译超时（已重试 " + retryCount + " 次），自动终止");
+                log.info("定时清理: 章节 {} 已达到最大重试次数，标记为 REJECTED", chapter.getId());
+            } else {
+                incrementRetryCount(chapter);
+                chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+                chapter.setReviewComment("翻译超时，自动重试（第 " + (retryCount + 1) + " 次）");
+                chapter.setRetryCount(retryCount + 1);
+                log.info("定时清理: 章节 {} 回退到 UNASSIGNED", chapter.getId());
+            }
+            chapterTaskMapper.updateById(chapter);
+        }
+    }
+
+    /**
+     * 指数退避等待，避免重试风暴
+     */
+    private void sleepWithBackoff(int retryCount, Exception e) {
+        long delay;
+        String msg = e.getMessage();
+        boolean isRateLimited = msg != null && (msg.contains("429") || msg.contains("rate limit") || msg.contains("Too Many Requests"));
+
+        if (isRateLimited) {
+            delay = Math.max(5000, RETRY_BASE_DELAY_MS * (1L << retryCount));
+        } else {
+            long baseDelay = RETRY_BASE_DELAY_MS * (1L << retryCount);
+            long jitter = (long) (Math.random() * baseDelay * 0.5);
+            delay = baseDelay + jitter;
+        }
+        delay = Math.min(delay, RETRY_MAX_DELAY_MS);
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
