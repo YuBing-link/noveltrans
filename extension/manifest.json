@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "NovelTrans - 专业小说翻译",
+  "name": "NovelTrans",
   "version": "1.0.0",
-  "description": "NovelTrans 专业翻译插件，支持网页翻译、阅读模式和选中文本翻译。",
+  "description": "Professional novel translation plugin.",
 
   "icons": {
     "16": "src/assets/icons/icon16.png",
@@ -24,6 +24,7 @@
       "matches": ["<all_urls>"],
       "js": [
         "src/lib/browser-polyfill.js",
+        "src/lib/i18n.js",
         "src/lib/config.js",
         "src/lib/purify.js",
         "src/lib/Readability.js",
@@ -67,7 +68,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["src/assets/icons/*", "src/options/reader-template.html", "src/options/welcome.html", "src/options/welcome.js", "src/content/reader-styles.css", "src/content/selection-styles.css", "src/content/auth-sync.js"],
+      "resources": ["src/assets/icons/*", "src/options/reader-template.html", "src/options/welcome.html", "src/options/welcome.js", "src/content/reader-styles.css", "src/content/selection-styles.css", "src/content/auth-sync.js", "locales/zh/messages.json", "locales/en/messages.json", "src/lib/i18n.js"],
       "matches": ["<all_urls>"]
     }
   ]

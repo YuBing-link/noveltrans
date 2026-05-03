@@ -271,13 +271,15 @@ CREATE TABLE IF NOT EXISTS `collab_chapter_task` (
     `assigned_time` DATETIME DEFAULT NULL COMMENT '分配时间',
     `submitted_time` DATETIME DEFAULT NULL COMMENT '提交时间',
     `reviewed_time` DATETIME DEFAULT NULL COMMENT '审核时间',
+    `retry_count` INT NOT NULL DEFAULT 0 COMMENT '自动重试次数',
     `completed_time` DATETIME DEFAULT NULL COMMENT '完成时间',
     `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (`id`),
     INDEX `idx_chapter_tenant_project` (`tenant_id`, `project_id`),
     INDEX `idx_chapter_assignee` (`assignee_id`),
     INDEX `idx_chapter_status` (`status`),
-    INDEX `idx_chapter_project_number` (`project_id`, `chapter_number`)
+    INDEX `idx_chapter_project_number` (`project_id`, `chapter_number`),
+    INDEX `idx_chapter_status_update` (`status`, `update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='章节任务表';
 
 -- ==================== 协作评论表 ====================

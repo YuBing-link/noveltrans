@@ -556,11 +556,22 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         List<CollabProjectMember> pagedMembers = fromIndex < total
                 ? allMembers.subList(fromIndex, toIndex)
                 : List.of();
+
+        // 批量加载关联用户，避免 N+1
+        java.util.Set<Long> userIds = new java.util.HashSet<>();
+        for (CollabProjectMember m : pagedMembers) {
+            if (m.getUserId() != null) userIds.add(m.getUserId());
+        }
+        java.util.Map<Long, User> userMap = new java.util.HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(userIds);
+            for (User user : users) {
+                userMap.put(user.getId(), user);
+            }
+        }
+
         List<ProjectMemberResponse> responseList = pagedMembers.stream()
-                .map(m -> {
-                    User user = userMapper.selectById(m.getUserId());
-                    return toMemberResponse(m, user);
-                })
+                .map(m -> toMemberResponse(m, userMap.get(m.getUserId())))
                 .collect(Collectors.toList());
         return PageResponse.of(page, pageSize, total, responseList);
     }
@@ -637,7 +648,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         }
 
         // 设置成员数
-        int memberCount = collabProjectMemberMapper.selectByProjectId(project.getId()).size();
+        int memberCount = collabProjectMemberMapper.countByProjectId(project.getId());
         resp.setMemberCount(memberCount);
 
         return resp;

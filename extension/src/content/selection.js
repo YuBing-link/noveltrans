@@ -130,7 +130,7 @@ class SelectionTranslator {
 
         const text = document.createElement('span');
         text.className = 'button-text';
-        text.textContent = '翻译';
+        text.textContent = typeof NovelTransI18n !== 'undefined' ? NovelTransI18n.t('translate_webpage') : '翻译';
 
         this.translationButton.appendChild(icon);
         this.translationButton.appendChild(text);
@@ -482,11 +482,11 @@ class SelectionTranslator {
             this.resetTranslationState();
 
             if (error.message && error.message.includes('Could not establish connection')) {
-                this.showError('翻译服务暂时不可用，请刷新页面');
+                this.showError(NovelTransI18n.t('cannot_communicate'));
             } else if (error.message && error.message.includes('超时')) {
                 this.showError('翻译超时，请稍后重试');
             } else {
-                this.showError('翻译失败：' + error.message);
+                this.showError(NovelTransI18n.t('reader_error') + error.message);
             }
         }
     }
@@ -550,11 +550,11 @@ class SelectionTranslator {
             // 加载状态 HTML
             contentHtml = `
             <div class="selection-result-header">
-                <span class="header-title">翻译中...</span>
+                <span class="header-title">${NovelTransI18n.t('translating')}</span>
             </div>
             <div class="selection-loading">
                 <div class="selection-spinner"></div>
-                <span>正在翻译，请稍候...</span>
+                <span>${NovelTransI18n.t('translating')}</span>
             </div>
             `;
         } else {
@@ -581,8 +581,8 @@ class SelectionTranslator {
 
             contentHtml = `
             <div class="selection-result-header">
-                <span class="header-title">翻译结果</span>
-                <button class="header-close" title="关闭">
+                <span class="header-title">${NovelTransI18n.t('translation_text')}</span>
+                <button class="header-close" title="${NovelTransI18n.t('close')}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -591,7 +591,7 @@ class SelectionTranslator {
             </div>
             ${bilingualContent}
             <div class="selection-result-footer">
-                <span>${data.bilingual ? '双语对照' : '译文'}</span>
+                <span>${data.bilingual ? NovelTransI18n.t('bilingual_mode') : NovelTransI18n.t('translation_text')}</span>
                 <span>字数：${data.original ? data.original.length : 0}</span>
             </div>
             `;

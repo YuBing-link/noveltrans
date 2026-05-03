@@ -114,6 +114,10 @@ public class TranslationService {
                     userLevelThrottledTranslationClient, postProcessingService, userId, null);
             String result = pipeline.executeFast(combined, target, mode);
             if (result == null || result.trim().isEmpty()) {
+                if (userId != null) {
+                    String modeName = req.getMode() != null ? req.getMode() : "fast";
+                    quotaService.refundChars(userId, combined.length(), modeName);
+                }
                 return new SelectionTranslateResponse(false, mode.getName(), "翻译失败：返回结果为空");
             }
             // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
@@ -121,6 +125,10 @@ public class TranslationService {
             return new SelectionTranslateResponse(true, mode.getName(), sanitized);
         } catch (Exception e) {
             log.error("选中文本翻译失败：{}", e.getMessage(), e);
+            if (userId != null) {
+                String modeName = req.getMode() != null ? req.getMode() : "fast";
+                quotaService.refundChars(userId, combined.length(), modeName);
+            }
             return new SelectionTranslateResponse(false, mode.getName(), "翻译失败：服务器内部错误");
         }
     }
@@ -194,20 +202,41 @@ public class TranslationService {
         }
 
         // 文本分段
-        List<String> segments = TextSegmentationUtil.segmentByTextEngine(content, mode.getName());
+        List<String> segments;
+        try {
+            segments = TextSegmentationUtil.segmentByTextEngine(content, mode.getName());
+        } catch (Exception e) {
+            log.error("阅读器文本分段失败：{}", e.getMessage(), e);
+            if (userId != null) {
+                String modeName = req.getMode() != null ? req.getMode() : "fast";
+                quotaService.refundChars(userId, content.length(), modeName);
+            }
+            return new ReaderTranslateResponse(false, mode.getName(), "文本分段失败：服务器内部错误");
+        }
         if (segments.isEmpty()) {
+            if (userId != null) {
+                String modeName = req.getMode() != null ? req.getMode() : "fast";
+                quotaService.refundChars(userId, content.length(), modeName);
+            }
             return new ReaderTranslateResponse(false, mode.getName(), "段落为空");
         }
 
         // 并行翻译所有段落（复用全局线程池）
         // 阅读器模式默认使用 MTranServer，html=true
-        List<String> translatedSegments = translateSegmentsInParallel(segments, target, mode, true);
-
-        // 合并翻译结果并净化（XSS 防护）
-        String rawResult = String.join("", translatedSegments);
-        String combinedResult = TextCleaningUtil.sanitizeHtml(rawResult);
-        log.info("阅读器翻译完成，原文长度：{}，译文长度：{}", content.length(), combinedResult.length());
-        return new ReaderTranslateResponse(true, mode.getName(), combinedResult);
+        try {
+            List<String> translatedSegments = translateSegmentsInParallel(segments, target, mode, true);
+            String rawResult = String.join("", translatedSegments);
+            String combinedResult = TextCleaningUtil.sanitizeHtml(rawResult);
+            log.info("阅读器翻译完成，原文长度：{}，译文长度：{}", content.length(), combinedResult.length());
+            return new ReaderTranslateResponse(true, mode.getName(), combinedResult);
+        } catch (Exception e) {
+            log.error("阅读器翻译失败：{}", e.getMessage(), e);
+            if (userId != null) {
+                String modeName = req.getMode() != null ? req.getMode() : "fast";
+                quotaService.refundChars(userId, content.length(), modeName);
+            }
+            return new ReaderTranslateResponse(false, mode.getName(), "翻译失败：服务器内部错误");
+        }
     }
 
     /**
@@ -403,13 +432,12 @@ public class TranslationService {
                     });
                 }
 
-                // 心跳线程：每 30 秒发送一次心跳，防止 SSE 连接超时断开
-                var heartbeatDone = new java.util.concurrent.CountDownLatch(1);
+                // 心跳线程：每 30 秒发送一次心跳，使用注册表检测 emitter 是否仍然活跃
+                String emitterId = SseEmitterUtil.registerEmitter(emitter);
                 Thread.startVirtualThread(() -> {
-                    while (true) {
+                    while (SseEmitterUtil.isEmitterActive(emitterId)) {
                         try {
-                            boolean done = heartbeatDone.await(30, java.util.concurrent.TimeUnit.SECONDS);
-                            if (done) break;
+                            Thread.sleep(30_000);
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             break;
@@ -425,15 +453,15 @@ public class TranslationService {
 
                 log.info("[SSE流式翻译] 所有翻译已完成，发送 [DONE] 信号");
 
-                // 翻译完成，停止心跳
-                heartbeatDone.countDown();
-
                 SseEmitterUtil.sendDone(emitter);
                 SseEmitterUtil.complete(emitter);
 
             } catch (Exception e) {
                 // 翻译失败，触发心跳停止
                 log.error("网页翻译失败：{}", e.getMessage(), e);
+                if (userId != null) {
+                    quotaService.refundChars(userId, totalChars, quotaMode);
+                }
                 SseEmitterUtil.sendError(emitter, "翻译失败：服务器内部错误");
                 SseEmitterUtil.complete(emitter);
             }
@@ -546,6 +574,10 @@ public class TranslationService {
 
             } catch (Exception e) {
                 log.error("文本流式翻译失败：{}", e.getMessage(), e);
+                Long currentUserId = userId;
+                if (currentUserId != null) {
+                    quotaService.refundChars(currentUserId, text.length(), modeString);
+                }
                 SseEmitterUtil.sendError(emitter, "翻译失败：服务器内部错误");
                 SseEmitterUtil.complete(emitter);
             }

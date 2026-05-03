@@ -115,19 +115,19 @@ function updateTranslateButton() {
 
   switch (currentPageStatus) {
     case PageStatus.TRANSLATED_SHOWING_TRANSLATION:
-      translateBtnText.textContent = '显示原文';
+      translateBtnText.textContent = NovelTransI18n.t('show_original');
       break;
     case PageStatus.TRANSLATED_SHOWING_ORIGINAL:
-      translateBtnText.textContent = '显示译文';
+      translateBtnText.textContent = NovelTransI18n.t('show_translation');
       break;
     case PageStatus.ORIGINAL:
-      translateBtnText.textContent = '开始翻译';
+      translateBtnText.textContent = NovelTransI18n.t('start_translate');
       break;
     case PageStatus.TRANSLATING:
-      translateBtnText.textContent = '翻译中...';
+      translateBtnText.textContent = NovelTransI18n.t('translating');
       break;
     default:
-      translateBtnText.textContent = '开始翻译';
+      translateBtnText.textContent = NovelTransI18n.t('start_translate');
   }
 }
 
@@ -219,9 +219,6 @@ async function handleTranslate() {
   pendingTranslation = true;
 
   try {
-    // 根据当前按钮文本确定用户意图
-    const buttonText = document.querySelector('#btn-translate .btn-text')?.textContent;
-
     if (currentPageStatus === PageStatus.ORIGINAL) {
       // 开始翻译
       console.log('🚀 开始翻译操作');
@@ -315,7 +312,7 @@ async function handleTranslate() {
         pendingTranslation = false;
       }, 2000);
 
-    } else if (buttonText === '显示原文' || currentPageStatus === PageStatus.TRANSLATED_SHOWING_TRANSLATION) {
+    } else if (currentPageStatus === PageStatus.TRANSLATED_SHOWING_TRANSLATION) {
       // 切换到显示原文
       console.log('切换到显示原文');
 
@@ -342,7 +339,7 @@ async function handleTranslate() {
 
       pendingTranslation = false;
 
-    } else if (buttonText === '显示译文' || currentPageStatus === PageStatus.TRANSLATED_SHOWING_ORIGINAL) {
+    } else if (currentPageStatus === PageStatus.TRANSLATED_SHOWING_ORIGINAL) {
       // 切换到显示译文
       console.log('切换到显示译文');
 
@@ -556,6 +553,21 @@ function bindEvents() {
     });
   }
 
+  // 语言切换按钮
+  const btnLangToggle = document.getElementById('btn-lang-toggle');
+  if (btnLangToggle) {
+    btnLangToggle.addEventListener('click', async function() {
+      const currentLang = NovelTransI18n.get();
+      const newLang = currentLang === 'zh' ? 'en' : 'zh';
+      NovelTransI18n.set(newLang, () => {
+        NovelTransI18n.apply();
+        updateTranslateButton();
+        updateLoginButtonState();
+        updateLangToggleIcon(newLang);
+      });
+    });
+  }
+
   // 登录按钮
   const loginBtn = document.getElementById('btn-login');
   if (loginBtn) {
@@ -704,7 +716,7 @@ async function updateLoginButtonState() {
   const isLoggedIn = await checkLoginState();
   if (isLoggedIn) {
     loginBtn.classList.add('logged-in');
-    loginBtn.title = '用户中心';
+    loginBtn.title = NovelTransI18n.t('user_center');
     // 登录后启用专家模式开关
     const expertCheck = document.getElementById('expert-mode-check');
     if (expertCheck) {
@@ -712,7 +724,7 @@ async function updateLoginButtonState() {
     }
   } else {
     loginBtn.classList.remove('logged-in');
-    loginBtn.title = '登录';
+    loginBtn.title = NovelTransI18n.t('login');
     // 未登录时禁用专家模式开关
     const expertCheck = document.getElementById('expert-mode-check');
     if (expertCheck) {
@@ -738,6 +750,13 @@ function getLanguageNameByCode(code) {
     'ru': 'Русский'
   };
   return langMap[code] || code;
+}
+
+function updateLangToggleIcon(lang) {
+  const langIcon = document.getElementById('lang-icon');
+  if (langIcon) {
+    langIcon.textContent = lang === 'zh' ? '🌐' : '🇺🇸';
+  }
 }
 
 // 根据引擎 ID 获取引擎信息
@@ -797,7 +816,7 @@ async function handleReader() {
       // 显示错误信息
       const errorMsg = response?.error || response?.message || '未知错误';
       console.error('❌ 阅读模式激活失败:', errorMsg);
-      alert(`阅读模式激活失败：${errorMsg}`);
+      alert(NovelTransI18n.t('reader_error') + errorMsg);
     }
   } catch (error) {
     console.error('❌ 发送阅读模式命令失败:', error);
@@ -826,14 +845,14 @@ async function handleReader() {
           return;
         } else {
           const errorMsg = retryResponse?.error || retryResponse?.message || '未知错误';
-          alert(`阅读模式激活失败：${errorMsg}`);
+          alert(NovelTransI18n.t('reader_error') + errorMsg);
         }
       } catch (injectError) {
         console.error('动态注入失败:', injectError);
-        alert('无法与当前页面通信。请确保页面已完全加载，然后重试。\n\n注意：浏览器内部页面（如 chrome://、about:）和扩展页面不支持此功能。');
+        alert(NovelTransI18n.t('cannot_communicate'));
       }
     } else {
-      alert(`无法与当前页面通信。请刷新页面后重试：${error.message}`);
+      alert(NovelTransI18n.t('communicate_retry') + error.message);
     }
   }
 }
@@ -1019,6 +1038,12 @@ function showLanguageDropdown(anchorEl) {
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
+  // 初始化 i18n 并应用翻译
+  NovelTransI18n.init(() => {
+    NovelTransI18n.apply();
+    updateLangToggleIcon(NovelTransI18n.get());
+  });
+
   currentTabId = await getCurrentTabId();
   console.log('popup 已加载，当前 tabId:', currentTabId);
 

@@ -1,10 +1,10 @@
-﻿<!-- settings.html -->
+<!-- settings.html -->
 <!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Extreme Translator 鈥?璁剧疆</title>
+  <title>NovelTrans - 设置</title>
   <style>  :root{
     --bg:#f5f4ed;
     --card:#faf9f5;
@@ -47,23 +47,23 @@
   textarea{width:100%;min-height:100px;padding:12px;border-radius:10px;border:1px solid var(--border);font-family:inherit;font-size:14px;resize:vertical}
   textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(201,100,66,0.1);outline:none}
   .export-area{display:flex;gap:10px}</style>
-  <!-- 鍔犺浇閰嶇疆鏂囦欢 -->
   <script src="../lib/browser-polyfill.js"></script>
   <script src="../lib/config.js"></script>
+  <script src="../lib/i18n.js"></script>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>璁剧疆</h1>
-      <div class="muted">Extreme Translator 鈥?閰嶇疆涓績</div>
+      <h1 data-i18n="settings">设置</h1>
+      <div class="muted" data-i18n="config_center">配置中心</div>
     </header>
 
     <section class="card">
       <div class="grid">
         <div>
-          <label>鑷姩缈昏瘧</label>
+          <label data-i18n="auto_translate">自动翻译</label>
           <div class="row">
-            <div class="small muted">褰撴娴嬪埌閫変腑鏂囨湰鍚庤嚜鍔ㄥ彂璧风炕璇?/div>
+            <div class="small muted" data-i18n="auto_translate_desc">当检测到选中文本后自动发起翻译</div>
             <div style="margin-left:auto">
               <label class="switch">
                 <input type="checkbox" id="autoTranslate">
@@ -74,9 +74,9 @@
         </div>
 
         <div>
-          <label>鏄剧ず闊宠瘧 / 娉ㄩ煶</label>
+          <label data-i18n="show_translit">显示音译/注音</label>
           <div class="row">
-            <div class="small muted">鍦ㄧ炕璇戠粨鏋滀腑闄勫姞闊宠瘧锛堝鏈夛級</div>
+            <div class="small muted" data-i18n="show_translit_desc">在翻译结果中附加音译（如有）</div>
             <div style="margin-left:auto">
               <label class="switch">
                 <input type="checkbox" id="showTranslit">
@@ -88,179 +88,51 @@
       </div>
 
       <div class="group">
-        <label>缈昏瘧璐ㄩ噺</label>
+        <label data-i18n="translation_quality">翻译质量</label>
         <select id="translationQuality">
-          <option value="fast">蹇€燂紙浣庢垚鏈級</option>
-          <option value="balanced">鍧囪　锛堥粯璁わ級</option>
-          <option value="high">楂樿川閲忥紙鑰楁椂/鎴愭湰楂橈級</option>
+          <option value="fast" data-i18n="quality_fast">快速（低成本）</option>
+          <option value="balanced" data-i18n="quality_balanced">均衡（默认）</option>
+          <option value="high" data-i18n="quality_high">高质量（耗时/成本高）</option>
         </select>
-        <div class="small muted" style="margin-top:8px">楂樿川閲忎細浣跨敤鏇村ぇ鐨勬ā鍨嬫垨鏇村涓婁笅鏂囥€?/div>
+        <div class="small muted" style="margin-top:8px" data-i18n="quality_high_desc">高质量会使用更大的模型或更多上下文。</div>
       </div>
 
       <div class="group">
-        <label>棣栭€夌炕璇戞湇鍔?/label>
+        <label data-i18n="preferred_service">首选翻译服务</label>
         <select id="preferredService">
-          <!-- 閫夐」灏嗕粠 config.js 鍔ㄦ€佺敓鎴?-->
+        </select>
+      </div>
+
+      <!-- 语言设置 -->
+      <div class="group">
+        <label data-i18n="language">语言</label>
+        <select id="uiLanguage">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
         </select>
       </div>
 
       <div class="controls">
-        <button id="btn-save">淇濆瓨璁剧疆</button>
-        <button class="secondary" id="btn-reset">鎭㈠榛樿</button>
+        <button id="btn-save" data-i18n="save_settings">保存设置</button>
+        <button class="secondary" id="btn-reset" data-i18n="restore_defaults">恢复默认</button>
       </div>
     </section>
 
     <section class="card">
-      <label>瀵煎嚭 / 瀵煎叆 璁剧疆</label>
+      <label data-i18n="export_import">导出 / 导入 设置</label>
       <div style="margin-top:8px" class="export-area">
-        <textarea id="exportArea" placeholder="鐐瑰嚮瀵煎嚭鍚庡皢鍦ㄦ澶勭湅鍒癑SON..."></textarea>
+        <textarea id="exportArea" data-i18n-placeholder="export_placeholder" placeholder="点击导出后将在此处看到JSON..."></textarea>
       </div>
       <div class="controls" style="margin-top:8px">
-        <button id="btn-export">瀵煎嚭鍒癑SON</button>
-        <button id="btn-import" class="secondary">浠嶫SON瀵煎叆</button>
+        <button id="btn-export" data-i18n="export_json">导出到JSON</button>
+        <button id="btn-import" class="secondary" data-i18n="import_json">从JSON导入</button>
       </div>
-      <div class="small muted" style="margin-top:8px">瀵煎叆浼氳鐩栧綋鍓嶈缃€傝璋ㄦ厧鎿嶄綔銆?/div>
+      <div class="small muted" style="margin-top:8px" data-i18n="import_warning">导入会覆盖当前设置。请谨慎操作。</div>
     </section>
 
-    <footer style="text-align:center;margin-top:8px;color:var(--muted)">Version 1.0.0</footer>
+    <footer style="text-align:center;margin-top:8px;color:var(--muted)"><span data-i18n="version">Version 1.0.0</span></footer>
   </div>
 
-  <script>
-    const DEFAULTS = {
-      autoTranslate: true,
-      showTransliteration: false,
-      translationQuality: 'balanced',
-      preferredService: 'openai'
-    };
-
-    const qs = (s)=>document.querySelector(s);
-
-    async function load() {
-      try {
-        const res = await browser.storage.local.get(['extremeTranslatorSettings']);
-        let settings = DEFAULTS;
-        if (res && res.extremeTranslatorSettings) {
-          try { settings = JSON.parse(res.extremeTranslatorSettings);}catch(e){}
-        }
-
-        qs('#autoTranslate').checked = !!settings.autoTranslate;
-        qs('#showTranslit').checked = !!settings.showTransliteration;
-        qs('#translationQuality').value = settings.translationQuality || DEFAULTS.translationQuality;
-        qs('#preferredService').value = settings.preferredService || DEFAULTS.preferredService;
-      } catch (e) {
-        console.warn('browser.storage 涓嶅彲鐢紝灏濊瘯 localStorage');
-        const s = localStorage.getItem('extremeTranslatorSettings');
-        if (s) {
-          const parsed = JSON.parse(s);
-          qs('#autoTranslate').checked = !!parsed.autoTranslate;
-          qs('#showTranslit').checked = !!parsed.showTransliteration;
-          qs('#translationQuality').value = parsed.translationQuality || DEFAULTS.translationQuality;
-          qs('#preferredService').value = parsed.preferredService || DEFAULTS.preferredService;
-        }
-      }
-    }
-
-    async function save() {
-      const settings = {
-        autoTranslate: qs('#autoTranslate').checked,
-        showTransliteration: qs('#showTranslit').checked,
-        translationQuality: qs('#translationQuality').value,
-        preferredService: qs('#preferredService').value
-      };
-
-      try {
-        await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(settings)});
-        alert('宸蹭繚瀛樿缃?);
-      } catch (e) {
-        localStorage.setItem('extremeTranslatorSettings', JSON.stringify(settings));
-        alert('宸蹭繚瀛樺埌 localStorage');
-      }
-    }
-
-    async function exportSettings() {
-      try {
-        // Promise-style: 浣跨敤 await 鏇夸唬鍥炶皟
-        const res = await browser.storage.local.get(['extremeTranslatorSettings']);
-        if (res && res.extremeTranslatorSettings) {
-          qs('#exportArea').value = res.extremeTranslatorSettings;
-        } else if (localStorage.getItem('extremeTranslatorSettings')) {
-          qs('#exportArea').value = localStorage.getItem('extremeTranslatorSettings');
-        } else {
-          qs('#exportArea').value = JSON.stringify(DEFAULTS, null, 2);
-        }
-      } catch (e) {
-        qs('#exportArea').value = localStorage.getItem('extremeTranslatorSettings') || JSON.stringify(DEFAULTS, null, 2);
-      }
-    }
-
-    async function importSettings() {
-      const text = qs('#exportArea').value.trim();
-      if (!text) { alert('璇疯緭鍏ユ垨绮樿创鍚堟硶鐨凧SON'); return; }
-      try {
-        const parsed = JSON.parse(text);
-        // Promise-style: 浣跨敤 await 鏇夸唬鍥炶皟
-        await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(parsed)});
-        alert('瀵煎叆鎴愬姛');
-        await load();
-      } catch (e) {
-        alert('JSON 鏍煎紡涓嶆纭?);
-      }
-    }
-
-    async function resetDefaults(){
-      if (!confirm('纭畾瑕佹仮澶嶉粯璁よ缃悧锛?)) return;
-      await browser.storage.local.set({extremeTranslatorSettings: JSON.stringify(DEFAULTS)});
-      await load();
-      alert('宸叉仮澶嶉粯璁?);
-    }
-
-    document.getElementById('btn-save').addEventListener('click', save);
-    document.getElementById('btn-reset').addEventListener('click', resetDefaults);
-    document.getElementById('btn-export').addEventListener('click', exportSettings);
-    document.getElementById('btn-import').addEventListener('click', importSettings);
-
-    // 鍔ㄦ€佺敓鎴愮炕璇戞湇鍔￠€夐」锛堜粠 config.js 璇诲彇锛?
-    document.addEventListener('DOMContentLoaded', async function() {
-      const select = document.getElementById('preferredService');
-
-      // 娓呯┖鐜版湁閫夐」
-      while (select.options.length > 0) {
-        select.remove(0);
-      }
-
-      // 浠?config.js 璇诲彇缈昏瘧鏈嶅姟鍒楄〃
-      if (window.translationServices) {
-        const services = window.translationServices;
-        services.forEach(service => {
-          const option = document.createElement('option');
-          option.value = service.id;
-          option.textContent = service.name;
-          select.appendChild(option);
-        });
-      }
-
-      // 鎭㈠鐢ㄦ埛閫夋嫨 - Promise-style: 浣跨敤 await 鏇夸唬鍥炶皟
-      try {
-        const res = await browser.storage.local.get(['extremeTranslatorSettings']);
-        if (res && res.extremeTranslatorSettings) {
-          try {
-            const settings = JSON.parse(res.extremeTranslatorSettings);
-            select.value = settings.preferredService || 'openai';
-          } catch (e) {
-            console.error('鍔犺浇璁剧疆澶辫触:', e);
-          }
-        }
-      } catch (e) {
-        console.error('鎭㈠鐢ㄦ埛閫夋嫨澶辫触:', e);
-      }
-    });
-
-    // 鍒濆鍖?
-    load();
-  </script>
-
+  <script src="options.js"></script>
 </body>
 </html>
-
-
-

@@ -319,7 +319,7 @@ class TranslationTeam:
                 role="user",
                 content=(
                     f"请将以下{self.source_lang}文本翻译为{self.target_lang}：\n\n"
-                    f"---\n{text}\n---"
+                    f"<user_input>\n{text}\n</user_input>"
                 ),
             )
             # Broadcast to all agents' memory
@@ -340,7 +340,7 @@ class TranslationTeam:
             msg_review = Msg(
                 name="User",
                 role="user",
-                content=f"以下是初步译文，请检查术语一致性：\n\n{translation_text}",
+                content=f"以下是初步译文，请检查术语一致性：\n\n<user_input>\n{translation_text}\n</user_input>",
             )
             for agent in self._agents:
                 await agent.observe(msg_review)
@@ -360,8 +360,8 @@ class TranslationTeam:
                 role="user",
                 content=(
                     f"以下是初步译文和术语审校意见：\n\n"
-                    f"【初步译文】\n{translation_text}\n\n"
-                    f"【术语审校意见】\n{term_feedback}\n\n"
+                    f"<user_input>\n{translation_text}\n</user_input>\n\n"
+                    f"<terminologist_feedback>\n{term_feedback}\n</terminologist_feedback>\n\n"
                     f"请结合以上意见，输出最终润色后的完整译文。"
                 ),
             )

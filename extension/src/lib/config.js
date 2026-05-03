@@ -468,3 +468,25 @@ if (typeof self !== 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { GlobalConfig, languages, getFlagEmoji };
 }
+
+// 翻译引擎名称映射（用于 i18n 场景下动态替换）
+const ENGINE_NAME_I18N_MAP = {
+    'Google 翻译': 'engine_google',
+    '百度翻译': 'engine_baidu',
+    '有道翻译': 'engine_youdao',
+    'Microsoft 翻译': 'engine_microsoft',
+    'DeepL': 'engine_deepl',
+    'OpenAI (GPT)': 'engine_openai',
+    'DeepSeek': 'engine_deepseek'
+};
+
+function getTranslatedEngineName(id) {
+    if (typeof GlobalConfig !== 'undefined' && GlobalConfig.TRANSLATION_ENGINES && GlobalConfig.TRANSLATION_ENGINES[id]) {
+        const name = GlobalConfig.TRANSLATION_ENGINES[id].name;
+        if (typeof NovelTransI18n !== 'undefined' && ENGINE_NAME_I18N_MAP[name]) {
+            return NovelTransI18n.t(ENGINE_NAME_I18N_MAP[name]) || name;
+        }
+        return name;
+    }
+    return id;
+}

@@ -171,6 +171,10 @@ class ReaderModeManager {
             this.overlay = overlay;
             document.body.appendChild(this.overlay);
 
+            if (typeof NovelTransI18n !== 'undefined') {
+                NovelTransI18n.apply(this.overlay);
+            }
+
             console.log('[Reader] 模板加载成功');
 
             requestAnimationFrame(() => {
@@ -199,19 +203,19 @@ class ReaderModeManager {
         this.overlay.innerHTML = `
             <div class="reader-toolbar">
                 <div class="reader-toolbar-left">
-                    <button id="reader-back-btn" class="reader-back-button" title="退出阅读模式 (ESC)">
+                    <button id="reader-back-btn" class="reader-back-button" data-i18n-title="reader_back" title="退出阅读模式 (ESC)">
                         <i class="ri-arrow-left-line"></i>
                     </button>
-                    <div id="reader-title" class="reader-toolbar-title">阅读模式</div>
+                    <div id="reader-title" class="reader-toolbar-title" data-i18n="reader_mode">阅读模式</div>
                 </div>
                 <div class="reader-toolbar-right">
-                    <button id="reader-font-minus" class="reader-icon-button" title="减小字号">
+                    <button id="reader-font-minus" class="reader-icon-button" data-i18n-title="font_minus" title="减小字号">
                         <span class="font-label">A</span><span class="font-minus">⁻</span>
                     </button>
-                    <button id="reader-font-plus" class="reader-icon-button" title="增大字号">
+                    <button id="reader-font-plus" class="reader-icon-button" data-i18n-title="font_plus" title="增大字号">
                         <span class="font-label">A</span><span class="font-plus">⁺</span>
                     </button>
-                    <button id="reader-more-btn" class="reader-icon-button" title="更多选项">
+                    <button id="reader-more-btn" class="reader-icon-button" data-i18n-title="more_options" title="更多选项">
                         <i class="ri-more-2-fill"></i>
                     </button>
                 </div>
@@ -221,79 +225,79 @@ class ReaderModeManager {
             </div>
             <div id="reader-settings-panel" class="reader-settings-panel">
                 <div class="settings-section">
-                    <div class="settings-section-title">主题</div>
+                    <div class="settings-section-title" data-i18n="theme">主题</div>
                     <div class="theme-options">
-                        <div class="theme-option active" data-theme="light"><i class="ri-sun-line"></i><span>日间</span></div>
-                        <div class="theme-option" data-theme="sepia"><i class="ri-book-open-line"></i><span>护眼</span></div>
-                        <div class="theme-option" data-theme="eyecare"><i class="ri-leaf-line"></i><span>绿色</span></div>
-                        <div class="theme-option" data-theme="dark"><i class="ri-moon-line"></i><span>夜间</span></div>
-                        <div class="theme-option" data-theme="paper"><i class="ri-article-line"></i><span>纸质</span></div>
+                        <div class="theme-option active" data-theme="light"><i class="ri-sun-line"></i><span data-i18n="theme_light">日间</span></div>
+                        <div class="theme-option" data-theme="sepia"><i class="ri-book-open-line"></i><span data-i18n="theme_sepia">护眼</span></div>
+                        <div class="theme-option" data-theme="eyecare"><i class="ri-leaf-line"></i><span data-i18n="theme_eyecare">绿色</span></div>
+                        <div class="theme-option" data-theme="dark"><i class="ri-moon-line"></i><span data-i18n="theme_dark">夜间</span></div>
+                        <div class="theme-option" data-theme="paper"><i class="ri-article-line"></i><span data-i18n="theme_paper">纸质</span></div>
                     </div>
                 </div>
                 <div class="settings-section">
-                    <div class="settings-section-title">字体</div>
+                    <div class="settings-section-title" data-i18n="font_family">字体</div>
                     <div class="font-options">
-                        <div class="font-option active" data-font="serif"><span style="font-family: Georgia, serif;">衬线</span></div>
-                        <div class="font-option" data-font="sans"><span style="font-family: -apple-system, sans-serif;">无衬线</span></div>
-                        <div class="font-option" data-font="kai"><span style="font-family: KaiTi, serif;">楷体</span></div>
+                        <div class="font-option active" data-font="serif"><span style="font-family: Georgia, serif;" data-i18n="font_serif">衬线</span></div>
+                        <div class="font-option" data-font="sans"><span style="font-family: -apple-system, sans-serif;" data-i18n="font_sans">无衬线</span></div>
+                        <div class="font-option" data-font="kai"><span style="font-family: KaiTi, serif;" data-i18n="font_kai">楷体</span></div>
                     </div>
                 </div>
                 <div class="settings-section">
-                    <div class="settings-section-title">字号</div>
+                    <div class="settings-section-title" data-i18n="font_size">字号</div>
                     <div class="slider-control">
                         <input type="range" id="font-size-range" min="14" max="32" step="1" value="${this.readingPreferences.fontSize}">
                         <div class="slider-value"><span id="font-size-value">${this.readingPreferences.fontSize}px</span></div>
                     </div>
                 </div>
                 <div class="settings-section">
-                    <div class="settings-section-title">行距</div>
+                    <div class="settings-section-title" data-i18n="line_height">行距</div>
                     <div class="slider-control">
                         <input type="range" id="line-height-range" min="1.2" max="2.5" step="0.1" value="${this.readingPreferences.lineHeight}">
                         <div class="slider-value"><span id="line-height-value">${this.readingPreferences.lineHeight}</span></div>
                     </div>
                 </div>
                 <div class="settings-section">
-                    <div class="settings-section-title">内容宽度</div>
+                    <div class="settings-section-title" data-i18n="content_width">内容宽度</div>
                     <div class="slider-control">
                         <input type="range" id="max-width-range" min="600" max="900" step="20" value="${this.readingPreferences.maxWidth}">
                         <div class="slider-value"><span id="max-width-value">${this.readingPreferences.maxWidth}px</span></div>
                     </div>
                 </div>
                 <div class="settings-section">
-                    <div class="settings-section-title">对齐</div>
+                    <div class="settings-section-title" data-i18n="alignment">对齐</div>
                     <div class="align-options">
                         <div class="align-option" data-align="left"><i class="ri-align-left"></i></div>
                         <div class="align-option active" data-align="justify"><i class="ri-align-justify"></i></div>
                     </div>
                     <label class="checkbox-label">
                         <input type="checkbox" id="first-indent-check">
-                        <span>首行缩进</span>
+                        <span data-i18n="first_indent">首行缩进</span>
                     </label>
                 </div>
                 <div class="settings-divider"></div>
                 <div class="settings-section">
-                    <button id="reader-tts-btn" class="settings-action-btn"><i class="ri-volume-up-line"></i><span>开始朗读</span></button>
-                    <button id="reader-toc-btn" class="settings-action-btn"><i class="ri-menu-2-line"></i><span>目录</span></button>
-                    <button id="reader-bookmark-btn" class="settings-action-btn"><i class="ri-bookmark-line"></i><span>书签</span></button>
+                    <button id="reader-tts-btn" class="settings-action-btn"><i class="ri-volume-up-line"></i><span data-i18n="start_tts">开始朗读</span></button>
+                    <button id="reader-toc-btn" class="settings-action-btn"><i class="ri-menu-2-line"></i><span data-i18n="table_of_contents">目录</span></button>
+                    <button id="reader-bookmark-btn" class="settings-action-btn"><i class="ri-bookmark-line"></i><span data-i18n="bookmark">书签</span></button>
                 </div>
             </div>
             <div class="reader-backdrop" id="settings-backdrop"></div>
             <div class="reader-backdrop" id="toc-backdrop"></div>
             <div id="reader-toc-sidebar" class="reader-toc-sidebar">
                 <div class="toc-header">
-                    <span class="toc-title">目录</span>
+                    <span class="toc-title" data-i18n="table_of_contents">目录</span>
                     <button id="toc-close-btn" class="toc-close-btn"><i class="ri-close-line"></i></button>
                 </div>
                 <div id="toc-content" class="toc-content"></div>
             </div>
             <!-- 翻译按钮（内容区底部居中） -->
-            <button id="reader-translate-btn" class="reader-translate-fab" title="翻译文章">
+            <button id="reader-translate-btn" class="reader-translate-fab" data-i18n-title="translate_article" title="翻译文章">
                 <i class="ri-translate-line"></i>
-                <span>翻译</span>
+                <span data-i18n="translate_webpage">翻译</span>
             </button>
-            <button id="reader-switch-language" class="reader-translate-fab" style="display:none;" title="切换原文/译文">
+            <button id="reader-switch-language" class="reader-translate-fab" style="display:none;" data-i18n-title="switch_language" title="切换原文/译文">
                 <i class="ri-translate"></i>
-                <span id="reader-lang-text">译文</span>
+                <span id="reader-lang-text" data-i18n="translation_text">译文</span>
             </button>
             <div id="reader-content" class="reader-content-container">
                 <div class="loading-container">
@@ -303,7 +307,7 @@ class ReaderModeManager {
                         <div class="spinner-ring"></div>
                         <div class="spinner-ring"></div>
                     </div>
-                    <div class="loading-text">正在提取文章内容...</div>
+                    <div class="loading-text" data-i18n="loading_content">正在提取文章内容...</div>
                 </div>
             </div>
             <div id="reader-image-lightbox" class="reader-image-lightbox">
@@ -313,6 +317,10 @@ class ReaderModeManager {
         `;
 
         document.body.appendChild(this.overlay);
+
+        if (typeof NovelTransI18n !== 'undefined') {
+            NovelTransI18n.apply(this.overlay);
+        }
 
         requestAnimationFrame(() => {
             this.bindEvents();

@@ -56,13 +56,14 @@ def build_prompt(
 
 
 def _format_glossary(terms: list[dict[str, str]] | None) -> str:
+    import html
     if not terms:
         return "（无术语表）"
     lines = []
     for t in terms:
-        src = t.get("source", "")
-        tgt = t.get("target", "")
-        note = t.get("note", "")
+        src = html.escape(t.get("source", ""))
+        tgt = html.escape(t.get("target", ""))
+        note = html.escape(t.get("note", ""))
         line = f"  - {src} → {tgt}"
         if note:
             line += f"（备注：{note}）"
