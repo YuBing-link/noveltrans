@@ -165,7 +165,7 @@ New Translation Request
 
 ## ⚠️ Known Issues
 
-- **Chrome extension translation engine not yet connected** — The translation buttons in the Chrome extension (reader mode, webpage mode, selection mode) are currently silently failing: they do nothing and produce no error. The backend translation API endpoints are ready; the extension-side integration is pending.
+- **Chrome extension translation engine selection not connected** — When you select "Google Translate" or another engine in the Chrome extension popup, all translation still goes through the LLM-based translation engine. The engine selector UI works but the selected engine value is not wired to the actual translation request.
 
 ## 🗺️ Roadmap
 
