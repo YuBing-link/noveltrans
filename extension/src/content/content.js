@@ -579,21 +579,35 @@ class DOMTranslator {
 
     const sourceText = sourceNodes.map(n => n.textContent || '').join('');
 
+    // 为每个源节点创建对应的隐藏控制 span（用于切换原文/译文）
+    const controlSpans = [];
+    for (const node of sourceNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const ctrl = document.createElement('span');
+        ctrl.className = 'dom-trans-source-ctrl';
+        ctrl.hidden = !this.showBilingual;
+        ctrl.textContent = node.textContent;
+        node.replaceWith(ctrl);
+        controlSpans.push(ctrl);
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const ctrl = node;
+        ctrl.classList.add('dom-trans-source-ctrl');
+        ctrl.hidden = !this.showBilingual;
+        controlSpans.push(ctrl);
+      }
+    }
+
     const wrapperInfo = {
       sourceNodes,
       sourceText,
       container,
+      controlSpans,
       hidden: !this.showBilingual,
-      hiddenElements: [],
+      hiddenElements: controlSpans,
       sourceVisible: this.showBilingual,
       sourceSpan: null,
     };
     this._wrapperLookup.set(wrapper, wrapperInfo);
-
-    if (!this.showBilingual) {
-      wrapperInfo.hiddenElements = this._hideSourceNodes(sourceNodes);
-      wrapperInfo.sourceVisible = false;
-    }
     return true;
   }
 
@@ -618,115 +632,61 @@ class DOMTranslator {
   }
 
   /**
-   * 恢复原文显示
+   * 恢复原文显示（切换为仅显示原文模式）
+   * 显示源文本 span，隐藏译文 wrapper
    */
   showSource(wrapper) {
     const info = this._wrapperLookup.get(wrapper);
     if (!info) return;
 
-    // 如果有 sourceSpan（双语模式下创建的原文包裹），显示它
+    // 恢复源文本 span
+    const spans = info.controlSpans || info.hiddenElements;
+    if (spans) {
+      for (const span of spans) {
+        if (document.contains(span)) {
+          span.hidden = false;
+        }
+      }
+    }
+
+    // 隐藏译文 wrapper
+    try { wrapper.style.setProperty('display', 'none', 'important'); } catch {}
+
+    // 兼容旧的 sourceSpan
     if (info.sourceSpan && document.contains(info.sourceSpan)) {
       info.sourceSpan.hidden = false;
     }
 
-    // 如果有 hiddenElements 中的隐藏 span，恢复为文本
-    const hiddenElements = info.hiddenElements;
-    if (hiddenElements && hiddenElements.length > 0) {
-      const restoredNodes = [];
-      for (const el of hiddenElements) {
-        if (el instanceof HTMLSpanElement && el.hidden) {
-          const textNode = document.createTextNode(el.textContent);
-          restoredNodes.push(textNode);
-          try {
-            wrapper.parentNode?.insertBefore(textNode, wrapper);
-            el.remove();
-          } catch (e) {
-            console.warn(`[showSource] 恢复失败: ${e.message}`);
-          }
-        } else if (el.nodeType === Node.ELEMENT_NODE && el.hidden) {
-          try { el.hidden = false; } catch {}
-          restoredNodes.push(el);
-        }
-      }
-      this._wrapperLookup.set(wrapper, { ...info, hidden: false, hiddenElements: restoredNodes, sourceVisible: true });
-    } else {
-      this._wrapperLookup.set(wrapper, { ...info, hidden: false, sourceVisible: true });
-    }
+    this._wrapperLookup.set(wrapper, { ...info, hidden: true, sourceVisible: true });
   }
 
   /**
-   * 隐藏原文
+   * 隐藏原文（切换为仅显示译文模式）
+   * 隐藏源文本 span，确保译文 wrapper 可见
    */
   hideSource(wrapper) {
     const info = this._wrapperLookup.get(wrapper);
     if (!info) return;
 
-    // 双语模式下，原文应始终可见，不隐藏
-    if (this.showBilingual) {
-      this._wrapperLookup.set(wrapper, { ...info, hidden: false, sourceVisible: true });
-      return;
+    // 隐藏源文本 span
+    const spans = info.controlSpans || info.hiddenElements;
+    if (spans) {
+      for (const span of spans) {
+        if (document.contains(span)) {
+          span.hidden = true;
+        }
+      }
     }
 
-    const newHiddenElements = [];
+    // 确保译文 wrapper 可见
+    try { wrapper.style.display = ''; } catch {}
 
-    // 如果有 sourceSpan，隐藏它
+    // 兼容旧的 sourceSpan
     if (info.sourceSpan && document.contains(info.sourceSpan)) {
       info.sourceSpan.hidden = true;
-      newHiddenElements.push(info.sourceSpan);
-      this._wrapperLookup.set(wrapper, { ...info, hidden: true, hiddenElements: newHiddenElements, sourceVisible: false });
-      return;
     }
 
-    // 如果有 hiddenElements，隐藏其中的文本节点
-    const hiddenElements = info.hiddenElements;
-    if (hiddenElements && hiddenElements.length > 0) {
-      for (const el of hiddenElements) {
-        if (document.contains(el)) {
-          if (el.nodeType === Node.TEXT_NODE) {
-            const hiddenSpan = document.createElement('span');
-            hiddenSpan.hidden = true;
-            hiddenSpan.textContent = el.textContent;
-            try { el.replaceWith(hiddenSpan); } catch {}
-            newHiddenElements.push(hiddenSpan);
-          } else if (el.nodeType === Node.ELEMENT_NODE) {
-            try { el.hidden = true; } catch {}
-            newHiddenElements.push(el);
-          }
-        }
-      }
-      if (newHiddenElements.length > 0) {
-        this._wrapperLookup.set(wrapper, { ...info, hidden: true, hiddenElements: newHiddenElements, sourceVisible: false });
-        return;
-      }
-    }
-
-    // fallback: 原文是散落的文本节点，需要包裹成 span 才能控制
-    // 从 wrapper 前面向前查找原文本节点
-    let sibling = wrapper.previousSibling;
-    const parent = wrapper.parentNode;
-    const sourceText = info.sourceText;
-
-    while (sibling) {
-      const prev = sibling.previousSibling;
-      if (sibling.nodeType === Node.TEXT_NODE && sibling.textContent.trim()) {
-        // 查找原文本节点
-        if (sourceText && (sourceText.includes(sibling.textContent) || sibling.textContent.includes(sourceText) || sibling.textContent.trim() === sourceText.trim())) {
-          // 创建原文包裹 span
-          const sourceSpan = document.createElement('span');
-          sourceSpan.hidden = true;
-          sourceSpan.textContent = sibling.textContent;
-          try {
-            sibling.replaceWith(sourceSpan);
-            info.sourceSpan = sourceSpan;
-          } catch {}
-          newHiddenElements.push(sourceSpan);
-          break;
-        }
-      }
-      sibling = prev;
-    }
-
-    this._wrapperLookup.set(wrapper, { ...info, hidden: true, hiddenElements: newHiddenElements, sourceVisible: false });
+    this._wrapperLookup.set(wrapper, { ...info, hidden: false, sourceVisible: false });
   }
 
   /**
@@ -737,8 +697,20 @@ class DOMTranslator {
     this._wrapperLookup.forEach((info, wrapper) => {
       const separator = wrapper.querySelector(':scope > br');
       if (separator) separator.hidden = !this.showBilingual;
-      if (this.showBilingual) this.showSource(wrapper);
-      else this.hideSource(wrapper);
+      if (this.showBilingual) {
+        // 开启双语：显示源文本 span + 确保 wrapper 可见
+        const spans = info.controlSpans || info.hiddenElements;
+        if (spans) {
+          for (const span of spans) {
+            if (document.contains(span)) span.hidden = false;
+          }
+        }
+        try { wrapper.style.display = ''; } catch {}
+        this._wrapperLookup.set(wrapper, { ...info, hidden: false, sourceVisible: true });
+      } else {
+        // 关闭双语：隐藏源文本 span + 显示 wrapper（译文模式）
+        this.hideSource(wrapper);
+      }
     });
   }
 
@@ -1139,8 +1111,6 @@ class TranslationService {
 
                         const domTranslator = this.domTranslator;
 
-                        // 直接检查 DOM 实际状态：wrapper 是否可见 + 原文是否可见
-                        // 不依赖 _showingTranslation 标志，因为它可能和实际 DOM 不同步
                         let firstWrapperInfo = null;
                         let firstWrapper = null;
                         domTranslator._wrapperLookup.forEach((info, wrapper) => {
@@ -1155,35 +1125,65 @@ class TranslationService {
                             break;
                         }
 
-                        // 检查原文是否可见：通过 wrapper 内的隐藏 span 是否存在于 DOM 中
-                        const he = firstWrapperInfo.hiddenElements;
-                        const hasHiddenSpanInDOM = he && he.length > 0 && he.some(el => el instanceof HTMLSpanElement && el.hidden && document.contains(el));
-                        const cs = window.getComputedStyle(firstWrapper);
-                        const actualDisplay = cs.display;
-                        const inlineDisplay = firstWrapper.style.display;
-                        console.log(`[toggle] computedDisplay='${actualDisplay}', inlineDisplay='${inlineDisplay}', isConnected=${firstWrapper.isConnected}, hidden=${firstWrapperInfo.hidden}, sourceVisible=${firstWrapperInfo.sourceVisible}`);
-                        const wrapperVisible = actualDisplay !== 'none';
+                        // 检测当前显示状态：原文 / 双语 / 译文
+                        const spans = firstWrapperInfo.controlSpans || firstWrapperInfo.hiddenElements;
+                        const sourceVisible = spans && spans.length > 0 && spans.every(el => document.contains(el) && !el.hidden);
+                        const wrapperVisible = firstWrapper.isConnected && window.getComputedStyle(firstWrapper).display !== 'none';
 
-                        // 如果 wrapper 隐藏 → 显示原文，否则 → 切换到原文
-                        if (!wrapperVisible) {
-                            // 当前显示原文，切换到译文
-                            console.log('[toggle] 检测到当前显示原文，切换到译文');
-                            domTranslator._wrapperLookup.forEach((info, wrapper) => {
-                                wrapper.style.display = '';
-                                domTranslator.hideSource(wrapper);
-                            });
-                            domTranslator._showingTranslation = true;
+                        let currentState;
+                        if (sourceVisible && wrapperVisible) {
+                            currentState = 'bilingual';
+                        } else if (sourceVisible && !wrapperVisible) {
+                            currentState = 'original';
+                        } else if (!sourceVisible && wrapperVisible) {
+                            currentState = 'translation';
                         } else {
-                            // wrapper 可见，切换到原文
-                            console.log('[toggle] 当前 wrapper 可见，切换到原文');
-                            domTranslator._wrapperLookup.forEach((info, wrapper) => {
-                                wrapper.style.setProperty('display', 'none', 'important');
-                                domTranslator.showSource(wrapper);
-                            });
-                            domTranslator._showingTranslation = false;
+                            currentState = 'original'; // fallback
                         }
 
-                        const newMode = domTranslator._showingTranslation ? 'translation' : 'original';
+                        if (domTranslator.showBilingual) {
+                            // 双语模式：2状态循环 纯原文 ↔ 双语（原文+译文）
+                            if (currentState === 'original') {
+                                // 纯原文 → 双语
+                                console.log('[toggle] 双语模式: 纯原文 → 双语');
+                                domTranslator._wrapperLookup.forEach((info, wrapper) => {
+                                    domTranslator.showSource(wrapper);
+                                    try { wrapper.style.display = ''; } catch {}
+                                });
+                            } else {
+                                // 双语（或译文） → 纯原文
+                                console.log('[toggle] 双语模式: 双语/译文 → 纯原文');
+                                domTranslator._wrapperLookup.forEach((info, wrapper) => {
+                                    domTranslator.showSource(wrapper);
+                                });
+                            }
+                        } else {
+                            // 非双语模式：2状态循环 原文 ↔ 译文
+                            if (currentState === 'translation') {
+                                // 译文 → 原文
+                                console.log('[toggle] 非双语: 译文 → 原文');
+                                domTranslator._wrapperLookup.forEach((info, wrapper) => {
+                                    domTranslator.showSource(wrapper);
+                                });
+                                domTranslator._showingTranslation = false;
+                            } else {
+                                // 原文 → 译文
+                                console.log('[toggle] 非双语: 原文 → 译文');
+                                domTranslator._wrapperLookup.forEach((info, wrapper) => {
+                                    domTranslator.hideSource(wrapper);
+                                });
+                                domTranslator._showingTranslation = true;
+                            }
+                        }
+
+                        // 重新检测切换后的状态
+                        const newSpans = firstWrapperInfo.controlSpans || firstWrapperInfo.hiddenElements;
+                        const newSourceVisible = newSpans && newSpans.length > 0 && newSpans.every(el => document.contains(el) && !el.hidden);
+                        const newWrapperVisible = firstWrapper.isConnected && window.getComputedStyle(firstWrapper).display !== 'none';
+                        const newMode = newSourceVisible && newWrapperVisible ? 'bilingual' :
+                                       !newSourceVisible && newWrapperVisible ? 'translation' : 'original';
+
+                        domTranslator._showingTranslation = (newMode === 'translation' || newMode === 'bilingual');
                         console.log(`[toggle] 切换完成: ${newMode}`);
                         sendResponse({
                             success: true,
@@ -1242,7 +1242,7 @@ class TranslationService {
         });
     }
 
-    // 获取当前页面翻译状态 - 改进版状态检测
+    // 获取当前页面翻译状态
     getCurrentPageStatus() {
         try {
             // 新架构：平行 wrapper 策略
@@ -1257,17 +1257,28 @@ class TranslationService {
 
             // 有翻译 wrapper，使用 DOMTransEngine 状态判断
             if (wrappers.length > 0) {
-                const mode = this.domTranslator?.bilingual ? 'bilingual' : 'translation_only';
-                switch (mode) {
-                    case 'bilingual':
-                        return 'bilingual_mode';
-                    case 'original':
-                        return 'showing_original';
-                    case 'translation':
-                        return 'showing_translation';
-                    default:
-                        return 'bilingual_mode';
+                // 通过第一个 wrapper 的实际 DOM 状态判断
+                let firstWrapper = null;
+                let firstWrapperInfo = null;
+                if (this.domTranslator) {
+                    this.domTranslator._wrapperLookup.forEach((info, wrapper) => {
+                        if (!firstWrapperInfo) {
+                            firstWrapperInfo = info;
+                            firstWrapper = wrapper;
+                        }
+                    });
                 }
+
+                if (firstWrapper && firstWrapperInfo) {
+                    const spans = firstWrapperInfo.controlSpans || firstWrapperInfo.hiddenElements;
+                    const sourceVisible = spans && spans.length > 0 && spans.every(el => document.contains(el) && !el.hidden);
+                    const wrapperVisible = firstWrapper.isConnected && window.getComputedStyle(firstWrapper).display !== 'none';
+                    if (sourceVisible && wrapperVisible) return 'bilingual_mode';
+                    if (!sourceVisible && wrapperVisible) return 'showing_translation';
+                    return 'showing_original';
+                }
+
+                return this.domTranslator?.bilingual ? 'bilingual_mode' : 'showing_translation';
             }
 
             // 只有 .extreme-translated 标记，检查是否直接翻译（无 wrapper）
@@ -1660,8 +1671,13 @@ class TranslationService {
                 font-size: inherit;
                 line-height: inherit;
             }
+            .dom-trans-source-ctrl {
+                display: inline;
+                white-space: inherit;
+            }
             .dom-trans-wrapper[hidden] > .dom-trans-text,
-            .dom-trans-wrapper > br[hidden] {
+            .dom-trans-wrapper > br[hidden],
+            .dom-trans-source-ctrl[hidden] {
                 display: none;
             }
         `;
