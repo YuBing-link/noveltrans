@@ -90,9 +90,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (tenantId == null) {
                 tenantId = user.getTenantId();
             }
-            if (tenantId != null) {
-                TenantContext.setTenantId(tenantId);
-            }
+            // Always set tenant context (fallback to 0L to match DB DEFAULT 0)
+            TenantContext.setTenantId(tenantId != null ? tenantId : 0L);
 
         } catch (TokenExpiredException e) {
             logger.debug("JWT Token 已过期: {}", e.getMessage());

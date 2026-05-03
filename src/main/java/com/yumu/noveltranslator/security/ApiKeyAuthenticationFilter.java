@@ -72,10 +72,8 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Set tenant context for API Key auth
-        if (apiUser.getTenantId() != null) {
-            TenantContext.setTenantId(apiUser.getTenantId());
-        }
+        // Set tenant context for API Key auth (fallback to 0L to match DB DEFAULT 0)
+        TenantContext.setTenantId(apiUser.getTenantId() != null ? apiUser.getTenantId() : 0L);
 
         // 设置认证信息（使用 CustomUserDetails 以兼容 SecurityUtil）
         CustomUserDetails userDetails = new CustomUserDetails(apiUser);

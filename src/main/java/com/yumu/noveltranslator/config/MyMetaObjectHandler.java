@@ -21,9 +21,10 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
         this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
 
         Long tenantId = TenantContext.getTenantId();
-        if (tenantId != null) {
-            this.strictInsertFill(metaObject, "tenantId", Long.class, tenantId);
+        if (tenantId == null) {
+            tenantId = 0L;
         }
+        this.strictInsertFill(metaObject, "tenantId", Long.class, tenantId);
     }
 
     /**
