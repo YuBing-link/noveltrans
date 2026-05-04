@@ -117,7 +117,7 @@ class TranslationServiceStreamTest {
         void 无认证用户正常翻译() {
             SecurityContextHolder.clearContext();
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -178,7 +178,7 @@ class TranslationServiceStreamTest {
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
@@ -203,7 +203,7 @@ class TranslationServiceStreamTest {
             // No auth user, no quota check
             SecurityContextHolder.clearContext();
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn(null); // simulate failure
 
             SseEmitter emitter = service.webpageTranslateStream(req);
@@ -220,7 +220,7 @@ class TranslationServiceStreamTest {
 
             SecurityContextHolder.clearContext();
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"Expert translation\"}");
 
             SseEmitter emitter = service.webpageTranslateStream(req);
@@ -308,7 +308,7 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -353,7 +353,7 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -372,7 +372,7 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenThrow(new RuntimeException("connection timeout"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -410,7 +410,7 @@ class TranslationServiceStreamTest {
         @Test
         void 翻译失败时使用原文兜底() {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenThrow(new RuntimeException("engine failed"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -427,7 +427,7 @@ class TranslationServiceStreamTest {
         @Test
         void 阅读器模式html为true() {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -437,7 +437,7 @@ class TranslationServiceStreamTest {
 
             assertTrue(resp.getSuccess());
             // reader mode uses html=true for MTranServer
-            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true));
+            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true), anyList());
         }
     }
 }

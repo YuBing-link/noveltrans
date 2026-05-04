@@ -164,8 +164,7 @@ class CollabProjectServiceTest {
             User u2 = new User();
             u2.setId(2L);
             u2.setUsername("李四");
-            when(userMapper.selectById(1L)).thenReturn(u1);
-            when(userMapper.selectById(2L)).thenReturn(u2);
+            when(userMapper.selectBatchIds(anyCollection())).thenReturn(List.of(u1, u2));
 
             PageResponse<ProjectMemberResponse> result = collabProjectService.getMembers(1L, 1, 10);
 
@@ -182,7 +181,7 @@ class CollabProjectServiceTest {
             User u = new User();
             u.setId(1L);
             u.setUsername("张三");
-            when(userMapper.selectById(1L)).thenReturn(u);
+            when(userMapper.selectBatchIds(anyCollection())).thenReturn(List.of(u));
 
             PageResponse<ProjectMemberResponse> result = collabProjectService.getMembers(1L, 5, 10);
 

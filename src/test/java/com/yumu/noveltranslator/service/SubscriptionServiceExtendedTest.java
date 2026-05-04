@@ -210,12 +210,12 @@ class SubscriptionServiceExtendedTest {
                 when(stripeCustomerMapper.selectOne(any())).thenReturn(customer);
                 // stripeSubscriptionMapper.selectOne 返回已有订阅
                 when(stripeSubscriptionMapper.selectOne(any())).thenReturn(existingSub);
+                when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
 
                 subscriptionService.handleCheckoutSessionCompleted(event);
 
                 verify(stripeSubscriptionMapper, never()).insert(any());
-                verify(stripeSubscriptionMapper).updateById(argThat(s ->
-                        "evt_checkout456".equals(s.getLastWebhookEventId())));
+                verify(stripeSubscriptionMapper).update(isNull(), any());
             }
         }
     }
@@ -269,13 +269,14 @@ class SubscriptionServiceExtendedTest {
         void past_due状态不降级仅记录() {
             StripeSubscription localSub = buildLocalSub("sub_pastdue", "PRO");
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(localSub);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
 
             Subscription stripeSub = buildStripeSub("sub_pastdue", "past_due");
             Event event = buildUpdatedEvent(stripeSub, "evt_pastdue");
 
             subscriptionService.handleSubscriptionUpdated(event);
 
-            verify(stripeSubscriptionMapper).updateById(any());
+            verify(stripeSubscriptionMapper).update(isNull(), any());
             verify(userMapper, never()).updateById(any());
         }
 
@@ -283,13 +284,14 @@ class SubscriptionServiceExtendedTest {
         void paused状态不更改用户等级() {
             StripeSubscription localSub = buildLocalSub("sub_paused", "PRO");
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(localSub);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
 
             Subscription stripeSub = buildStripeSub("sub_paused", "paused");
             Event event = buildUpdatedEvent(stripeSub, "evt_paused");
 
             subscriptionService.handleSubscriptionUpdated(event);
 
-            verify(stripeSubscriptionMapper).updateById(any());
+            verify(stripeSubscriptionMapper).update(isNull(), any());
             verify(userMapper, never()).updateById(any());
         }
 
@@ -304,6 +306,7 @@ class SubscriptionServiceExtendedTest {
 
             StripeSubscription localSub = buildLocalSub("sub_trialing", "PRO");
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(localSub);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
 
             Subscription stripeSub = buildStripeSub("sub_trialing", "trialing");
             Event event = buildUpdatedEvent(stripeSub, "evt_trialing");
@@ -324,6 +327,7 @@ class SubscriptionServiceExtendedTest {
 
             StripeSubscription localSub = buildLocalSub("sub_unpaid", "PRO");
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(localSub);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
 
             Subscription stripeSub = buildStripeSub("sub_unpaid", "unpaid");
             Event event = buildUpdatedEvent(stripeSub, "evt_unpaid");
@@ -344,6 +348,7 @@ class SubscriptionServiceExtendedTest {
 
             StripeSubscription localSub = buildLocalSub("sub_reactivated", "PRO");
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(localSub);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
 
             Subscription stripeSub = buildStripeSub("sub_reactivated", "active");
             Event event = buildUpdatedEvent(stripeSub, "evt_reactivated");
@@ -495,6 +500,7 @@ class SubscriptionServiceExtendedTest {
             when(event.getId()).thenReturn("evt_upgrade");
 
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
 
             subscriptionService.handleSubscriptionUpdated(event);
 
@@ -544,6 +550,7 @@ class SubscriptionServiceExtendedTest {
             when(event.getId()).thenReturn("evt_nulllevel");
 
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
 
             subscriptionService.handleSubscriptionUpdated(event);
 

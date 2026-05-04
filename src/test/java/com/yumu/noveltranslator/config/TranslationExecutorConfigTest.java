@@ -56,16 +56,14 @@ class TranslationExecutorConfigTest {
             TranslationExecutorConfig config = new TranslationExecutorConfig();
             ExecutorService executor = config.translationExecutor();
 
-            CountDownLatch latch = new CountDownLatch(1);
-            // 使用 Thread.setDefaultUncaughtExceptionHandler 捕获
-            Thread.UncaughtExceptionHandler original = Thread.getDefaultUncaughtExceptionHandler();
-            try {
-                Thread.setDefaultUncaughtExceptionHandler((t, e) -> latch.countDown());
-                executor.submit(() -> { throw new RuntimeException("test"); });
-                assertTrue(latch.await(5, TimeUnit.SECONDS));
-            } finally {
-                Thread.setDefaultUncaughtExceptionHandler(original);
-            }
+            // 通过 Future 验证异常被传播，且 executor 没有崩溃
+            Future<?> future = executor.submit(() -> { throw new RuntimeException("test"); });
+            assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.SECONDS));
+
+            // executor 仍然可以执行新任务，说明异常没有导致线程池崩溃
+            Future<?> next = executor.submit(() -> "ok");
+            assertEquals("ok", next.get(5, TimeUnit.SECONDS));
+            executor.shutdown();
         }
 
         @Test
@@ -101,7 +99,7 @@ class TranslationExecutorConfigTest {
                     Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory()), semaphore);
 
             Future<?> future = bounded.submit(() -> {});
-            assertNotNull(future.get(5, TimeUnit.SECONDS));
+            assertNull(future.get(5, TimeUnit.SECONDS));
             bounded.shutdown();
         }
 
@@ -174,10 +172,6 @@ class TranslationExecutorConfigTest {
                 new TranslationExecutorConfig.BoundedExecutorService(
                     Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory()), semaphore);
 
-            // 消耗掉唯一的 permit
-            semaphore.acquire();
-            assertEquals(0, semaphore.availablePermits());
-
             CountDownLatch taskDone = new CountDownLatch(1);
             bounded.execute(taskDone::countDown);
             assertTrue(taskDone.await(5, TimeUnit.SECONDS));
@@ -194,16 +188,14 @@ class TranslationExecutorConfigTest {
                 new TranslationExecutorConfig.BoundedExecutorService(
                     Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory()), semaphore);
 
-            semaphore.acquire();
-            assertEquals(0, semaphore.availablePermits());
-
-            CountDownLatch taskAttempted = new CountDownLatch(1);
+            CountDownLatch taskDone = new CountDownLatch(1);
             bounded.execute(() -> {
                 try { throw new RuntimeException("fail"); }
-                finally { taskAttempted.countDown(); }
+                finally { taskDone.countDown(); }
             });
-            assertTrue(taskAttempted.await(5, TimeUnit.SECONDS));
+            assertTrue(taskDone.await(5, TimeUnit.SECONDS));
 
+            // 任务异常后 permit 应被释放
             assertEquals(1, semaphore.availablePermits());
             bounded.shutdown();
         }
@@ -215,13 +207,12 @@ class TranslationExecutorConfigTest {
                 new TranslationExecutorConfig.BoundedExecutorService(
                     Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory()), semaphore);
 
-            semaphore.acquire();
-            CountDownLatch taskAttempted = new CountDownLatch(1);
+            CountDownLatch taskDone = new CountDownLatch(1);
             Future<?> future = bounded.submit(() -> {
                 try { throw new IllegalStateException("submit fail"); }
-                finally { taskAttempted.countDown(); }
+                finally { taskDone.countDown(); }
             });
-            assertTrue(taskAttempted.await(5, TimeUnit.SECONDS));
+            assertTrue(taskDone.await(5, TimeUnit.SECONDS));
             assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.SECONDS));
             assertEquals(1, semaphore.availablePermits());
             bounded.shutdown();
@@ -234,8 +225,12 @@ class TranslationExecutorConfigTest {
                 new TranslationExecutorConfig.BoundedExecutorService(
                     Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory()), semaphore);
 
-            semaphore.acquire();
-            Future<String> future = bounded.submit(() -> { throw new RuntimeException("callable fail"); });
+            CountDownLatch taskDone = new CountDownLatch(1);
+            Future<String> future = bounded.submit(() -> {
+                try { throw new RuntimeException("callable fail"); }
+                finally { taskDone.countDown(); }
+            });
+            assertTrue(taskDone.await(5, TimeUnit.SECONDS));
             assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.SECONDS));
             assertEquals(1, semaphore.availablePermits());
             bounded.shutdown();
@@ -248,8 +243,12 @@ class TranslationExecutorConfigTest {
                 new TranslationExecutorConfig.BoundedExecutorService(
                     Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory()), semaphore);
 
-            semaphore.acquire();
-            Future<Integer> future = bounded.submit(() -> { throw new RuntimeException("submit result fail"); }, 42);
+            CountDownLatch taskDone = new CountDownLatch(1);
+            Future<Integer> future = bounded.submit(() -> {
+                try { throw new RuntimeException("submit result fail"); }
+                finally { taskDone.countDown(); }
+            }, 42);
+            assertTrue(taskDone.await(5, TimeUnit.SECONDS));
             assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.SECONDS));
             assertEquals(1, semaphore.availablePermits());
             bounded.shutdown();

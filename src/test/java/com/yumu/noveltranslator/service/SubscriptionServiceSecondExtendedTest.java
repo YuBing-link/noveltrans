@@ -1,6 +1,8 @@
 package com.yumu.noveltranslator.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.stripe.exception.StripeException;
+import com.stripe.param.SubscriptionUpdateParams;
 import com.stripe.model.Subscription;
 import com.stripe.model.SubscriptionItem;
 import com.stripe.model.SubscriptionItemCollection;
@@ -85,14 +87,14 @@ class SubscriptionServiceSecondExtendedTest {
         @Test
         void 空sessionId返回错误() {
             PaymentVerificationResponse resp = service.verifyCheckoutSession(null, 1L);
-            assertFalse(resp.getSuccess());
+            assertFalse(resp.isPaid());
             assertEquals("缺少 session_id 参数", resp.getMessage());
         }
 
         @Test
         void 空白sessionId返回错误() {
             PaymentVerificationResponse resp = service.verifyCheckoutSession("   ", 1L);
-            assertFalse(resp.getSuccess());
+            assertFalse(resp.isPaid());
         }
 
         @Test
@@ -106,7 +108,7 @@ class SubscriptionServiceSecondExtendedTest {
 
                 PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertFalse(resp.getSuccess());
+                assertFalse(resp.isPaid());
                 assertEquals("支付会话不属于当前用户", resp.getMessage());
             }
         }
@@ -131,9 +133,9 @@ class SubscriptionServiceSecondExtendedTest {
 
                 PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertTrue(resp.getSuccess());
+                assertTrue(resp.isPaid());
                 assertEquals("支付成功，订阅已激活", resp.getMessage());
-                assertEquals("active", resp.getSubscriptionStatus());
+                assertEquals("active", resp.getStatus());
             }
         }
 
@@ -154,8 +156,8 @@ class SubscriptionServiceSecondExtendedTest {
 
                 PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertTrue(resp.getSuccess());
-                assertEquals("pending", resp.getSubscriptionStatus());
+                assertTrue(resp.isPaid());
+                assertEquals("pending", resp.getStatus());
                 assertEquals("支付已确认，订阅正在激活中", resp.getMessage());
             }
         }
@@ -175,8 +177,8 @@ class SubscriptionServiceSecondExtendedTest {
 
                 PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertFalse(resp.getSuccess());
-                assertEquals("unpaid", resp.getSubscriptionStatus());
+                assertFalse(resp.isPaid());
+                assertEquals("unpaid", resp.getStatus());
                 assertEquals("支付尚未完成", resp.getMessage());
             }
         }
@@ -196,8 +198,8 @@ class SubscriptionServiceSecondExtendedTest {
 
                 PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertFalse(resp.getSuccess());
-                assertEquals("no_payment_required", resp.getSubscriptionStatus());
+                assertFalse(resp.isPaid());
+                assertEquals("no_payment_required", resp.getStatus());
             }
         }
 
@@ -205,11 +207,11 @@ class SubscriptionServiceSecondExtendedTest {
         void stripe异常返回失败() {
             try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
                 sessionStatic.when(() -> Session.retrieve("cs_test"))
-                        .thenThrow(new RuntimeException("Network error"));
+                        .thenThrow(mock(StripeException.class));
 
                 PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertFalse(resp.getSuccess());
+                assertFalse(resp.isPaid());
                 assertEquals("无法验证支付状态", resp.getMessage());
             }
         }
@@ -222,7 +224,7 @@ class SubscriptionServiceSecondExtendedTest {
     class CancelSubscriptionSuccessTests {
 
         @Test
-        void 成功取消订阅() {
+        void 成功取消订阅() throws StripeException {
             StripeSubscription sub = new StripeSubscription();
             sub.setId(1L);
             sub.setUserId(1L);
@@ -236,7 +238,7 @@ class SubscriptionServiceSecondExtendedTest {
             try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
                 Subscription mockStripeSub = mock(Subscription.class);
                 when(mockStripeSub.getCancelAtPeriodEnd()).thenReturn(true);
-                when(mockStripeSub.update(any())).thenReturn(mockStripeSub);
+                when(mockStripeSub.update(any(SubscriptionUpdateParams.class))).thenReturn(mockStripeSub);
                 subStatic.when(() -> Subscription.retrieve("sub_cancel")).thenReturn(mockStripeSub);
 
                 SubscriptionStatusResponse resp = service.cancelSubscription(1L);
@@ -249,7 +251,7 @@ class SubscriptionServiceSecondExtendedTest {
         }
 
         @Test
-        void trialing状态可以取消() {
+        void trialing状态可以取消() throws StripeException {
             StripeSubscription sub = new StripeSubscription();
             sub.setId(1L);
             sub.setUserId(1L);
@@ -262,7 +264,7 @@ class SubscriptionServiceSecondExtendedTest {
             try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
                 Subscription mockStripeSub = mock(Subscription.class);
                 when(mockStripeSub.getCancelAtPeriodEnd()).thenReturn(true);
-                when(mockStripeSub.update(any())).thenReturn(mockStripeSub);
+                when(mockStripeSub.update(any(SubscriptionUpdateParams.class))).thenReturn(mockStripeSub);
                 subStatic.when(() -> Subscription.retrieve("sub_trial_cancel")).thenReturn(mockStripeSub);
 
                 SubscriptionStatusResponse resp = service.cancelSubscription(1L);
@@ -297,7 +299,7 @@ class SubscriptionServiceSecondExtendedTest {
     class UpgradeSubscriptionIndirectTests {
 
         @Test
-        void 已有活跃订阅时升级而不是创建() {
+        void 已有活跃订阅时升级而不是创建() throws StripeException {
             StripeCustomer existing = new StripeCustomer();
             existing.setUserId(1L);
             existing.setStripeCustomerId("cus_test");
@@ -345,7 +347,7 @@ class SubscriptionServiceSecondExtendedTest {
                 SubscriptionItemCollection items = mock(SubscriptionItemCollection.class);
                 when(items.getData()).thenReturn(List.of(subItem));
                 when(mockStripeSub.getItems()).thenReturn(items);
-                when(mockStripeSub.update(any())).thenReturn(mockStripeSub);
+                when(mockStripeSub.update(any(SubscriptionUpdateParams.class))).thenReturn(mockStripeSub);
 
                 subStatic.when(() -> Subscription.retrieve("sub_existing"))
                         .thenReturn(mockStripeSub);

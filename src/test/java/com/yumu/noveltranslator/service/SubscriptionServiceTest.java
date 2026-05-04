@@ -19,6 +19,7 @@ import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.mapper.UserPlanHistoryMapper;
 import com.yumu.noveltranslator.properties.StripeProperties;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -420,6 +421,14 @@ class SubscriptionServiceTest {
             Subscription stripeSub = mock(Subscription.class);
             when(stripeSub.getId()).thenReturn("sub_test123");
 
+            com.stripe.model.SubscriptionItem subItem = mock(com.stripe.model.SubscriptionItem.class);
+            com.stripe.model.Price price = mock(com.stripe.model.Price.class);
+            when(price.getId()).thenReturn("price_test");
+            when(subItem.getPrice()).thenReturn(price);
+            SubscriptionItemCollection items = mock(SubscriptionItemCollection.class);
+            when(items.getData()).thenReturn(List.of(subItem));
+            when(stripeSub.getItems()).thenReturn(items);
+
             Event event = mock(Event.class);
             EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
@@ -430,7 +439,8 @@ class SubscriptionServiceTest {
 
             assertDoesNotThrow(() -> subscriptionService.handleSubscriptionUpdated(event));
 
-            verify(stripeSubscriptionMapper, never()).updateById(any());
+            // 原子更新会执行，但幂等检查会阻止实际更新
+            verify(stripeSubscriptionMapper).update(isNull(), any());
         }
 
         @Test
@@ -473,6 +483,10 @@ class SubscriptionServiceTest {
             when(event.getId()).thenReturn("evt_new123");
 
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
+            ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+            when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
 
             subscriptionService.handleSubscriptionUpdated(event);
 
@@ -566,11 +580,14 @@ class SubscriptionServiceTest {
             when(event.getId()).thenReturn("evt_deleted123");
 
             when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(stripeSubscriptionMapper.update(isNull(), any())).thenReturn(1);
+            ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+            when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
 
             subscriptionService.handleSubscriptionDeleted(event);
 
-            verify(stripeSubscriptionMapper).updateById(argThat(s ->
-                    "canceled".equals(s.getStatus()) && "evt_deleted123".equals(s.getLastWebhookEventId())));
+            verify(stripeSubscriptionMapper).update(isNull(), any());
             verify(userMapper).updateById(argThat(u -> "FREE".equals(u.getUserLevel())));
             verify(userPlanHistoryMapper).insert(argThat(h ->
                     "subscription.deleted".equals(h.getNote())));

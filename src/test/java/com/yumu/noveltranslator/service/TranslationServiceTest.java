@@ -122,7 +122,7 @@ class TranslationServiceTest {
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -134,7 +134,7 @@ class TranslationServiceTest {
 
             assertTrue(resp.getSuccess());
             assertEquals("翻译结果", resp.getTranslation());
-            verify(translationClient).translate(eq("Hello World"), eq("zh"), eq("fast"), eq(false), eq(true));
+            verify(translationClient).translate(eq("Hello World"), eq("zh"), eq("fast"), eq(false), eq(true), anyList());
         }
 
         @Test
@@ -143,7 +143,7 @@ class TranslationServiceTest {
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":500,\"error\":\"引擎不可用\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -161,7 +161,7 @@ class TranslationServiceTest {
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"result\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -169,7 +169,7 @@ class TranslationServiceTest {
             SelectionTranslateResponse resp = translationService.selectionTranslate(req);
 
             assertTrue(resp.getSuccess());
-            verify(translationClient).translate(eq("test"), eq("zh"), eq("fast"), eq(false), eq(true));
+            verify(translationClient).translate(eq("test"), eq("zh"), eq("fast"), eq(false), eq(true), anyList());
         }
     }
 
@@ -199,7 +199,7 @@ class TranslationServiceTest {
         @Test
         void 单段落翻译() {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译段落\"}");
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -215,7 +215,7 @@ class TranslationServiceTest {
         @Test
         void 多段落并行翻译() {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
                         return "{\"code\":200,\"data\":\"[translated]\" + text}";
@@ -233,7 +233,7 @@ class TranslationServiceTest {
         @Test
         void 长文本分段翻译() {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
                         return "{\"code\":200,\"data\":\"[T:\" + text.length() + \"]\"}";

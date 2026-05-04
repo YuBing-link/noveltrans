@@ -34,7 +34,7 @@ class NovelTranslatorTenantLineHandlerTest {
             TenantContext.setTenantId(42L);
             var result = handler.getTenantId();
             assertInstanceOf(LongValue.class, result);
-            assertEquals(42L, result.getValue());
+            assertEquals(42L, ((LongValue) result).getValue());
         }
 
         @Test
@@ -42,7 +42,7 @@ class NovelTranslatorTenantLineHandlerTest {
             TenantContext.clear();
             var result = handler.getTenantId();
             assertInstanceOf(LongValue.class, result);
-            assertEquals(0L, result.getValue());
+            assertEquals(0L, ((LongValue) result).getValue());
         }
     }
 

@@ -75,7 +75,7 @@ class TranslationCacheServiceVirtualThreadTest {
         @Test
         void 第一次失败第二次重试成功() throws Exception {
             doThrow(new RuntimeException("DB timeout"))
-                .doNothing()
+                .doReturn(1)
                 .when(translationCacheMapper).insertCache(any());
 
             cacheService.putCache("first-retry-key", "src", "tgt", "en", "zh", "google");
@@ -90,7 +90,7 @@ class TranslationCacheServiceVirtualThreadTest {
         void 数据库写入失败后重试() throws Exception {
             doThrow(new RuntimeException("DB timeout"))
                 .doThrow(new RuntimeException("DB timeout"))
-                .doNothing()
+                .doReturn(1)
                 .when(translationCacheMapper).insertCache(any());
 
             cacheService.putCache("retry-key", "src", "tgt", "en", "zh", "google");
