@@ -55,6 +55,9 @@ package-lock.json
 .playwright-cli/
 .tours/
 
+# Playwright reports
+playwright-report/
+
 # Backup files
 *.bak
 *.backup
