@@ -1,10 +1,10 @@
 services:
   # MySQL 数据库
   mysql:
-    image: mysql:8.0-oracle
+    image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: 123456
-      MYSQL_DATABASE: novel_translator
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DB}
     ports:
       - "3307:3306"
     volumes:
@@ -15,10 +15,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    networks:
+      - noveltrans
 
-  # Redis 缓存（升级为 Redis Stack 支持向量搜索）
+  # Redis Stack（支持 HNSW 向量搜索、RediSearch、JSON）
   redis:
-    image: redis/redis-stack-server:latest
+    image: redis/redis-stack-server:7.4.0-v8
     ports:
       - "6379:6379"
     volumes:
@@ -28,8 +31,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    restart: unless-stopped
+    networks:
+      - noveltrans
 
-  # MTranServer Mock（轻量模拟，用于压测）
+  # MTranServer Mock（轻量模拟，用于压测/开发）
   mtran-server:
     build: ./services/mtran-mock
     ports:
@@ -39,8 +45,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
+    restart: unless-stopped
+    networks:
+      - noveltrans
 
-  # Python 翻译微服务
+  # Python 翻译微服务（LLM 引擎）
   llm-engine:
     build: ./services/translate-engine
     working_dir: /app
@@ -54,7 +63,9 @@ services:
       - TRANSLATION_MOCK=${TRANSLATION_MOCK:-false}
     ports:
       - "8000:8000"
-
+    restart: unless-stopped
+    networks:
+      - noveltrans
 
   # Ollama Embedding 服务（本地向量模型 + GPU 加速）
   # 默认禁用，如需使用请取消注释，并在 .env 中设置 EMBEDDING_PROVIDER=ollama
@@ -65,7 +76,6 @@ services:
   #   volumes:
   #     - ollama-data:/root/.ollama
   #   # GPU 加速向量计算（需 NVIDIA GPU + Container Toolkit）
-  #   # 如有 NVIDIA GPU + Container Toolkit，取消 deploy 配置
   #   # deploy:
   #   #   resources:
   #   #     reservations:
@@ -84,6 +94,9 @@ services:
   #     interval: 10s
   #     timeout: 5s
   #     retries: 10
+  #   restart: unless-stopped
+  #   networks:
+  #     - noveltrans
 
   # Spring Boot 后端
   backend:
@@ -92,12 +105,6 @@ services:
     volumes:
       - .:/app
       - m2-cache:/root/.m2
-      - ./maven-settings.xml:/root/.m2/settings.xml:ro
-    command: >
-      bash -c "mvn clean package -DskipTests -Dmaven.test.skip=true &&
-               java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar"
-    ports:
-      - "8080:8080"
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - MYSQL_HOST=mysql
@@ -132,15 +139,20 @@ services:
       - STRIPE_PRO_YEARLY_PRICE_ID=${STRIPE_PRO_YEARLY_PRICE_ID}
       - STRIPE_MAX_MONTHLY_PRICE_ID=${STRIPE_MAX_MONTHLY_PRICE_ID}
       - STRIPE_MAX_YEARLY_PRICE_ID=${STRIPE_MAX_YEARLY_PRICE_ID}
-      # 代理
-      - HTTP_PROXY=http://host.docker.internal:7890
-      - HTTPS_PROXY=http://host.docker.internal:7890
-      - http_proxy=http://host.docker.internal:7890
-      - https_proxy=http://host.docker.internal:7890
-      - NO_PROXY=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,ollama,api.stripe.com,checkout.stripe.com
-      - no_proxy=localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,ollama,api.stripe.com,checkout.stripe.com
-      - MAVEN_OPTS=-Dhttp.proxyHost=host.docker.internal -Dhttp.proxyPort=7890 -Dhttps.proxyHost=host.docker.internal -Dhttps.proxyPort=7890 -Dhttp.nonProxyHosts=api.stripe.com\|checkout.stripe.com\|localhost\|127.0.0.1\|ollama
-      - JAVA_TOOL_OPTIONS=-Dhttp.nonProxyHosts=localhost\|127.0.0.1\|llm-engine\|mtran-server\|mysql\|redis\|ollama\|api.stripe.com\|checkout.stripe.com -Djava.net.useSystemProxies=false
+      # 翻译服务线程池
+      - TRANSLATE_MAX_WORKERS=${TRANSLATE_MAX_WORKERS:-2}
+      # 代理（可选，如需要设置 HTTP_PROXY 环境变量）
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - http_proxy=${HTTP_PROXY:-}
+      - https_proxy=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,ollama,api.stripe.com,checkout.stripe.com}
+      - no_proxy=${NO_PROXY:-localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,ollama,api.stripe.com,checkout.stripe.com}
+      - MAVEN_OPTS=${MAVEN_OPTS:-}
+      - JAVA_TOOL_OPTIONS=${JAVA_TOOL_OPTIONS:-}
+    command: >
+      bash -c "mvn clean package -DskipTests -Dmaven.test.skip=true &&
+               java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar"
     depends_on:
       mysql:
         condition: service_healthy
@@ -151,6 +163,9 @@ services:
       # 如需本地 Embedding，取消注释 ollama 服务及下行：
       # ollama:
       #   condition: service_started
+    restart: unless-stopped
+    networks:
+      - noveltrans
 
   # Nginx 网关
   nginx:
@@ -161,10 +176,18 @@ services:
     ports:
       - "7341:7341"
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - noveltrans
 
 volumes:
   mysql-data:
   m2-cache:
   redis-data:
   ollama-data:
+
+networks:
+  noveltrans:
+    driver: bridge
