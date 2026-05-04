@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Java Backend ───────────────────────────────────────────────
+  backend:
+    name: Backend (Java 21)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: 123456
+          MYSQL_DATABASE: novel_translator
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis/redis-stack-server:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Initialize database schema
+        run: |
+          mysql -h 127.0.0.1 -P 3307 -u root -p123456 novel_translator < src/main/resources/schema.sql
+        env:
+          MYSQL_PWD: 123456
+
+      - name: Compile
+        run: mvn -B compile -DskipTests
+
+      - name: Run tests with coverage
+        run: mvn -B test jacoco:report -Dspring.profiles.active=test
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          retention-days: 14
+
+  # ── Frontend ───────────────────────────────────────────────────
+  frontend:
+    name: Frontend (React)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web-app
+        run: npm ci
+
+      - name: Type check
+        working-directory: web-app
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: web-app
+        run: npm run build
+
+      - name: Run tests
+        working-directory: web-app
+        run: npx vitest run --coverage
+
+  # ── Docker Compose Smoke Test ──────────────────────────────────
+  smoke-test:
+    name: Docker Compose Smoke Test
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build frontend for production
+        working-directory: web-app
+        run: |
+          npm ci
+          npm run build
+
+      - name: Start all services
+        run: docker compose up -d
+        env:
+          MYSQL_PASSWORD: 123456
+          JWT_SECRET: ci-test-jwt-secret-key-min-32-chars-please
+          TRANSLATE_SERVICE_API_KEY: ci-test-api-key
+          TRANSLATION_MOCK: 'true'
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for backend to start..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:7341/health > /dev/null 2>&1; then
+              echo "Backend is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend failed to start"
+          docker compose logs backend
+          exit 1
+
+      - name: Health check
+        run: |
+          curl -sf http://localhost:7341/health | python3 -m json.tool
+          echo "--- MySQL ---"
+          docker compose exec mysql mysqladmin ping -h localhost
+          echo "--- Redis ---"
+          docker compose exec redis redis-cli ping

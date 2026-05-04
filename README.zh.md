@@ -4,6 +4,7 @@
 
 > [English README](README.md)
 
+[![CI](https://github.com/YuBing-link/noveltrans/actions/workflows/ci.yml/badge.svg)](https://github.com/YuBing-link/noveltrans/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=spring)](https://spring.io/projects/spring-boot)
@@ -351,6 +352,7 @@ noveltrans/
 - [x] Chrome 扩展（三种翻译模式）
 - [x] 外部 REST API（API Key 认证）
 - [x] 缓存一致性（版本号 + 延迟双删 + Redis pub/sub）
+- [x] CI/CD 流水线（GitHub Actions：构建、测试、Docker 冒烟测试）
 - [ ] API 智能调度网关
 - [ ] WebSocket 实时翻译进度推送
 - [ ] 文档格式支持（PDF、EPUB）

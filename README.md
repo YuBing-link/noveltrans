@@ -4,6 +4,7 @@ A SaaS translation platform for web novel authors and translators — batch-tran
 
 > [中文版](README.zh.md)
 
+[![CI](https://github.com/YuBing-link/noveltrans/actions/workflows/ci.yml/badge.svg)](https://github.com/YuBing-link/noveltrans/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=spring)](https://spring.io/projects/spring-boot)
@@ -93,6 +94,7 @@ Open [http://localhost:7341](http://localhost:7341) in your browser.
 | **Payments** | Stripe Checkout, Billing Portal, Webhooks |
 | **Gateway** | Nginx (single entry point, port 7341) |
 | **Testing** | JUnit 5, Mockito, Vitest, Playwright, k6 |
+| **CI/CD** | GitHub Actions (build, test, Docker Compose smoke test) |
 
 ## 🏗️ Project Structure
 
@@ -355,6 +357,7 @@ A smart multi-provider API gateway that sits between the translation engine and 
 - [x] Chrome extension (3 translation modes)
 - [x] External REST API with API-key auth
 - [x] Cache consistency with version stamp and Redis pub/sub
+- [x] CI/CD pipeline (GitHub Actions: build, test, Docker smoke test)
 - [ ] API intelligent dispatch gateway
 - [ ] WebSocket real-time translation progress
 - [ ] Document format support (PDF, EPUB)
