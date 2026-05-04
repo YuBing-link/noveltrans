@@ -15,8 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -25,12 +25,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: Extract tag
         id: meta
         run: echo "TAG=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
-      - name: Build llm-engine
-        uses: docker/build-push-action@v6
+      - name: Build & push llm-engine
+        uses: docker/build-push-action@v5
         with:
           context: ./services/translate-engine
           push: true
@@ -38,8 +38,8 @@ jobs:
             ghcr.io/${{ github.repository }}/llm-engine:latest
             ghcr.io/${{ github.repository }}/llm-engine:${{ steps.meta.outputs.TAG }}
 
-      - name: Build mtran-server
-        uses: docker/build-push-action@v6
+      - name: Build & push mtran-server
+        uses: docker/build-push-action@v5
         with:
           context: ./services/mtran-mock
           push: true
@@ -54,19 +54,14 @@ jobs:
           docker pull nginx:1.28-alpine
           docker pull maven:3.9-eclipse-temurin-21
 
-      - name: Tag public images for GHCR
+      - name: Tag & push public images to GHCR
         run: |
-          docker tag mysql:8.0 ghcr.io/${{ github.repository }}/mysql:8.0
-          docker tag redis/redis-stack-server:7.4.0-v8 ghcr.io/${{ github.repository }}/redis-stack:7.4.0-v8
-          docker tag nginx:1.28-alpine ghcr.io/${{ github.repository }}/nginx:1.28-alpine
-          docker tag maven:3.9-eclipse-temurin-21 ghcr.io/${{ github.repository }}/maven:3.9-eclipse-temurin-21
-
-      - name: Push public images to GHCR
-        run: |
-          docker push ghcr.io/${{ github.repository }}/mysql:8.0
-          docker push ghcr.io/${{ github.repository }}/redis-stack:7.4.0-v8
-          docker push ghcr.io/${{ github.repository }}/nginx:1.28-alpine
-          docker push ghcr.io/${{ github.repository }}/maven:3.9-eclipse-temurin-21
+          for img in mysql:8.0 redis-stack:7.4.0-v8 nginx:1.28-alpine maven:3.9-eclipse-temurin-21; do
+            src="${img%%:*}"
+            tag="${img#*:}"
+            docker tag "${img}" "ghcr.io/${{ github.repository }}/${src}:${tag}"
+            docker push "ghcr.io/${{ github.repository }}/${src}:${tag}"
+          done
 
       - name: Save offline package
         run: |
@@ -80,7 +75,7 @@ jobs:
             ghcr.io/${{ github.repository }}/mtran-server:${{ steps.meta.outputs.TAG }} \
             | gzip > docker-packages/noveltrans-${{ steps.meta.outputs.TAG }}-images.tar.gz
 
-      - name: Upload offline package as artifact
+      - name: Upload offline package
         uses: actions/upload-artifact@v4
         with:
           name: docker-images-${{ steps.meta.outputs.TAG }}
