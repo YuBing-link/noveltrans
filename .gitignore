@@ -5,6 +5,7 @@
 
 # Build
 target/
+target.old/
 *.class
 *.jar
 
@@ -37,6 +38,13 @@ web-app/dist/
 # Test & Coverage
 coverage/
 test-results/
+load-test/results/
+load-test/*-results.json
+*-results.json
+
+# Root-level package files (redundant; web-app has its own)
+package.json
+package-lock.json
 
 # Tool artifacts
 .gstack/
