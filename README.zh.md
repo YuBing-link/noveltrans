@@ -8,6 +8,7 @@
 [![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=spring)](https://spring.io/projects/spring-boot)
 [![React](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
+[![Coverage](https://img.shields.io/badge/Coverage-86%25-brightgreen)]()
 
 ## ✨ 核心特性
 
@@ -16,6 +17,19 @@
 - **团队协作** — 项目管理、章节分配、审核批准工作流
 - **三大交付渠道** — React Web 仪表盘、Chrome 扩展（MV3，三种翻译模式）、外部 REST API（API Key 认证）
 - **订阅商业化** — Stripe Checkout + 计费门户 + Webhook，三档计划（FREE / PRO / MAX）带用量配额
+
+## 🏆 技术亮点
+
+| 领域 | 实现 |
+|------|------|
+| **分布式缓存一致性** | 版本号 + 延迟双删 + Redis pub/sub 跨实例缓存失效联动 |
+| **虚拟线程** | Java 21 虚拟线程贯穿全局 — 异步缓存驱逐、多智能体扇出、HTTP 客户端 I/O |
+| **四级缓存链路** | Caffeine L1 (10 min) → Redis L2 (30 min) → MySQL L3 (24 h) → RAG 语义匹配（永久） |
+| **Webhook 幂等性** | Stripe webhook 去重处理，DuplicateKeyException 安全，支持并发投递 |
+| **引擎弹性容错** | LLM + MTranServer 双引擎，健康检查 + 断路器冷却 + 概率路由 |
+| **RAG 向量检索** | Redis Stack HNSW 索引 + KNN 语义搜索，用户隔离，质量自动过滤 |
+| **分级限流** | 匿名 / 免费 / Pro / API Key 差异化并发限制，按用户维度控制 |
+| **测试覆盖** | 86% 指令覆盖率 / 75% 分支覆盖率，JUnit 5 + Vitest + Playwright + k6 压测 |
 
 ## 🛠️ 快速开始
 
@@ -67,7 +81,7 @@ curl http://localhost:7341/health    # 后端健康检查
 
 | 层级 | 技术 |
 |------|------|
-| **后端** | Java 21, Spring Boot 3.2, MyBatis-Plus, Undertow |
+| **后端** | Java 21, Spring Boot 3.2, MyBatis-Plus, Undertow, Virtual Threads |
 | **前端** | React 19, TypeScript 6, Vite 8, TailwindCSS 4.2, i18next |
 | **Chrome 扩展** | Manifest V3, Content Scripts, IndexedDB |
 | **翻译引擎** | Python 3.11, FastAPI, OpenAI SDK, AgentScope（多智能体） |
@@ -147,7 +161,8 @@ noveltrans/
          ┌────────┐   ┌──────────┐   ┌──────────────┐
          │ MySQL  │   │  Redis   │   │ Python FastAPI│
          │  8.0   │   │ (缓存 +  │   │ + MTranServer│
-         │        │   │  向量)   │   │ (神经翻译)    │
+         │        │   │  向量 +  │   │ (神经翻译)    │
+         │        │   │ pub/sub) │   │              │
          └────────┘   └──────────┘   └──────────────┘
 ```
 
@@ -161,6 +176,18 @@ noveltrans/
   ├── L3: MySQL 持久化缓存（24 小时 TTL）
   ├── L4: RAG 语义匹配（永久）← 向量相似度搜索
   └── L5: 直接 LLM / MTranServer 翻译（降级）
+```
+
+### 缓存一致性策略
+
+```
+数据变更（更新/删除翻译记忆）
+  │
+  ├── 第 1 步：清空 L1 (Caffeine) + L2 (Redis) — 前置删除
+  ├── 第 2 步：Redis 中递增版本号 + 发布 pub/sub 事件
+  ├── 第 3 步：等待 2 秒（等待进行中的写入完成）
+  ├── 第 4 步：清空 L2 Redis 旧版本 key + 过期 L3 旧记录 — 后置删除
+  └── 第 5 步：所有实例接收 pub/sub，清空各自 L1 本地缓存
 ```
 
 ### 详细技术说明
@@ -199,6 +226,7 @@ noveltrans/
 - **缓存穿透防护**：空值占位 + 短暂过期策略
 - **缓存击穿防护**：`ConcurrentHashMap` 同 key 并发加锁
 - **缓存雪崩防护**：过期时间随机抖动
+- **缓存一致性**：版本号 + 延迟双删 + Redis pub/sub 跨实例缓存失效联动
 </details>
 
 <details>
@@ -227,6 +255,58 @@ noveltrans/
 - **每月自动重置**：定时任务每月 1 号 0 点清理过期记录
 </details>
 
+## 🚀 后续发展方向
+
+### API 智能调度网关
+
+在翻译引擎和上游 LLM 提供商（Claude、GPT-4、DeepSeek 等）之间构建智能多提供商 API 网关。
+
+**专家模式** — 一次性完成任务，独占调度：
+- 每个翻译请求独占 1 个 API 并发 slot
+- 无抢占 —— 一旦分配，slot 被该任务独占直到完成
+
+**协作模式** — 多章节、断点续翻式翻译：
+- 每个项目维护**优先级模型链**（如 Claude → GPT-4 → DeepSeek）
+- 在主模型达到并发上限前，提前调度请求
+- 当主模型满载时，用户被询问：*排队以获得更好的风格一致性，或降级到其他模型？*
+- 降级模型被存储为项目的次优先选择，实现智能降级
+- 通过限制同一章节块内的模型切换次数，保持翻译风格一致性
+
+**架构设计：**
+```
+                  翻译请求
+                      │
+                      ▼
+           ┌─────────────────────┐
+           │    调度网关          │
+           │  ┌───────────────┐  │
+           │  │ 项目模型      │  │
+           │  │ 优先级链      │  │
+           │  └───────┬───────┘  │
+           │          │          │
+           │  ┌───────▼───────┐  │
+           │  │ 并发池管理器   │  │
+           │  └───────┬───────┘  │
+           │          │          │
+           │  ┌───────▼───────┐  │
+           │  │ 队列 + 降级策略│  │
+           │  └───────────────┘  │
+           └─────────┬───────────┘
+                      │
+       ┌──────────────┼──────────────┐
+       ▼              ▼              ▼
+  ┌────────┐    ┌────────┐    ┌────────┐
+  │ Claude │    │  GPT   │    │DeepSeek│
+  │ (max 5)│    │(max 10)│    │(max 20)│
+  └────────┘    └────────┘    └────────┘
+```
+
+**核心设计目标：**
+- 每个提供商可配置 `max_concurrency`、`cost_per_token`、`quality_tier`
+- 带超时的排队策略（超时自动降级，不无限等待）
+- 项目级别的 `preferred_models` 持久化 — 一旦降级模型表现良好，自动成为项目第二优先选择
+- 最小模型切换间隔，避免连续章节出现"风格割裂"
+
 ## 🗺️ 路线图
 
 - [x] 用户注册和邮箱验证
@@ -236,6 +316,8 @@ noveltrans/
 - [x] 团队协作工作区
 - [x] Chrome 扩展（三种翻译模式）
 - [x] 外部 REST API（API Key 认证）
+- [x] 缓存一致性（版本号 + 延迟双删 + Redis pub/sub）
+- [ ] API 智能调度网关
 - [ ] WebSocket 实时翻译进度推送
 - [ ] 文档格式支持（PDF、EPUB）
 - [ ] 机器翻译质量评分看板
@@ -258,4 +340,4 @@ noveltrans/
 
 ---
 
-**最后更新**：2026-04-29
+**最后更新**：2026-05-04

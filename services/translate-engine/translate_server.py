@@ -796,7 +796,8 @@ async def translate_api(req: TranslateRequest):
 # =============================================================================
 # Separate thread pool for translation — agentscope uses asyncio.run() internally
 # which requires a thread without a running event loop.
-_translation_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="translate")
+_translate_max_workers = int(os.environ.get("TRANSLATE_MAX_WORKERS", "2"))
+_translation_executor = ThreadPoolExecutor(max_workers=_translate_max_workers, thread_name_prefix="translate")
 class TeamTranslateRequest(BaseModel):
     """AI 翻译团队请求体
 

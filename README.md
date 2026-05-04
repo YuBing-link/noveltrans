@@ -1,6 +1,6 @@
 # NovelTrans
 
-A SaaS translation platform for web novel authors and translators — batch-translate long-form content with RAG-powered translation memory, team collaboration, and Stripe billing.
+A SaaS translation platform for web novel authors and translators — batch-translate long-form content with RAG-powered translation memory, multi-agent collaboration, team workspaces, and Stripe billing.
 
 > [中文版](README.zh.md)
 
@@ -8,6 +8,7 @@ A SaaS translation platform for web novel authors and translators — batch-tran
 [![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=spring)](https://spring.io/projects/spring-boot)
 [![React](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
+[![Coverage](https://img.shields.io/badge/Coverage-86%25-brightgreen)]()
 
 ## ✨ Features
 
@@ -16,6 +17,19 @@ A SaaS translation platform for web novel authors and translators — batch-tran
 - **Collaborate as a team** — project/workspace management, chapter assignment, review-and-approve workflow
 - **Three delivery channels** — React web dashboard, Chrome extension (MV3, 3 translation modes), and external REST API with API-key authentication
 - **Monetize with subscriptions** — Stripe Checkout + Billing Portal + Webhook, 3-tier plans (FREE / PRO / MAX) with usage quotas
+
+## 🏆 Technical Highlights
+
+| Area | Implementation |
+|------|----------------|
+| **Distributed cache consistency** | Version-stamped cache with delayed double-delete and Redis pub/sub for cross-instance invalidation |
+| **Virtual threads** | Java 21 virtual threads throughout — async cache eviction, multi-agent fan-out, and HTTP client I/O |
+| **Cache chain** | 4-tier: Caffeine L1 (10 min) → Redis L2 (30 min) → MySQL L3 (24 h) → RAG semantic match (permanent) |
+| **Webhook idempotency** | Stripe webhook deduplication with DuplicateKeyException handling, safe under concurrent delivery |
+| **Engine resilience** | LLM + MTranServer dual-engine with health check, circuit breaker cooling, and probabilistic routing |
+| **RAG vector search** | Redis Stack HNSW index with KNN semantic search, user-scoped isolation, automatic quality filtering |
+| **Rate limiting** | Tiered concurrency control — anonymous / free / pro / API key, enforced per-user |
+| **Testing** | 86% instruction / 75% branch coverage with JUnit 5 + Vitest + Playwright + k6 load testing |
 
 ## 🛠️ Quick Start
 
@@ -67,8 +81,8 @@ Open [http://localhost:7341](http://localhost:7341) in your browser.
 
 | Layer | Technology |
 |-------|------------|
-| **Backend** | Java 21, Spring Boot 3.2, MyBatis-Plus, Undertow |
-| **Frontend** | React 19, TypeScript 6, Vite 8, TailwindCSS 4.2, i18next |
+| **Backend** | Java 21, Spring Boot 3.2, MyBatis-Plus, Undertow, Virtual Threads |
+| **Frontend** | React 19, TypeScript, Vite, TailwindCSS 4.2, i18next |
 | **Chrome Extension** | Manifest V3, Content Scripts, IndexedDB |
 | **Translation Engine** | Python 3.11, FastAPI, OpenAI SDK, AgentScope (multi-agent) |
 | **Neural Translation Machine** | MTranServer — lightweight open-source translation engine |
@@ -147,7 +161,8 @@ See `.env.example` for the full list.
          ┌────────┐   ┌──────────┐   ┌──────────────┐
          │ MySQL  │   │  Redis   │   │ Python FastAPI│
          │  8.0   │   │ (cache + │   │ + MTranServer│
-         │        │   │ vectors) │   │ (neural MT)  │
+         │        │   │ vectors +│   │ (neural MT)  │
+         │        │   │ pub/sub) │   │              │
          └────────┘   └──────────┘   └──────────────┘
 ```
 
@@ -163,9 +178,138 @@ New Translation Request
   └── L5: Direct LLM / MTranServer translation (fallback)
 ```
 
+### Cache Consistency Strategy
+
+```
+Data Change (update/delete translation memory)
+  │
+  ├── Step 1: Clear L1 (Caffeine) + L2 (Redis)  — pre-delete
+  ├── Step 2: Bump version number in Redis + publish pub/sub event
+  ├── Step 3: Sleep 2s (wait for in-flight writes to complete)
+  ├── Step 4: Clear L2 Redis old-version keys + expire L3 old records — post-delete
+  └── Step 5: All instances receive pub/sub, flush their L1 local cache
+```
+
+<details>
+<summary>Click to expand: RAG Translation Memory</summary>
+
+- **Vector semantic search**: Redis Stack HNSW vector index, encode source text as embeddings, KNN search historical translations
+- **Four-tier cache chain**: Caffeine (L1) → Redis (L2) → MySQL (L3) → RAG semantic search (L4) → Translation engine
+- **Quality filtering**: Auto-filter empty translations, length anomalies, ad keywords, excessive special characters before storage
+- **Dual degradation**: Auto-fallback from Redis KNN to MySQL cosine similarity when Redis search is unavailable
+- **User isolation**: KNN queries scoped by `user_id` + `target_lang`, preventing data cross-contamination
+</details>
+
+<details>
+<summary>Click to expand: Translation Pipeline</summary>
+
+- **Single pipeline component**: `TranslationPipeline` encapsulates four-tier translation logic, eliminating code duplication
+- **Strategy pattern**: Configurable stages — `execute()` for full pipeline, `executeFast()` for cache + direct translation only
+- **Post-processing**: All translation paths include `fixUntranslatedChinese()` post-processing
+- **Quality validation**: Static `isValidTranslation()` and `shouldCache()` methods ensure consistent quality checks
+</details>
+
+<details>
+<summary>Click to expand: Translation Engine</summary>
+
+- **OpenAI-compatible API**: Supports OpenAI GPT, Claude, local Ollama, DeepSeek, and any compatible endpoint
+- **Professional novel translation prompt**: 6 translation principles ensuring literary translation quality
+- **Dual-engine fault tolerance**: LLM engine + MTranServer lightweight engine with bidirectional degradation, health check + circuit breaker cooling
+- **Probabilistic routing**: Smart engine selection based on historical success rate + response time
+</details>
+
+<details>
+<summary>Click to expand: Cache Protection</summary>
+
+- **Cache penetration prevention**: Null placeholder + short TTL strategy
+- **Cache breakdown prevention**: `ConcurrentHashMap` per-key concurrent locking
+- **Cache avalanche prevention**: TTL random jitter
+- **Cache consistency**: Version-stamped delayed double-delete + Redis pub/sub cross-instance invalidation
+</details>
+
+<details>
+<summary>Click to expand: Security</summary>
+
+- **JWT + API Key dual authentication**: Both routes share the same translation pipeline
+- **Translation endpoint enforcement**: All `/v1/translate/**` endpoints require valid JWT or API Key
+- **API Key management**: `nt_sk_xxxx` prefix + 32 random chars, list display with mask
+- **BCrypt password hashing**: User passwords hashed before storage
+- **Email verification**: Double verification for registration / password reset
+- **Tiered rate limiting**: Different concurrency limits for anonymous / free / pro users
+</details>
+
+<details>
+<summary>Click to expand: Character Quota System</summary>
+
+| Tier | Monthly Char Pack | Fast (×0.5) | Expert (×1.0) | Team (×2.0) |
+|------|----------|-------------|-------------|-------------|
+| **Free** | 10,000 | 20k chars original | 10k chars original | 5k chars original |
+| **Pro** | 50,000 | 100k chars original | 50k chars original | 25k chars original |
+| **Max** | 200,000 | 400k chars original | 200k chars original | 100k chars original |
+
+- **Mode coefficient**: Fast ×0.5 (save quota), Expert ×1.0, Team ×2.0
+- **Deduction per request**: Quota pre-checked before translation begins
+- **Daily tracking**: `quota_usage` table records daily consumption, monthly aggregation
+- **Auto-reset monthly**: Scheduled task clears expired records on the 1st of each month
+</details>
+
 ## ⚠️ Known Issues
 
 - **Chrome extension translation engine selection not connected** — When you select "Google Translate" or another engine in the Chrome extension popup, all translation still goes through the LLM-based translation engine. The engine selector UI works but the selected engine value is not wired to the actual translation request. This does not affect project functionality.
+
+## 🚀 Future Directions
+
+### API Intelligent Dispatch Gateway
+
+A smart multi-provider API gateway that sits between the translation engine and upstream LLM providers (Claude, GPT-4, DeepSeek, etc.).
+
+**Expert Mode** — single-pass, task-exclusive translation:
+- Each translation request occupies 1 API concurrency slot exclusively
+- No slot contention — once assigned, the slot is held until task completion
+
+**Collaboration Mode** — multi-chapter, resumable translation:
+- Projects maintain a **priority model chain** (e.g., Claude → GPT-4 → DeepSeek)
+- Before hitting the primary provider's concurrency ceiling, requests are pre-scheduled
+- When the primary model reaches max concurrency, the user is prompted: *queue for style consistency, or fall back to an alternate model?*
+- Fallback models are stored as secondary preferences for the project, enabling intelligent degradation
+- Style consistency is preserved by minimizing model switches within the same chapter block
+
+**Architecture:**
+```
+                  Translation Request
+                         │
+                         ▼
+              ┌─────────────────────┐
+              │  Dispatch Gateway   │
+              │  ┌───────────────┐  │
+              │  │ Project Model │  │
+              │  │ Priority Chain│  │
+              │  └───────┬───────┘  │
+              │          │          │
+              │  ┌───────▼───────┐  │
+              │  │ Concurrency   │  │
+              │  │ Pool Manager  │  │
+              │  └───────┬───────┘  │
+              │          │          │
+              │  ┌───────▼───────┐  │
+              │  │ Queue + Fallback│ │
+              │  │ Strategy       │  │
+              │  └───────────────┘  │
+              └─────────┬───────────┘
+                        │
+           ┌────────────┼────────────┐
+           ▼            ▼            ▼
+      ┌────────┐  ┌────────┐  ┌────────┐
+      │ Claude │  │  GPT   │  │DeepSeek│
+      │ (max 5)│  │(max 10)│  │(max 20)│
+      └────────┘  └────────┘  └────────┘
+```
+
+**Key design goals:**
+- Per-provider configurable `max_concurrency`, `cost_per_token`, `quality_tier`
+- Time-bounded queuing (auto-fallback after timeout, not infinite wait)
+- Project-scoped `preferred_models` persistence — once a fallback proves good, it becomes the project's second choice automatically
+- Minimum model-switch interval to avoid "style fragmentation" across consecutive chapters
 
 ## 🗺️ Roadmap
 
@@ -176,6 +320,8 @@ New Translation Request
 - [x] Team collaboration workspace
 - [x] Chrome extension (3 translation modes)
 - [x] External REST API with API-key auth
+- [x] Cache consistency with version stamp and Redis pub/sub
+- [ ] API intelligent dispatch gateway
 - [ ] WebSocket real-time translation progress
 - [ ] Document format support (PDF, EPUB)
 - [ ] Machine translation quality scoring dashboard
@@ -198,4 +344,4 @@ For larger changes, please open an issue first to discuss the approach.
 
 ---
 
-**Last updated**: 2026-04-29
+**Last updated**: 2026-05-04
