@@ -27,8 +27,8 @@
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
-cd novelTranslator
+git clone https://github.com/YuBing-link/noveltrans.git
+cd noveltrans
 ```
 
 ### 2. Configure Environment Variables
@@ -83,6 +83,9 @@ STRIPE_MAX_YEARLY_PRICE_ID=price_xxxx
 
 # ===== Inter-Service Authentication =====
 TRANSLATE_SERVICE_API_KEY=<your-internal-service-api-key>
+
+# ===== Translation Service Concurrency (Optional, default 2) =====
+TRANSLATE_MAX_WORKERS=2
 ```
 
 ### 3. Build the Frontend
@@ -147,7 +150,7 @@ mysql -h 127.0.0.1 -P 3307 -u root -p < src/main/resources/schema.sql
 
 ```bash
 mvn clean package -DskipTests
-java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar
+java -jar target/*.jar
 ```
 
 Or run `NovelTranslatorApplication.java` directly from your IDE.
@@ -271,4 +274,4 @@ stripe listen --forward-to localhost:7341/webhook/stripe
 
 ---
 
-**Last updated**: 2026-04-29
+**Last updated**: 2026-05-04

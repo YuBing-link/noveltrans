@@ -436,6 +436,27 @@ Previously, translation pipeline logic was duplicated across three Service class
 - **Problem**: Mass cache expiry at once causes DB pressure spike
 - **Solution**: Random jitter on TTL (e.g., `baseTTL + random(0, jitter)`)
 
+### Cache Consistency Strategy
+
+When translation memory data is updated or deleted, a **version-stamped delayed double-delete** strategy ensures cross-instance cache consistency:
+
+```
+Data Change (update/delete)
+  │
+  ├── Step 1: Pre-delete — clear L1 (Caffeine) + L2 (Redis) for this language pair
+  ├── Step 2: Bump version number in Redis + publish pub/sub event
+  ├── Step 3: Sleep 2s (wait for in-flight writes to complete)
+  ├── Step 4: Post-delete — clear L2 Redis old-version keys + expire L3 old records
+  └── Step 5: All instances receive pub/sub event, flush their L1 local cache
+```
+
+Key components:
+
+- **`CacheVersionService`** — Maintains per-language-pair version numbers in Redis, handles `INCR` + event publishing
+- **`CachePubSubConfig`** — Redis `MessageListenerContainer` subscribed to `translator:cache:invalidation` channel
+- **`TranslationCacheService.delayedDoubleDelete()`** — Spawns a virtual thread for the pre-delete → version bump → sleep → post-delete sequence
+- **Version-prefixed Redis keys** — Cache keys include version prefix, so post-delete only removes old-version entries without affecting newly written data
+
 ---
 
 ## Translation Engine Architecture
@@ -661,3 +682,7 @@ user (1) ──── (N) translation_memory
 - Before refactoring, the 4-level pipeline logic was duplicated in 3 Services, making maintenance costly
 - After extracting to `TranslationPipeline`, all translation paths call the same component, ensuring consistent behavior
 - Adding post-processing (residual Chinese correction) only requires a single change
+
+---
+
+**Last updated**: 2026-05-04

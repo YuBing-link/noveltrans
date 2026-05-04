@@ -2,6 +2,12 @@
 
 > This document describes all REST API endpoints provided by the NovelTrans backend server.
 
+**Related documents:**
+
+- [README.md](README.md) — Project overview and quick start
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture and data flow
+- [load-test/STRESS_TEST_REPORT.md](load-test/STRESS_TEST_REPORT.md) — API performance benchmarks
+
 ---
 
 ## Table of Contents
@@ -13,6 +19,7 @@
   - [External API (API Key Access)](#external-api-api-key-access)
   - [RAG Translation Memory](#rag-translation-memory)
 - [User API](#user-api)
+- [Subscription & Billing (Stripe)](#subscription--billing-stripe)
 - [Document Management](#document-management)
 - [Glossary Management](#glossary-management)
 - [Collaboration Projects](#collaboration-projects)
@@ -456,6 +463,64 @@ Returns `{ data: { user profile }, token: "JWT" }`.
 
 ---
 
+## Subscription & Billing (Stripe)
+
+**Base path**: `/subscription`
+**Controller**: `SubscriptionController`
+
+### 1. Create Checkout Session
+
+`POST /subscription/checkout` — Auth required
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| priceId | string | Yes | Stripe price ID (e.g., `price_pro_monthly`) |
+
+Returns `{ checkoutUrl }` — redirect user to Stripe Checkout.
+
+### 2. Get Subscription Status
+
+`GET /subscription/status` — Auth required
+
+Returns current subscription tier, expiry date, and usage limits.
+
+### 3. Verify Subscription
+
+`GET /subscription/verify` — Auth required
+
+Verifies the latest subscription state with Stripe.
+
+### 4. Cancel Subscription
+
+`POST /subscription/cancel` — Auth required
+
+Cancels the current subscription at period end.
+
+### 5. Create Billing Portal Session
+
+`POST /subscription/portal` — Auth required
+
+Creates a Stripe Billing Portal session for managing payment methods and invoices.
+
+### 6. Stripe Webhook
+
+`POST /webhook/stripe` — Auth: Webhook signature (Stripe-Signature header)
+
+Handles Stripe events:
+
+| Event | Action |
+|-------|--------|
+| `checkout.session.completed` | Create subscription record, upgrade user level |
+| `customer.subscription.updated` | Update subscription status, handle plan changes |
+| `customer.subscription.deleted` | Cancel subscription, downgrade user level |
+
+Idempotency guaranteed via:
+- Atomic `UPDATE WHERE last_webhook_event_id IS NULL` conditional updates
+- Redis SETNX per-event_id dedup for cross-event-type interference prevention
+- `@Transactional` on all handlers
+
+---
+
 ## Glossary Management
 
 **Base path**: `/user/glossaries`
@@ -610,4 +675,4 @@ Returns `{ data: { user profile }, token: "JWT" }`.
 
 ---
 
-**Last updated**: 2026-04-27
+**Last updated**: 2026-05-04
