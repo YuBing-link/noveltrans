@@ -37,3 +37,13 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}/llm-engine:latest
             ghcr.io/${{ github.repository }}/llm-engine:${{ steps.meta.outputs.TAG }}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ github.repository }}/backend:${{ steps.meta.outputs.TAG }}
