@@ -64,6 +64,7 @@ LLM_MODEL=gpt-4o
 # ===== MTran Lightweight Engine =====
 MTRAN_API_KEY=<your-mtran-api-key>
 MTRAN_PORT=8989
+MTRAN_MOCK=false  # true = mock responses (dev/load-test), false = connect to real MTranServer
 
 # ===== Embedding Vector Model =====
 # Options: ollama (local) or openai (cloud)
@@ -192,10 +193,10 @@ npm run dev
 ```
 Nginx (7341)
   └── Backend (8080)
-        ├── MySQL (3306)      ← health check
-        ├── Redis (6379)      ← health check
+        ├── MySQL (3306)       ← health check
+        ├── Redis (6379)       ← health check
         ├── MTranServer (8989) ← startup
-        ├── Ollama (11434)    ← startup
+        ├── Ollama (11434)     ← startup (optional)
         └── LLM Engine (8000)  ← startup
 ```
 

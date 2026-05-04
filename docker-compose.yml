@@ -35,6 +35,20 @@ services:
     networks:
       - noveltrans
 
+  # MTranServer — lightweight open-source translation engine
+  mtran-server:
+    image: xxnuo/mtranserver:latest
+    ports:
+      - "8989:8989"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - noveltrans
+
   # Python 翻译微服务（LLM 引擎）
   llm-engine:
     build: ./services/translate-engine
@@ -145,6 +159,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mtran-server:
+        condition: service_started
       # 如需本地 Embedding，取消注释 ollama 服务及下行：
       # ollama:
       #   condition: service_started
