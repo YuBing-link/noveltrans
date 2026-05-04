@@ -35,20 +35,6 @@ services:
     networks:
       - noveltrans
 
-  # MTranServer Mock（轻量模拟，用于压测/开发）
-  mtran-server:
-    build: ./services/mtran-mock
-    ports:
-      - "8989:8989"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8989/health')"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-    restart: unless-stopped
-    networks:
-      - noveltrans
-
   # Python 翻译微服务（LLM 引擎）
   llm-engine:
     build: ./services/translate-engine
@@ -119,6 +105,7 @@ services:
       - MTRAN_HOST=mtran-server
       - MTRAN_PORT=${MTRAN_PORT}
       - MTRAN_API_KEY=${MTRAN_API_KEY}
+      - MTRAN_MOCK=${MTRAN_MOCK:-false}
       - MAIL_USERNAME=${MAIL_USERNAME}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - PYTHON_TRANSLATE_URL=http://llm-engine:8000/translate
@@ -151,15 +138,13 @@ services:
       - MAVEN_OPTS=${MAVEN_OPTS:-}
       - JAVA_TOOL_OPTIONS=${JAVA_TOOL_OPTIONS:-}
     command: >
-      bash -c "mvn clean package -DskipTests -Dmaven.test.skip=true &&
+      bash -c "mvn clean package -DskipTests -Dmaven.test.skip=true -s maven-settings.xml &&
                java -jar target/novelTranslator-0.0.1-SNAPSHOT.jar"
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mtran-server:
-        condition: service_started
       # 如需本地 Embedding，取消注释 ollama 服务及下行：
       # ollama:
       #   condition: service_started

@@ -5,8 +5,8 @@ import com.yumu.noveltranslator.mapper.TranslationCacheMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.PreDestroy;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -40,13 +40,21 @@ import java.util.concurrent.atomic.AtomicLong;
  * </ul>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class TranslationCacheService {
 
     private final TranslationCacheMapper translationCacheMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final CacheVersionService cacheVersionService;
+
+    public TranslationCacheService(
+            TranslationCacheMapper translationCacheMapper,
+            StringRedisTemplate stringRedisTemplate,
+            @Lazy CacheVersionService cacheVersionService) {
+        this.translationCacheMapper = translationCacheMapper;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.cacheVersionService = cacheVersionService;
+    }
 
     // ==================== L1: Caffeine 内存缓存 ====================
 

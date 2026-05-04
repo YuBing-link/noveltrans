@@ -122,6 +122,7 @@ mtran:
     host: ${MTRAN_HOST:localhost}
     port: ${MTRAN_PORT:8989}
     api-key: ${MTRAN_API_KEY:}
+    mock: ${MTRAN_MOCK:false}  # true = 模拟响应（开发/测试），false = 直连真实 MTranServer
 
 email:
 
