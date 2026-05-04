@@ -29,14 +29,18 @@ jobs:
         id: meta
         run: echo "TAG=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
+      - name: Extract GitHub username
+        id: owner
+        run: echo "OWNER=${GITHUB_REPOSITORY%/*}" >> "$GITHUB_OUTPUT"
+
       - name: Build & push llm-engine
         uses: docker/build-push-action@v5
         with:
           context: ./services/translate-engine
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/llm-engine:latest
-            ghcr.io/${{ github.repository }}/llm-engine:${{ steps.meta.outputs.TAG }}
+            ghcr.io/${{ steps.owner.outputs.OWNER }}/llm-engine:latest
+            ghcr.io/${{ steps.owner.outputs.OWNER }}/llm-engine:${{ steps.meta.outputs.TAG }}
 
       - name: Build & push mtran-server
         uses: docker/build-push-action@v5
@@ -44,8 +48,8 @@ jobs:
           context: ./services/mtran-mock
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/mtran-server:latest
-            ghcr.io/${{ github.repository }}/mtran-server:${{ steps.meta.outputs.TAG }}
+            ghcr.io/${{ steps.owner.outputs.OWNER }}/mtran-server:latest
+            ghcr.io/${{ steps.owner.outputs.OWNER }}/mtran-server:${{ steps.meta.outputs.TAG }}
 
       - name: Pull public images
         run: |
@@ -56,23 +60,25 @@ jobs:
 
       - name: Tag & push public images to GHCR
         run: |
-          for img in mysql:8.0 redis-stack:7.4.0-v8 nginx:1.28-alpine maven:3.9-eclipse-temurin-21; do
+          OWNER="${{ steps.owner.outputs.OWNER }}"
+          for img in mysql:8.0 redis-stack-server:7.4.0-v8 nginx:1.28-alpine maven:3.9-eclipse-temurin-21; do
             src="${img%%:*}"
             tag="${img#*:}"
-            docker tag "${img}" "ghcr.io/${{ github.repository }}/${src}:${tag}"
-            docker push "ghcr.io/${{ github.repository }}/${src}:${tag}"
+            docker tag "${img}" "ghcr.io/${OWNER}/${src}:${tag}"
+            docker push "ghcr.io/${OWNER}/${src}:${tag}"
           done
 
       - name: Save offline package
         run: |
           mkdir -p docker-packages
+          OWNER="${{ steps.owner.outputs.OWNER }}"
           docker save \
-            ghcr.io/${{ github.repository }}/mysql:8.0 \
-            ghcr.io/${{ github.repository }}/redis-stack:7.4.0-v8 \
-            ghcr.io/${{ github.repository }}/nginx:1.28-alpine \
-            ghcr.io/${{ github.repository }}/maven:3.9-eclipse-temurin-21 \
-            ghcr.io/${{ github.repository }}/llm-engine:${{ steps.meta.outputs.TAG }} \
-            ghcr.io/${{ github.repository }}/mtran-server:${{ steps.meta.outputs.TAG }} \
+            ghcr.io/${OWNER}/mysql:8.0 \
+            ghcr.io/${OWNER}/redis-stack-server:7.4.0-v8 \
+            ghcr.io/${OWNER}/nginx:1.28-alpine \
+            ghcr.io/${OWNER}/maven:3.9-eclipse-temurin-21 \
+            ghcr.io/${OWNER}/llm-engine:${{ steps.meta.outputs.TAG }} \
+            ghcr.io/${OWNER}/mtran-server:${{ steps.meta.outputs.TAG }} \
             | gzip > docker-packages/noveltrans-${{ steps.meta.outputs.TAG }}-images.tar.gz
 
       - name: Upload offline package
