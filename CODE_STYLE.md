@@ -2,6 +2,12 @@
 
 This document defines the coding standards, naming conventions, comment guidelines, and package structure for NovelTrans. All contributors should follow these conventions.
 
+**Related documents:**
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Contributing guide and git workflow
+- [SETUP.md](SETUP.md) — Deployment guide
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture
+
 ## Table of Contents
 
 - [Naming Conventions](#naming-conventions)

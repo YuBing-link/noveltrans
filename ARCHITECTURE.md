@@ -2,6 +2,14 @@
 
 This document describes the system architecture, component responsibilities, data flow, and key technical decisions of NovelTrans.
 
+**Related documents:**
+
+- [README.md](README.md) — Project overview and quick start
+- [SETUP.md](SETUP.md) — Deployment guide
+- [CODE_STYLE.md](CODE_STYLE.md) — Coding standards
+- [test-coverage-report.md](test-coverage-report.md) — Test coverage report
+- [load-test/STRESS_TEST_REPORT.md](load-test/STRESS_TEST_REPORT.md) — Performance stress test results
+
 ## Table of Contents
 
 - [System Overview](#system-overview)

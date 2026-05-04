@@ -33,6 +33,8 @@
 
 ## 🛠️ 快速开始
 
+> 详细部署步骤、本地开发配置和常见问题排查，参见 [`SETUP.md`](SETUP.md)。
+
 ### 前置依赖
 
 | 依赖 | 版本 | 用途 |
@@ -141,6 +143,8 @@ noveltrans/
 完整列表参见 `.env.example`。
 
 ## 📊 架构
+
+> 系统设计、数据流、缓存层次结构和部署拓扑的详细说明，参见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
 
 ```
                     ┌─────────────────────────────────────┐
@@ -255,6 +259,36 @@ noveltrans/
 - **每月自动重置**：定时任务每月 1 号 0 点清理过期记录
 </details>
 
+## 📈 性能表现
+
+使用 k6（翻译 + 支付）和 Python 多线程 HTTP（Webhook）进行压测。完整报告：[`load-test/STRESS_TEST_REPORT.md`](load-test/STRESS_TEST_REPORT.md)
+
+### 翻译 API
+
+| 场景 | 吞吐量 | p95 延迟 | 错误率 |
+|------|--------|---------|--------|
+| 真实场景（1s 用户思考时间） | **93.7 req/s** | 303 ms | 0% |
+| 最大吞吐（无 sleep） | **496.8 req/s** | 302 ms | 0% |
+
+### Stripe 支付结账
+
+| 场景 | 吞吐量 | p95 延迟 | 错误率 |
+|------|--------|---------|--------|
+| 真实场景（1s 用户思考时间） | **16.9 req/s** | 2,572 ms | 0% |
+| 最大吞吐（无 sleep） | **23.5 req/s** | 2,093 ms | 0% |
+
+> 结账延迟主要由 Stripe API 网络往返（约 2s）决定，非应用处理耗时。
+
+### Webhook 幂等性（50 并发线程）
+
+| 测试 | 请求数 | 重复记录 | 状态 |
+|------|--------|---------|------|
+| `checkout.session.completed` (50×10) | 500 | 1 | 通过 |
+| `subscription.updated` (100×10) | 1,000 | 0 | 通过 |
+| 混合事件 (50×5×3 种类型) | 750 | 2 | 通过 |
+
+混合事件竞态条件历经 3 轮修复：原子条件更新 → DuplicateKeyException 处理 → Redis SETNX 跨事件去重。
+
 ## 🚀 后续发展方向
 
 ### API 智能调度网关
@@ -322,9 +356,23 @@ noveltrans/
 - [ ] 文档格式支持（PDF、EPUB）
 - [ ] 机器翻译质量评分看板
 
+## 📚 文档索引
+
+| 文档 | 说明 |
+|------|------|
+| [`SETUP.md`](SETUP.md) | 详细部署指南与本地开发配置 |
+| [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) | 完整 REST API 文档 |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | 系统架构、数据流、缓存层次、部署拓扑 |
+| [`test-coverage-report.md`](test-coverage-report.md) | JaCoCo 测试覆盖率报告（86% 指令 / 75% 分支） |
+| [`load-test/STRESS_TEST_REPORT.md`](load-test/STRESS_TEST_REPORT.md) | k6 + Python 多线程压测结果 |
+| [`CODE_STYLE.md`](CODE_STYLE.md) | 编码规范、命名约定、包结构 |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Git 工作流、提交规范、PR 流程 |
+
 ## 🤝 贡献
 
 欢迎提交 Bug 修复、文档改进和新的翻译引擎集成。
+
+安装和开发规范参见 [`SETUP.md`](SETUP.md)、[`CODE_STYLE.md`](CODE_STYLE.md) 和 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
 
 1. Fork 本仓库
 2. 创建你的功能分支（`git checkout -b feature/your-feature`）

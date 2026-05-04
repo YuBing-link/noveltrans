@@ -5,6 +5,12 @@
 > Test Framework: JUnit 5 + Mockito
 > Build: Maven + Spring Boot
 
+**Related documents:**
+
+- [README.md](README.md) — Project overview
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Testing requirements
+- [load-test/STRESS_TEST_REPORT.md](load-test/STRESS_TEST_REPORT.md) — Performance stress test results
+
 ---
 
 ## 1. Overview

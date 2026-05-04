@@ -2,6 +2,12 @@
 
 > This document describes the deployment process and environment configuration for NovelTrans.
 
+**Related documents:**
+
+- [README.md](README.md) — Project overview and quick start
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Contributing guide and git workflow
+
 ## Prerequisites
 
 | Dependency | Version | Purpose |

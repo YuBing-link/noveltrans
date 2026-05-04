@@ -6,6 +6,12 @@
 **Payment**: Stripe Test Mode
 **Last Updated**: 2026-05-04 — Round 3 (cross-event idempotency fix via Redis SETNX)
 
+**Related documents:**
+
+- [README.md](../README.md) — Project overview
+- [ARCHITECTURE.md](../ARCHITECTURE.md) — System architecture
+- [test-coverage-report.md](../test-coverage-report.md) — Test coverage report
+
 ---
 
 ## 1. Translation API

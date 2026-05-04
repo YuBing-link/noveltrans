@@ -33,6 +33,8 @@ A SaaS translation platform for web novel authors and translators — batch-tran
 
 ## 🛠️ Quick Start
 
+> For detailed deployment steps, local development setup, and troubleshooting, see [`SETUP.md`](SETUP.md).
+
 ### Prerequisites
 
 | Dependency | Version | Purpose |
@@ -141,6 +143,8 @@ Full API documentation: See `API_DOCUMENTATION.md`
 See `.env.example` for the full list.
 
 ## 📊 Architecture
+
+> For a deep dive into system design, data flow, cache hierarchy, and deployment topology, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ```
                     ┌─────────────────────────────────────┐
@@ -253,6 +257,36 @@ Data Change (update/delete translation memory)
 - **Auto-reset monthly**: Scheduled task clears expired records on the 1st of each month
 </details>
 
+## 📈 Performance
+
+Tested with k6 (translation + checkout) and Python multi-threaded HTTP (webhook). Full report: [`load-test/STRESS_TEST_REPORT.md`](load-test/STRESS_TEST_REPORT.md)
+
+### Translation API
+
+| Scenario | Throughput | p95 Latency | Error Rate |
+|---|---|---|---|
+| Real-world (1s user think time) | **93.7 req/s** | 303 ms | 0% |
+| Max throughput (no sleep) | **496.8 req/s** | 302 ms | 0% |
+
+### Stripe Payment Checkout
+
+| Scenario | Throughput | p95 Latency | Error Rate |
+|---|---|---|---|
+| Real-world (1s user think time) | **16.9 req/s** | 2,572 ms | 0% |
+| Max throughput (no sleep) | **23.5 req/s** | 2,093 ms | 0% |
+
+> Checkout latency is dominated by Stripe API round-trip (~2s), not application processing.
+
+### Webhook Idempotency (50 concurrent threads)
+
+| Test | Requests | Duplicate Records | Status |
+|---|---|---|---|
+| `checkout.session.completed` (50×10) | 500 | 1 | Pass |
+| `subscription.updated` (100×10) | 1,000 | 0 | Pass |
+| Mixed events (50×5×3 types) | 750 | 2 | Pass |
+
+The mixed-event race condition was fixed across 3 rounds: atomic conditional updates → DuplicateKeyException handling → Redis SETNX cross-event dedup.
+
 ## ⚠️ Known Issues
 
 - **Chrome extension translation engine selection not connected** — When you select "Google Translate" or another engine in the Chrome extension popup, all translation still goes through the LLM-based translation engine. The engine selector UI works but the selected engine value is not wired to the actual translation request. This does not affect project functionality.
@@ -326,9 +360,23 @@ A smart multi-provider API gateway that sits between the translation engine and 
 - [ ] Document format support (PDF, EPUB)
 - [ ] Machine translation quality scoring dashboard
 
+## 📚 Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [`SETUP.md`](SETUP.md) | Detailed deployment & local development guide |
+| [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) | Complete REST API reference |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | System architecture, data flow, cache hierarchy, deployment topology |
+| [`test-coverage-report.md`](test-coverage-report.md) | JaCoCo test coverage report (86% instruction / 75% branch) |
+| [`load-test/STRESS_TEST_REPORT.md`](load-test/STRESS_TEST_REPORT.md) | k6 + Python multi-threaded stress test results |
+| [`CODE_STYLE.md`](CODE_STYLE.md) | Coding standards, naming conventions, package structure |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Git workflow, commit conventions, PR process |
+
 ## 🤝 Contributing
 
 Bug fixes, documentation improvements, and new translation engine integrations are welcome.
+
+For setup and conventions, see [`SETUP.md`](SETUP.md), [`CODE_STYLE.md`](CODE_STYLE.md), and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/your-feature`)

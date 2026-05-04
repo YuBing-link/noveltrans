@@ -2,6 +2,13 @@
 
 Thank you for your interest in NovelTrans! This document explains how to set up the development environment, contribute code, and follow project conventions.
 
+**Other project documents:**
+
+- [SETUP.md](SETUP.md) — Detailed deployment & local development guide
+- [CODE_STYLE.md](CODE_STYLE.md) — Coding standards and naming conventions
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture and data flow
+- [README.md](README.md) — Project overview and quick start
+
 ## Table of Contents
 
 - [Development Environment Setup](#development-environment-setup)
