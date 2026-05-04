@@ -29,61 +29,11 @@ jobs:
         id: meta
         run: echo "TAG=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
-      - name: Extract GitHub username
-        id: owner
-        run: echo "OWNER=${GITHUB_REPOSITORY%/*}" >> "$GITHUB_OUTPUT"
-
       - name: Build & push llm-engine
         uses: docker/build-push-action@v5
         with:
           context: ./services/translate-engine
           push: true
           tags: |
-            ghcr.io/${{ steps.owner.outputs.OWNER }}/llm-engine:latest
-            ghcr.io/${{ steps.owner.outputs.OWNER }}/llm-engine:${{ steps.meta.outputs.TAG }}
-
-      - name: Build & push mtran-server
-        uses: docker/build-push-action@v5
-        with:
-          context: ./services/mtran-mock
-          push: true
-          tags: |
-            ghcr.io/${{ steps.owner.outputs.OWNER }}/mtran-server:latest
-            ghcr.io/${{ steps.owner.outputs.OWNER }}/mtran-server:${{ steps.meta.outputs.TAG }}
-
-      - name: Pull public images
-        run: |
-          docker pull mysql:8.0
-          docker pull redis/redis-stack-server:7.4.0-v8
-          docker pull nginx:1.28-alpine
-          docker pull maven:3.9-eclipse-temurin-21
-
-      - name: Tag & push public images to GHCR
-        run: |
-          OWNER="${{ steps.owner.outputs.OWNER }}"
-          for img in mysql:8.0 redis-stack-server:7.4.0-v8 nginx:1.28-alpine maven:3.9-eclipse-temurin-21; do
-            src="${img%%:*}"
-            tag="${img#*:}"
-            docker tag "${img}" "ghcr.io/${OWNER}/${src}:${tag}"
-            docker push "ghcr.io/${OWNER}/${src}:${tag}"
-          done
-
-      - name: Save offline package
-        run: |
-          mkdir -p docker-packages
-          OWNER="${{ steps.owner.outputs.OWNER }}"
-          docker save \
-            ghcr.io/${OWNER}/mysql:8.0 \
-            ghcr.io/${OWNER}/redis-stack-server:7.4.0-v8 \
-            ghcr.io/${OWNER}/nginx:1.28-alpine \
-            ghcr.io/${OWNER}/maven:3.9-eclipse-temurin-21 \
-            ghcr.io/${OWNER}/llm-engine:${{ steps.meta.outputs.TAG }} \
-            ghcr.io/${OWNER}/mtran-server:${{ steps.meta.outputs.TAG }} \
-            | gzip > docker-packages/noveltrans-${{ steps.meta.outputs.TAG }}-images.tar.gz
-
-      - name: Upload offline package
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-images-${{ steps.meta.outputs.TAG }}
-          path: docker-packages/
-          retention-days: 30
+            ghcr.io/${{ github.repository }}/llm-engine:latest
+            ghcr.io/${{ github.repository }}/llm-engine:${{ steps.meta.outputs.TAG }}
