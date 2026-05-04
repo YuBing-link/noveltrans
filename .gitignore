@@ -9,6 +9,9 @@ target.old/
 *.class
 *.jar
 
+# Local Docker image packages
+docker-packages/
+
 # Database
 *.db
 
