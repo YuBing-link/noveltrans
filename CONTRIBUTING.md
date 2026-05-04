@@ -290,4 +290,4 @@ A: Modify the `translation.openai.base-url` in `application.yaml` or set the `OP
 
 ---
 
-**Last updated**: 2026-04-27
+**Last updated**: 2026-05-04
