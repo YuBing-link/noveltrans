@@ -39,12 +39,15 @@ class TranslationCacheServiceVirtualThreadTest {
     private StringRedisTemplate stringRedisTemplate;
     @Mock
     private ValueOperations<String, String> valueOperations;
+    @Mock
+    private CacheVersionService cacheVersionService;
 
     private TranslationCacheService cacheService;
 
     @BeforeEach
     void setUp() {
-        cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate);
+        cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate, cacheVersionService);
+        when(cacheVersionService.getVersion(anyString(), anyString())).thenReturn("1");
         when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
     }
@@ -63,7 +66,7 @@ class TranslationCacheServiceVirtualThreadTest {
             verify(translationCacheMapper).insertCache(captor.capture());
 
             TranslationCache saved = captor.getValue();
-            assertEquals("vt-key", saved.getCacheKey());
+            assertEquals("v1:vt-key", saved.getCacheKey());
             assertEquals("source", saved.getSourceText());
             assertEquals("target", saved.getTargetText());
             assertEquals("en", saved.getSourceLang());
@@ -182,7 +185,7 @@ class TranslationCacheServiceVirtualThreadTest {
             ArgumentCaptor<TranslationCache> captor = ArgumentCaptor.forClass(TranslationCache.class);
             verify(translationCacheMapper).insertCache(captor.capture());
 
-            assertEquals("mode-key_expert", captor.getValue().getCacheKey());
+            assertEquals("v1:mode-key_expert", captor.getValue().getCacheKey());
         }
     }
 }

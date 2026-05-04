@@ -50,6 +50,11 @@ public class TranslationCache {
     private String mode;
 
     /**
+     * 缓存版本号
+     */
+    private Integer version;
+
+    /**
      * 过期时间
      */
     private LocalDateTime expireTime;

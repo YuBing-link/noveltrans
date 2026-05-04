@@ -12,6 +12,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -24,6 +26,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class TranslationCacheServiceTest {
 
     @Mock
@@ -35,11 +38,15 @@ class TranslationCacheServiceTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
 
+    @Mock
+    private CacheVersionService cacheVersionService;
+
     private TranslationCacheService cacheService;
 
     @BeforeEach
     void setUp() {
-        cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate);
+        cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate, cacheVersionService);
+        when(cacheVersionService.getVersion(anyString(), anyString())).thenReturn("1");
     }
 
     @Nested
@@ -138,10 +145,10 @@ class TranslationCacheServiceTest {
 
             cacheService.putCache("cache-key", "source", "target", "en", "zh", "google");
 
-            // Verify L1
-            assertEquals("target", cacheService.getCache("cache-key"));
-            // Verify L2 Redis write
-            verify(valueOperations).set(eq("translator:cache:cache-key"), eq("target"), any(Duration.class));
+            // Verify L1 — key now has version prefix v1:
+            assertEquals("target", cacheService.getCache("v1:cache-key"));
+            // Verify L2 Redis write with versioned key
+            verify(valueOperations).set(eq("translator:cache:v1:cache-key"), eq("target"), any(Duration.class));
         }
 
         @Test

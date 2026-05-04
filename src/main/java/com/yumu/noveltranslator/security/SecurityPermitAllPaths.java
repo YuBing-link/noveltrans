@@ -20,8 +20,7 @@ public final class SecurityPermitAllPaths {
         "/actuator",
         "/swagger-ui",
         "/v3/api-docs",
-        "/webhook/stripe",
-        "/admin/cache"
+        "/webhook/stripe"
     );
 
     private SecurityPermitAllPaths() {

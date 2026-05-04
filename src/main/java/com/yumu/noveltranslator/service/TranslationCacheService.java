@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>缓存穿透：空值占位（5 分钟短暂过期）</li>
  *   <li>缓存击穿：synchronized 对同一 key 加锁</li>
  *   <li>缓存雪崩：过期时间添加随机抖动</li>
+ *   <li>缓存一致性：版本号前缀 + 延迟双删 + Redis pub/sub</li>
  * </ul>
  */
 @Service
@@ -45,6 +46,7 @@ public class TranslationCacheService {
 
     private final TranslationCacheMapper translationCacheMapper;
     private final StringRedisTemplate stringRedisTemplate;
+    private final CacheVersionService cacheVersionService;
 
     // ==================== L1: Caffeine 内存缓存 ====================
 
@@ -109,7 +111,7 @@ public class TranslationCacheService {
      * 获取翻译缓存（三级缓存查询）
      * 查询顺序：L1 Caffeine → L2 Redis → L3 数据库 → null
      *
-     * @param cacheKey 缓存键
+     * @param cacheKey 缓存键（已包含版本号前缀）
      * @return 缓存的翻译结果，null 表示无缓存
      */
     public String getCache(String cacheKey) {
@@ -180,7 +182,7 @@ public class TranslationCacheService {
      * 根据翻译模式获取缓存
      * 按模式层级依次搜索：fast→expert→team, expert→team, team
      *
-     * @param cacheKey    基础缓存键（不含模式标签）
+     * @param cacheKey    基础缓存键（含版本号前缀，不含模式标签）
      * @param currentMode 当前翻译模式（fast/expert/team）
      * @return 缓存的翻译结果，null 表示无缓存
      */
@@ -236,8 +238,9 @@ public class TranslationCacheService {
 
     /**
      * 保存翻译缓存到 L1 + L2 + L3
+     * 写入时使用当前版本号作为 key 前缀
      *
-     * @param cacheKey   缓存键
+     * @param cacheKey   缓存键（不含版本号，由内部拼接）
      * @param sourceText 源文本
      * @param targetText 目标文本
      * @param sourceLang 源语言
@@ -246,23 +249,14 @@ public class TranslationCacheService {
      */
     public void putCache(String cacheKey, String sourceText, String targetText,
                          String sourceLang, String targetLang, String engine) {
-        String redisKey = REDIS_KEY_PREFIX + cacheKey;
-
-        // 1. 写入 L1 Caffeine
-        caffeineCache.put(cacheKey, targetText);
-
-        // 2. 写入 L2 Redis（带随机抖动防雪崩）
-        long redisTtl = REDIS_CACHE_SECONDS + jitter(REDIS_JITTER_SECONDS);
-        stringRedisTemplate.opsForValue().set(redisKey, targetText, Duration.ofSeconds(redisTtl));
-
-        // 3. 异步写入 L3 数据库（带随机抖动防雪崩）
-        saveToDatabaseAsync(cacheKey, sourceText, targetText, sourceLang, targetLang, engine);
+        putCache(cacheKey, sourceText, targetText, sourceLang, targetLang, engine, null);
     }
 
     /**
      * 保存翻译缓存到 L1 + L2 + L3（带模式标签）
+     * 写入时使用当前版本号作为 key 前缀
      *
-     * @param cacheKey   基础缓存键（不含模式标签）
+     * @param cacheKey   基础缓存键（不含版本号）
      * @param sourceText 源文本
      * @param targetText 目标文本
      * @param sourceLang 源语言
@@ -272,8 +266,24 @@ public class TranslationCacheService {
      */
     public void putCache(String cacheKey, String sourceText, String targetText,
                          String sourceLang, String targetLang, String engine, String mode) {
-        String finalKey = (mode != null && !mode.isBlank()) ? cacheKey + "_" + mode : cacheKey;
-        putCache(finalKey, sourceText, targetText, sourceLang, targetLang, engine);
+        // 获取当前版本号，拼接为 v{version}:<cacheKey>
+        String version = cacheVersionService.getVersion(sourceLang, targetLang);
+        String baseKey = "v" + version + ":" + cacheKey;
+        String finalKey = (mode != null && !mode.isBlank()) ? baseKey + "_" + mode : baseKey;
+
+        String redisKey = REDIS_KEY_PREFIX + finalKey;
+
+        // 1. 写入 L1 Caffeine
+        caffeineCache.put(finalKey, targetText);
+
+        // 2. 写入 L2 Redis（带随机抖动防雪崩）
+        long redisTtl = REDIS_CACHE_SECONDS + jitter(REDIS_JITTER_SECONDS);
+        stringRedisTemplate.opsForValue().set(redisKey, targetText, Duration.ofSeconds(redisTtl));
+
+        // 3. 异步写入 L3 数据库（带版本号）
+        saveToDatabaseAsync(finalKey, sourceText, targetText, sourceLang, targetLang, engine, version);
+
+        log.debug("L1+L2+L3 写入成功: key={}, version={}, mode={}", finalKey, version, mode);
     }
 
     /**
@@ -306,7 +316,7 @@ public class TranslationCacheService {
      * 异步保存缓存到数据库（使用虚拟线程，带重试机制）
      */
     private void saveToDatabaseAsync(String cacheKey, String sourceText, String targetText,
-                                      String sourceLang, String targetLang, String engine) {
+                                      String sourceLang, String targetLang, String engine, String version) {
         Thread.startVirtualThread(() -> {
             int maxRetries = 2;
             for (int attempt = 0; attempt <= maxRetries; attempt++) {
@@ -318,6 +328,7 @@ public class TranslationCacheService {
                     cache.setSourceLang(sourceLang);
                     cache.setTargetLang(targetLang);
                     cache.setEngine(engine);
+                    cache.setVersion(Integer.parseInt(version));
                     // 24 小时 + 随机抖动（0~4 小时），防雪崩
                     long jitterHours = jitter(DB_JITTER_HOURS);
                     cache.setExpireTime(LocalDateTime.now().plusHours(DATABASE_CACHE_EXPIRY_HOURS + jitterHours));
@@ -339,6 +350,92 @@ public class TranslationCacheService {
                 }
             }
         });
+    }
+
+    // ==================== 延迟双删 ====================
+
+    /**
+     * 延迟双删：在数据变更时保证缓存一致性
+     *
+     * 流程：
+     * 1. 前置删除：清空 L1 + L2 对应语言对的缓存
+     * 2. 版本号 bump：Redis INCR + 发布 pub/sub 事件
+     * 3. 延迟 2 秒
+     * 4. 后置删除：再次清空 L2 Redis（版本前缀匹配）+ L3 过期版本记录
+     *
+     * @param sourceLang 源语言
+     * @param targetLang 目标语言
+     */
+    public void delayedDoubleDelete(String sourceLang, String targetLang) {
+        Thread.startVirtualThread(() -> {
+            try {
+                // Step 1: 前置删除 — 清空本地 L1 缓存
+                log.info("延迟双删 [前置删除]: sourceLang={}, targetLang={}", sourceLang, targetLang);
+                clearLocalCache();
+
+                // Step 2: 版本号 bump + 发布 pub/sub 事件（其他实例收到后会清空 L1）
+                String newVersion = cacheVersionService.bumpVersionAndPublish(sourceLang, targetLang);
+
+                // Step 3: 延迟 2 秒（等待可能的并发写入完成）
+                Thread.sleep(2000);
+
+                // Step 4: 后置删除 — 清空 L2 Redis 中旧版本的所有 key
+                try {
+                    String oldVersion = String.valueOf(Integer.parseInt(newVersion) - 1);
+                    deleteRedisByOldVersion(oldVersion);
+                } catch (Exception e) {
+                    log.warn("延迟双删 [后置删除 L2] 失败: {}", e.getMessage());
+                }
+
+                // Step 5: 删除 L3 数据库中旧版本的记录
+                try {
+                    deleteDbCacheByOldVersion(Integer.parseInt(newVersion));
+                } catch (Exception e) {
+                    log.warn("延迟双删 [后置删除 L3] 失败: {}", e.getMessage());
+                }
+
+                log.info("延迟双删完成: sourceLang={}, targetLang={}, newVersion={}", sourceLang, targetLang, newVersion);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("延迟双删被中断: sourceLang={}, targetLang={}", sourceLang, targetLang);
+            } catch (Exception e) {
+                log.error("延迟双删异常: sourceLang={}, targetLang={}, error={}", sourceLang, targetLang, e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * 删除 Redis 中旧版本的所有缓存 key
+     */
+    private void deleteRedisByOldVersion(String oldVersion) {
+        String pattern = REDIS_KEY_PREFIX + "v" + oldVersion + ":*";
+        var keys = stringRedisTemplate.keys(pattern);
+        if (keys != null && !keys.isEmpty()) {
+            long deleted = stringRedisTemplate.delete(keys);
+            log.info("延迟双删 [L2] 删除旧版本 Redis key: version={}, 删除 {} 条", oldVersion, deleted);
+        }
+    }
+
+    /**
+     * 删除数据库中旧版本的所有缓存记录
+     */
+    private void deleteDbCacheByOldVersion(int currentVersion) {
+        int deleted = translationCacheMapper.delete(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<TranslationCache>()
+                        .lt("version", currentVersion)
+        );
+        log.info("延迟双删 [L3] 删除旧版本 DB 记录: currentVersion={}, 删除 {} 条", currentVersion, deleted);
+    }
+
+    // ==================== 本地缓存清空（供 CacheVersionService 调用） ====================
+
+    /**
+     * 清空本地 Caffeine 缓存，供 pub/sub 事件处理使用
+     */
+    public void clearLocalCache() {
+        long size = caffeineCache.estimatedSize();
+        caffeineCache.invalidateAll();
+        log.debug("本地 Caffeine 缓存已清空，原条目数: {}", size);
     }
 
     // ==================== 辅助方法 ====================
@@ -400,6 +497,17 @@ public class TranslationCacheService {
             log.info("L3 数据库缓存已清空，删除 {} 条记录", deleted);
         } catch (Exception e) {
             log.warn("L3 数据库缓存清空失败：{}", e.getMessage());
+        }
+
+        // 同时清空版本号
+        try {
+            var versionKeys = stringRedisTemplate.keys("translator:cache_version:*");
+            if (versionKeys != null && !versionKeys.isEmpty()) {
+                stringRedisTemplate.delete(versionKeys);
+                log.info("缓存版本号已清空");
+            }
+        } catch (Exception e) {
+            log.warn("缓存版本号清空失败: {}", e.getMessage());
         }
     }
 

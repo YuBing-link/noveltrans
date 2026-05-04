@@ -30,6 +30,7 @@ public class WebGlossaryController {
 
     private final UserService userService;
     private final com.yumu.noveltranslator.mapper.GlossaryMapper glossaryMapper;
+    private final com.yumu.noveltranslator.service.CacheVersionService cacheVersionService;
 
     /**
      * 获取术语库列表
@@ -67,6 +68,7 @@ public class WebGlossaryController {
     public Result<GlossaryResponse> createGlossaryItem(@RequestBody @Valid GlossaryItemRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
         GlossaryResponse glossary = userService.createGlossaryItem(userId, request);
+        cacheVersionService.bumpAllVersions();
         return Result.ok(glossary);
     }
 
@@ -81,6 +83,7 @@ public class WebGlossaryController {
         if (glossary == null) {
             return Result.error("术语项不存在");
         }
+        cacheVersionService.bumpAllVersions();
         return Result.ok(glossary);
     }
 
@@ -95,6 +98,7 @@ public class WebGlossaryController {
         if (!success) {
             return Result.error("术语项不存在");
         }
+        cacheVersionService.bumpAllVersions();
         return Result.ok(null);
     }
 
@@ -208,7 +212,11 @@ public class WebGlossaryController {
                 }
             }
 
-            return Result.ok(imported);
+            int result = imported > 0 ? imported : 0;
+            if (imported > 0) {
+                cacheVersionService.bumpAllVersions();
+            }
+            return Result.ok(result);
         } catch (IOException e) {
             return Result.error("文件解析失败: " + e.getMessage());
         }

@@ -39,12 +39,15 @@ class TranslationCacheServiceExtendedTest {
     private StringRedisTemplate stringRedisTemplate;
     @Mock
     private ValueOperations<String, String> valueOperations;
+    @Mock
+    private CacheVersionService cacheVersionService;
 
     private TranslationCacheService cacheService;
 
     @BeforeEach
     void setUp() {
-        cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate);
+        cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate, cacheVersionService);
+        when(cacheVersionService.getVersion(anyString(), anyString())).thenReturn("1");
         // Default: Redis returns null (L2 miss)
         when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get(anyString())).thenReturn(null);
@@ -119,8 +122,8 @@ class TranslationCacheServiceExtendedTest {
 
             cacheService.putCache("key", "source", "target", "en", "zh", "google", "team");
 
-            // 验证 L1 中存储的 key 带有 _team 后缀
-            assertEquals("target", cacheService.getCache("key_team"));
+            // 验证 L1 中存储的 key 带有 v1: 前缀和 _team 后缀
+            assertEquals("target", cacheService.getCache("v1:key_team"));
         }
 
         @Test
@@ -130,9 +133,9 @@ class TranslationCacheServiceExtendedTest {
 
             cacheService.putCache("key", "source", "target", "en", "zh", "google", "");
 
-            assertEquals("target", cacheService.getCache("key"));
+            assertEquals("target", cacheService.getCache("v1:key"));
             // 确认没有 _ 后缀
-            assertNull(cacheService.getCache("key_"));
+            assertNull(cacheService.getCache("v1:key_"));
         }
 
         @Test
@@ -142,7 +145,7 @@ class TranslationCacheServiceExtendedTest {
 
             cacheService.putCache("key", "source", "target", "en", "zh", "google", null);
 
-            assertEquals("target", cacheService.getCache("key"));
+            assertEquals("target", cacheService.getCache("v1:key"));
         }
     }
 

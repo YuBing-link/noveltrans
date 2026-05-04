@@ -39,7 +39,14 @@ class CacheKeyUtilTest {
     @Test
     void keyIsMd5Format() {
         String key = CacheKeyUtil.buildCacheKey("test", "zh", "google");
-        // MD5 hash 应为 32 位十六进制字符串
-        assertTrue(key.matches("[a-f0-9]{32}"));
+        // 格式: v{version}:{32 位十六进制 MD5}
+        assertTrue(key.matches("v\\d+:[a-f0-9]{32}"));
+    }
+
+    @Test
+    void versionedKeyMatchesExpectedFormat() {
+        String key = CacheKeyUtil.buildCacheKey("test", "en", "zh", "2");
+        assertTrue(key.startsWith("v2:"));
+        assertTrue(key.matches("v2:[a-f0-9]{32}"));
     }
 }

@@ -181,11 +181,13 @@ CREATE TABLE IF NOT EXISTS `translation_cache` (
     `target_lang` VARCHAR(50) NOT NULL,
     `engine` VARCHAR(50) DEFAULT NULL,
     `mode` VARCHAR(20) DEFAULT 'fast',
+    `version` INT NOT NULL DEFAULT 1,
     `expire_time` DATETIME NOT NULL,
     `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE INDEX `idx_cache_key` (`cache_key`),
-    INDEX `idx_cache_expire` (`expire_time`)
+    INDEX `idx_cache_expire` (`expire_time`),
+    INDEX `idx_cache_version` (`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ==================== 翻译记忆库 ====================
