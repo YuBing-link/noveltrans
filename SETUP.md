@@ -208,7 +208,6 @@ Nginx (7341)
 
 - [ ] Replace all default passwords and secrets
 - [ ] Enable HTTPS (Nginx TLS configuration)
-- [ ] Remove development proxy settings (HTTP_PROXY, etc.)
 - [ ] Enforce Stripe Webhook signature verification
 - [ ] Enable MySQL password strength policy
 - [ ] Set Redis authentication password
@@ -275,4 +274,4 @@ stripe listen --forward-to localhost:7341/webhook/stripe
 
 ---
 
-**Last updated**: 2026-05-04
+**Last updated**: 2026-05-05

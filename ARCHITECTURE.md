@@ -123,7 +123,8 @@ NovelTrans is a full-stack bilingual novel translation system built with the fol
 | `TranslationTaskService` | Async document translation task management, SSE streaming |
 | `MultiAgentTranslationService` | Multi-agent collaborative translation (by project chapters) |
 | `TranslationPipeline` | **Unified translation pipeline**: encapsulates 4-level flow (cache → RAG → entity consistency → direct LLM) |
-| `TranslationCacheService` | Caffeine (L1) + Redis (L2) cache management |
+| `TranslationCacheService` | Caffeine (L1) + Redis (L2) cache management, **term reverse index for fine-grained glossary invalidation** |
+| `CacheVersionService` | Version-stamped cache keys, `bumpVersionForGlossaryTerm()` for targeted invalidation |
 | `RagTranslationService` | RAG semantic retrieval translation memory |
 | `EntityConsistencyService` | Entity consistency (glossary + placeholder protection) |
 | `TranslationPostProcessingService` | Post-processing (residual Chinese detection and correction) |
@@ -131,7 +132,12 @@ NovelTrans is a full-stack bilingual novel translation system built with the fol
 | `UserService` | User CRUD, password management, permission checks |
 | `ExternalTranslationService` | External translation engine coordination |
 | `QuotaService` | Character quota management, tier checks |
-| `SubscriptionService` | Stripe subscription lifecycle |
+| `SubscriptionService` | Stripe subscription lifecycle, **`invoice.payment_succeeded` fallback activation** |
+| `CollabProjectService` | Team collaboration project management, **async chapter split via domain event** |
+| `ChapterSplitAsyncListener` | **`@Async` listener**: batch inserts 50 chapters per transaction, activates project via state machine |
+| `CollabEventPublisher` | **Collaboration event publisher**: publishes to Redis Stream for SSE replay |
+| `ChapterTaskService` | Chapter assignment, submission, review — uses **state machine `transitionChapter()`** |
+| `DraftProjectRecoveryTask` | **`@Scheduled` compensation task**: activates stalled DRAFT projects or logs stale for manual review |
 
 #### 4.3 Translation Pipeline (`service/pipeline/`)
 
@@ -179,6 +185,7 @@ NovelTrans is a full-stack bilingual novel translation system built with the fol
 | `RedisConfig` | Redis connection pool, serialization |
 | `RedisVectorConfig` | Redis HNSW vector index configuration |
 | `TranslationExecutorConfig` | Virtual thread executor configuration |
+| `ChapterSplitExecutorConfig` | **Dedicated thread pool for async chapter split**: core=2, max=5, queue=100 |
 | `TranslationLimitProperties` | Translation limit configuration property binding |
 | `SecurityPermitAllPaths` | Anonymous access path whitelist |
 | `MyMetaObjectHandler` | MyBatis-Plus auto-fill (created_at, updated_at) |
@@ -191,9 +198,13 @@ NovelTrans is a full-stack bilingual novel translation system built with the fol
 | `JwtAuthenticationFilter` | JWT token parsing and authentication, invalid token returns 401 |
 | `JwtAuthenticationEntryPoint` | 401 response for unauthenticated requests |
 | `ApiKeyAuthenticationFilter` | API Key (`nt_sk_xxxx`) authentication filter |
+| `TranslationRateLimitFilter` | **IP-level rate limiting for `/v1/translate/**`**: Redis Sorted Set sliding window, 100 req/60s |
+| `TranslationIpRateLimiter` | **Redis Sorted Set rate limiter**: `ZREMRANGEBYSCORE` + `ZADD` + `ZCARD`, fail-open on Redis errors |
 | `CustomUserDetails` | Spring Security UserDetails implementation |
 | `SecurityPermitAllPaths` | Centralized whitelist paths shared by SecurityConfig and JwtAuthenticationFilter |
 | `ProjectAccessAspect` | `@RequireProjectAccess` annotation AOP permission check |
+
+> **Note**: Filter classes (`JwtAuthenticationFilter`, `ApiKeyAuthenticationFilter`, `SecurityHeadersFilter`, `TranslationRateLimitFilter`) are **not** annotated with `@Component`. They are created with `new` in `SecurityConfig.filterChain()` to avoid Spring Security's CGLIB proxy ordering conflicts.
 
 #### 4.6 Utilities
 
@@ -510,6 +521,11 @@ The system applies 6 translation principles for novel content:
 │                                                  │
 │  Request → SecurityFilterChain                    │
 │            │                                     │
+│            ├── TranslationRateLimitFilter         │
+│            │   └── IP sliding window:             │
+│            │       100 req / 60s per IP           │
+│            │       Skips API Key auth             │
+│            │                                     │
 │            ├── Whitelist paths → Pass directly   │
 │            │   (/user/login, /user/register,     │
 │            │    /health, /actuator, /swagger)    │
@@ -546,6 +562,20 @@ The system applies 6 translation principles for novel content:
 
 ### Rate Limiting
 
+#### IP-Level (Security Filter Layer)
+
+| Parameter | Value |
+|-----------|-------|
+| Algorithm | Redis Sorted Set sliding window |
+| Key | `translation:ip_limit:{clientIP}` |
+| Window | 60 seconds |
+| Max requests | 100 per window |
+| Scope | `/v1/translate/**` only |
+| Skip | API Key authenticated requests |
+| Failure | Fail-open (allow on Redis error) |
+
+#### Per-User (Application Layer)
+
 | User Type | Max Concurrency |
 |-----------|----------------|
 | Anonymous | 1 |
@@ -555,6 +585,7 @@ The system applies 6 translation principles for novel content:
 
 - Per-user concurrency enforced via `Semaphore`
 - Daily quota counting via Redis sliding window
+- IP extraction: `X-Forwarded-For` → `X-Real-IP` → `getRemoteAddr()`
 
 ### Data Security
 
@@ -685,4 +716,4 @@ user (1) ──── (N) translation_memory
 
 ---
 
-**Last updated**: 2026-05-04
+**Last updated**: 2026-05-05

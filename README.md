@@ -23,13 +23,16 @@ A SaaS translation platform for web novel authors and translators — batch-tran
 
 | Area | Implementation |
 |------|----------------|
-| **Distributed cache consistency** | Version-stamped cache with delayed double-delete and Redis pub/sub for cross-instance invalidation |
+| **Distributed cache consistency** | Version-stamped cache with delayed double-delete, Redis pub/sub for cross-instance invalidation, and **term-aware reverse index for fine-grained glossary cache invalidation** (only affected entries expire, not global) |
 | **Virtual threads** | Java 21 virtual threads throughout — async cache eviction, multi-agent fan-out, and HTTP client I/O |
 | **Cache chain** | 4-tier: Caffeine L1 (10 min) → Redis L2 (30 min) → MySQL L3 (24 h) → RAG semantic match (permanent) |
-| **Webhook idempotency** | Stripe webhook deduplication with DuplicateKeyException handling, safe under concurrent delivery |
+| **Webhook idempotency** | 5-layer defense-in-depth (signature → Redis SETNX → DB lastWebhookEventId → DuplicateKeyException → timestamp ordering), with **`invoice.payment_succeeded` as fallback activation path** |
 | **Engine resilience** | LLM + MTranServer dual-engine with health check, circuit breaker cooling, and probabilistic routing |
 | **RAG vector search** | Redis Stack HNSW index with KNN semantic search, user-scoped isolation, automatic quality filtering |
-| **Rate limiting** | Tiered concurrency control — anonymous / free / pro / API key, enforced per-user |
+| **Rate limiting** | **IP-level Redis sliding window** for `/v1/translate/**` + tiered per-user concurrency (anonymous / free / pro / API key) |
+| **Async batch processing** | **Event-driven chapter split**: narrow DB transaction + `@Async` batch insert (50/batch) + scheduled compensation task for crash recovery |
+| **SSE reliability** | **Redis Stream message replay** — clients reconnect with `lastEventId` to recover missed collaboration events |
+| **State machine** | **Driving state machine** — `transitionProject()` and `transitionChapter()` encapsulate validate + set, preventing status bypass |
 | **Testing** | 86% instruction / 75% branch coverage with JUnit 5 + Vitest + Playwright + k6 load testing |
 
 ## 🛠️ Quick Start
@@ -194,6 +197,14 @@ Data Change (update/delete translation memory)
   ├── Step 3: Sleep 2s (wait for in-flight writes to complete)
   ├── Step 4: Clear L2 Redis old-version keys + expire L3 old records — post-delete
   └── Step 5: All instances receive pub/sub, flush their L1 local cache
+
+Glossary Change (add/update/delete term)
+  │
+  ├── On putCache(): extract words (length >= 3) from sourceText
+  ├── For each word: SADD glossary:cache_keys:{word} {cacheKey}
+  ├── On glossary change: SMEMBERS glossary:cache_keys:{term}
+  ├── Delete only affected keys across L1, L2, L3
+  └── Avoids global cache stampede — only matching entries invalidated
 ```
 
 <details>
@@ -241,7 +252,8 @@ Data Change (update/delete translation memory)
 - **API Key management**: `nt_sk_xxxx` prefix + 32 random chars, list display with mask
 - **BCrypt password hashing**: User passwords hashed before storage
 - **Email verification**: Double verification for registration / password reset
-- **Tiered rate limiting**: Different concurrency limits for anonymous / free / pro users
+- **IP-level rate limiting**: Redis Sorted Set sliding window (100 req/60s per IP) on all `/v1/translate/**` endpoints, placed before JWT filter in Security filter chain. Skips API Key authenticated requests.
+- **Tiered per-user rate limiting**: Different concurrency limits for anonymous / free / pro users
 </details>
 
 <details>
@@ -395,4 +407,4 @@ For larger changes, please open an issue first to discuss the approach.
 
 ---
 
-**Last updated**: 2026-05-04
+**Last updated**: 2026-05-05

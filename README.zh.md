@@ -23,13 +23,16 @@
 
 | 领域 | 实现 |
 |------|------|
-| **分布式缓存一致性** | 版本号 + 延迟双删 + Redis pub/sub 跨实例缓存失效联动 |
+| **分布式缓存一致性** | 版本号 + 延迟双删 + Redis pub/sub 跨实例缓存失效联动；**术语反向索引精准失效**（新增/修改术语只淘汰包含该词的缓存条目，避免全局暴力刷新） |
 | **虚拟线程** | Java 21 虚拟线程贯穿全局 — 异步缓存驱逐、多智能体扇出、HTTP 客户端 I/O |
 | **四级缓存链路** | Caffeine L1 (10 min) → Redis L2 (30 min) → MySQL L3 (24 h) → RAG 语义匹配（永久） |
-| **Webhook 幂等性** | Stripe webhook 去重处理，DuplicateKeyException 安全，支持并发投递 |
+| **Webhook 幂等性** | 5 层纵深防御（签名 → Redis SETNX → DB lastWebhookEventId → DuplicateKeyException → 时间戳排序），**`invoice.payment_succeeded` 作为 fallback 激活路径** |
 | **引擎弹性容错** | LLM + MTranServer 双引擎，健康检查 + 断路器冷却 + 概率路由 |
 | **RAG 向量检索** | Redis Stack HNSW 索引 + KNN 语义搜索，用户隔离，质量自动过滤 |
-| **分级限流** | 匿名 / 免费 / Pro / API Key 差异化并发限制，按用户维度控制 |
+| **分级限流** | **IP 级 Redis 滑动窗口限流**（`/v1/translate/**`，60s/100 次）+ 按用户维度的匿名/免费/Pro/API Key 差异化并发限制 |
+| **异步批量处理** | **事件驱动章节拆分**：窄事务 + `@Async` 批量插入（50 章/批）+ 定时补偿任务兜底节点宕机 |
+| **SSE 断线重放** | **Redis Stream 消息重放** — 客户端携带 `lastEventId` 重连可追回丢失的协作事件 |
+| **状态机驱动** | **驱动型状态机** — `transitionProject()` 和 `transitionChapter()` 封装 validate + set，防止 setStatus 绕过校验 |
 | **测试覆盖** | 86% 指令覆盖率 / 75% 分支覆盖率，JUnit 5 + Vitest + Playwright + k6 压测 |
 
 ## 🛠️ 快速开始
@@ -193,6 +196,14 @@ noveltrans/
   ├── 第 3 步：等待 2 秒（等待进行中的写入完成）
   ├── 第 4 步：清空 L2 Redis 旧版本 key + 过期 L3 旧记录 — 后置删除
   └── 第 5 步：所有实例接收 pub/sub，清空各自 L1 本地缓存
+
+术语库变更（新增/修改/删除术语）
+  │
+  ├── putCache() 时从 sourceText 提取单词（长度 >= 3）
+  ├── 对每个单词：SADD glossary:cache_keys:{word} {cacheKey}
+  ├── 术语变更时：SMEMBERS glossary:cache_keys:{term}
+  ├── 只删除受影响的 L1、L2、L3 缓存键
+  └── 避免全局缓存抖动 — 只淘汰包含该词的条目
 ```
 
 ### 详细技术说明
@@ -242,6 +253,7 @@ noveltrans/
 - **API Key 管理**：`nt_sk_xxxx` 格式前缀 + 32 位随机字符，列表展示掩码脱敏
 - **BCrypt 密码加密**：用户密码哈希存储
 - **邮箱验证**：注册/密码重置双重验证
+- **IP 级限流**：Redis Sorted Set 滑动窗口（每 IP 60 秒内最多 100 请求），位于 JWT 过滤器之前，跳过 API Key 认证的请求，防止恶意用户多账号轮换绕过限制
 - **分级限流**：匿名用户 / 免费用户 / Pro 用户差异化并发限制
 </details>
 
@@ -390,4 +402,4 @@ noveltrans/
 
 ---
 
-**最后更新**：2026-05-04
+**最后更新**：2026-05-05
