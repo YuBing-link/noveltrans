@@ -13,6 +13,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.SocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -91,13 +95,13 @@ public class UserLevelThrottledTranslationClient {
     /**
      * 禁用代理的 ProxySelector，确保内部 Docker 服务直连
      */
-    private static final java.net.ProxySelector NO_PROXY_SELECTOR = new java.net.ProxySelector() {
+    private static final ProxySelector NO_PROXY_SELECTOR = new ProxySelector() {
         @Override
-        public java.util.List<java.net.Proxy> select(java.net.URI uri) {
-            return java.util.List.of(java.net.Proxy.NO_PROXY);
+        public List<Proxy> select(URI uri) {
+            return List.of(Proxy.NO_PROXY);
         }
         @Override
-        public void connectFailed(java.net.URI uri, java.net.SocketAddress sa, java.io.IOException ioe) {
+        public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
             // 连接失败由上层 HttpClient 处理
         }
     };

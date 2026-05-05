@@ -39,7 +39,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-
 import jakarta.annotation.PostConstruct;
 
 /**
@@ -234,7 +233,7 @@ public class MultiAgentTranslationService {
             if (!aiGlossaryGlossaryTerms.isEmpty()) {
                 Set<String> userTermKeys = glossaryTerms.stream()
                         .map(Glossary::getSourceWord)
-                        .collect(java.util.stream.Collectors.toSet());
+                        .collect(Collectors.toSet());
                 for (Glossary aiTerm : aiGlossaryGlossaryTerms) {
                     if (!userTermKeys.contains(aiTerm.getSourceWord())) {
                         glossaryTerms.add(aiTerm);

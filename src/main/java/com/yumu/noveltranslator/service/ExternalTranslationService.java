@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.net.ConnectException;
 import java.time.Duration;
 
 /**
@@ -88,7 +89,7 @@ public class ExternalTranslationService {
                 throw new RuntimeException("外部翻译引擎响应超时，请检查服务性能：" + e.getMessage(), e);
             }
             // 检查是否是连接失败
-            if (e.getCause() instanceof java.net.ConnectException || errorMsg.contains("Connection refused") || errorMsg.contains("connect timed out")) {
+            if (e.getCause() instanceof ConnectException || errorMsg.contains("Connection refused") || errorMsg.contains("connect timed out")) {
                 log.error("外部翻译引擎连接失败，请确认服务已启动在 http://localhost:{}，错误：{}",
                          System.getProperty("mtran.server.port", "8989"), e.getMessage(), e);
                 throw new RuntimeException("无法连接到外部翻译引擎，请确认服务已启动：" + e.getMessage(), e);

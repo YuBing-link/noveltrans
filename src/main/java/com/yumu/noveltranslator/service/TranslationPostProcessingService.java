@@ -12,7 +12,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import jakarta.annotation.PreDestroy;
@@ -73,8 +75,8 @@ public class TranslationPostProcessingService {
      * 检测译文中连续的中文字符段
      * 日语目标语言使用排除法：日语使用 CJK 统一表意文字（汉字），需排除常见日语汉字
      */
-    private java.util.List<String> detectChineseSegments(String text) {
-        java.util.List<String> segments = new java.util.ArrayList<>();
+    private List<String> detectChineseSegments(String text) {
+        List<String> segments = new ArrayList<>();
         Matcher matcher = CHINESE_PATTERN.matcher(text);
         while (matcher.find()) {
             segments.add(matcher.group());
@@ -114,7 +116,7 @@ public class TranslationPostProcessingService {
     /**
      * 调用 LLM 补充翻译残留中文段
      */
-    private String remediateSegments(java.util.List<String> segments, String targetLang, String engine) throws Exception {
+    private String remediateSegments(List<String> segments, String targetLang, String engine) throws Exception {
         String sourceText = String.join("\n", segments);
 
         String baseUrl = pythonTranslateUrl.replace("/translate", "");
@@ -162,7 +164,7 @@ public class TranslationPostProcessingService {
      * 将补救翻译结果应用到原文
      * 关键修复：使用逐个替换，避免 String.replace() 的全局替换导致内容混乱
      */
-    private String applyRemediation(String translatedText, java.util.List<String> segments, String remedied) {
+    private String applyRemediation(String translatedText, List<String> segments, String remedied) {
         String result = translatedText;
         String[] remediedSegments = remedied.split("\n", -1);
 

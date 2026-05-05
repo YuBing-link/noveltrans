@@ -34,7 +34,11 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -342,9 +346,10 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      * 获取用户创建的项目列表
      */
     public List<CollabProjectResponse> listOwnedByUserId(Long userId) {
-        return collabProjectMapper.selectByOwnerId(userId)
-                .stream()
-                .map(this::toProjectResponse)
+        List<CollabProject> projects = collabProjectMapper.selectByOwnerId(userId);
+        Map<Long, User> userMap = batchLoadOwnerUsers(projects);
+        return projects.stream()
+                .map(p -> toProjectResponse(p, userMap))
                 .collect(Collectors.toList());
     }
 
@@ -361,8 +366,9 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             List<CollabProject> pagedProjects = fromIndex < total
                     ? allProjects.subList(fromIndex, toIndex)
                     : List.of();
+            Map<Long, User> userMap = batchLoadOwnerUsers(pagedProjects);
             List<CollabProjectResponse> responseList = pagedProjects.stream()
-                    .map(this::toProjectResponse)
+                    .map(p -> toProjectResponse(p, userMap))
                     .collect(Collectors.toList());
             return PageResponse.of(page, pageSize, total, responseList);
         } finally {
@@ -635,6 +641,10 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     }
 
     private CollabProjectResponse toProjectResponse(CollabProject project) {
+        return toProjectResponse(project, Map.of());
+    }
+
+    private CollabProjectResponse toProjectResponse(CollabProject project, Map<Long, User> userMap) {
         CollabProjectResponse resp = new CollabProjectResponse();
         resp.setId(project.getId());
         resp.setName(project.getName());
@@ -648,7 +658,10 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         resp.setUpdateTime(project.getUpdateTime());
 
         // 设置所有者名称
-        User owner = userMapper.selectById(project.getOwnerId());
+        User owner = userMap.get(project.getOwnerId());
+        if (owner == null) {
+            owner = userMapper.selectById(project.getOwnerId());
+        }
         if (owner != null) {
             resp.setOwnerName(owner.getUsername());
         }
@@ -658,6 +671,21 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         resp.setMemberCount(memberCount);
 
         return resp;
+    }
+
+    private Map<Long, User> batchLoadOwnerUsers(List<CollabProject> projects) {
+        Set<Long> userIds = new HashSet<>();
+        for (CollabProject p : projects) {
+            if (p.getOwnerId() != null) userIds.add(p.getOwnerId());
+        }
+        Map<Long, User> userMap = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(userIds);
+            for (User user : users) {
+                userMap.put(user.getId(), user);
+            }
+        }
+        return userMap;
     }
 
     private ProjectMemberResponse toMemberResponse(CollabProjectMember member, User user) {

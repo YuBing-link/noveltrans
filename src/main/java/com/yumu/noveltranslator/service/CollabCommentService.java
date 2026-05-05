@@ -71,7 +71,7 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
         save(comment);
 
         log.info("创建评论: chapterTaskId={}, userId={}, parentId={}", chapterTaskId, userId, request.getParentId());
-        return toCommentResponse(comment);
+        return toCommentResponse(comment, Map.of());
     }
 
     /**
@@ -91,16 +91,16 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
         Page<CollabComment> commentPage = new Page<>(page, size);
         var rootPage = collabCommentMapper.selectByChapterTaskIdPage(commentPage, chapterTaskId);
 
-        // 批量加载关联用户，避免 N+1
+        // 批量加载回复和用户，避免 N+1
         Set<Long> userIds = new HashSet<>();
-        for (CollabComment comment : rootPage.getRecords()) {
-            userIds.add(comment.getUserId());
-        }
-        List<CollabComment> allReplies = collabCommentMapper.selectByChapterTaskIdAll(chapterTaskId);
-        Map<Long, CollabComment> replyMap = new HashMap<>();
-        for (CollabComment reply : allReplies) {
-            replyMap.computeIfAbsent(reply.getParentId(), k -> new ArrayList<>());
-            userIds.add(reply.getUserId());
+        Map<Long, List<CollabComment>> repliesByRoot = new HashMap<>();
+        for (CollabComment root : rootPage.getRecords()) {
+            userIds.add(root.getUserId());
+            List<CollabComment> replies = collabCommentMapper.selectRepliesByParentId(root.getId());
+            repliesByRoot.put(root.getId(), replies);
+            for (CollabComment reply : replies) {
+                userIds.add(reply.getUserId());
+            }
         }
 
         Map<Long, User> userMap = new HashMap<>();
@@ -111,11 +111,10 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
             }
         }
 
-        // 为当前页的根评论加载回复
         List<CommentResponse> responses = rootPage.getRecords().stream()
                 .map(root -> {
                     CommentResponse resp = toCommentResponse(root, userMap);
-                    List<CommentResponse> replyResponses = collabCommentMapper.selectRepliesByParentId(root.getId()).stream()
+                    List<CommentResponse> replyResponses = repliesByRoot.getOrDefault(root.getId(), List.of()).stream()
                             .map(reply -> toCommentResponse(reply, userMap))
                             .collect(Collectors.toList());
                     resp.setReplies(replyResponses);
@@ -171,7 +170,7 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
         removeById(commentId);
     }
 
-    private CommentResponse toCommentResponse(CollabComment comment) {
+    private CommentResponse toCommentResponse(CollabComment comment, Map<Long, User> userMap) {
         CommentResponse resp = new CommentResponse();
         resp.setId(comment.getId());
         resp.setUserId(comment.getUserId());
@@ -181,7 +180,7 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
         resp.setResolved(comment.getResolved());
         resp.setCreateTime(comment.getCreateTime());
 
-        User user = userMapper.selectById(comment.getUserId());
+        User user = userMap.get(comment.getUserId());
         if (user != null) {
             resp.setUsername(user.getUsername());
             resp.setAvatar(user.getAvatar());

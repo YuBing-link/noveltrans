@@ -22,7 +22,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -77,12 +81,12 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         Page<CollabChapterTask> resultPage = chapterTaskMapper.selectPage(pageParam, wrapper);
 
         // 批量加载关联用户，避免 N+1
-        java.util.Set<Long> userIds = new java.util.HashSet<>();
+        Set<Long> userIds = new HashSet<>();
         for (CollabChapterTask task : resultPage.getRecords()) {
             if (task.getAssigneeId() != null) userIds.add(task.getAssigneeId());
             if (task.getReviewerId() != null) userIds.add(task.getReviewerId());
         }
-        java.util.Map<Long, User> userMap = new java.util.HashMap<>();
+        Map<Long, User> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
             List<User> users = userMapper.selectBatchIds(userIds);
             for (User user : users) {
@@ -244,8 +248,22 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
                .orderByDesc(CollabChapterTask::getUpdateTime);
         Page<CollabChapterTask> pageParam = new Page<>(page, pageSize);
         Page<CollabChapterTask> resultPage = chapterTaskMapper.selectPage(pageParam, wrapper);
+
+        Set<Long> userIds = new HashSet<>();
+        for (CollabChapterTask task : resultPage.getRecords()) {
+            if (task.getAssigneeId() != null) userIds.add(task.getAssigneeId());
+            if (task.getReviewerId() != null) userIds.add(task.getReviewerId());
+        }
+        Map<Long, User> userMap = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(userIds);
+            for (User user : users) {
+                userMap.put(user.getId(), user);
+            }
+        }
+
         List<ChapterTaskResponse> list = resultPage.getRecords().stream()
-                .map(this::toChapterResponse)
+                .map(task -> toChapterResponse(task, userMap))
                 .collect(Collectors.toList());
         return PageResponse.of(page, pageSize, resultPage.getTotal(), list);
     }
