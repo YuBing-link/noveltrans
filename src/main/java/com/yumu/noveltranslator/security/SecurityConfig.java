@@ -1,6 +1,11 @@
 package com.yumu.noveltranslator.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.config.tenant.TenantCleanupInterceptor;
+import com.yumu.noveltranslator.mapper.ApiKeyMapper;
+import com.yumu.noveltranslator.mapper.UserMapper;
+import com.yumu.noveltranslator.service.TokenBlacklistService;
+import com.yumu.noveltranslator.util.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,41 +34,58 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final TenantCleanupInterceptor tenantCleanupInterceptor;
-    private final SecurityHeadersFilter securityHeadersFilter;
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final TranslationRateLimitFilter translationRateLimitFilter;
+    private final TranslationIpRateLimiter translationIpRateLimiter;
+    private final ObjectMapper objectMapper;
+    private final JwtUtils jwtUtils;
+    private final UserMapper userMapper;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final ApiKeyMapper apiKeyMapper;
 
     @Bean
-    public JwtAuthenticationFilter authenticationTokenFilter() {
-        return jwtAuthenticationFilter;
-    }
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // Create filter instances directly (no longer @Component)
+        JwtAuthenticationFilter jwtAuthenticationFilter =
+                new JwtAuthenticationFilter(jwtUtils, userMapper, tokenBlacklistService);
+        ApiKeyAuthenticationFilter apiKeyAuthenticationFilter =
+                new ApiKeyAuthenticationFilter(apiKeyMapper, userMapper);
+        TranslationRateLimitFilter translationRateLimitFilter =
+                new TranslationRateLimitFilter(translationIpRateLimiter, objectMapper);
+        SecurityHeadersFilter securityHeadersFilter = new SecurityHeadersFilter();
 
-    @Bean
-    public SecurityHeadersFilter securityHeadersFilter() {
-        return new SecurityHeadersFilter();
-    }
+        http
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+            .authorizeHttpRequests(authz -> authz
+                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers(SecurityPermitAllPaths.PERMIT_ALL_PATHS.toArray(new String[0])).permitAll()
+                .requestMatchers("/admin/**").authenticated()
+                .requestMatchers("/v1/translate/selection", "/v1/translate/reader", "/v1/translate/webpage", "/v1/translate/text/stream").authenticated()
+                .requestMatchers("/v1/translate/**").authenticated()
+                .anyRequest().authenticated()
+            );
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+        // All custom filters positioned before UsernamePasswordAuthenticationFilter.
+        // Order: translationRateLimit → apiKeyAuth → jwtAuth
+        http.addFilterBefore(translationRateLimitFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(tenantCleanupInterceptor, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(securityHeadersFilter, UsernamePasswordAuthenticationFilter.class);
 
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
+        return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        // CORS 白名单：严格校验 Origin，防止跨域攻击
         String allowedOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
         List<String> origins;
         if (allowedOrigins != null && !allowedOrigins.isBlank()) {
             origins = List.of(allowedOrigins.split(","));
         } else {
-            // 开发环境：本地端口 + Chrome 扩展
             origins = List.of(
                 "http://localhost:7341",
                 "chrome-extension://imhobepmmpncjlobbicamollfjldiodi"
@@ -74,7 +96,7 @@ public class SecurityConfig {
         return (HttpServletRequest request) -> {
             String origin = request.getHeader("Origin");
             if (origin == null || !allowedOriginsList.contains(origin)) {
-                return null; // 拒绝非白名单源
+                return null;
             }
             CorsConfiguration config = new CorsConfiguration();
             config.setAllowedOriginPatterns(List.of(origin));
@@ -87,32 +109,12 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            // CSRF 已禁用：本项目使用 JWT + Authorization header 认证，
-            // 不依赖浏览器自动携带的 Cookie 认证，因此不受 CSRF 攻击影响。
-            // 如果未来引入 Cookie 认证，需要启用 CSRF 保护。
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
-            .authorizeHttpRequests(authz -> authz
-                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers(SecurityPermitAllPaths.PERMIT_ALL_PATHS.toArray(new String[0])).permitAll()
-                .requestMatchers("/admin/**").authenticated()
-                // 翻译端点必须认证：防止匿名请求消耗配额和费用
-                .requestMatchers("/v1/translate/selection", "/v1/translate/reader", "/v1/translate/webpage", "/v1/translate/text/stream").authenticated()
-                .requestMatchers("/v1/translate/**").authenticated()
-                .anyRequest().authenticated()
-            );
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 
-        http.addFilterBefore(translationRateLimitFilter, JwtAuthenticationFilter.class);
-        http.addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-        http.addFilterBefore(authenticationTokenFilter(), ApiKeyAuthenticationFilter.class);
-        http.addFilterAfter(tenantCleanupInterceptor, UsernamePasswordAuthenticationFilter.class);
-        http.addFilterAfter(securityHeadersFilter, TenantCleanupInterceptor.class);
-
-        return http.build();
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 }

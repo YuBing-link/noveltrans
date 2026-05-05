@@ -8,7 +8,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,14 +23,17 @@ import java.time.LocalDateTime;
  * 支持 Authorization: Bearer nt_sk_xxxx 格式的 API Key 认证
  */
 @Slf4j
-@Component
-@RequiredArgsConstructor
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String API_KEY_PREFIX = "nt_sk_";
 
     private final ApiKeyMapper apiKeyMapper;
     private final UserMapper userMapper;
+
+    public ApiKeyAuthenticationFilter(ApiKeyMapper apiKeyMapper, UserMapper userMapper) {
+        this.apiKeyMapper = apiKeyMapper;
+        this.userMapper = userMapper;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)

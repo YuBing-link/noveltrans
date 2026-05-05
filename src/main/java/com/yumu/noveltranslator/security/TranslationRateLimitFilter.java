@@ -23,16 +23,23 @@ import java.util.Map;
  * <p>
  * Skips rate limiting for authenticated API Key requests, which already
  * have per-key tracking at the application layer.
+ * <p>
+ * NOTE: Not a @Component — declared as @Bean in SecurityConfig to avoid
+ * CGLIB proxy issues with Spring Security's filter registration.
  */
 @Slf4j
-@Component
-@RequiredArgsConstructor
 public class TranslationRateLimitFilter extends OncePerRequestFilter {
 
     private static final int RETRY_AFTER_SECONDS = 60;
 
     private final TranslationIpRateLimiter translationIpRateLimiter;
     private final ObjectMapper objectMapper;
+
+    public TranslationRateLimitFilter(TranslationIpRateLimiter translationIpRateLimiter,
+                                       ObjectMapper objectMapper) {
+        this.translationIpRateLimiter = translationIpRateLimiter;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

@@ -19,23 +19,31 @@ class SecurityConfigTest {
     private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
     @Mock
-    private ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
-
-    @Mock
     private com.yumu.noveltranslator.config.tenant.TenantCleanupInterceptor tenantCleanupInterceptor;
 
     @Mock
-    private com.yumu.noveltranslator.security.SecurityHeadersFilter securityHeadersFilter;
+    private TranslationIpRateLimiter translationIpRateLimiter;
 
     @Mock
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Mock
-    private TranslationRateLimitFilter translationRateLimitFilter;
+    private com.yumu.noveltranslator.util.JwtUtils jwtUtils;
+
+    @Mock
+    private com.yumu.noveltranslator.mapper.UserMapper userMapper;
+
+    @Mock
+    private com.yumu.noveltranslator.service.TokenBlacklistService tokenBlacklistService;
+
+    @Mock
+    private com.yumu.noveltranslator.mapper.ApiKeyMapper apiKeyMapper;
 
     private SecurityConfig createConfig() {
         return new SecurityConfig(
-                jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor, securityHeadersFilter, jwtAuthenticationFilter, translationRateLimitFilter);
+                jwtAuthenticationEntryPoint, tenantCleanupInterceptor,
+                translationIpRateLimiter, objectMapper,
+                jwtUtils, userMapper, tokenBlacklistService, apiKeyMapper);
     }
 
     @Nested
