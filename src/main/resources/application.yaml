@@ -13,6 +13,16 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 10000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -28,7 +38,7 @@ spring:
   sql:
     init:
       schema-locations: classpath:sql/schema.sql
-      mode: always
+      mode: never
   threads:
     virtual:
       enabled: true
@@ -124,6 +134,21 @@ mtran:
     api-key: ${MTRAN_API_KEY:}
     mock: ${MTRAN_MOCK:false}  # true = 模拟响应（开发/测试），false = 直连真实 MTranServer
 
+# Resilience4j 熔断器配置
+resilience4j:
+  circuitbreaker:
+    instances:
+      mtranServer:
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        slidingWindowSize: 10
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 5
+        recordExceptions:
+          - java.util.concurrent.TimeoutException
+          - java.io.IOException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+
 email:
 
 # Embedding 配置（RAG 翻译记忆）
@@ -150,7 +175,7 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
       show-components: always
 
 # Stripe 支付配置（Test 模式）

@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.beans.factory.annotation.Value;
-import jakarta.annotation.PostConstruct;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -22,11 +22,13 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import jakarta.annotation.PreDestroy;
 
 /**
  * 基于用户级别的限流翻译客户端
@@ -83,10 +85,8 @@ public class UserLevelThrottledTranslationClient {
     private final ExternalTranslationService externalTranslationService;
     private final TranslationLimitProperties limitProperties;
 
-    private Semaphore freeUserSemaphore;
-    private Semaphore proUserSemaphore;
-    private Semaphore maxUserSemaphore;
-    private Semaphore anonymousUserSemaphore;
+    private final ConcurrentHashMap<String, Semaphore> userSemaphores = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> semaphoreLastAccessTime = new ConcurrentHashMap<>();
 
     /**
      * 禁用代理的 ProxySelector，确保内部 Docker 服务直连
@@ -109,14 +109,68 @@ public class UserLevelThrottledTranslationClient {
             .build();
 
     /**
-     * 初始化用户级别信号量（从配置文件读取）
+     * 获取用户专属的信号量（基于 userId 隔离）
      */
-    @PostConstruct
-    public void init() {
-        this.freeUserSemaphore = new Semaphore(limitProperties.getFreeConcurrencyLimit());
-        this.proUserSemaphore = new Semaphore(limitProperties.getProConcurrencyLimit());
-        this.maxUserSemaphore = new Semaphore(limitProperties.getMaxConcurrencyLimit());
-        this.anonymousUserSemaphore = new Semaphore(limitProperties.getAnonymousConcurrencyLimit());
+    private Semaphore getUserSemaphore() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String userId;
+
+        if (authentication != null && authentication.isAuthenticated() &&
+            authentication.getPrincipal() instanceof CustomUserDetails) {
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+            userId = "user_" + userDetails.getId();
+        } else {
+            userId = "anonymous";
+        }
+
+        semaphoreLastAccessTime.put(userId, System.nanoTime());
+
+        return userSemaphores.computeIfAbsent(userId, uid -> {
+            String userLevel;
+            if (userId.startsWith("user_")) {
+                CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+                userLevel = userDetails.getUserLevel();
+            } else {
+                userLevel = "anonymous";
+            }
+
+            int permits;
+            if ("max".equalsIgnoreCase(userLevel)) {
+                permits = limitProperties.getMaxConcurrencyLimit();
+            } else if ("pro".equalsIgnoreCase(userLevel) || "premium".equalsIgnoreCase(userLevel)) {
+                permits = limitProperties.getProConcurrencyLimit();
+            } else if ("anonymous".equals(uid)) {
+                permits = limitProperties.getAnonymousConcurrencyLimit();
+            } else {
+                permits = limitProperties.getFreeConcurrencyLimit();
+            }
+            log.info("为用户 {} (level={}) 创建信号量，permits={}", uid, userLevel, permits);
+            return new Semaphore(permits);
+        });
+    }
+
+    /**
+     * 定时清理 30 分钟内未使用的信号量，防止内存泄漏
+     */
+    @Scheduled(cron = "0 */30 * * * *")
+    public void cleanupIdleSemaphores() {
+        long now = System.nanoTime();
+        long idleThreshold = TimeUnit.MINUTES.toNanos(30);
+        int cleanedCount = 0;
+
+        for (Map.Entry<String, Long> entry : semaphoreLastAccessTime.entrySet()) {
+            if (now - entry.getValue() > idleThreshold) {
+                String userId = entry.getKey();
+                userSemaphores.remove(userId);
+                semaphoreLastAccessTime.remove(userId);
+                cleanedCount++;
+                log.info("清理空闲信号量：userId={}", userId);
+            }
+        }
+
+        if (cleanedCount > 0) {
+            log.info("信号量清理完成：共清理 {} 个空闲信号量", cleanedCount);
+        }
     }
 
 
@@ -591,31 +645,6 @@ public class UserLevelThrottledTranslationClient {
 
 
     /**
-     * 根据用户身份获取对应的信号量
-     */
-    private Semaphore getUserSemaphore() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication != null && authentication.isAuthenticated() &&
-            authentication.getPrincipal() instanceof CustomUserDetails) {
-            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
-            String userLevel = userDetails.getUserLevel();
-
-            if ("max".equalsIgnoreCase(userLevel)) {
-                return maxUserSemaphore;
-            } else if ("pro".equalsIgnoreCase(userLevel) || "premium".equalsIgnoreCase(userLevel)) {
-                return proUserSemaphore;
-            } else {
-                // 默认为免费用户
-                return freeUserSemaphore;
-            }
-        }
-
-        // 未登录用户
-        return anonymousUserSemaphore;
-    }
-
-    /**
      * 获取统计信息（用于监控和调试）
      */
     public Map<String, Object> getRoundRobinStats() {
@@ -640,5 +669,13 @@ public class UserLevelThrottledTranslationClient {
             (System.currentTimeMillis() - Math.max(pythonLastResetTime.get(), mTranLastResetTime.get())) / 1000);
 
         return stats;
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        client.close();
+        userSemaphores.clear();
+        semaphoreLastAccessTime.clear();
+        log.info("UserLevelThrottledTranslationClient 已关闭");
     }
 }

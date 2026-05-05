@@ -98,6 +98,14 @@ openai_client = AsyncOpenAI(
 # =============================================================================
 app = FastAPI(title="Novel Translation Microservice", version="5.0")
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    _translation_executor.shutdown(wait=True)
+    try:
+        await openai_client.close()
+    except Exception:
+        pass
+
 # =============================================================================
 # 1. 引擎注册表（保留扩展机制）
 # =============================================================================
@@ -209,6 +217,7 @@ def record_engine_failure(eng_name: str, error: str):
 RATE_LIMIT_MAX = 10        # 每秒最大请求数
 RATE_LIMIT_WINDOW = 1.0    # 窗口大小（秒）
 _request_timestamps: list[float] = []
+_rate_limit_lock = asyncio.Lock()
 
 async def check_rate_limit() -> bool:
     """
@@ -216,16 +225,16 @@ async def check_rate_limit() -> bool:
     使用滑动窗口算法：统计当前时间前 1 秒内的请求数。
     返回 True 表示允许通过，False 表示被限流。
     """
-    now = time.monotonic()
-    # 清理过期时间戳
-    cutoff = now - RATE_LIMIT_WINDOW
-    _request_timestamps[:] = [ts for ts in _request_timestamps if ts > cutoff]
+    async with _rate_limit_lock:
+        now = time.monotonic()
+        cutoff = now - RATE_LIMIT_WINDOW
+        _request_timestamps[:] = [ts for ts in _request_timestamps if ts > cutoff]
 
-    if len(_request_timestamps) >= RATE_LIMIT_MAX:
-        return False
+        if len(_request_timestamps) >= RATE_LIMIT_MAX:
+            return False
 
-    _request_timestamps.append(now)
-    return True
+        _request_timestamps.append(now)
+        return True
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
@@ -401,7 +410,7 @@ def clean_json_response(text: str) -> str:
 # 5. 请求/响应模型
 # =============================================================================
 class TranslateRequest(BaseModel):
-    text: str = Field(..., min_length=1, description="待翻译的原文")
+    text: str = Field(..., min_length=1, max_length=50000, description="待翻译的原文")
     target_lang: str = Field(default="zh", description="目标语言代码，如 zh, en, ja 等")
     engine: str = Field(default="openai", description="指定翻译引擎，或 'auto' 自动选择")
     fallback: bool = Field(default=True, description="是否启用引擎降级")
@@ -419,7 +428,7 @@ class TranslateResponse(BaseModel):
     is_fallback: bool
 
 class EntityExtractionRequest(BaseModel):
-    text: str = Field(..., min_length=1, description="待提取实体的原文")
+    text: str = Field(..., min_length=1, max_length=50000, description="待提取实体的原文")
     source_lang: str = Field(default="zh", description="源语言代码")
     target_lang: str = Field(default="en", description="目标语言代码（用于后续翻译）")
 
@@ -437,7 +446,7 @@ class EntityTranslationResponse(BaseModel):
     translations: dict[str, str]
 
 class PlaceholderTranslateRequest(BaseModel):
-    text: str = Field(..., min_length=1, description="包含占位符的待翻译文本")
+    text: str = Field(..., min_length=1, max_length=50000, description="包含占位符的待翻译文本")
     target_lang: str = Field(default="zh", description="目标语言代码")
     engine: str = Field(default="openai", description="指定翻译引擎")
     fallback: bool = Field(default=True, description="是否启用引擎降级")
@@ -796,7 +805,7 @@ async def translate_api(req: TranslateRequest):
 # =============================================================================
 # Separate thread pool for translation — agentscope uses asyncio.run() internally
 # which requires a thread without a running event loop.
-_translate_max_workers = int(os.environ.get("TRANSLATE_MAX_WORKERS", "2"))
+_translate_max_workers = int(os.environ.get("TRANSLATE_MAX_WORKERS", str(min(os.cpu_count() or 2, 8))))
 _translation_executor = ThreadPoolExecutor(max_workers=_translate_max_workers, thread_name_prefix="translate")
 class TeamTranslateRequest(BaseModel):
     """AI 翻译团队请求体
@@ -806,7 +815,7 @@ class TeamTranslateRequest(BaseModel):
     """
     model_config = {"populate_by_name": True}
 
-    text: str = Field(..., description="章节原文")
+    text: str = Field(..., min_length=1, max_length=50000, description="章节原文")
     novel_type: str = Field(default="daily", alias="novelType", description="小说类型：battle/mystery/daily")
     source_lang: str = Field(default="Japanese", alias="sourceLang", description="源语言")
     target_lang: str = Field(default="Chinese", alias="targetLang", description="目标语言")
@@ -933,4 +942,7 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         log_level="info",
+        timeout_keep_alive=30,
+        timeout_graceful_shutdown=60,
+        limit_concurrency=100,
     )

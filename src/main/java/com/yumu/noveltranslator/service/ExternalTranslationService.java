@@ -1,8 +1,9 @@
 package com.yumu.noveltranslator.service;
 
-import jakarta.annotation.Nullable;
-
 import com.alibaba.fastjson2.JSONObject;
+import com.yumu.noveltranslator.exception.MTranServerUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import jakarta.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -53,6 +54,7 @@ public class ExternalTranslationService {
      * @return 翻译结果
      * @throws RuntimeException 翻译失败时抛出异常
      */
+    @CircuitBreaker(name = "mtranServer", fallbackMethod = "mtranServerFallback")
     public JSONObject translate(String from, String to, String text, boolean html) {
         // Mock 模式：直接返回模拟响应，不发 HTTP 请求
         if (mockMode) {
@@ -94,6 +96,14 @@ public class ExternalTranslationService {
             log.error("外部翻译引擎翻译异常，待翻译文本长度：{}", text != null ? text.length() : 0, e);
             throw new RuntimeException("外部翻译引擎翻译失败：" + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Circuit breaker fallback for MTranServer failures.
+     */
+    private JSONObject mtranServerFallback(String from, String to, String text, boolean html, Throwable t) {
+        log.warn("MTranServer 熔断器触发: {}", t.getMessage());
+        throw new MTranServerUnavailableException("MTranServer 不可用（熔断器已打开）: " + t.getMessage(), t);
     }
 
     /**

@@ -31,10 +31,16 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final TenantCleanupInterceptor tenantCleanupInterceptor;
+    private final SecurityHeadersFilter securityHeadersFilter;
 
     @Bean
     public JwtAuthenticationFilter authenticationTokenFilter() {
         return new JwtAuthenticationFilter();
+    }
+
+    @Bean
+    public SecurityHeadersFilter securityHeadersFilter() {
+        return new SecurityHeadersFilter();
     }
 
     @Bean
@@ -92,7 +98,7 @@ public class SecurityConfig {
                 .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(SecurityPermitAllPaths.PERMIT_ALL_PATHS.toArray(new String[0])).permitAll()
-                .requestMatchers("/admin/**").permitAll()
+                .requestMatchers("/admin/**").authenticated()
                 // 翻译端点必须认证：防止匿名请求消耗配额和费用
                 .requestMatchers("/v1/translate/selection", "/v1/translate/reader", "/v1/translate/webpage", "/v1/translate/text/stream").authenticated()
                 .requestMatchers("/v1/translate/**").authenticated()
@@ -102,6 +108,7 @@ public class SecurityConfig {
         http.addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(authenticationTokenFilter(), ApiKeyAuthenticationFilter.class);
         http.addFilterAfter(tenantCleanupInterceptor, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(securityHeadersFilter, TenantCleanupInterceptor.class);
 
         return http.build();
     }

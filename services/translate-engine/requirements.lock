@@ -2,3 +2,5 @@ fastapi==0.115.0
 uvicorn==0.30.6
 openai==1.51.0
 agentscope==1.0.19
+httpx==0.27.2
+pydantic==2.9.2

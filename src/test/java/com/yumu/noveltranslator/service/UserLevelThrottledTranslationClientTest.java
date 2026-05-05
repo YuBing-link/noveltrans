@@ -19,6 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -41,11 +42,11 @@ class UserLevelThrottledTranslationClientTest {
     void setUp() {
         when(limitProperties.getFreeConcurrencyLimit()).thenReturn(10);
         when(limitProperties.getProConcurrencyLimit()).thenReturn(20);
+        when(limitProperties.getMaxConcurrencyLimit()).thenReturn(5);
         when(limitProperties.getAnonymousConcurrencyLimit()).thenReturn(3);
 
         client = new UserLevelThrottledTranslationClient(externalTranslationService, limitProperties);
         ReflectionTestUtils.setField(client, "pythonTranslateUrl", "http://localhost:9999/translate");
-        client.init();
         SecurityContextHolder.clearContext();
     }
 
@@ -197,8 +198,22 @@ class UserLevelThrottledTranslationClientTest {
         @Test
         void 信号量超时抛出异常() {
             setAuthenticatedUser(1L, "free");
-            // Fill up all semaphore permits
-            Semaphore sem = (Semaphore) ReflectionTestUtils.getField(client, "freeUserSemaphore");
+            // Trigger semaphore creation for user_1
+            JSONObject mtranResp = new JSONObject();
+            mtranResp.put("result", "translated");
+            when(externalTranslationService.translate(anyString(), anyString(), anyString(), anyBoolean()))
+                    .thenReturn(mtranResp);
+
+            // First call creates the semaphore
+            client.translate("Hello", "zh", "google", false, true);
+
+            // Now drain all permits from the user's semaphore
+            @SuppressWarnings("unchecked")
+            ConcurrentHashMap<String, Semaphore> userSemaphores =
+                (ConcurrentHashMap<String, Semaphore>) ReflectionTestUtils.getField(client, "userSemaphores");
+            Semaphore sem = userSemaphores.get("user_1");
+            assertNotNull(sem);
+
             try {
                 sem.acquire(10); // Take all permits
             } catch (InterruptedException e) {

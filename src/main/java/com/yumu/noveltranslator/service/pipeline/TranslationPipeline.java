@@ -288,7 +288,7 @@ public class TranslationPipeline {
         }
 
         // L4: 直译（注入术语表）
-        String rawJson = translationClient.translate(text, targetLang, mode.getName(), false, !glossaryTerms.isEmpty(), glossaryTerms);
+        String rawJson = translationClient.translate(text, targetLang, mode.getName(), false, glossaryTerms.isEmpty(), glossaryTerms);
         String result = ExternalResponseUtil.extractDataField(rawJson);
 
         if (result == null) {

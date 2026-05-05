@@ -1,8 +1,11 @@
 package com.yumu.noveltranslator.security;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.mapper.UserMapper;
+import com.yumu.noveltranslator.service.TokenBlacklistService;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.exceptions.TokenExpiredException;
@@ -21,6 +24,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -32,6 +36,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private TokenBlacklistService tokenBlacklistService;
+
+    private final Cache<String, User> userCache = Caffeine.newBuilder()
+        .maximumSize(10_000)
+        .expireAfterWrite(5, TimeUnit.MINUTES)
+        .build();
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -61,7 +73,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // 验证 JWT token
             var decodedJWT = jwtUtils.verifyToken(jwt);
 
-            // 从 token 中提取用户信息
+            if (tokenBlacklistService.isBlacklisted(jwt)) {
+                sendUnauthorized(response, "Token has been revoked");
+                return;
+            }
+
             String email = decodedJWT.getClaim("email").asString();
             Long userId = decodedJWT.getClaim("userId").asLong();
 
@@ -72,7 +88,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
             // 从数据库加载用户，构建 CustomUserDetails
-            User user = userMapper.findByEmail(email);
+            User user = userCache.get(email, key -> userMapper.findByEmail(key));
             if (user == null || !user.getId().equals(userId)) {
                 logger.warn("JWT Token 对应的用户不存在: email={}, userId={}", email, userId);
                 sendUnauthorized(response, "Invalid token: user not found");
@@ -127,7 +143,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"code\":401,\"message\":\"" + message + "\"}");
+        response.getWriter().write("{\"success\":false,\"data\":null,\"code\":\"401\",\"message\":\"" + message + "\",\"token\":null}");
         response.flushBuffer();
     }
 }

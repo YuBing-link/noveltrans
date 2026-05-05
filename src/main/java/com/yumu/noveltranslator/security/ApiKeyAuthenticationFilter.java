@@ -56,7 +56,10 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         ApiKey apiKey = apiKeyMapper.findByApiKey(jwt);
         if (apiKey == null || !apiKey.getActive()) {
             logger.warn("API Key 无效或已禁用: {}", maskApiKey(jwt));
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "API Key 无效或已禁用");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"data\":null,\"code\":\"401\",\"message\":\"API Key 无效或已禁用\",\"token\":null}");
+            response.flushBuffer();
             return;
         }
 

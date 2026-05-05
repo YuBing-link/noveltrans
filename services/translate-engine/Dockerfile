@@ -9,6 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY . .
 
+ENV TRANSLATE_MAX_WORKERS=4
+
 EXPOSE 8000
 
 CMD ["python", "translate_server.py"]

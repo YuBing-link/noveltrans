@@ -19,7 +19,11 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -87,14 +91,34 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
         Page<CollabComment> commentPage = new Page<>(page, size);
         var rootPage = collabCommentMapper.selectByChapterTaskIdPage(commentPage, chapterTaskId);
 
+        // 批量加载关联用户，避免 N+1
+        Set<Long> userIds = new HashSet<>();
+        for (CollabComment comment : rootPage.getRecords()) {
+            userIds.add(comment.getUserId());
+        }
+        List<CollabComment> allReplies = collabCommentMapper.selectByChapterTaskIdAll(chapterTaskId);
+        Map<Long, CollabComment> replyMap = new HashMap<>();
+        for (CollabComment reply : allReplies) {
+            replyMap.computeIfAbsent(reply.getParentId(), k -> new ArrayList<>());
+            userIds.add(reply.getUserId());
+        }
+
+        Map<Long, User> userMap = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(userIds);
+            for (User user : users) {
+                userMap.put(user.getId(), user);
+            }
+        }
+
         // 为当前页的根评论加载回复
         List<CommentResponse> responses = rootPage.getRecords().stream()
                 .map(root -> {
-                    CommentResponse resp = toCommentResponse(root);
-                    List<CollabComment> replies = collabCommentMapper.selectRepliesByParentId(root.getId());
-                    resp.setReplies(replies.stream()
-                            .map(this::toCommentResponse)
-                            .collect(Collectors.toList()));
+                    CommentResponse resp = toCommentResponse(root, userMap);
+                    List<CommentResponse> replyResponses = collabCommentMapper.selectRepliesByParentId(root.getId()).stream()
+                            .map(reply -> toCommentResponse(reply, userMap))
+                            .collect(Collectors.toList());
+                    resp.setReplies(replyResponses);
                     return resp;
                 })
                 .collect(Collectors.toList());

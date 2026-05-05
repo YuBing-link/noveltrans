@@ -3,11 +3,13 @@ package com.yumu.noveltranslator.controller.web;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.dto.ApiKeyResponse;
+import com.yumu.noveltranslator.dto.CreateApiKeyRequest;
 import com.yumu.noveltranslator.dto.PageResponse;
 import com.yumu.noveltranslator.dto.Result;
 import com.yumu.noveltranslator.entity.ApiKey;
 import com.yumu.noveltranslator.mapper.ApiKeyMapper;
 import com.yumu.noveltranslator.util.SecurityUtil;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,9 +38,9 @@ public class WebApiKeyController {
      * POST /user/api-keys
      */
     @PostMapping
-    public Result<Map<String, Object>> createApiKey(@RequestBody(required = false) Map<String, String> request) {
+    public Result<Map<String, Object>> createApiKey(@Valid @RequestBody CreateApiKeyRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        String name = request != null && request.containsKey("name") ? request.get("name") : "Default";
+        String name = request.getName();
 
         String key = generateApiKey();
         ApiKey apiKey = new ApiKey();

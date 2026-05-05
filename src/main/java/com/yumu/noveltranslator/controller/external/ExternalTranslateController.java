@@ -85,7 +85,7 @@ public class ExternalTranslateController {
             return Result.ok(response);
         } catch (Exception e) {
             log.error("外部 API 翻译失败", e);
-            return Result.error("翻译失败：" + e.getMessage());
+            return Result.error("翻译失败，请稍后重试");
         }
     }
 

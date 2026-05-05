@@ -280,13 +280,7 @@ class TranslationTeam:
         """
         if not text.strip():
             return ""
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(self._async_translate(text))
-        finally:
-            loop.close()
+        return asyncio.run(self._async_translate(text))
 
     async def _async_translate(self, text: str) -> str:
         """Async implementation of the translation pipeline.

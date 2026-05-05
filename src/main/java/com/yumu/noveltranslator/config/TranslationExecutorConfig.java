@@ -1,8 +1,11 @@
 package com.yumu.noveltranslator.config;
 
+import com.yumu.noveltranslator.properties.TranslationLimitProperties;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.Collection;
 import java.util.List;
@@ -13,8 +16,12 @@ import java.util.concurrent.*;
  * 提供全局共享的虚拟线程池，避免每次请求创建新线程池的开销
  */
 @Configuration
+@EnableScheduling
+@RequiredArgsConstructor
 @Slf4j
 public class TranslationExecutorConfig {
+
+    private final TranslationLimitProperties limitProperties;
 
     /**
      * 全局共享的虚拟线程池
@@ -39,14 +46,12 @@ public class TranslationExecutorConfig {
     }
 
     /**
-     * 可选：创建有界虚拟线程池
+     * 有界虚拟线程池
      * 使用信号量限制最大并发数，防止过多并发请求压垮翻译服务
-     *
-     * 注意：当前未启用，如需使用请取消 @Bean 注释并根据需要调整 maxConcurrent 参数
      */
-    // @Bean(name = "boundedTranslationExecutor")
+    @Bean(name = "boundedTranslationExecutor")
     public ExecutorService boundedTranslationExecutor() {
-        int maxConcurrent = 50; // 最大并发数，可根据实际情况调整
+        int maxConcurrent = limitProperties.getMaxConcurrent();
 
         // 信号量用于限制并发数
         Semaphore semaphore = new Semaphore(maxConcurrent);

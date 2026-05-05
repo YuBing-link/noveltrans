@@ -62,7 +62,7 @@ public class MultiAgentTranslationService {
     /**
      * 内存映射跟踪章节重试次数（服务重启后由 init() 从 DB 恢复）
      */
-    private static final Map<Long, Integer> retryCounterMap = new ConcurrentHashMap<>();
+    private final Map<Long, Integer> retryCounterMap = new ConcurrentHashMap<>();
 
     private final CollabChapterTaskMapper chapterTaskMapper;
     private final CollabProjectMapper collabProjectMapper;

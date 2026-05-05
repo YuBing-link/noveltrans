@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import jakarta.annotation.PreDestroy;
 
 /**
  * 翻译后处理服务：检测译文中的残留中文并补充翻译
@@ -177,5 +178,11 @@ public class TranslationPostProcessingService {
             }
         }
         return result;
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        httpClient.close();
+        log.info("TranslationPostProcessingService HTTP client closed");
     }
 }

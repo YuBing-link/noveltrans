@@ -866,6 +866,8 @@ public class TranslationTaskService {
      */
     @PreDestroy
     public void shutdown() {
-        log.info("翻译任务服务关闭，等待异步翻译任务完成...");
+        log.info("TranslationTaskService 关闭中，等待异步翻译任务完成...");
+        // 虚拟线程由 JVM 自动管理，无需显式关闭
+        log.info("TranslationTaskService 已关闭");
     }
 }

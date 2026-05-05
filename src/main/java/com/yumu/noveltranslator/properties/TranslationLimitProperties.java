@@ -55,4 +55,7 @@ public class TranslationLimitProperties {
 
     /** 团队模式系数（消耗更多） */
     private double teamModeMultiplier = 2.0;
+
+    /** 全局最大并发翻译数（有界执行器使用） */
+    private int maxConcurrent = 50;
 }

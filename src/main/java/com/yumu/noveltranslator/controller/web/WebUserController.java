@@ -3,10 +3,12 @@ package com.yumu.noveltranslator.controller.web;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.security.CustomUserDetails;
+import com.yumu.noveltranslator.security.LoginRateLimiter;
 import com.yumu.noveltranslator.service.AuthService;
 import com.yumu.noveltranslator.service.TranslationTaskService;
 import com.yumu.noveltranslator.service.UserService;
 import com.yumu.noveltranslator.util.SecurityUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +27,7 @@ public class WebUserController {
     private final AuthService authService;
     private final UserService userService;
     private final TranslationTaskService translationTaskService;
+    private final LoginRateLimiter loginRateLimiter;
 
     /**
      * 发送注册验证码
@@ -49,8 +52,20 @@ public class WebUserController {
      * POST /user/login
      */
     @PostMapping("/login")
-    public Result<User> login(@RequestBody @Valid LoginRequest req) {
+    public Result<User> login(@RequestBody @Valid LoginRequest req, HttpServletRequest httpRequest) {
+        String clientIp = getClientIp(httpRequest);
+        if (!loginRateLimiter.allowLoginAttempt(clientIp)) {
+            return Result.error("429", "登录尝试次数过多，请稍后再试");
+        }
         return authService.login(req);
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     /**
@@ -210,7 +225,7 @@ public class WebUserController {
      * PUT /user/preferences
      */
     @PutMapping("/preferences")
-    public Result<UserPreferencesResponse> updatePreferences(@RequestBody UserPreferencesRequest request) {
+    public Result<UserPreferencesResponse> updatePreferences(@Valid @RequestBody UserPreferencesRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
         UserPreferencesResponse preferences = userService.updateUserPreferences(userId, request);
         return Result.ok(preferences);
