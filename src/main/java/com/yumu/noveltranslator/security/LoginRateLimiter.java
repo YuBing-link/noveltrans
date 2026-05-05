@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.security;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -37,5 +38,25 @@ public class LoginRateLimiter {
             return false;
         }
         return true;
+    }
+
+    /**
+     * 定期清理过期的 IP 记录，防止全局单例长期运行导致内存泄漏。
+     */
+    @Scheduled(fixedRate = 300_000)
+    public void cleanup() {
+        long now = System.currentTimeMillis();
+        int removed = 0;
+        for (var it = attemptWindows.entrySet().iterator(); it.hasNext(); ) {
+            var entry = it.next();
+            if (now - entry.getValue() > WINDOW_MS * 10) {
+                it.remove();
+                loginAttempts.remove(entry.getKey());
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            log.info("LoginRateLimiter 清理了 {} 个过期的 IP 登录尝试记录", removed);
+        }
     }
 }
