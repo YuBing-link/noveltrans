@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import threading
 from typing import Any
 
 from agentscope.agent import ReActAgent
@@ -15,6 +16,19 @@ from ..config import get_model
 from ..prompts import battle, mystery, daily
 
 logger = logging.getLogger(__name__)
+
+# Per-thread persistent event loop to avoid the overhead of asyncio.run()
+# which creates/destroys a new loop on every call.
+_thread_local = threading.local()
+
+
+def _get_or_create_loop() -> asyncio.AbstractEventLoop:
+    """Get or create a persistent event loop for the current thread."""
+    loop = getattr(_thread_local, "loop", None)
+    if loop is None or loop.is_closed():
+        loop = asyncio.new_event_loop()
+        _thread_local.loop = loop
+    return loop
 
 # ---------------------------------------------------------------------------
 # Style -> prompt builder mapping
@@ -275,12 +289,13 @@ class TranslationTeam:
     def translate(self, text: str) -> str:
         """Run the full team translation pipeline (sync wrapper).
 
-        Delegates to :meth:`_async_translate` via a dedicated event loop
-        to properly handle agentscope 1.x async agent calls.
+        Uses a persistent per-thread event loop to avoid the CPU overhead
+        of creating/destroying a new loop on every request (asyncio.run).
         """
         if not text.strip():
             return ""
-        return asyncio.run(self._async_translate(text))
+        loop = _get_or_create_loop()
+        return loop.run_until_complete(self._async_translate(text))
 
     async def _async_translate(self, text: str) -> str:
         """Async implementation of the translation pipeline.

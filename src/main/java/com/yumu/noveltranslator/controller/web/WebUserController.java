@@ -152,10 +152,15 @@ public class WebUserController {
      * POST /user/logout
      */
     @PostMapping("/logout")
-    public Result logout(@RequestBody(required = false) Map<String, String> request) {
+    public Result logout(@RequestBody(required = false) Map<String, String> request,
+                         @org.springframework.web.bind.annotation.RequestHeader(value = "Authorization", required = false) String authHeader) {
         Long userId = SecurityUtil.getRequiredUserId();
         String refreshToken = request != null ? request.get("refreshToken") : null;
-        return authService.logout(userId, refreshToken);
+        String jwt = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7);
+        }
+        return authService.logout(userId, refreshToken, jwt);
     }
 
     /**

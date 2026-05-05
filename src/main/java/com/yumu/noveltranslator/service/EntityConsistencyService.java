@@ -18,6 +18,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -439,6 +440,7 @@ public class EntityConsistencyService {
 
     /**
      * 构建占位符映射上下文（公开方法，供外部调用）
+     * 使用 __ENT_<hash>__ 格式占位符，避免 [{N}] 与原文内容碰撞
      */
     public EntityMappingContext buildMapping(Map<String, String> entityTranslations) {
         List<EntityMapping> mappings = new ArrayList<>();
@@ -446,7 +448,7 @@ public class EntityConsistencyService {
         int index = 1;
 
         for (Map.Entry<String, String> entry : entityTranslations.entrySet()) {
-            String placeholder = "[{" + index + "}]";
+            String placeholder = generatePlaceholder(entry.getKey(), entry.getValue(), index);
             EntityMapping mapping = EntityMapping.builder()
                     .sourceText(entry.getKey())
                     .translatedText(entry.getValue())
@@ -459,6 +461,25 @@ public class EntityConsistencyService {
         }
 
         return new EntityMappingContext(mappings, entityToPlaceholder);
+    }
+
+    /**
+     * 生成确定性占位符：__ENT_<8-char-hash>__
+     * 相同原文+译文始终生成相同占位符，便于调试和日志追踪。
+     */
+    private String generatePlaceholder(String source, String translated, int fallbackIndex) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest((source + ":" + translated).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(8);
+            for (int i = 0; i < 4; i++) {
+                hex.append(String.format("%02x", hash[i]));
+            }
+            return "__ENT_" + hex + "__";
+        } catch (Exception e) {
+            // SHA-256 不可用时回退到序号格式（极不可能）
+            return "__ENT_IDX_" + fallbackIndex + "__";
+        }
     }
 
     /**
@@ -523,24 +544,16 @@ public class EntityConsistencyService {
 
     /**
      * 译文中将占位符替换为翻译后的实体名（公开方法，供外部调用）
-     * 兼容 LLM 破坏占位符格式的情况：[{1}] → [1]
+     * 占位符格式为 __ENT_<hash>__，LLM 几乎不可能破坏此格式
      */
     public String restorePlaceholders(String text, EntityMappingContext context) {
         String result = text;
         for (EntityMapping mapping : context.mappings) {
-            String placeholder = mapping.getPlaceholder(); // [{N}]
-            // 优先尝试标准格式还原
+            String placeholder = mapping.getPlaceholder();
             if (result.contains(placeholder)) {
                 result = result.replace(placeholder, mapping.getTranslatedText());
             } else {
-                // LLM 可能把 [{N}] 破坏成 [N]，使用正则回退
-                String degradedPattern = "\\[" + mapping.getIndex() + "\\]";
-                if (result.contains("[" + mapping.getIndex() + "]")) {
-                    result = result.replaceAll(degradedPattern, Matcher.quoteReplacement(mapping.getTranslatedText()));
-                    log.warn("占位符被 LLM 破坏，使用回退还原: {} → {}", placeholder, mapping.getTranslatedText());
-                } else {
-                    log.warn("占位符还原失败: 未找到 {} (索引={}) 在译文中", placeholder, mapping.getIndex());
-                }
+                log.warn("占位符还原失败: 未找到 {} (原文={}) 在译文中", placeholder, mapping.getSourceText());
             }
         }
         return result;

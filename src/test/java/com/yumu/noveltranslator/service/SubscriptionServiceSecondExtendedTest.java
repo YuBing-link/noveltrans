@@ -64,6 +64,10 @@ class SubscriptionServiceSecondExtendedTest {
     private UserPlanHistoryMapper userPlanHistoryMapper;
     @Mock
     private StringRedisTemplate stringRedisTemplate;
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+    @Mock
+    private com.yumu.noveltranslator.util.JwtUtils jwtUtils;
 
     private SubscriptionService service;
 
@@ -75,7 +79,8 @@ class SubscriptionServiceSecondExtendedTest {
 
         service = new SubscriptionService(
                 stripeProperties, stripeCustomerMapper, stripeSubscriptionMapper,
-                userMapper, userPlanHistoryMapper, stringRedisTemplate);
+                userMapper, userPlanHistoryMapper, stringRedisTemplate,
+                tokenBlacklistService, jwtUtils);
     }
 
     // ============ verifyCheckoutSession ============

@@ -29,6 +29,12 @@ public class TranslationPostProcessingService {
     /** 残留中文检测正则：连续 2+ 个中文字符 */
     private static final Pattern CHINESE_PATTERN = Pattern.compile("[\u4e00-\u9fff\u3400-\u4dbf]{2,}");
 
+    /** \u6b8b\u7559\u4e2d\u6587\u7edd\u5bf9\u4e0a\u9650\uff08\u5b57\u7b26\u6570\uff09\uff0c\u8d85\u8fc7\u6b64\u503c\u653e\u5f03\u540e\u5904\u7406\u4ee5\u907f\u514d\u6210\u672c\u5931\u63a7 */
+    private static final int MAX_REMEDIAL_CHARS = 500;
+
+    /** \u6b8b\u7559\u4e2d\u6587\u76f8\u5bf9\u4e0a\u9650\uff08\u5360\u8bd1\u6587\u603b\u957f\u5ea6\u7684\u767e\u5206\u6bd4\uff09\uff0c\u8d85\u8fc7\u6b64\u503c\u6807\u8bb0\u4e3a\u7ffb\u8bd1\u5931\u8d25 */
+    private static final double MAX_REMEDIAL_RATIO = 0.15;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();
@@ -53,7 +59,20 @@ public class TranslationPostProcessingService {
 
         var segments = detectChineseSegments(translatedText);
         if (!segments.isEmpty()) {
-            log.info("[后处理] 检测到 {} 段残留中文: {}", segments.size(), segments);
+            int totalChineseChars = segments.stream().mapToInt(String::length).sum();
+
+            // 成本熔断：残留中文超过阈值时放弃后处理，避免 API 账单击穿
+            if (totalChineseChars > MAX_REMEDIAL_CHARS) {
+                log.warn("[后处理] 残留中文 {} 字超过绝对上限({})，放弃后处理以避免成本失控", totalChineseChars, MAX_REMEDIAL_CHARS);
+                return translatedText;
+            }
+            if (translatedText.length() > 0 && (double) totalChineseChars / translatedText.length() > MAX_REMEDIAL_RATIO) {
+                log.warn("[后处理] 残留中文占比 {:.1f}% 超过阈值({:.0f}%)，译文可能翻译失败，放弃后处理",
+                        (double) totalChineseChars / translatedText.length() * 100, MAX_REMEDIAL_RATIO * 100);
+                return translatedText;
+            }
+
+            log.info("[后处理] 检测到 {} 段残留中文 (共 {} 字): {}", segments.size(), totalChineseChars, segments);
 
             try {
                 String remedied = remediateSegments(segments, targetLang, engine);

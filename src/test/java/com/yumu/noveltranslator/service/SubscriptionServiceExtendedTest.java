@@ -66,6 +66,10 @@ class SubscriptionServiceExtendedTest {
     private UserPlanHistoryMapper userPlanHistoryMapper;
     @Mock
     private StringRedisTemplate stringRedisTemplate;
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+    @Mock
+    private com.yumu.noveltranslator.util.JwtUtils jwtUtils;
 
     private SubscriptionService subscriptionService;
 
@@ -77,7 +81,8 @@ class SubscriptionServiceExtendedTest {
 
         subscriptionService = new SubscriptionService(
                 stripeProperties, stripeCustomerMapper, stripeSubscriptionMapper,
-                userMapper, userPlanHistoryMapper, stringRedisTemplate);
+                userMapper, userPlanHistoryMapper, stringRedisTemplate,
+                tokenBlacklistService, jwtUtils);
     }
 
     // ============ cancelSubscription 补充分支 ============

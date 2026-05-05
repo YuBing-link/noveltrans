@@ -803,9 +803,10 @@ async def translate_api(req: TranslateRequest):
 # =============================================================================
 # 6. AI 翻译团队端点 (Agentscope 多 Agent 协作)
 # =============================================================================
-# Separate thread pool for translation — agentscope uses asyncio.run() internally
-# which requires a thread without a running event loop.
-_translate_max_workers = int(os.environ.get("TRANSLATE_MAX_WORKERS", str(min(os.cpu_count() or 2, 8))))
+# Separate thread pool for translation — agentscope requires sync execution
+# but each thread maintains a persistent event loop (no asyncio.run overhead).
+# Default workers: min(cpu_count * 2, 16), configurable via TRANSLATE_MAX_WORKERS.
+_translate_max_workers = int(os.environ.get("TRANSLATE_MAX_WORKERS", str(min((os.cpu_count() or 2) * 2, 16))))
 _translation_executor = ThreadPoolExecutor(max_workers=_translate_max_workers, thread_name_prefix="translate")
 class TeamTranslateRequest(BaseModel):
     """AI 翻译团队请求体
@@ -887,8 +888,7 @@ async def translate_team(req: TeamTranslateRequest):
         from agents.pipeline import translate_chapter
 
         # Run sync translation in a separate thread to avoid event loop conflicts.
-        # agentscope 1.x MsgHub is async but called from sync code; running in
-        # a fresh thread gives it its own event loop where asyncio.run() works.
+        # Each thread maintains its own persistent event loop.
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             _translation_executor,
@@ -944,5 +944,5 @@ if __name__ == "__main__":
         log_level="info",
         timeout_keep_alive=30,
         timeout_graceful_shutdown=60,
-        limit_concurrency=100,
+        limit_concurrency=200,
     )

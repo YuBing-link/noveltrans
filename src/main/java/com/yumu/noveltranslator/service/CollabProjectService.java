@@ -107,7 +107,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public TeamProjectCreateResult createProjectFromDocument(Long userId, Long documentId, String documentName,
                                                               String filePath, String fileType,
                                                               String sourceLang, String targetLang) {
-        // 读取文档内容
+        // 在事务外读取文档内容，避免长时间占用数据库连接
         String content;
         try {
             content = Files.readString(Paths.get(filePath), java.nio.charset.StandardCharsets.UTF_8);
@@ -119,9 +119,15 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new BusinessException(ErrorCodeEnum.PARAMETER_ERROR, "文档内容为空");
         }
 
-        // 智能章节分割：优先按章节标题分割，其次按字符数分组
+        // 在事务外拆分章节，避免长时间占用数据库连接
         List<String> chapters = splitIntoChapters(content);
 
+        return doCreateProject(userId, documentId, documentName, chapters, sourceLang, targetLang);
+    }
+
+    @Transactional
+    private TeamProjectCreateResult doCreateProject(Long userId, Long documentId, String documentName,
+                                                     List<String> chapters, String sourceLang, String targetLang) {
         // 创建项目
         CollabProject project = new CollabProject();
         project.setName(documentName);
@@ -192,7 +198,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权向该项目添加章节");
         }
 
-        // 读取文档内容
+        // 在事务外读取文档内容，避免长时间占用数据库连接
         String content;
         try {
             content = Files.readString(Paths.get(document.getPath()), java.nio.charset.StandardCharsets.UTF_8);
@@ -204,14 +210,21 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new BusinessException(ErrorCodeEnum.PARAMETER_ERROR, "文档内容为空");
         }
 
+        // 在事务外拆分章节
+        List<String> chapters = splitIntoChapters(content);
+
+        return doAddChaptersToProject(project, document, chapters);
+    }
+
+    @Transactional
+    private int doAddChaptersToProject(CollabProject project, Document document, List<String> chapters) {
+        Long projectId = project.getId();
+
         // 关联文档（如果项目尚未关联）
         if (project.getDocumentId() == null) {
             project.setDocumentId(document.getId());
             updateById(project);
         }
-
-        // 智能章节分割：优先按章节标题分割，其次按字符数分组
-        List<String> chapters = splitIntoChapters(content);
 
         // 获取当前最大章节号
         List<CollabChapterTask> existingChapters = collabChapterTaskMapper.selectByProjectId(projectId);

@@ -7,6 +7,7 @@ import com.auth0.jwt.interfaces.DecodedJWT;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.util.JwtUtils;
+import com.yumu.noveltranslator.service.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -50,6 +51,9 @@ class JwtAuthenticationFilterTest {
     private FilterChain chain;
 
     @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
+    @Mock
     private DecodedJWT decodedJWT;
 
     @Mock
@@ -65,19 +69,7 @@ class JwtAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter();
-        // 通过反射注入 mock
-        try {
-            var jwtUtilsField = JwtAuthenticationFilter.class.getDeclaredField("jwtUtils");
-            jwtUtilsField.setAccessible(true);
-            jwtUtilsField.set(filter, jwtUtils);
-
-            var userMapperField = JwtAuthenticationFilter.class.getDeclaredField("userMapper");
-            userMapperField.setAccessible(true);
-            userMapperField.set(filter, userMapper);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        filter = new JwtAuthenticationFilter(jwtUtils, userMapper, tokenBlacklistService);
 
         SecurityContextHolder.clearContext();
     }

@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.service;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.*;
 
 /**
@@ -61,6 +63,7 @@ public class EmbeddingService {
         }
     }
 
+    @CircuitBreaker(name = "embedding", fallbackMethod = "embeddingFallback")
     private float[] embedWithOpenAI(String text) {
         if (openaiApiKey == null || openaiApiKey.isBlank()) {
             log.warn("OpenAI API Key 未配置，跳过 Embedding 生成");
@@ -78,7 +81,7 @@ public class EmbeddingService {
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(Map.class)
-                .block();
+                .block(Duration.ofSeconds(10));
 
         if (response != null && response.containsKey("data")) {
             List<Map<String, Object>> dataList = (List<Map<String, Object>>) response.get("data");
@@ -90,6 +93,7 @@ public class EmbeddingService {
         return new float[0];
     }
 
+    @CircuitBreaker(name = "embedding", fallbackMethod = "embeddingFallback")
     private float[] embedWithOllama(String text) {
         Map<String, Object> requestBody = new HashMap<>(2);
         requestBody.put("model", ollamaModel);
@@ -101,7 +105,7 @@ public class EmbeddingService {
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(Map.class)
-                .block();
+                .block(Duration.ofSeconds(10));
 
         if (response != null && response.containsKey("embedding")) {
             List<Double> embedding = (List<Double>) response.get("embedding");
@@ -116,6 +120,11 @@ public class EmbeddingService {
             result[i] = list.get(i).floatValue();
         }
         return result;
+    }
+
+    private float[] embeddingFallback(String text, Throwable t) {
+        log.warn("Embedding 服务熔断降级: {}", t.getMessage());
+        return new float[0];
     }
 
     /**

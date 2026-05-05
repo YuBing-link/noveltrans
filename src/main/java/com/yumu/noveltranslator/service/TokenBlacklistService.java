@@ -5,7 +5,6 @@ import com.yumu.noveltranslator.mapper.TokenBlacklistMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Service for managing JWT token blacklist and revocation. */
 @Service
@@ -21,6 +20,15 @@ public class TokenBlacklistService {
      */
     public boolean isBlacklisted(String jwtToken) {
         return tokenBlacklistMapper.findByToken(jwtToken) != null;
+    }
+
+    /**
+     * Check if a user's email is globally blacklisted (all tokens revoked).
+     * @param email the user's email address
+     * @return true if all tokens for this user are revoked
+     */
+    public boolean isEmailBlacklisted(String email) {
+        return tokenBlacklistMapper.isEmailBlacklisted(email) != null;
     }
 
     /**
@@ -41,16 +49,14 @@ public class TokenBlacklistService {
     }
 
     /**
-     * Revoke all tokens for a specific user.
+     * Revoke all tokens for a specific user by inserting an email-level blacklist entry.
+     * Any JWT with this email will be rejected.
      * @param email the user's email address
      * @param reason the reason for revocation
+     * @param expiresAt how long the blanket blacklist should last
      */
-    public void blacklistAllUserTokens(String email, String reason) {
-        List<TokenBlacklist> existing = tokenBlacklistMapper.findByEmail(email);
-        for (TokenBlacklist entry : existing) {
-            entry.setReason(reason);
-            tokenBlacklistMapper.updateById(entry);
-        }
+    public void blacklistAllUserTokens(String email, String reason, LocalDateTime expiresAt) {
+        tokenBlacklistMapper.insertEmailBlacklist(email, reason, expiresAt, LocalDateTime.now());
     }
 
     /**

@@ -81,6 +81,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
+            // 检查用户是否被全局吊销令牌（如退款/降级后）
+            if (tokenBlacklistService.isEmailBlacklisted(email)) {
+                sendUnauthorized(response, "Account access has been revoked");
+                return;
+            }
+
             // 从数据库加载用户，构建 CustomUserDetails
             User user = userCache.get(email, key -> userMapper.findByEmail(key));
             if (user == null || !user.getId().equals(userId)) {

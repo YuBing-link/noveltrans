@@ -58,4 +58,15 @@ public class TranslationLimitProperties {
 
     /** 全局最大并发翻译数（有界执行器使用） */
     private int maxConcurrent = 50;
+
+    // ==================== Token 速率限制配置 ====================
+
+    /** 免费用户每分钟 token 上限 */
+    private int freeTpmLimit = 2000;
+
+    /** 专业用户每分钟 token 上限 */
+    private int proTpmLimit = 10000;
+
+    /** Max 用户每分钟 token 上限 */
+    private int maxTpmLimit = 50000;
 }

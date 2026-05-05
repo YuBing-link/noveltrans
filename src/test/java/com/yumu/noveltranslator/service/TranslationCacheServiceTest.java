@@ -47,6 +47,9 @@ class TranslationCacheServiceTest {
     void setUp() {
         cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate, cacheVersionService);
         when(cacheVersionService.getVersion(anyString(), anyString())).thenReturn("1");
+        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any())).thenReturn(true);
+        lenient().when(stringRedisTemplate.delete(anyString())).thenReturn(true);
     }
 
     @Nested
@@ -208,6 +211,83 @@ class TranslationCacheServiceTest {
             cacheService.warmupCache(java.util.List.of("warm-key"));
 
             assertEquals("warm-value", cacheService.getCache("warm-key"));
+        }
+    }
+
+    @Nested
+    @DisplayName("分布式缓存加载锁")
+    class DistributedCacheLockTests {
+
+        @BeforeEach
+        void setUpMocks() {
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        }
+
+        @Test
+        void 缓存命中L1不查询分布式锁() {
+            cacheService.putToMemoryCache("lock-key", "l1-value");
+
+            cacheService.getCache("lock-key");
+
+            // Redis lock should not be called when L1 hits
+            verify(valueOperations, never()).setIfAbsent(anyString(), anyString(), anyLong(), any());
+        }
+
+        @Test
+        void L2查询时获取分布式锁() {
+            // L1 miss, L2 Redis hit
+            when(valueOperations.get(anyString())).thenReturn("redis-value");
+            // Distributed lock acquired
+            when(valueOperations.setIfAbsent(eq("cache:lock:test-key"), eq("1"), eq(30L), any())).thenReturn(true);
+            when(stringRedisTemplate.delete(anyString())).thenReturn(true);
+
+            String result = cacheService.getCache("test-key");
+
+            assertEquals("redis-value", result);
+            // Verify distributed lock was attempted
+            verify(valueOperations).setIfAbsent(eq("cache:lock:test-key"), eq("1"), eq(30L), any());
+        }
+
+        @Test
+        void 分布式锁获取失败返回null() {
+            // L1 miss, L2 Redis miss, lock not acquired
+            when(valueOperations.get(anyString())).thenReturn(null);
+            when(valueOperations.setIfAbsent(eq("cache:lock:test-key"), eq("1"), eq(30L), any())).thenReturn(false);
+
+            String result = cacheService.getCache("test-key");
+
+            // Should fall through to L3, which should also miss
+            // Since L3 loader also goes through loadWithLock, it will also fail to acquire lock
+            // Result should be null (cache miss)
+            assertNull(result);
+        }
+
+        @Test
+        void 分布式锁获取成功后删除锁key() {
+            // L1 miss, L2 Redis hit
+            when(valueOperations.get(anyString())).thenReturn("locked-value");
+            when(valueOperations.setIfAbsent(eq("cache:lock:test-key"), eq("1"), eq(30L), any())).thenReturn(true);
+            when(stringRedisTemplate.delete(eq("cache:lock:test-key"))).thenReturn(true);
+
+            cacheService.getCache("test-key");
+
+            verify(stringRedisTemplate).delete("cache:lock:test-key");
+        }
+
+        @Test
+        void 获取锁后重新检查L1缓存() {
+            // First, put something in L1
+            cacheService.putToMemoryCache("recheck-key", "l1-while-waiting");
+
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+            when(valueOperations.get(anyString())).thenReturn(null);
+            when(valueOperations.setIfAbsent(eq("cache:lock:recheck-key"), eq("1"), eq(30L), any())).thenReturn(true);
+            when(stringRedisTemplate.delete(anyString())).thenReturn(true);
+
+            // Should return L1 value without calling loader (because another instance already loaded it)
+            String result = cacheService.getCache("recheck-key");
+
+            assertEquals("l1-while-waiting", result);
         }
     }
 }

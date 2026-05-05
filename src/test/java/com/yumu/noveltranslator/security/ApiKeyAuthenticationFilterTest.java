@@ -41,18 +41,7 @@ class ApiKeyAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new ApiKeyAuthenticationFilter();
-        try {
-            var apiKeyField = ApiKeyAuthenticationFilter.class.getDeclaredField("apiKeyMapper");
-            apiKeyField.setAccessible(true);
-            apiKeyField.set(filter, apiKeyMapper);
-
-            var userField = ApiKeyAuthenticationFilter.class.getDeclaredField("userMapper");
-            userField.setAccessible(true);
-            userField.set(filter, userMapper);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        filter = new ApiKeyAuthenticationFilter(apiKeyMapper, userMapper);
         SecurityContextHolder.clearContext();
     }
 

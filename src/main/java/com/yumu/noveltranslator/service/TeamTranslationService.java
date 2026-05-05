@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.service;
 import com.yumu.noveltranslator.dto.TeamTranslateRequest;
 import com.yumu.noveltranslator.dto.TeamTranslateResponse;
 import com.yumu.noveltranslator.entity.Glossary;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -51,6 +52,7 @@ public class TeamTranslationService {
      * @param glossaryTerms 术语表词条列表
      * @return 翻译后的文本
      */
+    @CircuitBreaker(name = "teamTranslation", fallbackMethod = "teamTranslationFallback")
     public String translateChapter(String text, String novelType, String sourceLang,
                                    String targetLang, List<Glossary> glossaryTerms) {
 
@@ -112,6 +114,7 @@ public class TeamTranslationService {
      * @param placeholderMap    占位符 → 翻译后实体名的映射
      * @return 翻译后的文本（占位符已还原为翻译后的实体名）
      */
+    @CircuitBreaker(name = "teamTranslation", fallbackMethod = "teamTranslationFallback")
     public String translateChapterWithPlaceholders(String text, String novelType, String sourceLang,
                                                    String targetLang, List<Glossary> glossaryTerms,
                                                    Map<String, String> placeholderMap) {
@@ -261,5 +264,18 @@ public class TeamTranslationService {
             fallback.setData(responseBody);
             return fallback;
         }
+    }
+
+    private String teamTranslationFallback(String text, String novelType, String sourceLang,
+                                           String targetLang, List<Glossary> glossaryTerms, Throwable t) {
+        log.error("AI 翻译团队熔断降级: {}", t.getMessage());
+        throw new RuntimeException("AI 翻译团队服务不可用（熔断器已打开）: " + t.getMessage(), t);
+    }
+
+    private String teamTranslationFallback(String text, String novelType, String sourceLang,
+                                           String targetLang, List<Glossary> glossaryTerms,
+                                           Map<String, String> placeholderMap, Throwable t) {
+        log.error("AI 翻译团队熔断降级(带占位符): {}", t.getMessage());
+        throw new RuntimeException("AI 翻译团队服务不可用（熔断器已打开）: " + t.getMessage(), t);
     }
 }

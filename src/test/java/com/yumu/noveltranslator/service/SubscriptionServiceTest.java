@@ -62,13 +62,20 @@ class SubscriptionServiceTest {
     @Mock
     private StringRedisTemplate stringRedisTemplate;
 
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
+    @Mock
+    private com.yumu.noveltranslator.util.JwtUtils jwtUtils;
+
     private SubscriptionService subscriptionService;
 
     @BeforeEach
     void setUp() {
         subscriptionService = new SubscriptionService(
                 stripeProperties, stripeCustomerMapper, stripeSubscriptionMapper,
-                userMapper, userPlanHistoryMapper, stringRedisTemplate);
+                userMapper, userPlanHistoryMapper, stringRedisTemplate,
+                tokenBlacklistService, jwtUtils);
     }
 
     // ==================== getSubscriptionStatus ====================
@@ -284,6 +291,32 @@ class SubscriptionServiceTest {
 
             assertTrue(ex.getMessage().contains("没有可取消的活跃订阅"));
         }
+
+        @Test
+        void 成功取消订阅() {
+            StripeSubscription sub = new StripeSubscription();
+            sub.setId(1L);
+            sub.setUserId(1L);
+            sub.setPlan("PRO");
+            sub.setStatus("active");
+            sub.setStripeSubscriptionId("sub_test123");
+            sub.setCurrentPeriodEnd(LocalDateTime.of(2026, 6, 1, 0, 0));
+
+            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(sub);
+
+            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
+                Subscription stripeSub = mock(Subscription.class);
+                subStatic.when(() -> Subscription.retrieve("sub_test123")).thenReturn(stripeSub);
+
+                SubscriptionStatusResponse response = subscriptionService.cancelSubscription(1L);
+
+                assertNotNull(response);
+                assertTrue(response.getCancelAtPeriodEnd());
+                assertDoesNotThrow(() -> verify(stripeSub).update(any(com.stripe.param.SubscriptionUpdateParams.class)));
+                verify(stripeSubscriptionMapper).updateById(argThat(s ->
+                        Boolean.TRUE.equals(s.getCancelAtPeriodEnd()) && s.getCanceledAt() != null));
+            }
+        }
     }
 
     // ==================== createPortalSession ====================
@@ -374,6 +407,30 @@ class SubscriptionServiceTest {
             when(deserializer.getObject()).thenReturn(Optional.of(session));
 
             assertDoesNotThrow(() -> subscriptionService.handleCheckoutSessionCompleted(event));
+        }
+
+        @Test
+        void StripeAPI调用失败正常返回() {
+            Session session = mock(Session.class);
+            when(session.getId()).thenReturn("cs_test123");
+            when(session.getMetadata()).thenReturn(Map.of(
+                    "userId", "1",
+                    "plan", "PRO",
+                    "billingCycle", "monthly"
+            ));
+            when(session.getSubscription()).thenReturn("sub_test123");
+
+            Event event = mock(Event.class);
+            EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
+            when(event.getDataObjectDeserializer()).thenReturn(deserializer);
+            when(deserializer.getObject()).thenReturn(Optional.of(session));
+
+            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
+                subStatic.when(() -> Subscription.retrieve("sub_test123"))
+                        .thenThrow(new RuntimeException("Stripe API error"));
+
+                assertDoesNotThrow(() -> subscriptionService.handleCheckoutSessionCompleted(event));
+            }
         }
     }
 

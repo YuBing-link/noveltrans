@@ -24,14 +24,24 @@ class SecurityConfigTest {
     @Mock
     private com.yumu.noveltranslator.config.tenant.TenantCleanupInterceptor tenantCleanupInterceptor;
 
+    @Mock
+    private com.yumu.noveltranslator.security.SecurityHeadersFilter securityHeadersFilter;
+
+    @Mock
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    private SecurityConfig createConfig() {
+        return new SecurityConfig(
+                jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor, securityHeadersFilter, jwtAuthenticationFilter);
+    }
+
     @Nested
     @DisplayName("CORS 配置 - 默认环境")
     class CorsDefaultConfigTests {
 
         @Test
         void 本地开发端口允许() {
-            SecurityConfig config = new SecurityConfig(
-                    jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor);
+            SecurityConfig config = createConfig();
             CorsConfigurationSource source = config.corsConfigurationSource();
 
             HttpServletRequest request = mock(HttpServletRequest.class);
@@ -46,8 +56,7 @@ class SecurityConfigTest {
 
         @Test
         void 扩展允许来源() {
-            SecurityConfig config = new SecurityConfig(
-                    jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor);
+            SecurityConfig config = createConfig();
             CorsConfigurationSource source = config.corsConfigurationSource();
 
             HttpServletRequest request = mock(HttpServletRequest.class);
@@ -63,8 +72,7 @@ class SecurityConfigTest {
 
         @Test
         void 非白名单来源拒绝() {
-            SecurityConfig config = new SecurityConfig(
-                    jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor);
+            SecurityConfig config = createConfig();
             CorsConfigurationSource source = config.corsConfigurationSource();
 
             HttpServletRequest request = mock(HttpServletRequest.class);
@@ -77,8 +85,7 @@ class SecurityConfigTest {
 
         @Test
         void 无Origin头拒绝() {
-            SecurityConfig config = new SecurityConfig(
-                    jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor);
+            SecurityConfig config = createConfig();
             CorsConfigurationSource source = config.corsConfigurationSource();
 
             HttpServletRequest request = mock(HttpServletRequest.class);
@@ -91,8 +98,7 @@ class SecurityConfigTest {
 
         @Test
         void 允许所有HTTP方法() {
-            SecurityConfig config = new SecurityConfig(
-                    jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor);
+            SecurityConfig config = createConfig();
             CorsConfigurationSource source = config.corsConfigurationSource();
 
             HttpServletRequest request = mock(HttpServletRequest.class);
@@ -115,8 +121,7 @@ class SecurityConfigTest {
 
         @Test
         void CORS_ALLOWED_ORIGINS环境变量覆盖默认值() {
-            SecurityConfig config = new SecurityConfig(
-                    jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor);
+            SecurityConfig config = createConfig();
             CorsConfigurationSource source = config.corsConfigurationSource();
 
             HttpServletRequest request = mock(HttpServletRequest.class);

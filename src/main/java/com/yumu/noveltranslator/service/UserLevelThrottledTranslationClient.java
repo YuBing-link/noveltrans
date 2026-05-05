@@ -88,6 +88,7 @@ public class UserLevelThrottledTranslationClient {
 
     private final ExternalTranslationService externalTranslationService;
     private final TranslationLimitProperties limitProperties;
+    private final TokenAwareRateLimiter tokenAwareRateLimiter;
 
     private final ConcurrentHashMap<String, Semaphore> userSemaphores = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> semaphoreLastAccessTime = new ConcurrentHashMap<>();
@@ -154,6 +155,32 @@ public class UserLevelThrottledTranslationClient {
     }
 
     /**
+     * 获取当前用户 ID（从 SecurityContext）
+     */
+    private String getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() &&
+            authentication.getPrincipal() instanceof CustomUserDetails) {
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+            return "user_" + userDetails.getId();
+        }
+        return "anonymous";
+    }
+
+    /**
+     * 获取当前用户等级
+     */
+    private String getCurrentUserLevel() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() &&
+            authentication.getPrincipal() instanceof CustomUserDetails) {
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+            return userDetails.getUserLevel();
+        }
+        return "anonymous";
+    }
+
+    /**
      * 定时清理 30 分钟内未使用的信号量，防止内存泄漏
      */
     @Scheduled(cron = "0 */30 * * * *")
@@ -202,6 +229,15 @@ public class UserLevelThrottledTranslationClient {
      */
     public String translateWithPython(String text, String targetLang, String engine) {
         Semaphore userSemaphore = getUserSemaphore();
+        String userId = getCurrentUserId();
+        String userLevel = getCurrentUserLevel();
+        int estimatedTokens = TokenAwareRateLimiter.estimateTokens(text);
+
+        if (!tokenAwareRateLimiter.tryConsume(userId, userLevel, estimatedTokens)) {
+            log.warn("[TPM限流] userId={}, level={}, tokens={}, 超过 TPM 配额", userId, userLevel, estimatedTokens);
+            throw new RuntimeException("翻译频率过高，请稍后重试");
+        }
+
         try {
             if (userSemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 try {
@@ -225,8 +261,10 @@ public class UserLevelThrottledTranslationClient {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            tokenAwareRateLimiter.refund(userId, estimatedTokens);
             throw new RuntimeException("请求被中断", e);
         } catch (Exception e) {
+            tokenAwareRateLimiter.refund(userId, estimatedTokens);
             String errorMsg = "翻译失败：" + e.getMessage();
             log.error("Python 翻译失败：{}", errorMsg);
             throw new RuntimeException(errorMsg, e);
@@ -260,6 +298,14 @@ public class UserLevelThrottledTranslationClient {
      */
     public String translate(String text, String targetLang, String engine, boolean html, boolean fastMode, List<Glossary> glossaryTerms) {
         Semaphore userSemaphore = getUserSemaphore();
+        String userId = getCurrentUserId();
+        String userLevel = getCurrentUserLevel();
+        int estimatedTokens = TokenAwareRateLimiter.estimateTokens(text);
+
+        if (!tokenAwareRateLimiter.tryConsume(userId, userLevel, estimatedTokens)) {
+            log.warn("[TPM限流] userId={}, level={}, tokens={}, 超过 TPM 配额", userId, userLevel, estimatedTokens);
+            throw new RuntimeException("翻译频率过高，请稍后重试");
+        }
 
         try {
             // 尝试获取许可，设定超时时间
@@ -287,6 +333,9 @@ public class UserLevelThrottledTranslationClient {
                     }
                     // 基于优秀率概率轮询（fast=30% 大模型，expert=70% 大模型）
                     return translateWithRoundRobin(text, targetLang, engine, fastMode, glossaryTerms);
+                } catch (Exception e) {
+                    tokenAwareRateLimiter.refund(userId, estimatedTokens);
+                    throw e;
                 } finally {
                     userSemaphore.release();
                 }
@@ -297,12 +346,14 @@ public class UserLevelThrottledTranslationClient {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            tokenAwareRateLimiter.refund(userId, estimatedTokens);
             String errorMsg = "请求被中断";
             log.warn("中断：{}", errorMsg);
             throw new RuntimeException(errorMsg, e);
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
+            tokenAwareRateLimiter.refund(userId, estimatedTokens);
             String errorMsg = "翻译请求失败：" + e.getMessage();
             log.error("错误：{}", errorMsg);
             throw new RuntimeException(errorMsg, e);

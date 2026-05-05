@@ -44,11 +44,14 @@ class WebUserControllerTest {
     @org.mockito.Mock
     private TranslationTaskService translationTaskService;
 
+    @org.mockito.Mock
+    private com.yumu.noveltranslator.security.LoginRateLimiter loginRateLimiter;
+
     private WebUserController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new WebUserController(authService, userService, translationTaskService);
+        controller = new WebUserController(authService, userService, translationTaskService, loginRateLimiter);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -322,7 +325,7 @@ class WebUserControllerTest {
         @Test
         void 退出登录成功() throws Exception {
             setupSecurityContext(createTestUser());
-            when(authService.logout(eq(1L), any())).thenReturn(Result.ok(null));
+            when(authService.logout(eq(1L), any(), any())).thenReturn(Result.ok(null));
 
             mockMvc.perform(post("/user/logout")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -334,7 +337,7 @@ class WebUserControllerTest {
         @Test
         void 退出登录无请求体() throws Exception {
             setupSecurityContext(createTestUser());
-            when(authService.logout(eq(1L), any())).thenReturn(Result.ok(null));
+            when(authService.logout(eq(1L), any(), any())).thenReturn(Result.ok(null));
 
             mockMvc.perform(post("/user/logout"))
                 .andExpect(status().isOk())

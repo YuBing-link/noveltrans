@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -33,6 +34,7 @@ public class AuthService implements UserDetailsService {
     private final JwtUtils jwtUtils;
     private final EmailVerificationCodeUtil emailVerificationCodeUtil;
     private final DeviceTokenService deviceTokenService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
@@ -318,15 +320,27 @@ public class AuthService implements UserDetailsService {
      * 退出登录
      */
     @Transactional
-    public Result logout(Long userId, String refreshToken) {
+    public Result logout(Long userId, String refreshToken, String jwt) {
         if (refreshToken != null) {
             try {
-                // 简化处理：仅清理 device token
+                // 清理 device token
                 deviceTokenService.removeToken(refreshToken);
             } catch (Exception e) {
                 // 忽略 token 解析失败
             }
         }
+
+        // 将 JWT 加入黑名单，使其立即失效
+        if (jwt != null && !jwt.isEmpty()) {
+            try {
+                String email = jwtUtils.getEmailFromToken(jwt);
+                LocalDateTime expiresAt = jwtUtils.getExpiresAtFromToken(jwt);
+                tokenBlacklistService.blacklistToken(jwt, email, "logout", expiresAt);
+            } catch (Exception e) {
+                // 忽略 token 解析失败
+            }
+        }
+
         return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());
     }
 

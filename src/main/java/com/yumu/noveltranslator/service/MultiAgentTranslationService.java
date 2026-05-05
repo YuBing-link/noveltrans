@@ -248,7 +248,7 @@ public class MultiAgentTranslationService {
             // 构建 Pipeline 并执行完整管线（L1→L2→L3→L4=Team）
             TranslationPipeline pipeline = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
-                    null, postProcessingService, teamTranslationService, userId, chapter.getProjectId().toString());
+                    null, postProcessingService, teamTranslationService, userId, chapter.getProjectId().toString(), glossaryTerms);
 
             String translated = pipeline.executeTeam(
                     sourceText, sourceLang, targetLang, TranslationMode.TEAM, novelType, glossaryTerms);

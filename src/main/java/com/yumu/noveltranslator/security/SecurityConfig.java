@@ -32,10 +32,11 @@ public class SecurityConfig {
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final TenantCleanupInterceptor tenantCleanupInterceptor;
     private final SecurityHeadersFilter securityHeadersFilter;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
     public JwtAuthenticationFilter authenticationTokenFilter() {
-        return new JwtAuthenticationFilter();
+        return jwtAuthenticationFilter;
     }
 
     @Bean

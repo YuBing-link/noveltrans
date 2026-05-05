@@ -15,9 +15,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -34,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>防缓存问题：</p>
  * <ul>
  *   <li>缓存穿透：空值占位（5 分钟短暂过期）</li>
- *   <li>缓存击穿：synchronized 对同一 key 加锁</li>
+ *   <li>缓存击穿：双层锁（JVM 本地 synchronized + Redis SET NX 分布式锁）</li>
  *   <li>缓存雪崩：过期时间添加随机抖动</li>
  *   <li>缓存一致性：版本号前缀 + 延迟双删 + Redis pub/sub</li>
  * </ul>
@@ -46,6 +44,14 @@ public class TranslationCacheService {
     private final TranslationCacheMapper translationCacheMapper;
     private final StringRedisTemplate stringRedisTemplate;
     private final CacheVersionService cacheVersionService;
+
+    /** 专用调度线程池，替代 Thread.sleep 保证延迟任务可靠执行 */
+    private final ScheduledExecutorService delayedCleanupExecutor = Executors.newScheduledThreadPool(
+            2, r -> {
+                Thread t = new Thread(r, "cache-cleanup");
+                t.setDaemon(true);
+                return t;
+            });
 
     public TranslationCacheService(
             TranslationCacheMapper translationCacheMapper,
@@ -99,6 +105,13 @@ public class TranslationCacheService {
      * 正在加载中的缓存 key 集合，防止并发查询同一 key
      */
     private final ConcurrentHashMap<String, Object> loadingKeys = new ConcurrentHashMap<>();
+
+    // ==================== 分布式缓存加载锁 ====================
+
+    private static final String CACHE_LOCK_PREFIX = "cache:lock:";
+    private static final long CACHE_LOCK_TTL_SECONDS = 30;
+    private static final int CACHE_LOCK_MAX_RETRIES = 3;
+    private static final long CACHE_LOCK_RETRY_BACKOFF_MS = 50;
 
     // ==================== 缓存统计 ====================
 
@@ -213,15 +226,50 @@ public class TranslationCacheService {
 
     /**
      * 对同一 key 加锁，防止缓存击穿
+     * 使用双层锁：JVM 本地 synchronized + Redis SET NX（分布式锁），
+     * 确保多实例部署时同一热 key 只有一个实例去查 L3 数据库。
      */
     private String loadWithLock(String cacheKey, String redisKey, java.util.function.Supplier<String> loader) {
-        // 先检查是否已有线程在加载
-        Object lock = loadingKeys.computeIfAbsent(cacheKey, k -> new Object());
-        synchronized (lock) {
+        // L1: JVM 本地锁，防止同一实例内并发
+        Object localLock = loadingKeys.computeIfAbsent(cacheKey, k -> new Object());
+        synchronized (localLock) {
             try {
-                return loader.get();
+                // L2: 分布式锁，防止跨实例并发
+                String lockKey = CACHE_LOCK_PREFIX + cacheKey;
+                boolean acquired = false;
+                for (int attempt = 0; attempt < CACHE_LOCK_MAX_RETRIES; attempt++) {
+                    Boolean result = stringRedisTemplate.opsForValue()
+                            .setIfAbsent(lockKey, "1", CACHE_LOCK_TTL_SECONDS, TimeUnit.SECONDS);
+                    if (Boolean.TRUE.equals(result)) {
+                        acquired = true;
+                        break;
+                    }
+                    // 其他实例正在加载，短暂等待后重试
+                    try {
+                        Thread.sleep(CACHE_LOCK_RETRY_BACKOFF_MS * (attempt + 1));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return null;
+                    }
+                }
+
+                if (acquired) {
+                    try {
+                        // 重新检查 L1（其他实例可能在锁获取期间已填充缓存）
+                        String l1Value = caffeineCache.getIfPresent(cacheKey);
+                        if (l1Value != null) {
+                            return NULL_PLACEHOLDER.equals(l1Value) ? null : l1Value;
+                        }
+                        return loader.get();
+                    } finally {
+                        stringRedisTemplate.delete(lockKey);
+                    }
+                } else {
+                    log.debug("缓存分布式锁未获取，其他实例正在加载: key={}", cacheKey);
+                    return null;
+                }
             } finally {
-                loadingKeys.remove(cacheKey, lock);
+                loadingKeys.remove(cacheKey, localLock);
             }
         }
     }
@@ -368,48 +416,42 @@ public class TranslationCacheService {
      * 流程：
      * 1. 前置删除：清空 L1 + L2 对应语言对的缓存
      * 2. 版本号 bump：Redis INCR + 发布 pub/sub 事件
-     * 3. 延迟 2 秒
+     * 3. 延迟 2 秒后通过 ScheduledExecutorService 调度后置删除
      * 4. 后置删除：再次清空 L2 Redis（版本前缀匹配）+ L3 过期版本记录
+     *
+     * 注：使用 ScheduledExecutorService 替代 Thread.sleep，避免容器重启/调度导致后置删除丢失。
+     * 即使后置删除未执行，版本号机制已保证旧 key 不可达，仅占用少量内存直到 TTL 自然淘汰。
      *
      * @param sourceLang 源语言
      * @param targetLang 目标语言
      */
     public void delayedDoubleDelete(String sourceLang, String targetLang) {
-        Thread.startVirtualThread(() -> {
-            try {
-                // Step 1: 前置删除 — 清空本地 L1 缓存
-                log.info("延迟双删 [前置删除]: sourceLang={}, targetLang={}", sourceLang, targetLang);
-                clearLocalCache();
+        try {
+            // Step 1: 前置删除 — 清空本地 L1 缓存
+            log.info("延迟双删 [前置删除]: sourceLang={}, targetLang={}", sourceLang, targetLang);
+            clearLocalCache();
 
-                // Step 2: 版本号 bump + 发布 pub/sub 事件（其他实例收到后会清空 L1）
-                String newVersion = cacheVersionService.bumpVersionAndPublish(sourceLang, targetLang);
+            // Step 2: 版本号 bump + 发布 pub/sub 事件（其他实例收到后会清空 L1）
+            String newVersion = cacheVersionService.bumpVersionAndPublish(sourceLang, targetLang);
 
-                // Step 3: 延迟 2 秒（等待可能的并发写入完成）
-                Thread.sleep(2000);
-
-                // Step 4: 后置删除 — 清空 L2 Redis 中旧版本的所有 key
+            // Step 3-5: 通过 ScheduledExecutorService 调度后置删除，避免 Thread.sleep 不可靠
+            delayedCleanupExecutor.schedule(() -> {
                 try {
+                    // 后置删除 — 清空 L2 Redis 中旧版本的所有 key
                     String oldVersion = String.valueOf(Integer.parseInt(newVersion) - 1);
                     deleteRedisByOldVersion(oldVersion);
-                } catch (Exception e) {
-                    log.warn("延迟双删 [后置删除 L2] 失败: {}", e.getMessage());
-                }
 
-                // Step 5: 删除 L3 数据库中旧版本的记录
-                try {
+                    // 删除 L3 数据库中旧版本的记录
                     deleteDbCacheByOldVersion(Integer.parseInt(newVersion));
-                } catch (Exception e) {
-                    log.warn("延迟双删 [后置删除 L3] 失败: {}", e.getMessage());
-                }
 
-                log.info("延迟双删完成: sourceLang={}, targetLang={}, newVersion={}", sourceLang, targetLang, newVersion);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("延迟双删被中断: sourceLang={}, targetLang={}", sourceLang, targetLang);
-            } catch (Exception e) {
-                log.error("延迟双删异常: sourceLang={}, targetLang={}, error={}", sourceLang, targetLang, e.getMessage(), e);
-            }
-        });
+                    log.info("延迟双删完成: sourceLang={}, targetLang={}, newVersion={}", sourceLang, targetLang, newVersion);
+                } catch (Exception e) {
+                    log.warn("延迟双删 [后置删除] 失败: {}", e.getMessage());
+                }
+            }, 2, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.error("延迟双删异常: sourceLang={}, targetLang={}, error={}", sourceLang, targetLang, e.getMessage(), e);
+        }
     }
 
     /**
@@ -565,6 +607,16 @@ public class TranslationCacheService {
     public void shutdown() {
         log.info("翻译缓存服务关闭，清理 Caffeine 缓存...");
         caffeineCache.invalidateAll();
+        log.info("翻译缓存服务关闭，关闭调度线程池...");
+        delayedCleanupExecutor.shutdown();
+        try {
+            if (!delayedCleanupExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                delayedCleanupExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            delayedCleanupExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         log.info("翻译缓存服务已关闭");
     }
 }

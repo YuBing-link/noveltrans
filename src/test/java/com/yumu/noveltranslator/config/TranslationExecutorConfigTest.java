@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.config;
 
+import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -9,9 +10,14 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @DisplayName("TranslationExecutorConfig 虚拟线程测试")
 class TranslationExecutorConfigTest {
+
+    private TranslationExecutorConfig createConfig() {
+        return new TranslationExecutorConfig(mock(TranslationLimitProperties.class));
+    }
 
     @Nested
     @DisplayName("translationExecutor bean")
@@ -19,14 +25,14 @@ class TranslationExecutorConfigTest {
 
         @Test
         void bean创建成功() {
-            TranslationExecutorConfig config = new TranslationExecutorConfig();
+            TranslationExecutorConfig config = createConfig();
             ExecutorService executor = config.translationExecutor();
             assertNotNull(executor);
         }
 
         @Test
         void 执行任务使用虚拟线程() throws Exception {
-            TranslationExecutorConfig config = new TranslationExecutorConfig();
+            TranslationExecutorConfig config = createConfig();
             ExecutorService executor = config.translationExecutor();
 
             Thread[] threadHolder = new Thread[1];
@@ -40,7 +46,7 @@ class TranslationExecutorConfigTest {
 
         @Test
         void 线程名带前缀() throws Exception {
-            TranslationExecutorConfig config = new TranslationExecutorConfig();
+            TranslationExecutorConfig config = createConfig();
             ExecutorService executor = config.translationExecutor();
 
             Thread[] threadHolder = new Thread[1];
@@ -53,7 +59,7 @@ class TranslationExecutorConfigTest {
 
         @Test
         void 未捕获异常由handler处理() throws Exception {
-            TranslationExecutorConfig config = new TranslationExecutorConfig();
+            TranslationExecutorConfig config = createConfig();
             ExecutorService executor = config.translationExecutor();
 
             // 通过 Future 验证异常被传播，且 executor 没有崩溃
@@ -68,7 +74,7 @@ class TranslationExecutorConfigTest {
 
         @Test
         void shutdown正常() {
-            TranslationExecutorConfig config = new TranslationExecutorConfig();
+            TranslationExecutorConfig config = createConfig();
             ExecutorService executor = config.translationExecutor();
             assertDoesNotThrow(() -> executor.shutdown());
         }

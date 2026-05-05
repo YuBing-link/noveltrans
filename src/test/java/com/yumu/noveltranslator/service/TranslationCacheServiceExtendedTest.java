@@ -261,6 +261,8 @@ class TranslationCacheServiceExtendedTest {
         void 同一key仅触发一次底层查询() {
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
             when(valueOperations.get(anyString())).thenReturn(null);
+            when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any())).thenReturn(true);
+            when(stringRedisTemplate.delete(anyString())).thenReturn(true);
             when(translationCacheMapper.selectById("stampede-key")).thenReturn(null);
             when(translationCacheMapper.selectOne(any())).thenReturn(null);
 

@@ -99,4 +99,13 @@ public class JwtUtils {
         DecodedJWT jwt = verifyToken(token);
         return jwt.getClaim("tenantId").asLong();
     }
+
+    /**
+     * 从 Token 中获取过期时间
+     */
+    public java.time.LocalDateTime getExpiresAtFromToken(String token) {
+        DecodedJWT jwt = verifyToken(token);
+        Date expiresAt = jwt.getExpiresAt();
+        return expiresAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
+    }
 }

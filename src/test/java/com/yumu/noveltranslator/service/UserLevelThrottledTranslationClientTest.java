@@ -36,6 +36,9 @@ class UserLevelThrottledTranslationClientTest {
     @Mock
     private TranslationLimitProperties limitProperties;
 
+    @Mock
+    private TokenAwareRateLimiter tokenAwareRateLimiter;
+
     private UserLevelThrottledTranslationClient client;
 
     @BeforeEach
@@ -44,8 +47,9 @@ class UserLevelThrottledTranslationClientTest {
         when(limitProperties.getProConcurrencyLimit()).thenReturn(20);
         when(limitProperties.getMaxConcurrencyLimit()).thenReturn(5);
         when(limitProperties.getAnonymousConcurrencyLimit()).thenReturn(3);
+        when(tokenAwareRateLimiter.tryConsume(anyString(), anyString(), anyInt())).thenReturn(true);
 
-        client = new UserLevelThrottledTranslationClient(externalTranslationService, limitProperties);
+        client = new UserLevelThrottledTranslationClient(externalTranslationService, limitProperties, tokenAwareRateLimiter);
         ReflectionTestUtils.setField(client, "pythonTranslateUrl", "http://localhost:9999/translate");
         SecurityContextHolder.clearContext();
     }
@@ -377,6 +381,65 @@ class UserLevelThrottledTranslationClientTest {
             method.invoke(client);
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    @Nested
+    @DisplayName("TPM 速率限制")
+    class TpmRateLimitingTests {
+
+        @Test
+        void TPM配额不足时拒绝请求() {
+            setAuthenticatedUser(1L, "free");
+            when(tokenAwareRateLimiter.tryConsume(anyString(), anyString(), anyInt())).thenReturn(false);
+
+            RuntimeException ex = assertThrows(RuntimeException.class,
+                    () -> client.translate("Hello world", "zh", "google", false, true));
+
+            assertTrue(ex.getMessage().contains("翻译频率过高"));
+            verify(tokenAwareRateLimiter).tryConsume(eq("user_1"), eq("free"), anyInt());
+        }
+
+        @Test
+        void TPM配额充足时允许请求() {
+            setAuthenticatedUser(1L, "free");
+            when(tokenAwareRateLimiter.tryConsume(anyString(), anyString(), anyInt())).thenReturn(true);
+            JSONObject mtranResp = new JSONObject();
+            mtranResp.put("result", "translated");
+            when(externalTranslationService.translate(anyString(), anyString(), anyString(), anyBoolean()))
+                    .thenReturn(mtranResp);
+
+            String result = client.translate("Hello", "zh", "google", false, true);
+
+            assertNotNull(result);
+            verify(tokenAwareRateLimiter).tryConsume(eq("user_1"), eq("free"), anyInt());
+        }
+
+        @Test
+        void 专家模式Python翻译也受TPM限制() {
+            setAuthenticatedUser(1L, "pro");
+            when(tokenAwareRateLimiter.tryConsume(anyString(), anyString(), anyInt())).thenReturn(false);
+
+            RuntimeException ex = assertThrows(RuntimeException.class,
+                    () -> client.translateWithPython("Hello", "zh", "google"));
+
+            assertTrue(ex.getMessage().contains("翻译频率过高"));
+            verify(tokenAwareRateLimiter).tryConsume(eq("user_1"), eq("pro"), anyInt());
+        }
+
+        @Test
+        void 匿名用户使用TPM限制() {
+            SecurityContextHolder.clearContext();
+            when(tokenAwareRateLimiter.tryConsume(anyString(), anyString(), anyInt())).thenReturn(true);
+            JSONObject mtranResp = new JSONObject();
+            mtranResp.put("result", "translated");
+            when(externalTranslationService.translate(anyString(), anyString(), anyString(), anyBoolean()))
+                    .thenReturn(mtranResp);
+
+            String result = client.translate("Hello", "zh", "google", false, true);
+
+            assertNotNull(result);
+            verify(tokenAwareRateLimiter).tryConsume(eq("anonymous"), eq("anonymous"), anyInt());
         }
     }
 }

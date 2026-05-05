@@ -116,6 +116,9 @@ translate-server:
     pro-concurrency-limit: 3     # 专业用户最大并发数
     max-concurrency-limit: 5     # Max 用户最大并发数
     anonymous-concurrency-limit: 1  # 匿名用户最大并发数
+    free-tpm-limit: 2000           # 免费用户每分钟 token 上限
+    pro-tpm-limit: 10000           # 专业用户每分钟 token 上限
+    max-tpm-limit: 50000           # Max 用户每分钟 token 上限
   verification:
     code:
       validity: 5
@@ -139,6 +142,26 @@ resilience4j:
   circuitbreaker:
     instances:
       mtranServer:
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        slidingWindowSize: 10
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 5
+        recordExceptions:
+          - java.util.concurrent.TimeoutException
+          - java.io.IOException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+      teamTranslation:
+        failureRateThreshold: 50
+        waitDurationInOpenState: 60s
+        slidingWindowSize: 10
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 3
+        recordExceptions:
+          - java.util.concurrent.TimeoutException
+          - java.io.IOException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+      embedding:
         failureRateThreshold: 50
         waitDurationInOpenState: 30s
         slidingWindowSize: 10

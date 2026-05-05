@@ -47,11 +47,14 @@ class AuthServiceTest {
     @Mock
     private DeviceTokenService deviceTokenService;
 
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userMapper, tenantMapper, jwtUtils, emailVerificationCodeUtil, deviceTokenService);
+        authService = new AuthService(userMapper, tenantMapper, jwtUtils, emailVerificationCodeUtil, deviceTokenService, tokenBlacklistService);
     }
 
     @Nested
@@ -591,7 +594,7 @@ class AuthServiceTest {
         void 带刷新令牌成功() {
             doNothing().when(deviceTokenService).removeToken("refresh-token");
 
-            Result result = authService.logout(1L, "refresh-token");
+            Result result = authService.logout(1L, "refresh-token", "test-jwt");
 
             assertTrue(result.isSuccess());
             verify(deviceTokenService).removeToken("refresh-token");
@@ -599,7 +602,7 @@ class AuthServiceTest {
 
         @Test
         void 不带刷新令牌成功() {
-            Result result = authService.logout(1L, null);
+            Result result = authService.logout(1L, null, null);
 
             assertTrue(result.isSuccess());
             verify(deviceTokenService, never()).removeToken(anyString());

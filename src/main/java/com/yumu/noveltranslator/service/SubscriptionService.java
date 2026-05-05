@@ -49,6 +49,8 @@ public class SubscriptionService {
     private final UserMapper userMapper;
     private final UserPlanHistoryMapper userPlanHistoryMapper;
     private final StringRedisTemplate stringRedisTemplate;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final com.yumu.noveltranslator.util.JwtUtils jwtUtils;
 
     // ==================== 用户端 API ====================
 
@@ -101,14 +103,15 @@ public class SubscriptionService {
      * 创建订阅支付会话
      * - 无活跃订阅 → 创建新订阅 Checkout Session（走 Stripe 支付流程）
      * - 有活跃订阅 + 升级套餐 → 直接调用 Subscription.update 变更价格，Stripe 自动按比例结算差价
+     *
+     * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
      */
-    @Transactional
     public CheckoutSessionResponse createCheckoutSession(Long userId, CheckoutSessionRequest request) {
         SubscriptionPlan plan = validatePlan(request.getPlan());
         BillingCycle billingCycle = validateBillingCycle(request.getBillingCycle());
         String priceId = getPriceId(plan, billingCycle);
 
-        // 1. 获取或创建 Stripe Customer
+        // 1. 获取或创建 Stripe Customer（Stripe HTTP + DB insert，在事务外）
         StripeCustomer customer = getOrCreateCustomer(userId);
 
         // 2. 检查是否已有活跃订阅
@@ -120,12 +123,12 @@ public class SubscriptionService {
                 .last("LIMIT 1")
         );
 
-        // 3. 已有活跃订阅 → 升级现有订阅（不创建新 session）
+        // 3. 已有活跃订阅 → 升级现有订阅（Stripe HTTP + DB 写，拆分为事务外+内）
         if (existingSub != null) {
-            return upgradeSubscription(existingSub, priceId, plan, billingCycle);
+            return upgradeSubscriptionWithNarrowTx(existingSub, priceId, plan, billingCycle);
         }
 
-        // 4. 无活跃订阅 → 创建新 Checkout Session
+        // 4. 无活跃订阅 → 创建新 Checkout Session（仅 Stripe HTTP，无 DB 写）
         try {
             SessionCreateParams params = SessionCreateParams.builder()
                 .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
@@ -152,23 +155,23 @@ public class SubscriptionService {
     }
 
     /**
-     * 升级现有订阅：替换 price，Stripe 自动按比例结算差价
+     * 升级现有订阅：Stripe HTTP 在事务外，DB 写在事务内。
      */
-    private CheckoutSessionResponse upgradeSubscription(StripeSubscription existingSub,
-                                                         String newPriceId,
-                                                         SubscriptionPlan newPlan,
-                                                         BillingCycle billingCycle) {
+    private CheckoutSessionResponse upgradeSubscriptionWithNarrowTx(StripeSubscription existingSub,
+                                                                     String newPriceId,
+                                                                     SubscriptionPlan newPlan,
+                                                                     BillingCycle billingCycle) {
+        // Stripe HTTP 调用在事务外
+        Subscription updated;
         try {
             Subscription stripeSub = Subscription.retrieve(existingSub.getStripeSubscriptionId());
 
-            // 删除旧的价格项
             String oldItemId = stripeSub.getItems().getData().get(0).getId();
             SubscriptionUpdateParams.Item removeItem = SubscriptionUpdateParams.Item.builder()
                 .setId(oldItemId)
                 .setDeleted(true)
                 .build();
 
-            // 添加新的价格项
             SubscriptionUpdateParams.Item newItem = SubscriptionUpdateParams.Item.builder()
                 .setPrice(newPriceId)
                 .setQuantity(1L)
@@ -180,39 +183,48 @@ public class SubscriptionService {
                 .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE)
                 .build();
 
-            Subscription updated = stripeSub.update(updateParams);
-
-            // 更新本地记录
-            existingSub.setPlan(newPlan.getValue());
-            existingSub.setBillingCycle(billingCycle.getValue());
-            existingSub.setStripePriceId(updated.getItems().getData().get(0).getPrice().getId());
-            existingSub.setStatus(updated.getStatus());
-            existingSub.setCancelAtPeriodEnd(updated.getCancelAtPeriodEnd());
-
-            if (updated.getCurrentPeriodStart() != null) {
-                existingSub.setCurrentPeriodStart(
-                    LocalDateTime.ofInstant(Instant.ofEpochSecond(updated.getCurrentPeriodStart()), ZoneId.systemDefault()));
-            }
-            if (updated.getCurrentPeriodEnd() != null) {
-                existingSub.setCurrentPeriodEnd(
-                    LocalDateTime.ofInstant(Instant.ofEpochSecond(updated.getCurrentPeriodEnd()), ZoneId.systemDefault()));
-            }
-
-            existingSub.setLastWebhookEventId("upgrade_" + System.currentTimeMillis());
-            stripeSubscriptionMapper.updateById(existingSub);
-
-            // 更新用户等级
-            updateUserLevel(existingSub.getUserId(), newPlan.getValue(), "subscription_upgrade", "upgrade_" + existingSub.getStripeSubscriptionId() + "_" + newPriceId);
-
-            log.info("Upgraded subscription {} for user {}: {} -> {}, priceId {}",
-                existingSub.getStripeSubscriptionId(), existingSub.getUserId(),
-                existingSub.getPlan(), newPlan, newPriceId);
-
-            return new CheckoutSessionResponse(null);
+            updated = stripeSub.update(updateParams);
         } catch (StripeException e) {
             log.error("Failed to upgrade subscription for user {}: {}", existingSub.getUserId(), e.getMessage(), e);
             throw new RuntimeException("升级订阅失败", e);
         }
+
+        // DB 写操作在窄事务内
+        return doUpgradeSubscription(existingSub, updated, newPriceId, newPlan, billingCycle);
+    }
+
+    @Transactional
+    private CheckoutSessionResponse doUpgradeSubscription(StripeSubscription existingSub,
+                                                           Subscription updated,
+                                                           String newPriceId,
+                                                           SubscriptionPlan newPlan,
+                                                           BillingCycle billingCycle) {
+        existingSub.setPlan(newPlan.getValue());
+        existingSub.setBillingCycle(billingCycle.getValue());
+        existingSub.setStripePriceId(updated.getItems().getData().get(0).getPrice().getId());
+        existingSub.setStatus(updated.getStatus());
+        existingSub.setCancelAtPeriodEnd(updated.getCancelAtPeriodEnd());
+
+        if (updated.getCurrentPeriodStart() != null) {
+            existingSub.setCurrentPeriodStart(
+                LocalDateTime.ofInstant(Instant.ofEpochSecond(updated.getCurrentPeriodStart()), ZoneId.systemDefault()));
+        }
+        if (updated.getCurrentPeriodEnd() != null) {
+            existingSub.setCurrentPeriodEnd(
+                LocalDateTime.ofInstant(Instant.ofEpochSecond(updated.getCurrentPeriodEnd()), ZoneId.systemDefault()));
+        }
+
+        existingSub.setLastWebhookEventId("upgrade_" + System.currentTimeMillis());
+        stripeSubscriptionMapper.updateById(existingSub);
+
+        // 更新用户等级
+        updateUserLevel(existingSub.getUserId(), newPlan.getValue(), "subscription_upgrade", "upgrade_" + existingSub.getStripeSubscriptionId() + "_" + newPriceId);
+
+        log.info("Upgraded subscription {} for user {}: {} -> {}, priceId {}",
+            existingSub.getStripeSubscriptionId(), existingSub.getUserId(),
+            existingSub.getPlan(), newPlan, newPriceId);
+
+        return new CheckoutSessionResponse(null);
     }
 
     /**
@@ -241,8 +253,8 @@ public class SubscriptionService {
 
     /**
      * 取消订阅（在周期结束时取消）
+     * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
      */
-    @Transactional
     public SubscriptionStatusResponse cancelSubscription(Long userId) {
         StripeSubscription sub = stripeSubscriptionMapper.selectOne(
             new LambdaQueryWrapper<StripeSubscription>()
@@ -257,27 +269,34 @@ public class SubscriptionService {
         }
 
         try {
+            // Stripe HTTP 调用在事务外执行
             Subscription stripeSub = Subscription.retrieve(sub.getStripeSubscriptionId());
             SubscriptionUpdateParams updateParams = SubscriptionUpdateParams.builder()
                 .setCancelAtPeriodEnd(true)
                 .build();
             stripeSub.update(updateParams);
-
-            sub.setCancelAtPeriodEnd(true);
-            sub.setCanceledAt(LocalDateTime.now());
-            sub.setLastWebhookEventId("manual_cancel_" + System.currentTimeMillis());
-            stripeSubscriptionMapper.updateById(sub);
-
-            return new SubscriptionStatusResponse(
-                sub.getPlan(),
-                sub.getStatus(),
-                sub.getCurrentPeriodEnd(),
-                true
-            );
         } catch (StripeException e) {
             log.error("Failed to cancel Stripe subscription {}: {}", sub.getStripeSubscriptionId(), e.getMessage(), e);
             throw new RuntimeException("取消订阅失败", e);
         }
+
+        // 仅 DB 写操作在事务内
+        return doCancelSubscription(sub);
+    }
+
+    @Transactional
+    private SubscriptionStatusResponse doCancelSubscription(StripeSubscription sub) {
+        sub.setCancelAtPeriodEnd(true);
+        sub.setCanceledAt(LocalDateTime.now());
+        sub.setLastWebhookEventId("manual_cancel_" + System.currentTimeMillis());
+        stripeSubscriptionMapper.updateById(sub);
+
+        return new SubscriptionStatusResponse(
+            sub.getPlan(),
+            sub.getStatus(),
+            sub.getCurrentPeriodEnd(),
+            true
+        );
     }
 
     /**
@@ -315,25 +334,12 @@ public class SubscriptionService {
 
     /**
      * 处理 checkout.session.completed 事件
+     * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
      */
-    @Transactional
     public void handleCheckoutSessionCompleted(Event event) {
-        Session session;
-        try {
-            var deserializer = event.getDataObjectDeserializer();
-            session = (Session) deserializer.getObject().orElse(null);
-            if (session == null) {
-                // API 版本不匹配时尝试 unsafe 反序列化
-                session = (Session) deserializer.deserializeUnsafe();
-                if (session == null) {
-                    log.warn("checkout.session.completed: failed to deserialize event object");
-                    return;
-                }
-            }
-        } catch (Exception e) {
-            log.error("checkout.session.completed: deserialization error", e);
-            return;
-        }
+        // 反序列化在事务外
+        Session session = deserializeSession(event, "checkout.session.completed");
+        if (session == null) return;
 
         String userIdStr = session.getMetadata().get("userId");
         String planStr = session.getMetadata().get("plan");
@@ -348,104 +354,101 @@ public class SubscriptionService {
         SubscriptionPlan plan = validatePlan(planStr);
         BillingCycle billingCycle = BillingCycle.fromValue(billingCycleStr != null ? billingCycleStr : "monthly");
 
-        // 获取 Stripe Subscription 对象
-        StripeSubscription subRecord;
+        // 获取 Stripe Subscription 对象（HTTP 调用，在事务外）
+        String subscriptionId = session.getSubscription();
+        if (subscriptionId == null) {
+            log.warn("checkout.session.completed: no subscription in session {}", session.getId());
+            return;
+        }
+
+        Subscription stripeSub;
+        StripeCustomer customer;
         try {
-            // 展开 subscription 对象以获取 ID
-            String subscriptionId = session.getSubscription();
-            if (subscriptionId == null) {
-                log.warn("checkout.session.completed: no subscription in session {}", session.getId());
-                return;
+            stripeSub = Subscription.retrieve(subscriptionId);
+            customer = getOrCreateCustomer(userId);
+        } catch (StripeException e) {
+            log.error("checkout.session.completed: Stripe API error for session {}: {}", session.getId(), e.getMessage(), e);
+            return;
+        }
+
+        // DB 操作在窄事务内
+        doHandleCheckoutSessionCompleted(event, userId, plan, billingCycle, subscriptionId, stripeSub, customer);
+    }
+
+    @Transactional
+    private void doHandleCheckoutSessionCompleted(Event event, Long userId, SubscriptionPlan plan,
+                                                   BillingCycle billingCycle, String subscriptionId,
+                                                   Subscription stripeSub, StripeCustomer customer) {
+        // 幂等检查：是否已存在该 subscription
+        StripeSubscription subRecord = stripeSubscriptionMapper.selectOne(
+            new LambdaQueryWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
+        );
+
+        // 幂等检查：是否已处理过该 event
+        if (subRecord != null && event.getId().equals(subRecord.getLastWebhookEventId())) {
+            log.info("checkout.session.completed: already processed event {}, skipping", event.getId());
+            return;
+        }
+
+        if (subRecord == null) {
+            // 插入新记录
+            subRecord = new StripeSubscription();
+            subRecord.setUserId(userId);
+            subRecord.setStripeCustomerId(customer.getStripeCustomerId());
+            subRecord.setStripeSubscriptionId(subscriptionId);
+            subRecord.setPlan(plan.getValue());
+            subRecord.setBillingCycle(billingCycle.getValue());
+            subRecord.setStripePriceId(stripeSub.getItems().getData().get(0).getPrice().getId());
+            subRecord.setStatus(stripeSub.getStatus());
+            subRecord.setCancelAtPeriodEnd(stripeSub.getCancelAtPeriodEnd());
+
+            if (stripeSub.getCurrentPeriodStart() != null) {
+                subRecord.setCurrentPeriodStart(
+                    LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodStart()), ZoneId.systemDefault()));
+            }
+            if (stripeSub.getCurrentPeriodEnd() != null) {
+                subRecord.setCurrentPeriodEnd(
+                    LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodEnd()), ZoneId.systemDefault()));
             }
 
-            Subscription stripeSub = Subscription.retrieve(subscriptionId);
+            subRecord.setLastWebhookEventId(event.getId());
+            boolean insertSucceeded = false;
 
-            // 获取或创建 Stripe Customer
-            StripeCustomer customer = getOrCreateCustomer(userId);
-
-            // 幂等检查：是否已存在该 subscription
-            subRecord = stripeSubscriptionMapper.selectOne(
-                new LambdaQueryWrapper<StripeSubscription>()
-                    .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-            );
-
-            // 幂等检查：是否已处理过该 event
-            if (subRecord != null && event.getId().equals(subRecord.getLastWebhookEventId())) {
-                log.info("checkout.session.completed: already processed event {}, skipping", event.getId());
-                return;
+            try {
+                stripeSubscriptionMapper.insert(subRecord);
+                insertSucceeded = true;
+            } catch (DuplicateKeyException e) {
+                subRecord = stripeSubscriptionMapper.selectOne(
+                    new LambdaQueryWrapper<StripeSubscription>()
+                        .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
+                );
+                if (subRecord == null) {
+                    log.error("DuplicateKeyException caught but re-query returned null for subscriptionId {}", subscriptionId);
+                    return;
+                }
+                log.info("checkout.session.completed: duplicate insert caught, re-queried existing record for subscriptionId {}", subscriptionId);
             }
 
-            if (subRecord == null) {
-                // 插入新记录 — 并发 webhook 可能触发 DuplicateKeyException（唯一索引兜底）
-                subRecord = new StripeSubscription();
-                subRecord.setUserId(userId);
-                subRecord.setStripeCustomerId(customer.getStripeCustomerId());
-                subRecord.setStripeSubscriptionId(subscriptionId);
-                subRecord.setPlan(plan.getValue());
-                subRecord.setBillingCycle(billingCycle.getValue());
-                subRecord.setStripePriceId(stripeSub.getItems().getData().get(0).getPrice().getId());
-                subRecord.setStatus(stripeSub.getStatus());
-                subRecord.setCancelAtPeriodEnd(stripeSub.getCancelAtPeriodEnd());
-
-                if (stripeSub.getCurrentPeriodStart() != null) {
-                    subRecord.setCurrentPeriodStart(
-                        LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodStart()), ZoneId.systemDefault()));
-                }
-                if (stripeSub.getCurrentPeriodEnd() != null) {
-                    subRecord.setCurrentPeriodEnd(
-                        LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodEnd()), ZoneId.systemDefault()));
-                }
-
-                // 在插入前就设置 event_id，确保插入成功的记录已经携带 event_id
-                // 这样 DuplicateKeyException catch 路径中 re-query 拿到的记录已经有 event_id，
-                // 后续的 IS NULL claim 会正确返回 0
-                subRecord.setLastWebhookEventId(event.getId());
-                boolean insertSucceeded = false;
-
-                try {
-                    stripeSubscriptionMapper.insert(subRecord);
-                    insertSucceeded = true;
-                } catch (DuplicateKeyException e) {
-                    // 另一条线程已插入成功，重新查询获取记录
-                    subRecord = stripeSubscriptionMapper.selectOne(
-                        new LambdaQueryWrapper<StripeSubscription>()
-                            .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-                    );
-                    if (subRecord == null) {
-                        log.error("DuplicateKeyException caught but re-query returned null for subscriptionId {}", subscriptionId);
-                        return; // 异常情况，不处理
-                    }
-                    log.info("checkout.session.completed: duplicate insert caught, re-queried existing record for subscriptionId {}", subscriptionId);
-                }
-
-                // 只有 DuplicateKeyException 路径（insertSucceeded=false）才需要原子 claim
-                // 插入成功的线程已经通过 insert 拥有了 event_id，无需再次 claim
-                if (!insertSucceeded) {
-                    int claimed = atomicClaimEventId(subRecord.getId(), event.getId());
-                    if (claimed == 0) {
-                        log.info("checkout.session.completed: event {} already claimed by concurrent thread, skipping", event.getId());
-                        return;
-                    }
-                }
-
-                log.info("Created subscription record for user {}, plan {}, subscriptionId {}", userId, plan, subscriptionId);
-            } else {
-                // 记录已存在（比如 subscription.updated 先于 checkout.session.completed 到达），
-                // 需要原子性地 claim 该 event 的处理权，防止并发重复处理
+            if (!insertSucceeded) {
                 int claimed = atomicClaimEventId(subRecord.getId(), event.getId());
                 if (claimed == 0) {
-                    log.info("checkout.session.completed: event {} already claimed by concurrent thread for existing record, skipping", event.getId());
+                    log.info("checkout.session.completed: event {} already claimed by concurrent thread, skipping", event.getId());
                     return;
                 }
             }
 
-            // 更新 userLevel
-            updateUserLevel(userId, plan.getValue(), "checkout.session.completed", event.getId());
-
-        } catch (StripeException e) {
-            log.error("checkout.session.completed: Stripe API error for session {}: {}", session.getId(), e.getMessage(), e);
-            throw new RuntimeException(e);
+            log.info("Created subscription record for user {}, plan {}, subscriptionId {}", userId, plan, subscriptionId);
+        } else {
+            int claimed = atomicClaimEventId(subRecord.getId(), event.getId());
+            if (claimed == 0) {
+                log.info("checkout.session.completed: event {} already claimed by concurrent thread for existing record, skipping", event.getId());
+                return;
+            }
         }
+
+        // 更新 userLevel
+        updateUserLevel(userId, plan.getValue(), "checkout.session.completed", event.getId());
     }
 
     /**
@@ -481,6 +484,8 @@ public class SubscriptionService {
         }
 
         // 原子幂等检查 + 更新：lastWebhookEventId 为 NULL 或与当前 event 不同时才更新
+        // 额外校验事件时间戳，防止 Stripe 乱序投递（如 deleted 先到、updated 后到）导致状态回退
+        long eventCreated = event.getCreated();
         int rows = stripeSubscriptionMapper.update(null,
             new LambdaUpdateWrapper<StripeSubscription>()
                 .eq(StripeSubscription::getId, subRecord.getId())
@@ -489,10 +494,16 @@ public class SubscriptionService {
                     .or()
                     .ne(StripeSubscription::getLastWebhookEventId, event.getId())
                 )
+                .and(w -> w
+                    .isNull(StripeSubscription::getLastEventCreated)
+                    .or()
+                    .lt(StripeSubscription::getLastEventCreated, eventCreated)
+                )
                 .set(StripeSubscription::getStatus, stripeSub.getStatus())
                 .set(StripeSubscription::getCancelAtPeriodEnd, stripeSub.getCancelAtPeriodEnd())
                 .set(StripeSubscription::getStripePriceId, stripeSub.getItems().getData().get(0).getPrice().getId())
                 .set(StripeSubscription::getLastWebhookEventId, event.getId())
+                .set(StripeSubscription::getLastEventCreated, eventCreated)
         );
 
         if (rows == 0) {
@@ -572,7 +583,8 @@ public class SubscriptionService {
             return;
         }
 
-        // 原子幂等检查 + 更新：lastWebhookEventId 为 NULL 或与当前 event 不同时才更新
+        // 原子幂等检查 + 更新 + 事件时间戳排序校验
+        long eventCreated = event.getCreated();
         int rows = stripeSubscriptionMapper.update(null,
             new LambdaUpdateWrapper<StripeSubscription>()
                 .eq(StripeSubscription::getId, subRecord.getId())
@@ -581,8 +593,14 @@ public class SubscriptionService {
                     .or()
                     .ne(StripeSubscription::getLastWebhookEventId, event.getId())
                 )
+                .and(w -> w
+                    .isNull(StripeSubscription::getLastEventCreated)
+                    .or()
+                    .lt(StripeSubscription::getLastEventCreated, eventCreated)
+                )
                 .set(StripeSubscription::getStatus, "canceled")
                 .set(StripeSubscription::getLastWebhookEventId, event.getId())
+                .set(StripeSubscription::getLastEventCreated, eventCreated)
         );
 
         if (rows == 0) {
@@ -627,9 +645,29 @@ public class SubscriptionService {
             return;
         }
 
-        subRecord.setStatus(stripeSub.getStatus());
-        subRecord.setLastWebhookEventId(event.getId());
-        stripeSubscriptionMapper.updateById(subRecord);
+        long eventCreated = event.getCreated();
+        int rows = stripeSubscriptionMapper.update(null,
+            new LambdaUpdateWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getId, subRecord.getId())
+                .and(w -> w
+                    .isNull(StripeSubscription::getLastWebhookEventId)
+                    .or()
+                    .ne(StripeSubscription::getLastWebhookEventId, event.getId())
+                )
+                .and(w -> w
+                    .isNull(StripeSubscription::getLastEventCreated)
+                    .or()
+                    .lt(StripeSubscription::getLastEventCreated, eventCreated)
+                )
+                .set(StripeSubscription::getStatus, stripeSub.getStatus())
+                .set(StripeSubscription::getLastWebhookEventId, event.getId())
+                .set(StripeSubscription::getLastEventCreated, eventCreated)
+        );
+
+        if (rows == 0) {
+            log.info("subscription.resumed: already processed event {}, skipping", event.getId());
+            return;
+        }
 
         log.info("Subscription {} resumed, status: {}", subscriptionId, stripeSub.getStatus());
     }
@@ -666,16 +704,57 @@ public class SubscriptionService {
         );
 
         if (subRecord != null) {
-            subRecord.setStatus("past_due");
-            subRecord.setLastWebhookEventId(event.getId());
-            stripeSubscriptionMapper.updateById(subRecord);
-            log.warn("invoice.payment_failed: subscription {} marked past_due (grace period applies)", subscriptionId);
+            long eventCreated = event.getCreated();
+            int rows = stripeSubscriptionMapper.update(null,
+                new LambdaUpdateWrapper<StripeSubscription>()
+                    .eq(StripeSubscription::getId, subRecord.getId())
+                    .and(w -> w
+                        .isNull(StripeSubscription::getLastWebhookEventId)
+                        .or()
+                        .ne(StripeSubscription::getLastWebhookEventId, event.getId())
+                    )
+                    .and(w -> w
+                        .isNull(StripeSubscription::getLastEventCreated)
+                        .or()
+                        .lt(StripeSubscription::getLastEventCreated, eventCreated)
+                    )
+                    .set(StripeSubscription::getStatus, "past_due")
+                    .set(StripeSubscription::getLastWebhookEventId, event.getId())
+                    .set(StripeSubscription::getLastEventCreated, eventCreated)
+            );
+
+            if (rows == 0) {
+                log.info("invoice.payment_failed: already processed event {}, skipping", event.getId());
+            } else {
+                log.warn("invoice.payment_failed: subscription {} marked past_due (grace period applies)", subscriptionId);
+            }
         } else {
             log.warn("invoice.payment_failed: no local record for subscription {}", subscriptionId);
         }
     }
 
     // ==================== 内部方法 ====================
+
+    /**
+     * 反序列化 Session 对象，供 checkout.session.completed 使用。
+     */
+    private Session deserializeSession(Event event, String eventType) {
+        try {
+            var deserializer = event.getDataObjectDeserializer();
+            Session session = (Session) deserializer.getObject().orElse(null);
+            if (session == null) {
+                session = (Session) deserializer.deserializeUnsafe();
+                if (session == null) {
+                    log.warn("{}: failed to deserialize event object", eventType);
+                    return null;
+                }
+            }
+            return session;
+        } catch (Exception e) {
+            log.error("{}: deserialization error", eventType, e);
+            return null;
+        }
+    }
 
     private StripeCustomer getOrCreateCustomer(Long userId) {
         StripeCustomer existing = stripeCustomerMapper.selectOne(
@@ -808,5 +887,24 @@ public class SubscriptionService {
         userPlanHistoryMapper.insert(history);
 
         log.info("User {} level changed: {} -> {} (reason: {})", userId, oldLevel, newLevel, reason);
+
+        // 降级到 FREE 时吊销用户所有 JWT，防止退款后继续白嫖高级 API
+        if ("FREE".equals(newLevel) && !oldLevel.equals("FREE")) {
+            revokeAllUserTokens(user.getEmail(), "subscription_downgrade: " + reason);
+        }
+    }
+
+    /**
+     * 吊销用户所有 JWT 令牌，使其立即失效。
+     * 通过 email 级别的黑名单条目实现，任何该邮箱的 JWT 都会被拒绝。
+     */
+    private void revokeAllUserTokens(String email, String reason) {
+        try {
+            LocalDateTime expiresAt = LocalDateTime.now().plusDays(7); // 黑名单保留 7 天
+            tokenBlacklistService.blacklistAllUserTokens(email, reason, expiresAt);
+            log.info("已吊销用户 {} 的所有 JWT 令牌（原因：{}）", email, reason);
+        } catch (Exception e) {
+            log.warn("吊销用户 JWT 失败: {}", e.getMessage());
+        }
     }
 }

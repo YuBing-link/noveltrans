@@ -38,6 +38,8 @@ class UserLevelThrottledTranslationClientFallbackTest {
     private ExternalTranslationService externalTranslationService;
     @Mock
     private TranslationLimitProperties limitProperties;
+    @Mock
+    private TokenAwareRateLimiter tokenAwareRateLimiter;
 
     private UserLevelThrottledTranslationClient client;
 
@@ -47,10 +49,10 @@ class UserLevelThrottledTranslationClientFallbackTest {
         when(limitProperties.getProConcurrencyLimit()).thenReturn(20);
         when(limitProperties.getMaxConcurrencyLimit()).thenReturn(50);
         when(limitProperties.getAnonymousConcurrencyLimit()).thenReturn(3);
+        lenient().when(tokenAwareRateLimiter.tryConsume(anyString(), anyString(), anyInt())).thenReturn(true);
 
-        client = new UserLevelThrottledTranslationClient(externalTranslationService, limitProperties);
+        client = new UserLevelThrottledTranslationClient(externalTranslationService, limitProperties, tokenAwareRateLimiter);
         ReflectionTestUtils.setField(client, "pythonTranslateUrl", "http://localhost:19999/translate");
-        client.init();
         SecurityContextHolder.clearContext();
     }
 
