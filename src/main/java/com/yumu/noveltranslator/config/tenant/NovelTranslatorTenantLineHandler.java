@@ -16,7 +16,8 @@ public class NovelTranslatorTenantLineHandler implements TenantLineHandler {
         "api_keys",
         "stripe_customer",
         "stripe_subscription",
-        "user_plan_history"
+        "user_plan_history",
+        "token_blacklist"
     );
 
     @Override
