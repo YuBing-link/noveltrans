@@ -12,11 +12,15 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 翻译缓存服务
@@ -78,6 +82,17 @@ public class TranslationCacheService {
     private static final String REDIS_KEY_PREFIX = "translator:cache:";
     private static final long REDIS_CACHE_SECONDS = 30 * 60;          // Redis 缓存 30 分钟
     private static final long REDIS_NULL_SECONDS = 5 * 60;            // 空值占位 5 分钟
+
+    // ==================== 术语反向索引 ====================
+
+    /** Redis Set key 前缀: glossary:cache_keys:{word} */
+    private static final String GLOSSARY_CACHE_KEYS_PREFIX = "glossary:cache_keys:";
+
+    /** 反向索引 Set 的 TTL（24 小时） */
+    private static final long GLOSSARY_INDEX_TTL_SECONDS = 24 * 3600;
+
+    /** 提取源文本中长度 >= 3 的单词，用于构建反向索引 */
+    private static final Pattern WORD_EXTRACT_PATTERN = Pattern.compile("\\b[\\w\\p{L}]{3,}\\b");
 
     // ==================== L3: 数据库配置常量 ====================
 
@@ -336,7 +351,10 @@ public class TranslationCacheService {
         long redisTtl = REDIS_CACHE_SECONDS + jitter(REDIS_JITTER_SECONDS);
         stringRedisTemplate.opsForValue().set(redisKey, targetText, Duration.ofSeconds(redisTtl));
 
-        // 3. 异步写入 L3 数据库（带版本号）
+        // 3. 维护术语反向索引：提取 sourceText 中的单词，建立 cacheKey 映射
+        buildReverseIndex(finalKey, sourceText);
+
+        // 4. 异步写入 L3 数据库（带版本号）
         saveToDatabaseAsync(finalKey, sourceText, targetText, sourceLang, targetLang, engine, version);
 
         log.debug("L1+L2+L3 写入成功: key={}, version={}, mode={}", finalKey, version, mode);
@@ -364,6 +382,95 @@ public class TranslationCacheService {
      */
     public void putToMemoryCache(String cacheKey, String targetText) {
         caffeineCache.put(cacheKey, targetText);
+    }
+
+    // ==================== 术语反向索引 ====================
+
+    /**
+     * 从 sourceText 中提取长度 >= 3 的单词，维护反向索引 Set。
+     * Redis key: glossary:cache_keys:{word_lowercase} -> Set of cacheKeys
+     * TTL: 24 小时
+     */
+    void buildReverseIndex(String cacheKey, String sourceText) {
+        if (sourceText == null || sourceText.isBlank()) {
+            return;
+        }
+
+        Set<String> uniqueWords = new HashSet<>();
+        Matcher matcher = WORD_EXTRACT_PATTERN.matcher(sourceText);
+        while (matcher.find()) {
+            uniqueWords.add(matcher.group().toLowerCase());
+        }
+
+        for (String word : uniqueWords) {
+            String indexKey = GLOSSARY_CACHE_KEYS_PREFIX + word;
+            stringRedisTemplate.opsForSet().add(indexKey, cacheKey);
+            stringRedisTemplate.expire(indexKey, Duration.ofSeconds(GLOSSARY_INDEX_TTL_SECONDS));
+        }
+
+        if (!uniqueWords.isEmpty()) {
+            log.debug("反向索引已更新: cacheKey={}, 词条数={}", cacheKey, uniqueWords.size());
+        }
+    }
+
+    /**
+     * 当术语发生变化时，使所有包含该词的缓存失效。
+     * 用于 glossary term 变更时的细粒度缓存失效。
+     *
+     * @param sourceWord 发生变化的原词（如 "Apple"）
+     */
+    public void invalidateKeysForTerm(String sourceWord) {
+        if (sourceWord == null || sourceWord.isBlank()) {
+            return;
+        }
+
+        String lowerWord = sourceWord.toLowerCase();
+        String indexKey = GLOSSARY_CACHE_KEYS_PREFIX + lowerWord;
+
+        // 1. 获取所有受影响的 cache keys
+        Set<String> cacheKeys = stringRedisTemplate.opsForSet().members(indexKey);
+        if (cacheKeys == null || cacheKeys.isEmpty()) {
+            log.debug("术语反向索引无匹配: word={}", lowerWord);
+            return;
+        }
+
+        log.info("开始术语细粒度失效: word={}, 影响 {} 个缓存键", lowerWord, cacheKeys.size());
+
+        // 2. 清空本地 Caffeine L1 缓存中对应的 key
+        for (String key : cacheKeys) {
+            caffeineCache.invalidate(key);
+        }
+
+        // 3. 删除 L2 Redis 中的缓存 key
+        try {
+            String[] redisKeys = cacheKeys.stream()
+                    .map(k -> REDIS_KEY_PREFIX + k)
+                    .toArray(String[]::new);
+            if (redisKeys.length > 0) {
+                long deleted = stringRedisTemplate.delete(java.util.List.of(redisKeys));
+                log.info("L2 Redis 删除 {} 个术语相关缓存键", deleted);
+            }
+        } catch (Exception e) {
+            log.warn("L2 Redis 术语缓存删除失败: word={}, error={}", lowerWord, e.getMessage());
+        }
+
+        // 4. 删除 L3 数据库中的缓存记录
+        try {
+            for (String key : cacheKeys) {
+                translationCacheMapper.delete(
+                        new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<TranslationCache>()
+                                .eq("cache_key", key)
+                );
+            }
+            log.info("L3 数据库删除 {} 个术语相关记录", cacheKeys.size());
+        } catch (Exception e) {
+            log.warn("L3 数据库术语缓存删除失败: word={}, error={}", lowerWord, e.getMessage());
+        }
+
+        // 5. 清理反向索引 Set 条目
+        stringRedisTemplate.delete(indexKey);
+
+        log.info("术语细粒度失效完成: word={}", lowerWord);
     }
 
     // ==================== 异步数据库写入 ====================

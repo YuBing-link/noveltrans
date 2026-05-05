@@ -52,12 +52,15 @@ class ChapterTaskServiceTest {
     @Mock
     private CollabStateMachine collabStateMachine;
 
+    @Mock
+    private CollabEventPublisher collabEventPublisher;
+
     private ChapterTaskService chapterTaskService;
 
     @BeforeEach
     void setUp() {
         chapterTaskService = new ChapterTaskService(
-                chapterTaskMapper, collabProjectMapper, userMapper, projectMemberMapper, collabStateMachine);
+                chapterTaskMapper, collabProjectMapper, userMapper, projectMemberMapper, collabStateMachine, collabEventPublisher);
         // ServiceImpl 需要 baseMapper 才能调用 getById/save/updateById 等方法
         ReflectionTestUtils.setField(chapterTaskService, "baseMapper", chapterTaskMapper);
     }

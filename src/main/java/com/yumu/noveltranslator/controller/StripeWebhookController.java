@@ -90,10 +90,8 @@ public class StripeWebhookController {
             case "customer.subscription.resumed" ->
                 subscriptionService.handleSubscriptionResumed(event);
 
-            case "invoice.payment_succeeded" -> {
-                // 仅记录，不改变业务状态
-                log.info("invoice.payment_succeeded: {}", event.getId());
-            }
+            case "invoice.payment_succeeded" ->
+                subscriptionService.handleInvoicePaymentSucceeded(event);
 
             case "invoice.payment_failed" ->
                 subscriptionService.handleInvoicePaymentFailed(event);

@@ -19,6 +19,9 @@ public interface CollabChapterTaskMapper extends BaseMapper<CollabChapterTask> {
     @Select("SELECT * FROM collab_chapter_task WHERE project_id = #{projectId} AND status = #{status} AND deleted = 0")
     List<CollabChapterTask> selectByProjectIdAndStatus(@Param("projectId") Long projectId, @Param("status") String status);
 
+    @Select("SELECT COUNT(*) FROM collab_chapter_task WHERE project_id = #{projectId} AND deleted = 0")
+    int countByProjectId(@Param("projectId") Long projectId);
+
     @Select("SELECT COUNT(*) FROM collab_chapter_task WHERE project_id = #{projectId} AND status = #{status} AND deleted = 0")
     int countByProjectIdAndStatus(@Param("projectId") Long projectId, @Param("status") String status);
 

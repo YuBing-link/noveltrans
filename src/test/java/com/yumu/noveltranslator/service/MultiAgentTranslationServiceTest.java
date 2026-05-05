@@ -12,6 +12,7 @@ import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.service.state.CollabStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -71,6 +72,9 @@ class MultiAgentTranslationServiceTest {
     @Mock
     private TranslationPostProcessingService postProcessingService;
 
+    @Mock
+    private CollabStateMachine collabStateMachine;
+
     private MultiAgentTranslationService service;
 
     @BeforeEach
@@ -78,7 +82,8 @@ class MultiAgentTranslationServiceTest {
         service = new MultiAgentTranslationService(
                 chapterTaskMapper, collabProjectMapper, documentMapper, translationTaskMapper,
                 teamTranslationService, cacheService, entityConsistencyService,
-                glossaryMapper, ragTranslationService, aiGlossaryService, postProcessingService);
+                glossaryMapper, ragTranslationService, aiGlossaryService, postProcessingService,
+                collabStateMachine);
     }
 
     @Nested

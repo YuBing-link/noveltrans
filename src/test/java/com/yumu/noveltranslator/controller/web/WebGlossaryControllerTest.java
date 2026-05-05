@@ -5,6 +5,7 @@ import com.yumu.noveltranslator.entity.Glossary;
 import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import com.yumu.noveltranslator.service.CacheVersionService;
+import com.yumu.noveltranslator.service.TranslationCacheService;
 import com.yumu.noveltranslator.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,11 +44,14 @@ class WebGlossaryControllerTest {
     @org.mockito.Mock
     private CacheVersionService cacheVersionService;
 
+    @org.mockito.Mock
+    private TranslationCacheService translationCacheService;
+
     private WebGlossaryController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new WebGlossaryController(userService, glossaryMapper, cacheVersionService);
+        controller = new WebGlossaryController(userService, glossaryMapper, cacheVersionService, translationCacheService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

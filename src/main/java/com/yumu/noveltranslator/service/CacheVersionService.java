@@ -78,9 +78,21 @@ public class CacheVersionService {
     }
 
     /**
+     * 为指定语言对 bump 版本号并发布失效事件
+     * 用于术语表变更时的细粒度缓存失效
+     */
+    public String bumpVersionForGlossaryTerm(String sourceLang, String targetLang) {
+        log.info("细粒度术语缓存失效: sourceLang={}, targetLang={}", sourceLang, targetLang);
+        return bumpVersionAndPublish(sourceLang, targetLang);
+    }
+
+    /**
      * 为所有已知语言对 bump 版本号
      * 用于术语表变更等全局影响场景
+     *
+     * @deprecated 使用 {@link #bumpVersionForGlossaryTerm(String, String)} 进行细粒度失效
      */
+    @Deprecated
     public void bumpAllVersions() {
         // 查询数据库中的所有目标语言
         List<String> targetLangs = translationCacheMapper.selectList(

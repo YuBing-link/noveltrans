@@ -17,6 +17,7 @@ import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
 import com.yumu.noveltranslator.service.pipeline.TranslationPipeline;
+import com.yumu.noveltranslator.service.state.CollabStateMachine;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -74,6 +75,7 @@ public class MultiAgentTranslationService {
     private final RagTranslationService ragTranslationService;
     private final AiGlossaryService aiGlossaryService;
     private final TranslationPostProcessingService postProcessingService;
+    private final CollabStateMachine collabStateMachine;
 
     /**
      * 启动时从数据库恢复重试计数
@@ -196,7 +198,7 @@ public class MultiAgentTranslationService {
         }
 
         // 更新章节状态为翻译中
-        chapter.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
+        collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.TRANSLATING);
         chapter.setAssignedTime(LocalDateTime.now());
         chapter.setProgress(50);
         chapterTaskMapper.updateById(chapter);
@@ -291,10 +293,12 @@ public class MultiAgentTranslationService {
             int retryCount = getRetryCount(chapter);
             if (retryCount >= MAX_RETRY_COUNT) {
                 log.error("章节 {} 已达到最大重试次数 {}，停止自动重试", chapterId, MAX_RETRY_COUNT);
-                chapter.setStatus(ChapterTaskStatus.REJECTED.getValue());
+                // 经 REVIEWING 中间状态转入 REJECTED
+                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REVIEWING);
+                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REJECTED);
                 chapter.setReviewComment("翻译异常（已重试 " + retryCount + " 次）: " + e.getMessage());
             } else {
-                chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.UNASSIGNED);
                 chapter.setReviewComment("翻译异常，等待重试（第 " + (retryCount + 1) + " 次）: " + e.getMessage());
                 // 指数退避，避免立即重试
                 sleepWithBackoff(retryCount, e);
@@ -326,7 +330,7 @@ public class MultiAgentTranslationService {
             }
             // 增加重试计数并回退状态
             incrementRetryCount(chapter);
-            chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.UNASSIGNED);
             chapter.setReviewComment("翻译中断，自动重试（第 " + (retryCount + 2) + " 次）");
             chapter.setRetryCount(retryCount + 1);
             chapterTaskMapper.updateById(chapter);
@@ -365,12 +369,14 @@ public class MultiAgentTranslationService {
         for (CollabChapterTask chapter : stuckChapters) {
             int retryCount = getRetryCount(chapter);
             if (retryCount >= MAX_RETRY_COUNT) {
-                chapter.setStatus(ChapterTaskStatus.REJECTED.getValue());
+                // 经 REVIEWING 中间状态转入 REJECTED
+                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REVIEWING);
+                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REJECTED);
                 chapter.setReviewComment("翻译超时（已重试 " + retryCount + " 次），自动终止");
                 log.info("定时清理: 章节 {} 已达到最大重试次数，标记为 REJECTED", chapter.getId());
             } else {
                 incrementRetryCount(chapter);
-                chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.UNASSIGNED);
                 chapter.setReviewComment("翻译超时，自动重试（第 " + (retryCount + 1) + " 次）");
                 chapter.setRetryCount(retryCount + 1);
                 log.info("定时清理: 章节 {} 回退到 UNASSIGNED", chapter.getId());
@@ -500,14 +506,18 @@ public class MultiAgentTranslationService {
         chapter.setSourceWordCount(sourceText.length());
 
         if (fromCache) {
-            // 缓存命中直接标记为已完成（跳过审校流程）
+            // 缓存命中：经 SUBMITTED → REVIEWING → APPROVED → COMPLETED 完成自动审核
+            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.SUBMITTED);
+            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REVIEWING);
+            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.APPROVED);
             chapter.setProgress(100);
-            chapter.setStatus(ChapterTaskStatus.COMPLETED.getValue());
             chapter.setCompletedTime(LocalDateTime.now());
+            chapter.setSubmittedTime(LocalDateTime.now());
+            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.COMPLETED);
         } else {
             // AI 新翻译：标记为 SUBMITTED（待审校）
+            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.SUBMITTED);
             chapter.setProgress(80);
-            chapter.setStatus(ChapterTaskStatus.SUBMITTED.getValue());
             chapter.setSubmittedTime(LocalDateTime.now());
         }
 
@@ -531,7 +541,11 @@ public class MultiAgentTranslationService {
         if (project != null) {
             project.setProgress(progress);
             if (progress == 100) {
-                project.setStatus(CollabProjectStatus.COMPLETED.getValue());
+                try {
+                    collabStateMachine.transitionProject(project, CollabProjectStatus.COMPLETED);
+                } catch (IllegalStateException e) {
+                    log.debug("项目无法转换为 COMPLETED 状态（当前状态不允许）: projectId={}", projectId);
+                }
             }
             collabProjectMapper.updateById(project);
         }

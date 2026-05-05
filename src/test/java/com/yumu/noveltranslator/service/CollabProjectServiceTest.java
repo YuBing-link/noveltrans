@@ -18,6 +18,7 @@ import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
 import com.yumu.noveltranslator.service.MultiAgentTranslationService;
 import com.yumu.noveltranslator.service.state.CollabStateMachine;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -65,13 +66,17 @@ class CollabProjectServiceTest {
     @Mock
     private MultiAgentTranslationService multiAgentTranslationService;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private CollabProjectService collabProjectService;
 
     @BeforeEach
     void setUp() {
         collabProjectService = new CollabProjectService(
                 collabProjectMapper, collabProjectMemberMapper, chapterTaskMapper, collabCommentMapper,
-                collabInviteCodeMapper, documentMapper, userMapper, collabStateMachine, multiAgentTranslationService);
+                collabInviteCodeMapper, documentMapper, userMapper, collabStateMachine, multiAgentTranslationService,
+                eventPublisher);
     }
 
     @Nested

@@ -181,13 +181,13 @@ class StripeWebhookControllerTest {
         }
 
         @Test
-        void invoicePaymentSucceeded事件仅记录不处理() {
+        void invoicePaymentSucceeded事件调用处理方法() {
             Event mockEvent = mock(Event.class);
             when(mockEvent.getType()).thenReturn("invoice.payment_succeeded");
 
             controller.dispatchEvent(mockEvent);
 
-            verifyNoInteractions(subscriptionService);
+            verify(subscriptionService).handleInvoicePaymentSucceeded(mockEvent);
         }
 
         @Test

@@ -32,6 +32,7 @@ public class WebGlossaryController {
     private final UserService userService;
     private final com.yumu.noveltranslator.mapper.GlossaryMapper glossaryMapper;
     private final com.yumu.noveltranslator.service.CacheVersionService cacheVersionService;
+    private final com.yumu.noveltranslator.service.TranslationCacheService translationCacheService;
 
     /**
      * 获取术语库列表
@@ -69,7 +70,7 @@ public class WebGlossaryController {
     public Result<GlossaryResponse> createGlossaryItem(@RequestBody @Valid GlossaryItemRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
         GlossaryResponse glossary = userService.createGlossaryItem(userId, request);
-        cacheVersionService.bumpAllVersions();
+        translationCacheService.invalidateKeysForTerm(request.getSourceWord());
         return Result.ok(glossary);
     }
 
@@ -84,7 +85,7 @@ public class WebGlossaryController {
         if (glossary == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "术语项不存在");
         }
-        cacheVersionService.bumpAllVersions();
+        translationCacheService.invalidateKeysForTerm(request.getSourceWord());
         return Result.ok(glossary);
     }
 
@@ -99,6 +100,8 @@ public class WebGlossaryController {
         if (!success) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "术语项不存在");
         }
+        // 删除时也需要失效，但此时术语项已被删除，无法获取 sourceWord
+        // 回退到全局版本 bump（这是合理的，因为删除操作相对较少）
         cacheVersionService.bumpAllVersions();
         return Result.ok(null);
     }
@@ -179,6 +182,7 @@ public class WebGlossaryController {
 
             int imported = 0;
             int skipped = 0;
+            java.util.Set<String> importedWords = new java.util.HashSet<>();
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
@@ -202,6 +206,9 @@ public class WebGlossaryController {
                 try {
                     glossaryMapper.insert(glossary);
                     imported++;
+                    if (!sourceWord.isEmpty()) {
+                        importedWords.add(sourceWord);
+                    }
                 } catch (org.springframework.dao.DuplicateKeyException e) {
                     skipped++;
                 } catch (Exception e) {
@@ -215,7 +222,10 @@ public class WebGlossaryController {
 
             int result = imported > 0 ? imported : 0;
             if (imported > 0) {
-                cacheVersionService.bumpAllVersions();
+                // 细粒度失效每个导入的术语
+                for (String word : importedWords) {
+                    translationCacheService.invalidateKeysForTerm(word);
+                }
             }
             return Result.ok(result);
         } catch (IOException e) {

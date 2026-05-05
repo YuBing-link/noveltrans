@@ -15,6 +15,7 @@ import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.enums.TranslationStatus;
+import com.yumu.noveltranslator.event.ChapterSplitEvent;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabCommentMapper;
 import com.yumu.noveltranslator.mapper.CollabInviteCodeMapper;
@@ -29,6 +30,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,6 +64,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     private final UserMapper userMapper;
     private final CollabStateMachine collabStateMachine;
     private final com.yumu.noveltranslator.service.MultiAgentTranslationService multiAgentTranslationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 创建协作项目，创建者自动成为 OWNER
@@ -125,10 +128,43 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         return doCreateProject(userId, documentId, documentName, chapters, sourceLang, targetLang);
     }
 
-    @Transactional
+    /**
+     * 从上传文档创建协作项目的核心逻辑。
+     * 1. 窄事务：仅创建项目 + OWNER 成员
+     * 2. 发布 ChapterSplitEvent 事件，由异步监听器批量插入章节
+     * 3. 更新文档状态为 PROCESSING
+     * 4. 立即返回，不等待章节插入完成
+     */
     private TeamProjectCreateResult doCreateProject(Long userId, Long documentId, String documentName,
                                                      List<String> chapters, String sourceLang, String targetLang) {
-        // 创建项目
+        // 窄事务：仅创建项目 + OWNER 成员
+        CollabProject project = createProjectAndOwner(userId, documentId, documentName, sourceLang, targetLang);
+
+        log.info("团队模式创建项目（窄事务）: projectId={}, docName={}, chapters={}, 将异步插入",
+                project.getId(), documentName, chapters.size());
+
+        // 更新文档状态为处理中
+        Document doc = documentMapper.selectById(documentId);
+        if (doc != null) {
+            doc.setStatus(TranslationStatus.PROCESSING.getValue());
+            doc.setUpdateTime(LocalDateTime.now());
+            documentMapper.updateById(doc);
+        }
+
+        // 发布章节拆分事件，由异步监听器处理批量插入
+        eventPublisher.publishEvent(new ChapterSplitEvent(
+                project.getId(), userId, documentId, documentName,
+                chapters, sourceLang, targetLang));
+
+        return new TeamProjectCreateResult(project.getId(), documentName, chapters.size());
+    }
+
+    /**
+     * 窄事务：仅创建项目和 OWNER 成员
+     */
+    @Transactional
+    protected CollabProject createProjectAndOwner(Long userId, Long documentId, String documentName,
+                                                    String sourceLang, String targetLang) {
         CollabProject project = new CollabProject();
         project.setName(documentName);
         project.setDescription("团队模式自动创建");
@@ -136,11 +172,10 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         project.setDocumentId(documentId);
         project.setSourceLang(sourceLang != null ? sourceLang : "auto");
         project.setTargetLang(targetLang);
-        project.setStatus(CollabProjectStatus.ACTIVE.getValue());
+        project.setStatus(CollabProjectStatus.DRAFT.getValue());
         project.setProgress(0);
         save(project);
 
-        // 创建者成为 OWNER
         CollabProjectMember owner = new CollabProjectMember();
         owner.setProjectId(project.getId());
         owner.setUserId(userId);
@@ -149,32 +184,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         owner.setJoinedTime(LocalDateTime.now());
         collabProjectMemberMapper.insert(owner);
 
-        // 自动创建章节
-        for (int i = 0; i < chapters.size(); i++) {
-            String chapterText = chapters.get(i);
-            CollabChapterTask chapter = new CollabChapterTask();
-            chapter.setProjectId(project.getId());
-            chapter.setChapterNumber(i + 1);
-            chapter.setTitle("第 " + (i + 1) + " 章");
-            chapter.setSourceText(chapterText);
-            chapter.setTargetText(null);
-            chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
-            chapter.setProgress(0);
-            chapter.setSourceWordCount(chapterText.length());
-            collabChapterTaskMapper.insert(chapter);
-        }
-
-        log.info("团队模式创建项目: projectId={}, docName={}, chapters={}", project.getId(), documentName, chapters.size());
-
-        // 更新文档状态为处理中
-        Document doc = documentMapper.selectById(documentId);
-        if (doc != null) {
-            doc.setStatus(TranslationStatus.PROCESSING.getValue());
-            doc.setUpdateTime(java.time.LocalDateTime.now());
-            documentMapper.updateById(doc);
-        }
-
-        return new TeamProjectCreateResult(project.getId(), documentName, chapters.size());
+        return project;
     }
 
     /**
@@ -422,15 +432,13 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         }
 
         CollabProjectStatus current = CollabProjectStatus.fromValue(project.getStatus());
-        collabStateMachine.validateProjectTransition(current, targetStatus);
-
-        project.setStatus(targetStatus.getValue());
+        collabStateMachine.transitionProject(project, targetStatus);
         if (targetStatus == CollabProjectStatus.COMPLETED) {
             project.setProgress(100);
         }
         updateById(project);
 
-        log.info("项目状态变更: projectId={}, {} → {}", projectId, current, targetStatus);
+        log.info("项目状态变更: projectId={}, {} -> {}", projectId, current, targetStatus);
     }
 
     /**

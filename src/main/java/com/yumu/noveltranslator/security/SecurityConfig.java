@@ -33,6 +33,7 @@ public class SecurityConfig {
     private final TenantCleanupInterceptor tenantCleanupInterceptor;
     private final SecurityHeadersFilter securityHeadersFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final TranslationRateLimitFilter translationRateLimitFilter;
 
     @Bean
     public JwtAuthenticationFilter authenticationTokenFilter() {
@@ -106,6 +107,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             );
 
+        http.addFilterBefore(translationRateLimitFilter, JwtAuthenticationFilter.class);
         http.addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(authenticationTokenFilter(), ApiKeyAuthenticationFilter.class);
         http.addFilterAfter(tenantCleanupInterceptor, UsernamePasswordAuthenticationFilter.class);

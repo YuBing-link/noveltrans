@@ -30,9 +30,12 @@ class SecurityConfigTest {
     @Mock
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @Mock
+    private TranslationRateLimitFilter translationRateLimitFilter;
+
     private SecurityConfig createConfig() {
         return new SecurityConfig(
-                jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor, securityHeadersFilter, jwtAuthenticationFilter);
+                jwtAuthenticationEntryPoint, apiKeyAuthenticationFilter, tenantCleanupInterceptor, securityHeadersFilter, jwtAuthenticationFilter, translationRateLimitFilter);
     }
 
     @Nested

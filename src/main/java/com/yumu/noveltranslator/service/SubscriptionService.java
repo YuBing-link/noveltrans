@@ -733,6 +733,226 @@ public class SubscriptionService {
         }
     }
 
+    /**
+     * 处理 invoice.payment_succeeded 事件（作为 checkout.session.completed 的fallback）
+     * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
+     */
+    public void handleInvoicePaymentSucceeded(Event event) {
+        com.stripe.model.Invoice invoice = deserializeInvoice(event, "invoice.payment_succeeded");
+        if (invoice == null) return;
+
+        String subscriptionId = invoice.getSubscription();
+        if (subscriptionId == null) {
+            log.info("invoice.payment_succeeded: no subscription in invoice {}, skipping", event.getId());
+            return;
+        }
+
+        StripeSubscription subRecord = stripeSubscriptionMapper.selectOne(
+            new LambdaQueryWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
+        );
+
+        // 已有记录且状态已是 active/trialing → 已由 checkout.session.completed 处理，跳过
+        if (subRecord != null
+            && ("active".equals(subRecord.getStatus()) || "trialing".equals(subRecord.getStatus()))) {
+            log.info("invoice.payment_succeeded: subscription {} already active, skipping (handled by checkout.session.completed)",
+                subscriptionId);
+            return;
+        }
+
+        // 已有记录但状态不是 active → 用原子更新激活
+        if (subRecord != null) {
+            doActivateSubscriptionFromInvoice(event, subRecord);
+            return;
+        }
+
+        // 无本地记录 → 孤立发票，需要创建完整订阅记录
+        createSubscriptionFromOrphanedInvoice(event, invoice, subscriptionId);
+    }
+
+    /**
+     * 反序列化 Invoice 对象
+     */
+    private com.stripe.model.Invoice deserializeInvoice(Event event, String eventType) {
+        try {
+            var deserializer = event.getDataObjectDeserializer();
+            var obj = (com.stripe.model.Invoice) deserializer.getObject().orElse(null);
+            if (obj == null) {
+                obj = (com.stripe.model.Invoice) deserializer.deserializeUnsafe();
+                if (obj == null) {
+                    log.warn("{}: failed to deserialize event object", eventType);
+                    return null;
+                }
+            }
+            return obj;
+        } catch (Exception e) {
+            log.error("{}: deserialization error", eventType, e);
+            return null;
+        }
+    }
+
+    /**
+     * 激活已有订阅（非 narrow transaction 路径：无 Stripe HTTP 调用）
+     */
+    @Transactional
+    private void doActivateSubscriptionFromInvoice(Event event, StripeSubscription subRecord) {
+        long eventCreated = event.getCreated();
+        int rows = stripeSubscriptionMapper.update(null,
+            new LambdaUpdateWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getId, subRecord.getId())
+                .and(w -> w
+                    .isNull(StripeSubscription::getLastWebhookEventId)
+                    .or()
+                    .ne(StripeSubscription::getLastWebhookEventId, event.getId())
+                )
+                .and(w -> w
+                    .isNull(StripeSubscription::getLastEventCreated)
+                    .or()
+                    .lt(StripeSubscription::getLastEventCreated, eventCreated)
+                )
+                .set(StripeSubscription::getStatus, "active")
+                .set(StripeSubscription::getLastWebhookEventId, event.getId())
+                .set(StripeSubscription::getLastEventCreated, eventCreated)
+        );
+
+        if (rows == 0) {
+            log.info("invoice.payment_succeeded: already processed event {}, skipping", event.getId());
+            return;
+        }
+
+        updateUserLevel(subRecord.getUserId(), subRecord.getPlan(), "invoice.payment_succeeded -> fallback activate", event.getId());
+        log.info("invoice.payment_succeeded: fallback activated subscription {} for user {}",
+            subRecord.getStripeSubscriptionId(), subRecord.getUserId());
+    }
+
+    /**
+     * 从孤立发票创建订阅记录（Stripe HTTP 在事务外，DB 写在窄事务内）
+     */
+    private void createSubscriptionFromOrphanedInvoice(Event event,
+                                                       com.stripe.model.Invoice invoice,
+                                                       String subscriptionId) {
+        String userIdStr = invoice.getMetadata() != null ? invoice.getMetadata().get("userId") : null;
+        if (userIdStr == null) {
+            log.warn("invoice.payment_succeeded: orphaned invoice {} has no userId in metadata, cannot create subscription",
+                event.getId());
+            return;
+        }
+
+        Long userId = Long.parseLong(userIdStr);
+
+        // Stripe HTTP 调用在事务外：获取 customer 和 subscription
+        StripeCustomer customer;
+        Subscription stripeSub;
+        try {
+            customer = getOrCreateCustomer(userId);
+            stripeSub = Subscription.retrieve(subscriptionId);
+        } catch (StripeException e) {
+            log.error("invoice.payment_succeeded: Stripe API error for orphaned invoice {}: {}",
+                event.getId(), e.getMessage(), e);
+            return;
+        }
+
+        // DB 操作在窄事务内
+        doCreateSubscriptionFromOrphanedInvoice(event, userId, subscriptionId, stripeSub, customer, invoice);
+    }
+
+    @Transactional
+    private void doCreateSubscriptionFromOrphanedInvoice(Event event, Long userId,
+                                                          String subscriptionId,
+                                                          Subscription stripeSub,
+                                                          StripeCustomer customer,
+                                                          com.stripe.model.Invoice invoice) {
+        // 双重检查：并发情况下可能已经被 checkout.session.completed 创建
+        StripeSubscription existing = stripeSubscriptionMapper.selectOne(
+            new LambdaQueryWrapper<StripeSubscription>()
+                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
+        );
+        if (existing != null
+            && ("active".equals(existing.getStatus()) || "trialing".equals(existing.getStatus()))) {
+            log.info("invoice.payment_succeeded: orphaned path race, subscription {} already active, skipping",
+                subscriptionId);
+            return;
+        }
+
+        StripeSubscription subRecord = new StripeSubscription();
+        subRecord.setUserId(userId);
+        subRecord.setStripeCustomerId(customer.getStripeCustomerId());
+        subRecord.setStripeSubscriptionId(subscriptionId);
+        subRecord.setLastWebhookEventId(event.getId());
+        subRecord.setLastEventCreated(event.getCreated());
+
+        if (stripeSub.getItems() != null && stripeSub.getItems().getData() != null
+            && !stripeSub.getItems().getData().isEmpty()) {
+            subRecord.setStripePriceId(stripeSub.getItems().getData().get(0).getPrice().getId());
+        }
+
+        subRecord.setStatus(stripeSub.getStatus());
+        subRecord.setCancelAtPeriodEnd(stripeSub.getCancelAtPeriodEnd());
+
+        if (stripeSub.getCurrentPeriodStart() != null) {
+            subRecord.setCurrentPeriodStart(
+                LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodStart()), ZoneId.systemDefault()));
+        }
+        if (stripeSub.getCurrentPeriodEnd() != null) {
+            subRecord.setCurrentPeriodEnd(
+                LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodEnd()), ZoneId.systemDefault()));
+        }
+
+        // 从 Stripe Subscription metadata 或 invoice metadata 推断 plan
+        String planStr = null;
+        if (stripeSub.getMetadata() != null) {
+            planStr = stripeSub.getMetadata().get("plan");
+        }
+        if (planStr == null && invoice.getMetadata() != null) {
+            planStr = invoice.getMetadata().get("plan");
+        }
+        if (planStr == null) {
+            planStr = "PRO"; // fallback default
+            log.warn("invoice.payment_succeeded: orphaned invoice {} has no plan metadata, defaulting to PRO",
+                event.getId());
+        }
+        subRecord.setPlan(planStr);
+
+        String billingCycleStr = null;
+        if (stripeSub.getMetadata() != null) {
+            billingCycleStr = stripeSub.getMetadata().get("billingCycle");
+        }
+        if (billingCycleStr == null && invoice.getMetadata() != null) {
+            billingCycleStr = invoice.getMetadata().get("billingCycle");
+        }
+        if (billingCycleStr == null) {
+            billingCycleStr = "monthly";
+        }
+        subRecord.setBillingCycle(billingCycleStr);
+
+        boolean insertSucceeded = false;
+        try {
+            stripeSubscriptionMapper.insert(subRecord);
+            insertSucceeded = true;
+        } catch (DuplicateKeyException e) {
+            subRecord = stripeSubscriptionMapper.selectOne(
+                new LambdaQueryWrapper<StripeSubscription>()
+                    .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
+            );
+            if (subRecord == null) {
+                log.error("DuplicateKeyException caught but re-query returned null for subscriptionId {}", subscriptionId);
+                return;
+            }
+        }
+
+        if (!insertSucceeded) {
+            int claimed = atomicClaimEventId(subRecord.getId(), event.getId());
+            if (claimed == 0) {
+                log.info("invoice.payment_succeeded: event {} already claimed by concurrent thread, skipping", event.getId());
+                return;
+            }
+        }
+
+        updateUserLevel(userId, subRecord.getPlan(), "invoice.payment_succeeded -> orphaned create", event.getId());
+        log.info("invoice.payment_succeeded: created subscription record from orphaned invoice for user {}, plan {}, subscriptionId {}",
+            userId, subRecord.getPlan(), subscriptionId);
+    }
+
     // ==================== 内部方法 ====================
 
     /**

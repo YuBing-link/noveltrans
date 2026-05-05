@@ -94,6 +94,9 @@ mybatis-plus:
       id-type: assign_id  # 使用雪花算法生成 ID，避免 SQLite 自增主键问题
 
 translation:
+  ip-rate-limit:
+    max-requests: 100
+    window-seconds: 60
   external:
     max-chars: 5000  # 外部 API 单次请求最大字符数
   openai:

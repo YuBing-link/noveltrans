@@ -6,11 +6,14 @@ import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.security.annotation.RequireProjectAccess;
 import com.yumu.noveltranslator.service.ChapterTaskService;
 import com.yumu.noveltranslator.service.CollabProjectService;
+import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.yumu.noveltranslator.dto.Result;
 import com.yumu.noveltranslator.dto.PageResponse;
@@ -27,6 +30,7 @@ public class CollabProjectController {
 
     private final CollabProjectService collabProjectService;
     private final ChapterTaskService chapterTaskService;
+    private final SseEmitterUtil sseEmitterUtil;
 
     // ==================== 项目管理 ====================
 
@@ -109,5 +113,41 @@ public class CollabProjectController {
             @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
         PageResponse<ChapterTaskResponse> chapters = chapterTaskService.listByProjectId(projectId, page, pageSize);
         return Result.ok(chapters);
+    }
+
+    // ==================== SSE 事件流 ====================
+
+    /**
+     * 协作项目 SSE 事件流端点。
+     * 客户端断开后重连时传入 lastEventId 即可补发遗漏事件。
+     *
+     * @param projectId   项目ID
+     * @param lastEventId 上次收到的事件 ID（可选，用于补发）
+     */
+    @GetMapping(value = "/sse/{projectId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RequireProjectAccess
+    public SseEmitter collabSse(@PathVariable Long projectId,
+                                @RequestParam(required = false) String lastEventId) {
+        SseEmitter emitter = SseEmitterUtil.createSseEmitter(null);
+
+        // 如果有 lastEventId，先重放遗漏的事件
+        if (lastEventId != null && !lastEventId.isBlank()) {
+            sseEmitterUtil.replayMissedEvents(String.valueOf(projectId), lastEventId, emitter);
+        }
+
+        // 发送连接确认事件
+        try {
+            emitter.send(SseEmitter.event()
+                    .name("connected")
+                    .data(String.format("{\"projectId\":%d}", projectId)));
+        } catch (Exception e) {
+            log.warn("SSE 连接确认发送失败: projectId={}", projectId);
+        }
+
+        // 完成 emitter（客户端应重新建立连接以接收后续实时事件）
+        SseEmitterUtil.sendDone(emitter);
+        SseEmitterUtil.complete(emitter);
+
+        return emitter;
     }
 }

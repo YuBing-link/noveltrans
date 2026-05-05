@@ -22,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -44,6 +46,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     private final UserMapper userMapper;
     private final CollabProjectMemberMapper projectMemberMapper;
     private final CollabStateMachine collabStateMachine;
+    private final CollabEventPublisher collabEventPublisher;
 
     /**
      * 创建章节
@@ -132,14 +135,22 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权分配章节，只有项目所有者可以分配");
         }
 
-        ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());
-        collabStateMachine.validateChapterTransition(current, ChapterTaskStatus.TRANSLATING);
+        collabStateMachine.transitionChapter(task, ChapterTaskStatus.TRANSLATING);
 
         task.setAssigneeId(assigneeId);
-        task.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
         task.setAssignedTime(LocalDateTime.now());
         task.setProgress(0);
         updateById(task);
+
+        final Long finalProjectId = task.getProjectId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    collabEventPublisher.publishChapterUpdate(finalProjectId, chapterId, String.valueOf(assigneeId), "assigned");
+                }
+            });
+        }
 
         log.info("分配章节: chapterId={}, assigneeId={}", chapterId, assigneeId);
         return toChapterResponse(task);
@@ -169,16 +180,25 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
             return toChapterResponse(task);
         }
 
-        collabStateMachine.validateChapterTransition(current, ChapterTaskStatus.SUBMITTED);
+        collabStateMachine.transitionChapter(task, ChapterTaskStatus.SUBMITTED);
 
         task.setTargetText(translatedText);
-        task.setStatus(ChapterTaskStatus.SUBMITTED.getValue());
         task.setSubmittedTime(LocalDateTime.now());
         task.setProgress(100);
         if (translatedText != null) {
             task.setTargetWordCount(translatedText.length());
         }
         updateById(task);
+
+        final Long finalProjectId = task.getProjectId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    collabEventPublisher.publishChapterUpdate(finalProjectId, chapterId, String.valueOf(task.getAssigneeId()), "submitted");
+                }
+            });
+        }
 
         log.info("提交章节: chapterId={}", chapterId);
         return toChapterResponse(task);
@@ -203,23 +223,19 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权审核该章节，只有审校或项目所有者可以审核");
         }
 
-        ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());
-        collabStateMachine.validateChapterTransition(current, ChapterTaskStatus.REVIEWING);
+        // 先转入 REVIEWING 中间状态
+        collabStateMachine.transitionChapter(task, ChapterTaskStatus.REVIEWING);
 
         task.setReviewerId(reviewerId);
         task.setReviewComment(comment);
         task.setReviewedTime(LocalDateTime.now());
 
         if (approved) {
-            ChapterTaskStatus approvedStatus = ChapterTaskStatus.APPROVED;
-            collabStateMachine.validateChapterTransition(ChapterTaskStatus.REVIEWING, approvedStatus);
-            task.setStatus(ChapterTaskStatus.APPROVED.getValue());
+            collabStateMachine.transitionChapter(task, ChapterTaskStatus.APPROVED);
             task.setCompletedTime(LocalDateTime.now());
             log.info("审核通过: chapterId={}", chapterId);
         } else {
-            ChapterTaskStatus rejectedStatus = ChapterTaskStatus.REJECTED;
-            collabStateMachine.validateChapterTransition(ChapterTaskStatus.REVIEWING, rejectedStatus);
-            task.setStatus(ChapterTaskStatus.REJECTED.getValue());
+            collabStateMachine.transitionChapter(task, ChapterTaskStatus.REJECTED);
             task.setProgress(0);
             task.setSubmittedTime(null);
             log.info("审核驳回: chapterId={}, reason={}", chapterId, comment);
@@ -229,9 +245,23 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
 
         // 如果 APPROVED，自动转为 COMPLETED
         if (approved) {
-            task.setStatus(ChapterTaskStatus.COMPLETED.getValue());
+            collabStateMachine.transitionChapter(task, ChapterTaskStatus.COMPLETED);
             updateById(task);
             updateProjectProgress(task.getProjectId());
+        }
+
+        final Long finalProjectId = task.getProjectId();
+        final String action = approved ? "updated" : "submitted";
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    collabEventPublisher.publishChapterUpdate(finalProjectId, chapterId, String.valueOf(reviewerId), action);
+                    if (comment != null && !comment.isBlank()) {
+                        collabEventPublisher.publishCommentAdded(finalProjectId, chapterId, reviewerId, comment);
+                    }
+                }
+            });
         }
 
         return toChapterResponse(task);
@@ -289,7 +319,11 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         if (project != null) {
             project.setProgress(progress);
             if (progress == 100) {
-                project.setStatus(CollabProjectStatus.COMPLETED.getValue());
+                try {
+                    collabStateMachine.transitionProject(project, CollabProjectStatus.COMPLETED);
+                } catch (IllegalStateException e) {
+                    log.debug("项目无法转换为 COMPLETED 状态（当前状态不允许）: projectId={}", projectId);
+                }
             }
             collabProjectMapper.updateById(project);
         }

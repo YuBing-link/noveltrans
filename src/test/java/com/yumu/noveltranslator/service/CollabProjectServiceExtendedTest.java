@@ -8,6 +8,7 @@ import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.mapper.*;
 import com.yumu.noveltranslator.service.state.CollabStateMachine;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,11 +55,12 @@ class CollabProjectServiceExtendedTest {
         userMapper = mock(UserMapper.class);
         collabStateMachine = mock(CollabStateMachine.class);
         multiAgentTranslationService = mock(MultiAgentTranslationService.class);
+        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
         service = new CollabProjectService(
                 collabProjectMapper, collabProjectMemberMapper, collabChapterTaskMapper,
                 collabCommentMapper, collabInviteCodeMapper, documentMapper, userMapper,
-                collabStateMachine, multiAgentTranslationService);
+                collabStateMachine, multiAgentTranslationService, eventPublisher);
         // ServiceImpl has its own baseMapper field that needs to be set
         ReflectionTestUtils.setField(service, "baseMapper", collabProjectMapper);
     }

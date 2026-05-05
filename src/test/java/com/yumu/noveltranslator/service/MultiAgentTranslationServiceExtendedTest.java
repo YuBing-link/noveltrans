@@ -8,6 +8,7 @@ import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.service.state.CollabStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -54,6 +55,8 @@ class MultiAgentTranslationServiceExtendedTest {
     private AiGlossaryService aiGlossaryService;
     @Mock
     private TranslationPostProcessingService postProcessingService;
+    @Mock
+    private CollabStateMachine collabStateMachine;
 
     private MultiAgentTranslationService service;
 
@@ -62,7 +65,8 @@ class MultiAgentTranslationServiceExtendedTest {
         service = new MultiAgentTranslationService(
                 chapterTaskMapper, collabProjectMapper, documentMapper, translationTaskMapper,
                 teamTranslationService, cacheService, entityConsistencyService,
-                glossaryMapper, ragTranslationService, aiGlossaryService, postProcessingService);
+                glossaryMapper, ragTranslationService, aiGlossaryService, postProcessingService,
+                collabStateMachine);
         clearRetryCounterMap();
         // postProcessingService fixUntranslatedChinese 默认返回译文本身
         lenient().doAnswer(inv -> inv.getArgument(1)).when(postProcessingService).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
