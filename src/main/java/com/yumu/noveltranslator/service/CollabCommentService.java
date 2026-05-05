@@ -6,6 +6,8 @@ import com.yumu.noveltranslator.entity.CollabChapterTask;
 import com.yumu.noveltranslator.entity.CollabComment;
 import com.yumu.noveltranslator.entity.CollabProjectMember;
 import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabCommentMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
@@ -45,18 +47,18 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
     public CommentResponse createComment(Long chapterTaskId, Long userId, CreateCommentRequest request) {
         CollabChapterTask task = chapterTaskMapper.selectById(chapterTaskId);
         if (task == null) {
-            throw new IllegalArgumentException("章节不存在: " + chapterTaskId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterTaskId);
         }
         CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
         if (member == null) {
-            throw new SecurityException("无权访问该项目");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
 
         // 如果是回复，验证父评论是否存在
         if (request.getParentId() != null) {
             CollabComment parent = collabCommentMapper.selectById(request.getParentId());
             if (parent == null || !parent.getChapterTaskId().equals(chapterTaskId)) {
-                throw new IllegalArgumentException("父评论不存在");
+                throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "父评论不存在");
             }
         }
 
@@ -80,11 +82,11 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
     public IPage<CommentResponse> getCommentsByChapterPage(Long chapterTaskId, Long userId, int page, int size) {
         CollabChapterTask task = chapterTaskMapper.selectById(chapterTaskId);
         if (task == null) {
-            throw new IllegalArgumentException("章节不存在: " + chapterTaskId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterTaskId);
         }
         CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
         if (member == null) {
-            throw new SecurityException("无权访问该项目");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
 
         // 分页查询根评论
@@ -133,15 +135,15 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
     public void resolveComment(Long commentId, Long userId) {
         CollabComment comment = getById(commentId);
         if (comment == null) {
-            throw new IllegalArgumentException("评论不存在");
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "评论不存在");
         }
         CollabChapterTask task = chapterTaskMapper.selectById(comment.getChapterTaskId());
         if (task == null) {
-            throw new IllegalArgumentException("章节不存在");
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在");
         }
         CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
         if (member == null) {
-            throw new SecurityException("无权访问该项目");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
         comment.setResolved(true);
         updateById(comment);
@@ -153,19 +155,19 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
     public void deleteComment(Long commentId, Long userId) {
         CollabComment comment = getById(commentId);
         if (comment == null) {
-            throw new IllegalArgumentException("评论不存在");
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "评论不存在");
         }
         CollabChapterTask task = chapterTaskMapper.selectById(comment.getChapterTaskId());
         if (task == null) {
-            throw new IllegalArgumentException("章节不存在");
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在");
         }
         CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
         if (member == null) {
-            throw new SecurityException("无权访问该项目");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
         // 仅创建者可以删除
         if (!comment.getUserId().equals(userId)) {
-            throw new SecurityException("无权删除他人评论");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权删除他人评论");
         }
         removeById(commentId);
     }

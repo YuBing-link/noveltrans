@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.controller.external;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.service.DocumentService;
 import com.yumu.noveltranslator.service.QuotaService;
 import com.yumu.noveltranslator.service.TranslationService;
@@ -53,15 +54,15 @@ public class ExternalTranslateController {
     public Result<ExternalTranslateResponse> translate(@RequestBody @Valid ExternalTranslateRequest request) {
         Long userId = resolveUserId();
         if (userId == null) {
-            return Result.error("认证失败");
+            return Result.error(ErrorCodeEnum.UNAUTHORIZED, "认证失败");
         }
 
         if (request.getText() == null || request.getText().isBlank()) {
-            return Result.error("文本不能为空");
+            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "文本不能为空");
         }
 
         if (request.getText().length() > maxCharsPerRequest) {
-            return Result.error("文本超过限制（最大 " + maxCharsPerRequest + " 字符）");
+            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "文本超过限制（最大 " + maxCharsPerRequest + " 字符）");
         }
 
         try {
@@ -85,7 +86,7 @@ public class ExternalTranslateController {
             return Result.ok(response);
         } catch (Exception e) {
             log.error("外部 API 翻译失败", e);
-            return Result.error("翻译失败，请稍后重试");
+            return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "翻译失败，请稍后重试");
         }
     }
 
@@ -97,15 +98,15 @@ public class ExternalTranslateController {
     public Result<List<ExternalTranslateResponse>> batchTranslate(@RequestBody @Valid ExternalBatchTranslateRequest request) {
         Long userId = resolveUserId();
         if (userId == null) {
-            return Result.error("认证失败");
+            return Result.error(ErrorCodeEnum.UNAUTHORIZED, "认证失败");
         }
 
         if (request.getTexts() == null || request.getTexts().isEmpty()) {
-            return Result.error("文本列表不能为空");
+            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "文本列表不能为空");
         }
 
         if (request.getTexts().size() > 50) {
-            return Result.error("批量翻译最多支持 50 条文本");
+            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "批量翻译最多支持 50 条文本");
         }
 
         String mode = request.getMode() != null ? request.getMode() : "fast";

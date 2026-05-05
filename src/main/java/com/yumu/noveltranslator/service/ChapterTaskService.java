@@ -8,6 +8,8 @@ import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
@@ -50,7 +52,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     public ChapterTaskResponse createChapter(Long projectId, Integer chapterNumber, String title, String sourceText, Long creatorId) {
         CollabProject project = collabProjectMapper.selectById(projectId);
         if (project == null) {
-            throw new IllegalArgumentException("项目不存在: " + projectId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
 
         CollabChapterTask task = new CollabChapterTask();
@@ -106,11 +108,11 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     public ChapterTaskResponse getChapterById(Long chapterId, Long userId) {
         CollabChapterTask task = getById(chapterId);
         if (task == null) {
-            throw new IllegalArgumentException("章节不存在: " + chapterId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterId);
         }
         com.yumu.noveltranslator.entity.CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
         if (member == null) {
-            throw new SecurityException("无权访问该章节");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该章节");
         }
         return toChapterResponse(task);
     }
@@ -122,12 +124,12 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     public ChapterTaskResponse assignChapter(Long chapterId, Long assigneeId, Long assignerId) {
         CollabChapterTask task = getById(chapterId);
         if (task == null) {
-            throw new IllegalArgumentException("章节不存在: " + chapterId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterId);
         }
         // 权限校验：分配者必须是项目OWNER
         CollabProjectMember assigner = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), assignerId);
         if (assigner == null || !ProjectMemberRole.OWNER.getValue().equals(assigner.getRole())) {
-            throw new SecurityException("无权分配章节，只有项目所有者可以分配");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权分配章节，只有项目所有者可以分配");
         }
 
         ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());
@@ -150,7 +152,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     public ChapterTaskResponse submitChapter(Long chapterId, String translatedText) {
         CollabChapterTask task = getById(chapterId);
         if (task == null) {
-            throw new IllegalArgumentException("章节不存在: " + chapterId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterId);
         }
 
         ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());
@@ -189,16 +191,16 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
     public ChapterTaskResponse reviewChapter(Long chapterId, Boolean approved, String comment, Long reviewerId) {
         CollabChapterTask task = getById(chapterId);
         if (task == null) {
-            throw new IllegalArgumentException("章节不存在: " + chapterId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterId);
         }
         // 权限校验：审核者必须是项目REVIEWER或OWNER
         CollabProjectMember reviewer = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), reviewerId);
         if (reviewer == null) {
-            throw new SecurityException("无权访问该项目");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
         if (!ProjectMemberRole.REVIEWER.getValue().equals(reviewer.getRole())
                 && !ProjectMemberRole.OWNER.getValue().equals(reviewer.getRole())) {
-            throw new SecurityException("无权审核该章节，只有审校或项目所有者可以审核");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权审核该章节，只有审校或项目所有者可以审核");
         }
 
         ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());

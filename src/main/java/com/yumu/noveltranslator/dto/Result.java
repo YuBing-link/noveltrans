@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.dto;
 
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -40,5 +41,13 @@ public class Result<T> {
 
     public static <T> Result<T> error(String message, int httpStatus) {
         return new Result<>(false, null, String.valueOf(httpStatus), message, null);
+    }
+
+    public static <T> Result<T> error(ErrorCodeEnum errorCode) {
+        return new Result<>(false, null, errorCode.getCode(), errorCode.getMessage(), null);
+    }
+
+    public static <T> Result<T> error(ErrorCodeEnum errorCode, String message) {
+        return new Result<>(false, null, errorCode.getCode(), message, null);
     }
 }

@@ -2,6 +2,7 @@ package com.yumu.noveltranslator.controller.web;
 
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Glossary;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.service.UserService;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
@@ -55,7 +56,7 @@ public class WebGlossaryController {
         Long userId = SecurityUtil.getRequiredUserId();
         GlossaryResponse glossary = userService.getGlossaryDetail(userId, id);
         if (glossary == null) {
-            return Result.error("术语库不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "术语库不存在");
         }
         return Result.ok(glossary);
     }
@@ -81,7 +82,7 @@ public class WebGlossaryController {
         Long userId = SecurityUtil.getRequiredUserId();
         GlossaryResponse glossary = userService.updateGlossaryItem(userId, id, request);
         if (glossary == null) {
-            return Result.error("术语项不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "术语项不存在");
         }
         cacheVersionService.bumpAllVersions();
         return Result.ok(glossary);
@@ -96,7 +97,7 @@ public class WebGlossaryController {
         Long userId = SecurityUtil.getRequiredUserId();
         boolean success = userService.deleteGlossaryItem(userId, id);
         if (!success) {
-            return Result.error("术语项不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "术语项不存在");
         }
         cacheVersionService.bumpAllVersions();
         return Result.ok(null);
@@ -111,7 +112,7 @@ public class WebGlossaryController {
         Long userId = SecurityUtil.getRequiredUserId();
         GlossaryResponse glossary = userService.getGlossaryDetail(userId, id);
         if (glossary == null) {
-            return Result.error("术语库不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "术语库不存在");
         }
         List<GlossaryResponse> terms = userService.getGlossaryTerms(userId);
         return Result.ok(terms);
@@ -149,31 +150,31 @@ public class WebGlossaryController {
     public Result<Integer> importGlossary(@RequestParam("file") MultipartFile file) {
         Long userId = SecurityUtil.getRequiredUserId();
         if (file.isEmpty()) {
-            return Result.error("文件不能为空");
+            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "文件不能为空");
         }
 
         // 文件大小限制：最大 5MB
         final long MAX_FILE_SIZE = 5 * 1024 * 1024;
         if (file.getSize() > MAX_FILE_SIZE) {
-            return Result.error("文件大小超过限制（最大 5MB）");
+            return Result.error(ErrorCodeEnum.PAYLOAD_TOO_LARGE, "文件大小超过限制（最大 5MB）");
         }
 
         String filename = file.getOriginalFilename();
         if (filename == null || !filename.toLowerCase().endsWith(".csv")) {
-            return Result.error("仅支持 CSV 文件");
+            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "仅支持 CSV 文件");
         }
 
         // MIME 类型校验
         String contentType = file.getContentType();
         if (contentType != null && !contentType.contains("csv") && !contentType.contains("text") && !contentType.contains("plain")) {
-            return Result.error("不支持的文件类型");
+            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "不支持的文件类型");
         }
 
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String header = reader.readLine();
             if (header == null) {
-                return Result.error("文件格式错误");
+                return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "文件格式错误");
             }
 
             int imported = 0;
@@ -218,7 +219,7 @@ public class WebGlossaryController {
             }
             return Result.ok(result);
         } catch (IOException e) {
-            return Result.error("文件解析失败: " + e.getMessage());
+            return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "文件解析失败: " + e.getMessage());
         }
     }
 

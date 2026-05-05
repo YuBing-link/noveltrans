@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.controller.shared;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.service.DocumentService;
 import com.yumu.noveltranslator.service.RagTranslationService;
 import com.yumu.noveltranslator.service.TranslationService;
@@ -45,7 +46,7 @@ public class SharedTranslateController {
     public Result<TaskStatusResponse> getTaskStatus(@PathVariable String taskId) {
         TranslationTask task = translationTaskService.getTaskByTaskId(taskId);
         if (task == null) {
-            return Result.error("任务不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "任务不存在");
         }
 
         return Result.ok(translationTaskService.toTaskStatusResponse(task));
@@ -63,7 +64,7 @@ public class SharedTranslateController {
         if (translationTaskService.cancelTask(taskId, userId)) {
             return Result.ok(null);
         } else {
-            return Result.error("取消失败，任务可能已完成或正在处理");
+            return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，任务可能已完成或正在处理");
         }
     }
 
@@ -79,7 +80,7 @@ public class SharedTranslateController {
         if (translationTaskService.deleteHistory(taskId, userId)) {
             return Result.ok(null);
         } else {
-            return Result.error("记录不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "记录不存在");
         }
     }
 
@@ -91,7 +92,7 @@ public class SharedTranslateController {
     public Result<TranslationResultResponse> getTranslationResult(@PathVariable String taskId) {
         TranslationResultResponse result = translationTaskService.getTranslationResult(taskId);
         if (result == null) {
-            return Result.error("任务不存在或结果不可用");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "任务不存在或结果不可用");
         }
 
         return Result.ok(result);

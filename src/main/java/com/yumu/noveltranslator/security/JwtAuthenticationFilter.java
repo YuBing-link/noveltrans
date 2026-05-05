@@ -13,9 +13,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -26,19 +25,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-
-    @Autowired
-    private JwtUtils jwtUtils;
-
-    @Autowired
-    private UserMapper userMapper;
-
-    @Autowired
-    private TokenBlacklistService tokenBlacklistService;
+    private final JwtUtils jwtUtils;
+    private final UserMapper userMapper;
+    private final TokenBlacklistService tokenBlacklistService;
 
     private final Cache<String, User> userCache = Caffeine.newBuilder()
         .maximumSize(10_000)
@@ -82,7 +76,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Long userId = decodedJWT.getClaim("userId").asLong();
 
             if (email == null || userId == null) {
-                logger.warn("JWT Token 缺少用户信息");
+                log.warn("JWT Token 缺少用户信息");
                 sendUnauthorized(response, "Invalid token: missing user info");
                 return;
             }
@@ -90,7 +84,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // 从数据库加载用户，构建 CustomUserDetails
             User user = userCache.get(email, key -> userMapper.findByEmail(key));
             if (user == null || !user.getId().equals(userId)) {
-                logger.warn("JWT Token 对应的用户不存在: email={}, userId={}", email, userId);
+                log.warn("JWT Token 对应的用户不存在: email={}, userId={}", email, userId);
                 sendUnauthorized(response, "Invalid token: user not found");
                 return;
             }
@@ -110,11 +104,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             TenantContext.setTenantId(tenantId != null ? tenantId : 0L);
 
         } catch (TokenExpiredException e) {
-            logger.debug("JWT Token 已过期: {}", e.getMessage());
+            log.debug("JWT Token 已过期: {}", e.getMessage());
             sendUnauthorized(response, "Token expired");
             return;
         } catch (JWTVerificationException e) {
-            logger.debug("JWT Token 验证失败: {}", e.getMessage());
+            log.debug("JWT Token 验证失败: {}", e.getMessage());
             sendUnauthorized(response, "Invalid token");
             return;
         }

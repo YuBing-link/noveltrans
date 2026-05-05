@@ -2,6 +2,7 @@ package com.yumu.noveltranslator.controller.web;
 
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.security.CustomUserDetails;
 import com.yumu.noveltranslator.security.LoginRateLimiter;
 import com.yumu.noveltranslator.service.AuthService;
@@ -55,17 +56,9 @@ public class WebUserController {
     public Result<User> login(@RequestBody @Valid LoginRequest req, HttpServletRequest httpRequest) {
         String clientIp = getClientIp(httpRequest);
         if (!loginRateLimiter.allowLoginAttempt(clientIp)) {
-            return Result.error("429", "登录尝试次数过多，请稍后再试");
+            return Result.error(ErrorCodeEnum.RATE_LIMIT, "登录尝试次数过多，请稍后再试");
         }
         return authService.login(req);
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     /**
@@ -229,5 +222,13 @@ public class WebUserController {
         Long userId = SecurityUtil.getRequiredUserId();
         UserPreferencesResponse preferences = userService.updateUserPreferences(userId, request);
         return Result.ok(preferences);
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

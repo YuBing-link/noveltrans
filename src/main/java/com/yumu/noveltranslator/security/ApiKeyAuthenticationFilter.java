@@ -8,9 +8,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -24,17 +23,15 @@ import java.time.LocalDateTime;
  * API Key 认证过滤器
  * 支持 Authorization: Bearer nt_sk_xxxx 格式的 API Key 认证
  */
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final Logger logger = LoggerFactory.getLogger(ApiKeyAuthenticationFilter.class);
     private static final String API_KEY_PREFIX = "nt_sk_";
 
-    @Autowired
-    private ApiKeyMapper apiKeyMapper;
-
-    @Autowired
-    private UserMapper userMapper;
+    private final ApiKeyMapper apiKeyMapper;
+    private final UserMapper userMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -55,7 +52,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         // 查找 API Key
         ApiKey apiKey = apiKeyMapper.findByApiKey(jwt);
         if (apiKey == null || !apiKey.getActive()) {
-            logger.warn("API Key 无效或已禁用: {}", maskApiKey(jwt));
+            log.warn("API Key 无效或已禁用: {}", maskApiKey(jwt));
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"success\":false,\"data\":null,\"code\":\"401\",\"message\":\"API Key 无效或已禁用\",\"token\":null}");
@@ -70,7 +67,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         // 加载用户并设置 CustomUserDetails 认证信息
         var apiUser = userMapper.selectById(apiKey.getUserId());
         if (apiUser == null) {
-            logger.warn("API Key 关联的用户不存在: userId={}", apiKey.getUserId());
+            log.warn("API Key 关联的用户不存在: userId={}", apiKey.getUserId());
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "用户不存在");
             return;
         }

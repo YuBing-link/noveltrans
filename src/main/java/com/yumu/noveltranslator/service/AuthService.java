@@ -105,7 +105,7 @@ public class AuthService implements UserDetailsService {
                 long elapsed = System.currentTimeMillis() - lastSend;
                 if (elapsed < 60000) {
                     int remaining = (int) ((60000 - elapsed) / 1000) + 1;
-                    return Result.error("429", "请等待 " + remaining + " 秒后再发送验证码");
+                    return Result.error(ErrorCodeEnum.RATE_LIMIT, "请等待 " + remaining + " 秒后再发送验证码");
                 }
             }
             return Result.error(ErrorCodeEnum.EMAIL_SEND_FAILED.getCode(),
@@ -136,7 +136,7 @@ public class AuthService implements UserDetailsService {
                 long elapsed = System.currentTimeMillis() - lastSend;
                 if (elapsed < 60000) {
                     int remaining = (int) ((60000 - elapsed) / 1000) + 1;
-                    return Result.error("429", "请等待 " + remaining + " 秒后再发送验证码");
+                    return Result.error(ErrorCodeEnum.RATE_LIMIT, "请等待 " + remaining + " 秒后再发送验证码");
                 }
             }
             return Result.error(ErrorCodeEnum.EMAIL_SEND_FAILED.getCode(),

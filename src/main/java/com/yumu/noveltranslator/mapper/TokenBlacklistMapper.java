@@ -5,6 +5,7 @@ import com.yumu.noveltranslator.entity.TokenBlacklist;
 import org.apache.ibatis.annotations.*;
 import java.util.List;
 
+/** Data access interface for token_blacklist table. */
 @Mapper
 public interface TokenBlacklistMapper extends BaseMapper<TokenBlacklist> {
 

@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.controller.web;
 import com.yumu.noveltranslator.dto.*;
 import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.service.CollabProjectService;
 import com.yumu.noveltranslator.service.DocumentService;
@@ -75,7 +76,7 @@ public class WebDocumentController {
 
         Document doc = documentService.getDocumentById(docId, userId);
         if (doc == null) {
-            return Result.error("文档不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "文档不存在");
         }
 
         return Result.ok(documentService.toDocumentInfoResponse(doc));
@@ -92,7 +93,7 @@ public class WebDocumentController {
         if (documentService.deleteDocument(docId, userId)) {
             return Result.ok(null);
         } else {
-            return Result.error("删除失败");
+            return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "删除失败");
         }
     }
 
@@ -106,15 +107,15 @@ public class WebDocumentController {
 
         TranslationTask task = translationTaskService.getTaskByDocumentId(docId);
         if (task == null) {
-            return Result.error("翻译任务不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "翻译任务不存在");
         }
         if (!task.getUserId().equals(userId)) {
-            return Result.error("无权操作");
+            return Result.error(ErrorCodeEnum.FORBIDDEN, "无权操作");
         }
         if (translationTaskService.cancelTask(task.getTaskId(), userId)) {
             return Result.ok(null);
         } else {
-            return Result.error("取消失败，任务可能已完成或正在处理");
+            return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，任务可能已完成或正在处理");
         }
     }
 
@@ -129,7 +130,7 @@ public class WebDocumentController {
         if (documentService.retryTranslation(docId, userId)) {
             return Result.ok(null);
         } else {
-            return Result.error("重试失败，文档不存在");
+            return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "重试失败，文档不存在");
         }
     }
 
@@ -210,7 +211,7 @@ public class WebDocumentController {
             return Result.ok(response);
 
         } catch (IOException e) {
-            return Result.error("文件上传失败：" + e.getMessage());
+            return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "文件上传失败：" + e.getMessage());
         }
     }
 

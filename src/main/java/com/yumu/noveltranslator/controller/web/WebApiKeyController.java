@@ -7,6 +7,7 @@ import com.yumu.noveltranslator.dto.CreateApiKeyRequest;
 import com.yumu.noveltranslator.dto.PageResponse;
 import com.yumu.noveltranslator.dto.Result;
 import com.yumu.noveltranslator.entity.ApiKey;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.mapper.ApiKeyMapper;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
@@ -97,7 +98,7 @@ public class WebApiKeyController {
         Long userId = SecurityUtil.getRequiredUserId();
         ApiKey key = apiKeyMapper.selectById(id);
         if (key == null || !key.getUserId().equals(userId)) {
-            return Result.error("API Key 不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "API Key 不存在");
         }
         apiKeyMapper.deleteById(id);
         return Result.ok(null);
@@ -112,7 +113,7 @@ public class WebApiKeyController {
         Long userId = SecurityUtil.getRequiredUserId();
         ApiKey key = apiKeyMapper.selectById(id);
         if (key == null || !key.getUserId().equals(userId)) {
-            return Result.error("API Key 不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "API Key 不存在");
         }
         String newKey = generateApiKey();
         key.setApiKey(newKey);
@@ -130,7 +131,7 @@ public class WebApiKeyController {
         Long userId = SecurityUtil.getRequiredUserId();
         ApiKey key = apiKeyMapper.selectById(id);
         if (key == null || !key.getUserId().equals(userId)) {
-            return Result.error("API Key 不存在");
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "API Key 不存在");
         }
         return Result.ok(Map.of("id", key.getId(), "apiKey", key.getApiKey()));
     }

@@ -12,6 +12,7 @@ import com.yumu.noveltranslator.entity.Document;
 import com.yumu.noveltranslator.entity.User;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
@@ -21,6 +22,8 @@ import com.yumu.noveltranslator.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.mapper.DocumentMapper;
 import com.yumu.noveltranslator.mapper.UserMapper;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.service.MultiAgentTranslationService;
 import com.yumu.noveltranslator.service.state.CollabStateMachine;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -109,11 +112,11 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         try {
             content = Files.readString(Paths.get(filePath), java.nio.charset.StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new RuntimeException("读取文档失败: " + e.getMessage());
+            throw new BusinessException(ErrorCodeEnum.SYSTEM_ERROR, "读取文档失败: " + e.getMessage());
         }
 
         if (content == null || content.trim().isEmpty()) {
-            throw new RuntimeException("文档内容为空");
+            throw new BusinessException(ErrorCodeEnum.PARAMETER_ERROR, "文档内容为空");
         }
 
         // 智能章节分割：优先按章节标题分割，其次按字符数分组
@@ -180,13 +183,13 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public int addChaptersToProject(Long userId, Long projectId, Document document) {
         CollabProject project = getById(projectId);
         if (project == null) {
-            throw new IllegalArgumentException("项目不存在: " + projectId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
 
         // 权限校验：只有项目所有者或成员才能添加章节
         CollabProjectMember member = collabProjectMemberMapper.selectByProjectAndUser(projectId, userId);
         if (member == null && !project.getOwnerId().equals(userId)) {
-            throw new IllegalStateException("无权向该项目添加章节");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权向该项目添加章节");
         }
 
         // 读取文档内容
@@ -194,11 +197,11 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         try {
             content = Files.readString(Paths.get(document.getPath()), java.nio.charset.StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new RuntimeException("读取文档失败: " + e.getMessage());
+            throw new BusinessException(ErrorCodeEnum.SYSTEM_ERROR, "读取文档失败: " + e.getMessage());
         }
 
         if (content == null || content.trim().isEmpty()) {
-            throw new RuntimeException("文档内容为空");
+            throw new BusinessException(ErrorCodeEnum.PARAMETER_ERROR, "文档内容为空");
         }
 
         // 关联文档（如果项目尚未关联）
@@ -337,7 +340,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public CollabProjectResponse getProjectById(Long projectId) {
         CollabProject project = getById(projectId);
         if (project == null) {
-            throw new IllegalArgumentException("项目不存在: " + projectId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
         return toProjectResponse(project);
     }
@@ -383,7 +386,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public CollabProjectResponse updateProject(Long projectId, CreateCollabProjectRequest request, Long userId) {
         CollabProject project = getById(projectId);
         if (project == null) {
-            throw new IllegalArgumentException("项目不存在: " + projectId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
 
         project.setName(request.getName());
@@ -402,7 +405,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public void changeProjectStatus(Long projectId, CollabProjectStatus targetStatus, Long userId) {
         CollabProject project = getById(projectId);
         if (project == null) {
-            throw new IllegalArgumentException("项目不存在: " + projectId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
 
         CollabProjectStatus current = CollabProjectStatus.fromValue(project.getStatus());
@@ -424,7 +427,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public InviteCodeResult generateInviteCode(Long projectId, Long operatorId) {
         CollabProject project = getById(projectId);
         if (project == null) {
-            throw new IllegalArgumentException("项目不存在: " + projectId);
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
 
         String code = generateRandomInviteCode();
@@ -465,13 +468,13 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public ProjectMemberResponse inviteMember(Long projectId, InviteMemberRequest request, Long inviterId) {
         User user = userMapper.findByEmail(request.getEmail());
         if (user == null) {
-            throw new IllegalArgumentException("用户不存在: " + request.getEmail());
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "用户不存在: " + request.getEmail());
         }
 
         // 检查是否已是成员
         CollabProjectMember existing = collabProjectMemberMapper.selectByProjectAndUser(projectId, user.getId());
         if (existing != null) {
-            throw new IllegalStateException("该用户已是项目成员");
+            throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "该用户已是项目成员");
         }
 
         String inviteCode = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
@@ -499,15 +502,15 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             // 进一步检查是否是已过期或已使用
             CollabInviteCode anyCode = collabInviteCodeMapper.selectByCode(inviteCode);
             if (anyCode == null) {
-                throw new IllegalArgumentException("邀请码无效");
+                throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "邀请码无效");
             }
             if (anyCode.getUsed() == 1) {
-                throw new IllegalArgumentException("邀请码已被使用");
+                throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "邀请码已被使用");
             }
             if (anyCode.getExpiresAt().isBefore(LocalDateTime.now())) {
-                throw new IllegalArgumentException("邀请码已过期");
+                throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "邀请码已过期");
             }
-            throw new IllegalArgumentException("邀请码不可用");
+            throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "邀请码不可用");
         }
 
         // 标记为已使用
@@ -520,16 +523,16 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             // 检查项目是否存在且为 ACTIVE
             CollabProject project = getById(codeRecord.getProjectId());
             if (project == null) {
-                throw new IllegalArgumentException("关联项目不存在");
+                throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "关联项目不存在");
             }
             if (!CollabProjectStatus.ACTIVE.getValue().equals(project.getStatus())) {
-                throw new IllegalStateException("项目当前不可加入");
+                throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "项目当前不可加入");
             }
 
             // 检查是否已是成员
             CollabProjectMember existing = collabProjectMemberMapper.selectByProjectAndUser(codeRecord.getProjectId(), userId);
             if (existing != null) {
-                throw new IllegalStateException("您已是该项目成员");
+                throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "您已是该项目成员");
             }
 
             // 创建成员记录（成员的 tenant_id 与项目一致）
@@ -595,12 +598,12 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public void removeMember(Long projectId, Long memberId, Long operatorId) {
         CollabProjectMember member = collabProjectMemberMapper.selectById(memberId);
         if (member == null || !member.getProjectId().equals(projectId)) {
-            throw new IllegalArgumentException("成员不存在");
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "成员不存在");
         }
 
         // OWNER 不能被移除（除非自己转让）
         if (ProjectMemberRole.OWNER.getValue().equals(member.getRole())) {
-            throw new IllegalStateException("所有者不能直接移除，需先转让项目");
+            throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "所有者不能直接移除，需先转让项目");
         }
 
         member.setInviteStatus("REMOVED");
@@ -614,10 +617,10 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     public void deleteProject(Long projectId, Long userId) {
         CollabProject project = getById(projectId);
         if (project == null) {
-            throw new IllegalArgumentException("项目不存在");
+            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在");
         }
         if (!project.getOwnerId().equals(userId)) {
-            throw new IllegalStateException("只有项目所有者可以删除项目");
+            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "只有项目所有者可以删除项目");
         }
 
         // 级联逻辑删除：评论 → 章节 → 成员 → 项目

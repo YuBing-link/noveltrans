@@ -9,6 +9,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/** Filter that adds security headers to every HTTP response. */
 @Component
 public class SecurityHeadersFilter extends OncePerRequestFilter {
 

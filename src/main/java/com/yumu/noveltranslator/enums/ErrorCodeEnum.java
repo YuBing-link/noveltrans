@@ -41,6 +41,16 @@ public enum ErrorCodeEnum {
     TOKEN_INVALID("T101", "令牌无效或已过期"),
     TOKEN_EXPIRED("T102", "令牌已过期"),
     TOKEN_MISSING("T103", "缺少令牌"),
+    TOKEN_SIGNATURE_ERROR("T104", "Token 签名错误，无效凭证"),
+
+    // HTTP 标准错误码
+    RATE_LIMIT("429", "请求频率过高，请稍后再试"),
+    METHOD_NOT_ALLOWED("405", "不支持的请求方法"),
+    PAYLOAD_TOO_LARGE("413", "文件过大"),
+
+    // 权限与状态
+    PERMISSION_DENIED("5002", "权限不足"),
+    INVALID_STATE("5003", "无效的状态转换"),
 
     // 订阅/支付相关错误码
     SUBSCRIPTION_NOT_FOUND("P001", "订阅不存在"),
