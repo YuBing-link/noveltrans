@@ -142,13 +142,6 @@ services:
       - STRIPE_MAX_YEARLY_PRICE_ID=${STRIPE_MAX_YEARLY_PRICE_ID}
       # 翻译服务线程池
       - TRANSLATE_MAX_WORKERS=${TRANSLATE_MAX_WORKERS:-2}
-      # 代理（可选，如需要设置 HTTP_PROXY 环境变量）
-      - HTTP_PROXY=${HTTP_PROXY:-}
-      - HTTPS_PROXY=${HTTPS_PROXY:-}
-      - http_proxy=${HTTP_PROXY:-}
-      - https_proxy=${HTTPS_PROXY:-}
-      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,ollama,api.stripe.com,checkout.stripe.com}
-      - no_proxy=${NO_PROXY:-localhost,127.0.0.1,llm-engine,mtran-server,mysql,redis,ollama,api.stripe.com,checkout.stripe.com}
       - MAVEN_OPTS=${MAVEN_OPTS:-}
       - JAVA_TOOL_OPTIONS=${JAVA_TOOL_OPTIONS:-}
     command: >
