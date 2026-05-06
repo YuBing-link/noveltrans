@@ -4,7 +4,7 @@
 **Environment**: Local Docker (MySQL 8.0, Redis, Java 21 Spring Boot + Undertow, Nginx)
 **Translation Engine**: Mock (MTranServer + LLM Engine)
 **Payment**: Stripe Test Mode
-**Last Updated**: 2026-05-06 — Round 27 (Cache key fix, QuotaService skip, Redis pool, API Key 500 VU)
+**Last Updated**: 2026-05-06 — Round 27 (Quota bypass + Redis pool 256, API Key 500 VU)
 
 **Related documents:**
 
@@ -359,7 +359,7 @@ if (!insertSucceeded) {
         new LambdaUpdateWrapper<StripeSubscription>()
             .eq(StripeSubscription::getId, subRecord.getId())
             .isNull(StripeSubscription::getLastWebhookEventId)
-            .set(StripeSubscription::getLastWebhookEventId, event.getId())
+            .set(StripeSubscription::setLastWebhookEventId, event.getId())
     );
     if (claimed == 0) return; // another thread claimed first
 }
@@ -522,6 +522,7 @@ private void updateUserLevel(Long userId, String newLevel, String reason, String
 | `load-test/translate-nosleep.js` | Translation API — maximum throughput (single user, JWT) | k6 |
 | `load-test/translate-apikey.js` | Translation API — multi-user concurrent (100 API keys) | k6 |
 | `load-test/translate-forged.js` | Translation API — multi-user concurrent (forged JWT, no login) | k6 |
+| `load-test/translate-forged-1000.js` | Translation API — 500 VU multi-user (forged JWT, 1000 users) | k6 |
 | `load-test/payment.js` | Checkout endpoint — real-world simulation (sleep) | k6 |
 | `load-test/checkout-nosleep.js` | Checkout endpoint — maximum throughput | k6 |
 | `load-test/webhook_idempotency.py` | Stripe Webhook concurrency idempotency | Python multi-threading |

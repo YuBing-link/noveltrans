@@ -120,14 +120,14 @@ translate-server:
     free-daily-limit: ${TRANSLATION_LIMIT_FREE_DAILY:-500}
     pro-daily-limit: ${TRANSLATION_LIMIT_PRO_DAILY:-5000}
     max-daily-limit: ${TRANSLATION_LIMIT_MAX_DAILY:-999999999}
-    free-concurrency-limit: ${TRANSLATION_LIMIT_FREE_CONCURRENCY:-1}
-    pro-concurrency-limit: ${TRANSLATION_LIMIT_PRO_CONCURRENCY:-3}
-    max-concurrency-limit: ${TRANSLATION_LIMIT_MAX_CONCURRENCY:-5}
-    anonymous-concurrency-limit: ${TRANSLATION_LIMIT_ANONYMOUS_CONCURRENCY:-1}
-    free-tpm-limit: ${TRANSLATION_LIMIT_FREE_TPM:-2000}
-    pro-tpm-limit: ${TRANSLATION_LIMIT_PRO_TPM:-10000}
-    max-tpm-limit: ${TRANSLATION_LIMIT_MAX_TPM:-50000}
-    anonymous-tpm-limit: ${TRANSLATION_LIMIT_ANONYMOUS_TPM:-999999999}
+    free-concurrency-limit: ${TRANSLATION_LIMIT_FREE_CONCURRENCY:-10}
+    pro-concurrency-limit: ${TRANSLATION_LIMIT_PRO_CONCURRENCY:-50}
+    max-concurrency-limit: ${TRANSLATION_LIMIT_MAX_CONCURRENCY:-100}
+    anonymous-concurrency-limit: ${TRANSLATION_LIMIT_ANONYMOUS_CONCURRENCY:-5}
+    free-tpm-limit: ${TRANSLATION_LIMIT_FREE_TPM:-10000}
+    pro-tpm-limit: ${TRANSLATION_LIMIT_PRO_TPM:-50000}
+    max-tpm-limit: ${TRANSLATION_LIMIT_MAX_TPM:-200000}
+    anonymous-tpm-limit: ${TRANSLATION_LIMIT_ANONYMOUS_TPM:-1000}
   verification:
     code:
       validity: 5
