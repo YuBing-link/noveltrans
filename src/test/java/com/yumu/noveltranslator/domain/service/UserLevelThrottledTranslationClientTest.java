@@ -1,9 +1,13 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.adapter.out.translate.ExternalTranslationService;
+import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.adapter.out.translate.TokenAwareRateLimiter;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

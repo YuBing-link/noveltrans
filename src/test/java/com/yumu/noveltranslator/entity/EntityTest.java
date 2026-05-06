@@ -1,4 +1,9 @@
 package com.yumu.noveltranslator.entity;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationCache;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
 
 import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;

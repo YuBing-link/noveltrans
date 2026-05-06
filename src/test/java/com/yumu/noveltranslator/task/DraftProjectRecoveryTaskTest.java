@@ -1,11 +1,11 @@
 package com.yumu.noveltranslator.task;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.yumu.noveltranslator.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.domain.service.state.CollabStateMachine;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

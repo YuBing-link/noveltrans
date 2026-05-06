@@ -1,10 +1,24 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
+import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
+import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
+import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
+import com.yumu.noveltranslator.dto.common.PageResponse;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.CollabInviteCode;
-import com.yumu.noveltranslator.entity.CollabProject;
-import com.yumu.noveltranslator.entity.CollabProjectMember;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabInviteCode;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.*;
 import org.junit.jupiter.api.*;
@@ -71,7 +85,7 @@ class CollabProjectServiceIntegrationTest {
             createdProjectId = response.getId();
 
             // 更新项目状态为 ACTIVE，以便后续测试加入功能
-            com.yumu.noveltranslator.entity.CollabProject project = new com.yumu.noveltranslator.entity.CollabProject();
+            com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject project = new com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject();
             project.setId(createdProjectId);
             project.setStatus(CollabProjectStatus.ACTIVE.getValue());
             collabProjectMapper.updateById(project);
@@ -157,7 +171,7 @@ class CollabProjectServiceIntegrationTest {
         assertNotNull(inviteCode);
         try {
             TenantContext.setBypassTenant(true);
-            assertThrows(IllegalArgumentException.class, () -> {
+            assertThrows(IllegalStateException.class, () -> {
                 collabProjectService.joinByInviteCode(inviteCode, 1L);
             });
         } finally {
@@ -240,7 +254,7 @@ class CollabProjectServiceIntegrationTest {
     void joinWithInvalidInviteCode() {
         try {
             TenantContext.setBypassTenant(true);
-            assertThrows(IllegalArgumentException.class, () -> {
+            assertThrows(IllegalStateException.class, () -> {
                 collabProjectService.joinByInviteCode("INVALID_CODE_XYZ", 1L);
             });
         } finally {
@@ -254,7 +268,7 @@ class CollabProjectServiceIntegrationTest {
     void getNonExistentProject() {
         TenantContext.setTenantId(103L);
         try {
-            assertThrows(IllegalArgumentException.class, () -> {
+            assertThrows(IllegalStateException.class, () -> {
                 collabProjectService.getProjectById(999999L);
             });
         } finally {

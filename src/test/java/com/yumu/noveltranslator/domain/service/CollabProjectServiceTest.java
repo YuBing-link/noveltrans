@@ -1,13 +1,14 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.domain.service.CollabProjectService;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yumu.noveltranslator.dto.CollabProjectResponse;
-import com.yumu.noveltranslator.dto.PageResponse;
-import com.yumu.noveltranslator.dto.ProjectMemberResponse;
-import com.yumu.noveltranslator.entity.CollabProject;
-import com.yumu.noveltranslator.entity.CollabProjectMember;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
+import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
@@ -17,7 +18,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemb
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
-import com.yumu.noveltranslator.domain.service.state.CollabStateMachine;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

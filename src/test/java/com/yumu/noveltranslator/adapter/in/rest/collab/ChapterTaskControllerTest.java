@@ -1,12 +1,12 @@
 package com.yumu.noveltranslator.adapter.in.rest.collab;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yumu.noveltranslator.dto.AssignChapterRequest;
-import com.yumu.noveltranslator.dto.ChapterTaskResponse;
-import com.yumu.noveltranslator.dto.PageResponse;
-import com.yumu.noveltranslator.dto.ReviewChapterRequest;
-import com.yumu.noveltranslator.dto.SubmitChapterRequest;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.collab.AssignChapterRequest;
+import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
+import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.dto.collab.ReviewChapterRequest;
+import com.yumu.noveltranslator.dto.collab.SubmitChapterRequest;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.ChapterTaskService;
 import org.junit.jupiter.api.AfterEach;

@@ -1,8 +1,22 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.email.DeviceTokenService;
+import com.yumu.noveltranslator.dto.auth.ChangePasswordRequest;
+import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
+import com.yumu.noveltranslator.dto.auth.RegisterRequest;
+import com.yumu.noveltranslator.dto.auth.LoginRequest;
+import com.yumu.noveltranslator.domain.service.AuthService;
+import com.yumu.noveltranslator.dto.auth.RefreshTokenRequest;
+import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TenantMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;

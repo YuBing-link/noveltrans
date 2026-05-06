@@ -1,4 +1,5 @@
 package com.yumu.noveltranslator.dto;
+import com.yumu.noveltranslator.dto.common.Result;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

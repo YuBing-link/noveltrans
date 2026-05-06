@@ -1,8 +1,8 @@
 package com.yumu.noveltranslator.adapter.in.rest.admin;
 
-import com.yumu.noveltranslator.dto.Result;
+import com.yumu.noveltranslator.dto.common.Result;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationCacheService;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

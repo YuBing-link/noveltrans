@@ -1,13 +1,15 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.domain.service.CollabCommentService;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.yumu.noveltranslator.dto.CommentResponse;
-import com.yumu.noveltranslator.dto.CreateCommentRequest;
-import com.yumu.noveltranslator.entity.CollabChapterTask;
-import com.yumu.noveltranslator.entity.CollabComment;
-import com.yumu.noveltranslator.entity.CollabProjectMember;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.collab.CommentResponse;
+import com.yumu.noveltranslator.dto.collab.CreateCommentRequest;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabComment;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
@@ -113,7 +115,7 @@ class CollabCommentServiceTest {
             when(chapterTaskMapper.selectById(999L)).thenReturn(null);
 
             CreateCommentRequest req = new CreateCommentRequest();
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.createComment(999L, 1L, req));
         }
 
@@ -124,7 +126,7 @@ class CollabCommentServiceTest {
             when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(null);
 
             CreateCommentRequest req = new CreateCommentRequest();
-            assertThrows(SecurityException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.createComment(1L, 1L, req));
         }
 
@@ -137,7 +139,7 @@ class CollabCommentServiceTest {
 
             CreateCommentRequest req = new CreateCommentRequest();
             req.setParentId(999L);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.createComment(1L, 1L, req));
         }
 
@@ -153,7 +155,7 @@ class CollabCommentServiceTest {
 
             CreateCommentRequest req = new CreateCommentRequest();
             req.setParentId(50L);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.createComment(1L, 1L, req));
         }
     }
@@ -189,7 +191,7 @@ class CollabCommentServiceTest {
         @Test
         void 章节不存在抛出异常() {
             when(chapterTaskMapper.selectById(999L)).thenReturn(null);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.getCommentsByChapterPage(999L, 1L, 1, 20));
         }
 
@@ -198,7 +200,7 @@ class CollabCommentServiceTest {
             CollabChapterTask task = buildTask(1L, 10L);
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
             when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(null);
-            assertThrows(SecurityException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.getCommentsByChapterPage(1L, 1L, 1, 20));
         }
     }
@@ -223,7 +225,7 @@ class CollabCommentServiceTest {
         @Test
         void 评论不存在抛出异常() {
             doReturn(null).when(service).getById(1L);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.resolveComment(1L, 1L));
         }
 
@@ -232,7 +234,7 @@ class CollabCommentServiceTest {
             CollabComment comment = buildComment(1L, 1L, "content", null);
             doReturn(comment).when(service).getById(1L);
             when(chapterTaskMapper.selectById(1L)).thenReturn(null);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.resolveComment(1L, 1L));
         }
     }
@@ -262,14 +264,14 @@ class CollabCommentServiceTest {
             when(chapterTaskMapper.selectById(1L)).thenReturn(task);
             when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
 
-            assertThrows(SecurityException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.deleteComment(1L, 1L));
         }
 
         @Test
         void 评论不存在抛出异常() {
             doReturn(null).when(service).getById(1L);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                 service.deleteComment(1L, 1L));
         }
     }

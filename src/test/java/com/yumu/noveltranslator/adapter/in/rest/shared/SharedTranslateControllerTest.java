@@ -1,8 +1,17 @@
 package com.yumu.noveltranslator.adapter.in.rest.shared;
+import com.yumu.noveltranslator.dto.entity.TaskStatusResponse;
+import com.yumu.noveltranslator.adapter.in.rest.plugin.PluginTranslateController;
+import com.yumu.noveltranslator.dto.translation.TranslationResultResponse;
+import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.TranslationTask;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.DocumentService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;

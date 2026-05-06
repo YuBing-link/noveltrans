@@ -1,4 +1,5 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.adapter.in.rest;
+import com.yumu.noveltranslator.adapter.in.rest.GlobalExceptionHandler;
 
 import com.auth0.jwt.exceptions.SignatureVerificationException;
 import com.auth0.jwt.exceptions.TokenExpiredException;

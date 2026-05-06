@@ -1,8 +1,15 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
+import com.yumu.noveltranslator.dto.entity.DocumentInfoResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.Document;
-import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.CollabProjectService;
 import com.yumu.noveltranslator.domain.service.DocumentService;
@@ -54,7 +61,7 @@ class WebDocumentControllerTest {
     }
 
     private void setupSecurityContext() {
-        com.yumu.noveltranslator.entity.User user = new com.yumu.noveltranslator.entity.User();
+        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
         user.setId(1L);
         user.setEmail("test@test.com");
         user.setUserLevel("free");

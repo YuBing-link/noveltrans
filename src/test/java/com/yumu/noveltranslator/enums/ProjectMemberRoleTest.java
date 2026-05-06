@@ -1,4 +1,5 @@
 package com.yumu.noveltranslator.enums;
+import com.yumu.noveltranslator.exception.BusinessException;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

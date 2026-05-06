@@ -1,7 +1,8 @@
-package com.yumu.noveltranslator.mapper;
+package com.yumu.noveltranslator.adapter.out.persistence.mapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;

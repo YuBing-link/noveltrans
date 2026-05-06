@@ -1,7 +1,8 @@
 package com.yumu.noveltranslator.adapter.in.security.aspect;
+import com.yumu.noveltranslator.exception.BusinessException;
 
-import com.yumu.noveltranslator.entity.CollabProjectMember;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
@@ -103,7 +104,7 @@ class ProjectAccessAspectTest {
             when(joinPoint.getArgs()).thenReturn(new Object[]{"someString"});
             when(requireAccess.roles()).thenReturn(new ProjectMemberRole[]{ProjectMemberRole.TRANSLATOR});
 
-            IllegalStateException ex = assertThrows(IllegalStateException.class,
+            BusinessException ex = assertThrows(IllegalStateException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("无法从请求中提取 projectId"));
         }
@@ -121,7 +122,7 @@ class ProjectAccessAspectTest {
             when(requireAccess.roles()).thenReturn(new ProjectMemberRole[]{ProjectMemberRole.TRANSLATOR});
             when(projectMemberMapper.selectByProjectAndUser(456L, 1L)).thenReturn(null);
 
-            SecurityException ex = assertThrows(SecurityException.class,
+            BusinessException ex = assertThrows(IllegalStateException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("无权访问该项目"));
         }
@@ -151,7 +152,7 @@ class ProjectAccessAspectTest {
             member.setRole("TRANSLATOR");
             when(projectMemberMapper.selectByProjectAndUser(100L, 1L)).thenReturn(member);
 
-            SecurityException ex = assertThrows(SecurityException.class,
+            BusinessException ex = assertThrows(IllegalStateException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("角色权限不足"));
         }
@@ -173,7 +174,7 @@ class ProjectAccessAspectTest {
             when(projectMemberMapper.selectByProjectAndUser(200L, 1L)).thenReturn(member);
 
             // 空roles数组，anyMatch返回false，应该抛出角色权限不足
-            SecurityException ex = assertThrows(SecurityException.class,
+            BusinessException ex = assertThrows(IllegalStateException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("角色权限不足"));
         }
@@ -232,7 +233,7 @@ class ProjectAccessAspectTest {
             member.setRole("TRANSLATOR");
             when(projectMemberMapper.selectByProjectAndUser(600L, 1L)).thenReturn(member);
 
-            SecurityException ex = assertThrows(SecurityException.class,
+            BusinessException ex = assertThrows(IllegalStateException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("角色权限不足"));
         }

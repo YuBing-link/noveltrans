@@ -1,4 +1,5 @@
 package com.yumu.noveltranslator.entity;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 
 import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;

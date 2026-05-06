@@ -2,10 +2,10 @@ package com.yumu.noveltranslator.adapter.in.rest.collab;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yumu.noveltranslator.dto.CommentResponse;
-import com.yumu.noveltranslator.dto.CreateCommentRequest;
-import com.yumu.noveltranslator.dto.PageResponse;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.collab.CommentResponse;
+import com.yumu.noveltranslator.dto.collab.CreateCommentRequest;
+import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.CollabCommentService;
 import org.junit.jupiter.api.AfterEach;

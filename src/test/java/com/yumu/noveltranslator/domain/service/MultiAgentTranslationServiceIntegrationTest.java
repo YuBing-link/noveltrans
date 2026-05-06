@@ -1,11 +1,18 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
+import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.domain.service.AiGlossaryService;
+import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
+import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.dto.RagTranslationResponse;
-import com.yumu.noveltranslator.entity.CollabChapterTask;
-import com.yumu.noveltranslator.entity.CollabProject;
-import com.yumu.noveltranslator.entity.Document;
-import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;

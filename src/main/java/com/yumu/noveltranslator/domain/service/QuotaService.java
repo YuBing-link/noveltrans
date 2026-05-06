@@ -77,6 +77,9 @@ public class QuotaService {
     /**
      * 获取用户月度字符配额
      */
+    /**
+     * 获取用户月度配额（原始值）
+     */
     public long getMonthlyQuota(String userLevel) {
         if (userLevel == null) return limitProperties.getFreeMonthlyChars();
         return switch (userLevel.toLowerCase()) {
@@ -96,6 +99,15 @@ public class QuotaService {
             case "team" -> limitProperties.getTeamModeMultiplier();
             default -> limitProperties.getExpertModeMultiplier();
         };
+    }
+
+    /**
+     * 获取剩余可用字符数（月度配额 - 已用）
+     */
+    public long getRemainingChars(Long userId, String userLevel) {
+        long quota = getMonthlyQuota(userLevel);
+        long used = getUsedThisMonth(userId);
+        return Math.max(0, quota - used);
     }
 
     /**

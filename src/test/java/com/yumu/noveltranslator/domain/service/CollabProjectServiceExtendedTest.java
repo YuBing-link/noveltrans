@@ -1,13 +1,39 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.dto.collab.InviteMemberRequest;
+import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabInviteCode;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
+import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
+import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.*;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.*;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.*;
-import com.yumu.noveltranslator.domain.service.state.CollabStateMachine;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -141,7 +167,7 @@ class CollabProjectServiceExtendedTest {
         @Test
         void 项目不存在抛异常() {
             when(collabProjectMapper.selectById(1L)).thenReturn(null);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.addChaptersToProject(1L, 1L, new Document()));
         }
 
@@ -212,7 +238,7 @@ class CollabProjectServiceExtendedTest {
         @Test
         void 项目不存在抛异常() {
             when(collabProjectMapper.selectById(1L)).thenReturn(null);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.deleteProject(1L, 1L));
         }
 
@@ -281,7 +307,7 @@ class CollabProjectServiceExtendedTest {
         @Test
         void 项目不存在抛异常() {
             when(collabProjectMapper.selectById(1L)).thenReturn(null);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.generateInviteCode(1L, 1L));
         }
 
@@ -338,7 +364,7 @@ class CollabProjectServiceExtendedTest {
         @Test
         void 项目不存在抛异常() {
             when(collabProjectMapper.selectById(1L)).thenReturn(null);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.changeProjectStatus(1L, CollabProjectStatus.ACTIVE, 1L));
         }
 
@@ -382,7 +408,7 @@ class CollabProjectServiceExtendedTest {
             when(collabInviteCodeMapper.selectByValidCode("INVALID")).thenReturn(null);
             when(collabInviteCodeMapper.selectByCode("INVALID")).thenReturn(null);
 
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.joinByInviteCode("INVALID", 1L));
         }
 
@@ -393,7 +419,7 @@ class CollabProjectServiceExtendedTest {
             code.setUsed(1);
             when(collabInviteCodeMapper.selectByCode("USED")).thenReturn(code);
 
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.joinByInviteCode("USED", 1L));
         }
 
@@ -405,7 +431,7 @@ class CollabProjectServiceExtendedTest {
             code.setExpiresAt(LocalDateTime.now().minusDays(1));
             when(collabInviteCodeMapper.selectByCode("EXPIRED")).thenReturn(code);
 
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.joinByInviteCode("EXPIRED", 1L));
         }
 
@@ -483,7 +509,7 @@ class CollabProjectServiceExtendedTest {
         @Test
         void 成员不存在抛异常() {
             when(collabProjectMemberMapper.selectById(1L)).thenReturn(null);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.removeMember(1L, 1L, 1L));
         }
 
@@ -493,7 +519,7 @@ class CollabProjectServiceExtendedTest {
             member.setId(1L);
             member.setProjectId(99L); // different project
             when(collabProjectMemberMapper.selectById(1L)).thenReturn(member);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.removeMember(1L, 1L, 1L));
         }
 
@@ -534,7 +560,7 @@ class CollabProjectServiceExtendedTest {
             InviteMemberRequest req = new InviteMemberRequest();
             req.setEmail("nonexistent@test.com");
             req.setRole(ProjectMemberRole.TRANSLATOR);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.inviteMember(1L, req, 1L));
         }
 
@@ -583,7 +609,7 @@ class CollabProjectServiceExtendedTest {
         @Test
         void 项目不存在抛异常() {
             when(collabProjectMapper.selectById(1L)).thenReturn(null);
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     service.updateProject(1L, new CreateCollabProjectRequest(), 1L));
         }
 

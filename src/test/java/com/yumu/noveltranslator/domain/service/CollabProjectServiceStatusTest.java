@@ -1,10 +1,11 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.domain.service.CollabProjectService;
 
-import com.yumu.noveltranslator.dto.CreateCollabProjectRequest;
-import com.yumu.noveltranslator.entity.CollabChapterTask;
-import com.yumu.noveltranslator.entity.CollabProject;
-import com.yumu.noveltranslator.entity.CollabProjectMember;
-import com.yumu.noveltranslator.entity.Document;
+import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
@@ -14,7 +15,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemb
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
-import com.yumu.noveltranslator.domain.service.state.CollabStateMachine;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

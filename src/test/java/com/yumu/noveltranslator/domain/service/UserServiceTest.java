@@ -1,9 +1,21 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.dto.translation.GlossaryItemRequest;
+import com.yumu.noveltranslator.domain.service.QuotaService;
+import com.yumu.noveltranslator.dto.translation.GlossaryResponse;
+import com.yumu.noveltranslator.dto.entity.UserPreferencesRequest;
+import com.yumu.noveltranslator.dto.entity.UserPreferencesResponse;
+import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.domain.service.UserService;
 
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.User;
-import com.yumu.noveltranslator.entity.UserPreference;
-import com.yumu.noveltranslator.entity.Glossary;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;

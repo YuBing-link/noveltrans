@@ -1,16 +1,17 @@
 package com.yumu.noveltranslator.domain.service.pipeline;
+import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 
-import com.yumu.noveltranslator.dto.ConsistencyTranslationResult;
-import com.yumu.noveltranslator.dto.EntityMapping;
-import com.yumu.noveltranslator.dto.RagTranslationResponse;
-import com.yumu.noveltranslator.entity.Glossary;
+import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.dto.translation.EntityMapping;
+import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.domain.service.TeamTranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationCacheService;
+import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.domain.service.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -570,7 +571,7 @@ class TranslationPipelineExtendedTest {
             stubTranslateEntities(Map.of("World", "世界"));
 
             // Build a real EntityMappingContext
-            com.yumu.noveltranslator.dto.EntityMapping mapping = com.yumu.noveltranslator.dto.EntityMapping.builder()
+            com.yumu.noveltranslator.dto.translation.EntityMapping mapping = com.yumu.noveltranslator.dto.translation.EntityMapping.builder()
                     .sourceText("World").translatedText("世界").placeholder("__ENTITY_0__").index(0).build();
             var context = new EntityConsistencyService.EntityMappingContext(
                     List.of(mapping),

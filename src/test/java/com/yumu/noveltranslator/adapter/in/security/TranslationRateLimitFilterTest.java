@@ -1,4 +1,6 @@
-package com.yumu.noveltranslator.security;
+package com.yumu.noveltranslator.adapter.in.security;
+import com.yumu.noveltranslator.adapter.in.security.RedisSlidingWindowRateLimiter;
+import com.yumu.noveltranslator.adapter.in.security.TranslationRateLimitFilter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -22,7 +24,10 @@ import static org.mockito.Mockito.*;
 class TranslationRateLimitFilterTest {
 
     @Mock
-    private TranslationIpRateLimiter rateLimiter;
+    private RedisSlidingWindowRateLimiter ipRateLimiter;
+
+    @Mock
+    private RedisSlidingWindowRateLimiter keyRateLimiter;
 
     @Mock
     private FilterChain chain;
@@ -34,7 +39,7 @@ class TranslationRateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new TranslationRateLimitFilter(rateLimiter, objectMapper);
+        filter = new TranslationRateLimitFilter(ipRateLimiter, keyRateLimiter, objectMapper);
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
     }
@@ -44,7 +49,7 @@ class TranslationRateLimitFilterTest {
     void doFilter_translatePath_allowed() throws Exception {
         request.setRequestURI("/v1/translate/reader");
         request.setRemoteAddr("192.168.1.1");
-        when(rateLimiter.allowRequest("192.168.1.1")).thenReturn(true);
+        when(ipRateLimiter.allowRequest("192.168.1.1")).thenReturn(true);
 
         filter.doFilterInternal(request, response, chain);
 
@@ -57,7 +62,7 @@ class TranslationRateLimitFilterTest {
     void doFilter_translatePath_rateLimited() throws Exception {
         request.setRequestURI("/v1/translate/text/stream");
         request.setRemoteAddr("10.0.0.5");
-        when(rateLimiter.allowRequest("10.0.0.5")).thenReturn(false);
+        when(ipRateLimiter.allowRequest("10.0.0.5")).thenReturn(false);
 
         filter.doFilterInternal(request, response, chain);
 
@@ -97,7 +102,7 @@ class TranslationRateLimitFilterTest {
 
         filter.doFilterInternal(request, response, chain);
 
-        verifyNoInteractions(rateLimiter);
+        verifyNoInteractions(ipRateLimiter);
         verify(chain).doFilter(request, response);
     }
 
@@ -106,11 +111,11 @@ class TranslationRateLimitFilterTest {
     void doFilter_xForwardedFor_extractsFirstIp() throws Exception {
         request.setRequestURI("/v1/translate/selection");
         request.addHeader("X-Forwarded-For", "203.0.113.50, 70.41.3.18, 150.172.238.17");
-        when(rateLimiter.allowRequest("203.0.113.50")).thenReturn(true);
+        when(ipRateLimiter.allowRequest("203.0.113.50")).thenReturn(true);
 
         filter.doFilterInternal(request, response, chain);
 
-        verify(rateLimiter).allowRequest("203.0.113.50");
+        verify(ipRateLimiter).allowRequest("203.0.113.50");
     }
 
     @Test
@@ -118,10 +123,10 @@ class TranslationRateLimitFilterTest {
     void doFilter_xRealIp_fallback() throws Exception {
         request.setRequestURI("/v1/translate/reader");
         request.addHeader("X-Real-IP", "198.51.100.77");
-        when(rateLimiter.allowRequest("198.51.100.77")).thenReturn(true);
+        when(ipRateLimiter.allowRequest("198.51.100.77")).thenReturn(true);
 
         filter.doFilterInternal(request, response, chain);
 
-        verify(rateLimiter).allowRequest("198.51.100.77");
+        verify(ipRateLimiter).allowRequest("198.51.100.77");
     }
 }

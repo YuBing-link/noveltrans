@@ -1,12 +1,13 @@
 package com.yumu.noveltranslator.domain.service.pipeline;
+import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 
-import com.yumu.noveltranslator.dto.ConsistencyTranslationResult;
-import com.yumu.noveltranslator.dto.RagTranslationResponse;
+import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationCacheService;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.domain.service.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -1,8 +1,12 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.domain.service.EmbeddingService;
+import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
+import com.yumu.noveltranslator.domain.service.RagTranslationService;
 
-import com.yumu.noveltranslator.dto.RagTranslationResponse;
-import com.yumu.noveltranslator.entity.TranslationMemory;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,8 +69,8 @@ class RagTranslationServiceExtendedTest {
     private void setAuthenticatedUser(Long userId) {
         User user = new User();
         user.setId(userId);
-        com.yumu.noveltranslator.security.CustomUserDetails userDetails =
-                new com.yumu.noveltranslator.security.CustomUserDetails(user);
+        com.yumu.noveltranslator.adapter.in.security.CustomUserDetails userDetails =
+                new com.yumu.noveltranslator.adapter.in.security.CustomUserDetails(user);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
     }

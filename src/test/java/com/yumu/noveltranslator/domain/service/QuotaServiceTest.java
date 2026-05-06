@@ -1,4 +1,5 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.domain.service.QuotaService;
 
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.QuotaUsageMapper;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;

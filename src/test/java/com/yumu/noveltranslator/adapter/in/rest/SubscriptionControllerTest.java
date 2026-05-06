@@ -1,10 +1,21 @@
-package com.yumu.noveltranslator.controller;
+package com.yumu.noveltranslator.adapter.in.rest;
+import com.yumu.noveltranslator.dto.subscription.SubscriptionStatusResponse;
+import com.yumu.noveltranslator.dto.subscription.PortalSessionResponse;
+import com.yumu.noveltranslator.adapter.in.rest.web.SubscriptionController;
+import com.yumu.noveltranslator.dto.subscription.CheckoutSessionRequest;
+import com.yumu.noveltranslator.dto.subscription.CheckoutSessionResponse;
+import com.yumu.noveltranslator.dto.common.Result;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.SubscriptionService;
+import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

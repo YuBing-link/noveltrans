@@ -1,7 +1,14 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.dto.translation.SelectionTranslationRequest;
+import com.yumu.noveltranslator.dto.translation.ReaderTranslateResponse;
+import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
+import com.yumu.noveltranslator.dto.translation.SelectionTranslateResponse;
+import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
+import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
@@ -57,7 +64,7 @@ class TranslationServiceTest {
     void setUp() {
         translationService = new TranslationService(
                 translationClient, cacheService, ragTranslationService,
-                entityConsistencyService, postProcessingService, teamTranslationService, quotaService, userMapper);
+                entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         // Pipeline 内部调用 fixUntranslatedChinese，mock 返回原文
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));

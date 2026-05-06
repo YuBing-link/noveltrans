@@ -1,10 +1,12 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.redis.DocumentEntityCache;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
 import com.alibaba.fastjson2.JSON;
-import com.yumu.noveltranslator.dto.ConsistencyTranslationResult;
-import com.yumu.noveltranslator.dto.EntityMapping;
-import com.yumu.noveltranslator.entity.Glossary;
-import com.yumu.noveltranslator.entity.UserPreference;
+import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.dto.translation.EntityMapping;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserPreferenceMapper;
 import org.junit.jupiter.api.BeforeEach;

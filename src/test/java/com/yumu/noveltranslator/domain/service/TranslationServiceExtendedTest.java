@@ -1,7 +1,25 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.dto.translation.SelectionTranslationRequest;
+import com.yumu.noveltranslator.dto.translation.ReaderTranslateResponse;
+import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.domain.service.QuotaService;
+import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
+import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
+import com.yumu.noveltranslator.dto.translation.WebpageTranslateRequest;
+import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.dto.translation.SelectionTranslateResponse;
+import com.yumu.noveltranslator.domain.service.TranslationService;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
@@ -62,7 +80,7 @@ class TranslationServiceExtendedTest {
     void setUp() {
         translationService = new TranslationService(
                 translationClient, cacheService, ragTranslationService,
-                entityConsistencyService, postProcessingService, teamTranslationService, quotaService, userMapper);
+                entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
         SecurityContextHolder.clearContext();

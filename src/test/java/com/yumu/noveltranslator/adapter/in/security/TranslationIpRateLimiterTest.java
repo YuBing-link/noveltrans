@@ -1,4 +1,5 @@
-package com.yumu.noveltranslator.security;
+package com.yumu.noveltranslator.adapter.in.security;
+import com.yumu.noveltranslator.adapter.in.security.RedisSlidingWindowRateLimiter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,8 +20,8 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("TranslationIpRateLimiter 单元测试")
-class TranslationIpRateLimiterTest {
+@DisplayName("RedisSlidingWindowRateLimiter 单元测试")
+class RedisSlidingWindowRateLimiterTest {
 
     @Mock
     private StringRedisTemplate redisTemplate;
@@ -28,12 +29,12 @@ class TranslationIpRateLimiterTest {
     @Mock
     private ZSetOperations zSetOperations;
 
-    private TranslationIpRateLimiter limiter;
+    private RedisSlidingWindowRateLimiter limiter;
 
     @BeforeEach
     void setUp() {
         when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
-        limiter = new TranslationIpRateLimiter(redisTemplate, 60, 5);
+        limiter = new RedisSlidingWindowRateLimiter(redisTemplate, "test:prefix", 60, 5);
     }
 
     @Test

@@ -1,6 +1,7 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 
-import com.yumu.noveltranslator.entity.Glossary;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

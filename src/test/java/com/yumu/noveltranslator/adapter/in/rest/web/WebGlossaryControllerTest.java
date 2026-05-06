@@ -1,11 +1,20 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
+import com.yumu.noveltranslator.dto.translation.GlossaryItemRequest;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.dto.translation.GlossaryResponse;
+import com.yumu.noveltranslator.dto.common.PageResponse;
 
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.Glossary;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.CacheVersionService;
-import com.yumu.noveltranslator.domain.service.TranslationCacheService;
+import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.domain.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,7 +65,7 @@ class WebGlossaryControllerTest {
     }
 
     private void setupSecurityContext() {
-        com.yumu.noveltranslator.entity.User user = new com.yumu.noveltranslator.entity.User();
+        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
         user.setId(1L);
         user.setEmail("test@test.com");
         user.setUserLevel("free");

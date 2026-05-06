@@ -1,4 +1,6 @@
 package com.yumu.noveltranslator.domain.service.state;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import org.junit.jupiter.api.DisplayName;

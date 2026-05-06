@@ -1,9 +1,9 @@
 package com.yumu.noveltranslator.adapter.in.rest.plugin;
 
-import com.yumu.noveltranslator.dto.Result;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.DeviceTokenService;
+import com.yumu.noveltranslator.adapter.out.email.DeviceTokenService;
 import com.yumu.noveltranslator.util.JwtUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

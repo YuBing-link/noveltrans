@@ -1,6 +1,7 @@
-package com.yumu.noveltranslator.mapper;
+package com.yumu.noveltranslator.adapter.out.persistence.mapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.QuotaUsageMapper;
 
-import com.yumu.noveltranslator.entity.QuotaUsage;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.QuotaUsage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;

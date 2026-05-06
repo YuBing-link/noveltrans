@@ -1,6 +1,7 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.redis.DocumentEntityCache;
 
-import com.yumu.noveltranslator.entity.ChapterEntityMap;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.ChapterEntityMap;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.ChapterEntityMapMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

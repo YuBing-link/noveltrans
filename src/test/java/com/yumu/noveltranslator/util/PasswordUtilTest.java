@@ -1,4 +1,5 @@
 package com.yumu.noveltranslator.util;
+import com.yumu.noveltranslator.exception.BusinessException;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -35,6 +36,6 @@ class PasswordUtilTest {
 
     @Test
     void hashPasswordThrowsOnNull() {
-        assertThrows(IllegalArgumentException.class, () -> PasswordUtil.hashPassword(null));
+        assertThrows(IllegalStateException.class, () -> PasswordUtil.hashPassword(null));
     }
 }

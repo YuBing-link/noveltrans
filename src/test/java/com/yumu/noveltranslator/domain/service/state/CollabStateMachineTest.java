@@ -1,7 +1,9 @@
 package com.yumu.noveltranslator.domain.service.state;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 
-import com.yumu.noveltranslator.entity.CollabChapterTask;
-import com.yumu.noveltranslator.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import org.junit.jupiter.api.BeforeEach;

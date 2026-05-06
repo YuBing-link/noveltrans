@@ -1,6 +1,7 @@
-package com.yumu.noveltranslator.mapper;
+package com.yumu.noveltranslator.adapter.out.persistence.mapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
 
-import com.yumu.noveltranslator.entity.CollabInviteCode;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabInviteCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;

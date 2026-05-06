@@ -1,21 +1,24 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.domain.service.ChapterTaskService;
+import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yumu.noveltranslator.dto.ChapterTaskResponse;
-import com.yumu.noveltranslator.dto.PageResponse;
-import com.yumu.noveltranslator.entity.CollabChapterTask;
-import com.yumu.noveltranslator.entity.CollabProject;
-import com.yumu.noveltranslator.entity.CollabProjectMember;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
+import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.yumu.noveltranslator.domain.service.state.CollabStateMachine;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -93,7 +96,7 @@ class ChapterTaskServiceTest {
         void 项目不存在抛出异常() {
             when(collabProjectMapper.selectById(999L)).thenReturn(null);
 
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     chapterTaskService.createChapter(999L, 1, "标题", "内容", 1L));
         }
 
@@ -195,7 +198,7 @@ class ChapterTaskServiceTest {
         void 章节不存在抛出异常() {
             when(chapterTaskMapper.selectById(999L)).thenReturn(null);
 
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     chapterTaskService.getChapterById(999L, 1L));
         }
     }
@@ -230,7 +233,7 @@ class ChapterTaskServiceTest {
         void 章节不存在抛出异常() {
             when(chapterTaskMapper.selectById(999L)).thenReturn(null);
 
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     chapterTaskService.assignChapter(999L, 2L, 1L));
         }
 
@@ -282,7 +285,7 @@ class ChapterTaskServiceTest {
         void 章节不存在抛出异常() {
             when(chapterTaskMapper.selectById(999L)).thenReturn(null);
 
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     chapterTaskService.submitChapter(999L, "译文"));
         }
     }
@@ -341,7 +344,7 @@ class ChapterTaskServiceTest {
         void 章节不存在抛出异常() {
             when(chapterTaskMapper.selectById(999L)).thenReturn(null);
 
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(IllegalStateException.class, () ->
                     chapterTaskService.reviewChapter(999L, true, "ok", 3L));
         }
     }

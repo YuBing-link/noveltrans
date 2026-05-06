@@ -1,16 +1,25 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
+import com.yumu.noveltranslator.domain.service.TranslationTaskService;
+import com.yumu.noveltranslator.util.ExternalResponseUtil;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
-import com.yumu.noveltranslator.dto.TranslationResultResponse;
-import com.yumu.noveltranslator.entity.Document;
-import com.yumu.noveltranslator.entity.Glossary;
-import com.yumu.noveltranslator.entity.TranslationHistory;
-import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.dto.translation.TranslationResultResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
-import com.yumu.noveltranslator.domain.service.pipeline.TranslationPipeline;
-import com.yumu.noveltranslator.domain.service.state.TranslationStateMachine;
+import com.yumu.noveltranslator.domain.service.TranslationPipeline;
+import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -103,11 +112,11 @@ class TranslationTaskServiceExtended2Test {
     }
 
     private void setAuthenticatedUser(Long userId) {
-        com.yumu.noveltranslator.entity.User user = new com.yumu.noveltranslator.entity.User();
+        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
         user.setId(userId);
         user.setUserLevel("free");
-        com.yumu.noveltranslator.security.CustomUserDetails userDetails =
-                new com.yumu.noveltranslator.security.CustomUserDetails(user);
+        com.yumu.noveltranslator.adapter.in.security.CustomUserDetails userDetails =
+                new com.yumu.noveltranslator.adapter.in.security.CustomUserDetails(user);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
     }

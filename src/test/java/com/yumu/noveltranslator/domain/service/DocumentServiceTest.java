@@ -1,12 +1,13 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.domain.service.DocumentService;
 
-import com.yumu.noveltranslator.dto.DocumentInfoResponse;
-import com.yumu.noveltranslator.entity.Document;
-import com.yumu.noveltranslator.entity.TranslationTask;
+import com.yumu.noveltranslator.dto.entity.DocumentInfoResponse;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
-import com.yumu.noveltranslator.domain.service.state.TranslationStateMachine;
+import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

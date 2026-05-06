@@ -1,4 +1,5 @@
-package com.yumu.noveltranslator.security;
+package com.yumu.noveltranslator.adapter.in.security;
+import com.yumu.noveltranslator.adapter.in.security.SecurityPermitAllPaths;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

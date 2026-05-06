@@ -1,8 +1,26 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
+import com.yumu.noveltranslator.dto.auth.ChangePasswordRequest;
+import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
+import com.yumu.noveltranslator.dto.entity.TranslationHistoryResponse;
+import com.yumu.noveltranslator.dto.auth.RegisterRequest;
+import com.yumu.noveltranslator.dto.auth.LoginRequest;
+import com.yumu.noveltranslator.dto.auth.RefreshTokenRequest;
+import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter;
+import com.yumu.noveltranslator.dto.entity.UserPreferencesRequest;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
+import com.yumu.noveltranslator.dto.entity.UserQuotaResponse;
+import com.yumu.noveltranslator.dto.entity.UserStatisticsResponse;
+import com.yumu.noveltranslator.dto.entity.UserPreferencesResponse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.AuthService;
 import com.yumu.noveltranslator.domain.service.TranslationTaskService;
@@ -45,7 +63,7 @@ class WebUserControllerTest {
     private TranslationTaskService translationTaskService;
 
     @org.mockito.Mock
-    private com.yumu.noveltranslator.security.LoginRateLimiter loginRateLimiter;
+    private com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter loginRateLimiter;
 
     private WebUserController controller;
 
@@ -384,7 +402,7 @@ class WebUserControllerTest {
         @Test
         void 获取翻译历史成功() throws Exception {
             setupSecurityContext(createTestUser());
-            com.yumu.noveltranslator.entity.TranslationHistory history = new com.yumu.noveltranslator.entity.TranslationHistory();
+            com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory history = new com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory();
             history.setTaskId("task-001");
             history.setUserId(1L);
             when(translationTaskService.getTranslationHistory(eq(1L), eq(1), eq(20), eq("all")))

@@ -1,4 +1,5 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.translate.TokenAwareRateLimiter;
 
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,13 +1,14 @@
-package com.yumu.noveltranslator.security;
+package com.yumu.noveltranslator.adapter.in.security;
+import com.yumu.noveltranslator.adapter.in.security.JwtAuthenticationFilter;
 
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.exceptions.TokenExpiredException;
 import com.auth0.jwt.interfaces.Claim;
 import com.auth0.jwt.interfaces.DecodedJWT;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.util.JwtUtils;
-import com.yumu.noveltranslator.domain.service.TokenBlacklistService;
+import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -69,7 +70,7 @@ class JwtAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter(jwtUtils, userMapper, tokenBlacklistService);
+        filter = new JwtAuthenticationFilter(jwtUtils, userMapper, tokenBlacklistService, null);
 
         SecurityContextHolder.clearContext();
     }

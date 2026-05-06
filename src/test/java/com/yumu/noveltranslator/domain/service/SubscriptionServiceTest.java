@@ -1,4 +1,12 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.dto.subscription.SubscriptionStatusResponse;
+import com.yumu.noveltranslator.util.JwtUtils;
+import com.yumu.noveltranslator.dto.subscription.PortalSessionResponse;
+import com.yumu.noveltranslator.dto.subscription.CheckoutSessionRequest;
+import com.yumu.noveltranslator.dto.subscription.CheckoutSessionResponse;
+import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
+import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stripe.Stripe;
@@ -8,11 +16,16 @@ import com.stripe.model.Subscription;
 import com.stripe.model.SubscriptionItemCollection;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.checkout.SessionCreateParams;
-import com.yumu.noveltranslator.dto.*;
-import com.yumu.noveltranslator.entity.StripeCustomer;
-import com.yumu.noveltranslator.entity.StripeSubscription;
-import com.yumu.noveltranslator.entity.User;
-import com.yumu.noveltranslator.entity.UserPlanHistory;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeCustomer;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeCustomerMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeSubscriptionMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
@@ -166,7 +179,7 @@ class SubscriptionServiceTest {
             request.setPlan("INVALID");
             request.setBillingCycle("monthly");
 
-            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            BusinessException ex = assertThrows(IllegalStateException.class,
                     () -> subscriptionService.createCheckoutSession(1L, request));
 
             assertTrue(ex.getMessage().contains("无效的套餐类型"));
@@ -178,7 +191,7 @@ class SubscriptionServiceTest {
             request.setPlan("PRO");
             request.setBillingCycle("INVALID");
 
-            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            BusinessException ex = assertThrows(IllegalStateException.class,
                     () -> subscriptionService.createCheckoutSession(1L, request));
 
             assertTrue(ex.getMessage().contains("无效的计费周期"));

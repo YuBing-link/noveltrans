@@ -1,4 +1,5 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.util.SseEmitterUtil;

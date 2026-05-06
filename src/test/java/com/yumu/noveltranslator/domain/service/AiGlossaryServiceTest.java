@@ -1,6 +1,7 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.domain.service.AiGlossaryService;
 
-import com.yumu.noveltranslator.entity.AiGlossary;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.AiGlossary;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.AiGlossaryMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

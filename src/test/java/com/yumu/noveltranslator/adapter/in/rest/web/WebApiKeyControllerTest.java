@@ -1,8 +1,9 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yumu.noveltranslator.dto.Result;
-import com.yumu.noveltranslator.entity.ApiKey;
+import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.ApiKey;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.ApiKeyMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
@@ -39,12 +40,12 @@ class WebApiKeyControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new WebApiKeyController(apiKeyMapper);
+        controller = new WebApiKeyController(apiKeyMapper, null, null);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
     private void setupSecurityContext() {
-        com.yumu.noveltranslator.entity.User user = new com.yumu.noveltranslator.entity.User();
+        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
         user.setId(1L);
         user.setEmail("test@test.com");
         user.setUserLevel("free");

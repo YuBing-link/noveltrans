@@ -1,6 +1,13 @@
 package com.yumu.noveltranslator.adapter.in.rest.plugin;
+import com.yumu.noveltranslator.dto.translation.ReaderTranslateResponse;
+import com.yumu.noveltranslator.dto.translation.SelectionTranslateResponse;
 
-import com.yumu.noveltranslator.dto.*;
+import com.yumu.noveltranslator.dto.common.*;
+import com.yumu.noveltranslator.dto.collab.*;
+import com.yumu.noveltranslator.dto.entity.*;
+import com.yumu.noveltranslator.dto.translation.*;
+import com.yumu.noveltranslator.dto.subscription.*;
+import com.yumu.noveltranslator.dto.auth.*;
 import com.yumu.noveltranslator.domain.service.TranslationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

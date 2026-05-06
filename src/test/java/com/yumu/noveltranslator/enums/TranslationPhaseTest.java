@@ -1,4 +1,5 @@
 package com.yumu.noveltranslator.enums;
+import com.yumu.noveltranslator.exception.BusinessException;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -32,7 +33,7 @@ class TranslationPhaseTest {
 
         @Test
         void valueOf无效名称抛出异常() {
-            assertThrows(IllegalArgumentException.class, () -> TranslationPhase.valueOf("INVALID"));
+            assertThrows(IllegalStateException.class, () -> TranslationPhase.valueOf("INVALID"));
         }
     }
 }

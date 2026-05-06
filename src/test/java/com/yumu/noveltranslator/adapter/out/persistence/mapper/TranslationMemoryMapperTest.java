@@ -1,7 +1,8 @@
-package com.yumu.noveltranslator.mapper;
+package com.yumu.noveltranslator.adapter.out.persistence.mapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationMemoryMapper;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.entity.TranslationMemory;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;

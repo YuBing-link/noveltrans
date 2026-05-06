@@ -1,7 +1,10 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
 
 import com.github.benmanes.caffeine.cache.Cache;
-import com.yumu.noveltranslator.entity.TranslationCache;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationCache;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationCacheMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

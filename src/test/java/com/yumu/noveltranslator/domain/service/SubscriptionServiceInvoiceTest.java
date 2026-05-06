@@ -1,4 +1,7 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.util.JwtUtils;
+import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
+import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -10,10 +13,10 @@ import com.stripe.model.Subscription;
 import com.stripe.model.SubscriptionItem;
 import com.stripe.model.SubscriptionItemCollection;
 import com.stripe.model.Price;
-import com.yumu.noveltranslator.entity.StripeCustomer;
-import com.yumu.noveltranslator.entity.StripeSubscription;
-import com.yumu.noveltranslator.entity.User;
-import com.yumu.noveltranslator.entity.UserPlanHistory;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeCustomer;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeCustomerMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeSubscriptionMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;

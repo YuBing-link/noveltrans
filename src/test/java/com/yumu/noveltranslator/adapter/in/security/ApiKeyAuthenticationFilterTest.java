@@ -1,7 +1,8 @@
-package com.yumu.noveltranslator.security;
+package com.yumu.noveltranslator.adapter.in.security;
+import com.yumu.noveltranslator.adapter.in.security.ApiKeyAuthenticationFilter;
 
-import com.yumu.noveltranslator.entity.ApiKey;
-import com.yumu.noveltranslator.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.ApiKey;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.ApiKeyMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +42,7 @@ class ApiKeyAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new ApiKeyAuthenticationFilter(apiKeyMapper, userMapper);
+        filter = new ApiKeyAuthenticationFilter(null, apiKeyMapper, userMapper);
         SecurityContextHolder.clearContext();
     }
 

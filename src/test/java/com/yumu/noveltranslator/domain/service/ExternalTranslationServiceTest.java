@@ -1,4 +1,5 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.translate.ExternalTranslationService;
 
 import com.alibaba.fastjson2.JSONObject;
 import org.junit.jupiter.api.DisplayName;

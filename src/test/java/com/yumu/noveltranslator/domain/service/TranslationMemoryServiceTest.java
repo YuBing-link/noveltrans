@@ -1,6 +1,8 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.domain.service.EmbeddingService;
+import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
 
-import com.yumu.noveltranslator.entity.TranslationMemory;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationMemoryMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

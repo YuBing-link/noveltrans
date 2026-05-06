@@ -1,4 +1,5 @@
-package com.yumu.noveltranslator.service;
+package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.adapter.out.translate.EngineAliasRegistry;
 
 import com.yumu.noveltranslator.enums.TranslationMode;
 import org.junit.jupiter.api.DisplayName;
