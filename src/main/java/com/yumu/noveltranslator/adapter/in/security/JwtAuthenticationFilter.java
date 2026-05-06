@@ -1,10 +1,10 @@
 package com.yumu.noveltranslator.adapter.in.security;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService;
+import com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService.JwtAuthInfo;
 import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.yumu.noveltranslator.util.SecurityUtil;
@@ -21,25 +21,29 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
+/**
+ * JWT 认证过滤器。
+ *
+ * 优化（ADR-008）：热路径零 MySQL
+ * - Caffeine L1（5 分钟） → Redis L2（30 分钟） → MySQL 兜底
+ * - 黑名单检查也优先 Redis，Redis 不可用时降级 MySQL
+ */
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
     private final UserMapper userMapper;
     private final TokenBlacklistService tokenBlacklistService;
-
-    private final Cache<String, User> userCache = Caffeine.newBuilder()
-        .maximumSize(10_000)
-        .expireAfterWrite(5, TimeUnit.MINUTES)
-        .build();
+    private final JwtAuthCacheService jwtAuthCacheService;
 
     public JwtAuthenticationFilter(JwtUtils jwtUtils, UserMapper userMapper,
-                                    TokenBlacklistService tokenBlacklistService) {
+                                    TokenBlacklistService tokenBlacklistService,
+                                    JwtAuthCacheService jwtAuthCacheService) {
         this.jwtUtils = jwtUtils;
         this.userMapper = userMapper;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.jwtAuthCacheService = jwtAuthCacheService;
     }
 
     @Override
@@ -70,60 +74,107 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // 验证 JWT token
             var decodedJWT = jwtUtils.verifyToken(jwt);
 
-            if (tokenBlacklistService.isBlacklisted(jwt)) {
-                sendUnauthorized(response, "Token has been revoked");
-                return;
-            }
-
             String email = decodedJWT.getClaim("email").asString();
             Long userId = decodedJWT.getClaim("userId").asLong();
 
             if (email == null || userId == null) {
-                log.warn("JWT Token 缺少用户信息");
                 sendUnauthorized(response, "Invalid token: missing user info");
                 return;
             }
 
-            // 检查用户是否被全局吊销令牌（如退款/降级后）
+            // 1. 尝试从缓存获取（L1 Caffeine → L2 Redis）
+            JwtAuthInfo cached = null;
+            try {
+                cached = jwtAuthCacheService.get(userId);
+            } catch (Exception e) {
+                log.warn("JWT 缓存读取失败，降级走 MySQL: {}", e.getMessage());
+            }
+
+            if (cached != null && !cached.isDisabled()) {
+                // 缓存命中，零 MySQL 查询
+                authenticateFromCache(request, response, chain, cached, jwt, email);
+                return;
+            }
+
+            // 2. 缓存未命中 → 查 MySQL 黑名单 + 加载用户
+            // 黑名单检查（MySQL，但频率极低，绝大多数用户不会被列入黑名单）
+            if (tokenBlacklistService.isBlacklisted(jwt)) {
+                sendUnauthorized(response, "Token has been revoked");
+                return;
+            }
             if (tokenBlacklistService.isEmailBlacklisted(email)) {
+                jwtAuthCacheService.put(userId, JwtAuthInfo.disabled());
                 sendUnauthorized(response, "Account access has been revoked");
                 return;
             }
 
-            // 从数据库加载用户，构建 CustomUserDetails
-            User user = userCache.get(email, key -> userMapper.findByEmail(key));
+            // 加载用户
+            User user = userMapper.findByEmail(email);
             if (user == null || !user.getId().equals(userId)) {
-                log.warn("JWT Token 对应的用户不存在: email={}, userId={}", email, userId);
                 sendUnauthorized(response, "Invalid token: user not found");
                 return;
             }
 
-            CustomUserDetails userDetails = new CustomUserDetails(user);
-            UsernamePasswordAuthenticationToken authToken =
-                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authToken);
+            // 写入缓存（含 userId, email, userLevel, tenantId）
+            JwtAuthInfo info = new JwtAuthInfo();
+            info.setUserId(user.getId());
+            info.setEmail(user.getEmail());
+            info.setUserLevel(user.getUserLevel());
+            info.setTenantId(user.getTenantId() != null ? user.getTenantId() : 0L);
+            info.setDisabled(false);
+            jwtAuthCacheService.put(userId, info);
 
-            // Set tenant context
-            Long tenantId = decodedJWT.getClaim("tenantId").asLong();
-            if (tenantId == null) {
-                tenantId = user.getTenantId();
-            }
-            // Always set tenant context (fallback to 0L to match DB DEFAULT 0)
-            TenantContext.setTenantIdOrDefault(tenantId);
+            // 设置认证
+            authenticateWithUser(request, response, chain, user);
 
         } catch (TokenExpiredException e) {
             log.debug("JWT Token 已过期: {}", e.getMessage());
             sendUnauthorized(response, "Token expired");
-            return;
         } catch (JWTVerificationException e) {
             log.debug("JWT Token 验证失败: {}", e.getMessage());
             sendUnauthorized(response, "Invalid token");
-            return;
         }
 
         // 认证成功，继续过滤器链
         chain.doFilter(request, response);
+    }
+
+    /**
+     * 从缓存认证（跳过 MySQL 查询）
+     */
+    private void authenticateFromCache(
+            HttpServletRequest request, HttpServletResponse response, FilterChain chain,
+            JwtAuthInfo info, String jwt, String email) throws IOException, ServletException {
+
+        // Set tenant context
+        TenantContext.setTenantIdOrDefault(info.getTenantId());
+
+        // 构造最小化 CustomUserDetails（从缓存信息构建，无需查 DB）
+        CustomUserDetails userDetails = new CustomUserDetails(info.getUserId(), info.getUserLevel());
+        UsernamePasswordAuthenticationToken authToken =
+            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authToken);
+
+        request.setAttribute("authenticatedUserId", info.getUserId());
+    }
+
+    /**
+     * 从 DB 加载的用户设置认证
+     */
+    private void authenticateWithUser(
+            HttpServletRequest request, HttpServletResponse response, FilterChain chain,
+            User user) throws IOException, ServletException {
+
+        TenantContext.setTenantIdOrDefault(user.getTenantId());
+
+        CustomUserDetails userDetails = new CustomUserDetails(user);
+        UsernamePasswordAuthenticationToken authToken =
+            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authToken);
+
+        request.setAttribute("authenticatedUserId", user.getId());
     }
 
     private boolean isExcludedPath(String requestURI) {

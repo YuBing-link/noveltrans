@@ -1,11 +1,14 @@
 package com.yumu.noveltranslator.util;
 
+import org.springframework.stereotype.Service;
+
 import java.util.Optional;
 import java.util.function.Function;
 
 /**
  * Verifies entity ownership by userId.
  */
+@Service
 public class OwnershipVerifier {
 
     /**

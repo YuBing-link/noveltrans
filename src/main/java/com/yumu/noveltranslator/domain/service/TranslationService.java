@@ -15,7 +15,6 @@ import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslat
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.adapter.out.translate.EngineAliasRegistry;
 import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.TextCleaningUtil;
@@ -89,7 +88,6 @@ public class TranslationService {
     private final TranslationPostProcessingService postProcessingService;
     private final TeamTranslationService teamTranslationService;
     private final QuotaService quotaService;
-    private final UserMapper userMapper;
 
     /**
      * 选中文本翻译
@@ -105,13 +103,13 @@ public class TranslationService {
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
 
-        // 检查字符配额
+        // 检查字符配额（从 SecurityContext 获取 userLevel，避免 MySQL 查询）
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         if (userId != null) {
-            User user = userMapper.selectById(userId);
-            if (user != null) {
+            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
+            if (userLevel != null) {
                 String modeName = req.getMode() != null ? req.getMode() : "fast";
-                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), combined.length(), modeName)) {
+                if (!quotaService.tryConsumeChars(userId, userLevel, combined.length(), modeName)) {
                     return new SelectionTranslateResponse(false, mode.getName(), "字符配额不足，请升级档位或等待下月重置");
                 }
             }
@@ -198,13 +196,13 @@ public class TranslationService {
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
 
-        // 检查字符配额
+        // 检查字符配额（从 SecurityContext 获取 userLevel）
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         if (userId != null) {
-            User user = userMapper.selectById(userId);
-            if (user != null) {
+            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
+            if (userLevel != null) {
                 String modeName = req.getMode() != null ? req.getMode() : "fast";
-                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), content.length(), modeName)) {
+                if (!quotaService.tryConsumeChars(userId, userLevel, content.length(), modeName)) {
                     return new ReaderTranslateResponse(false, mode.getName(), "字符配额不足，请升级档位或等待下月重置");
                 }
             }
@@ -366,14 +364,14 @@ public class TranslationService {
                 .mapToInt(item -> item.getOriginal() != null ? item.getOriginal().length() : 0)
                 .sum();
 
-        // 检查字符配额
+        // 检查字符配额（从 SecurityContext 获取 userLevel）
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         String quotaMode = (req.getFastMode() != null && !req.getFastMode()) ? "expert" : "fast";
 
         if (userId != null) {
-            User user = userMapper.selectById(userId);
-            if (user != null) {
-                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), totalChars, quotaMode)) {
+            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
+            if (userLevel != null) {
+                if (!quotaService.tryConsumeChars(userId, userLevel, totalChars, quotaMode)) {
                     SseEmitterUtil.sendError(emitter, "字符配额不足，请升级档位或等待下月重置");
                     SseEmitterUtil.complete(emitter);
                     return emitter;
@@ -497,12 +495,12 @@ public class TranslationService {
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
         String modeString = req.getMode() != null ? req.getMode() : "fast";
 
-        // 检查字符配额
+        // 检查字符配额（从 SecurityContext 获取 userLevel）
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         if (userId != null) {
-            User user = userMapper.selectById(userId);
-            if (user != null) {
-                if (!quotaService.tryConsumeChars(userId, user.getUserLevel(), text.length(), modeString)) {
+            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
+            if (userLevel != null) {
+                if (!quotaService.tryConsumeChars(userId, userLevel, text.length(), modeString)) {
                     SseEmitterUtil.sendError(emitter, "字符配额不足，请升级档位或等待下月重置");
                     SseEmitterUtil.complete(emitter);
                     return emitter;

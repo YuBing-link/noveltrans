@@ -1,12 +1,12 @@
 package com.yumu.noveltranslator.adapter.in.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import com.yumu.noveltranslator.util.SecurityUtil;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -14,7 +14,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import com.yumu.noveltranslator.util.SecurityUtil;
 
 /**
  * IP-level rate limiting filter for translation endpoints.

@@ -631,7 +631,45 @@ src/main/java/com/yumu/noveltranslator/
 
 ### Files Changed
 
-(To be updated after implementation — expected: 100+ files touched via moves)
+**Commit**: `2295961` — "refactor: restructure to hexagonal architecture (ports and adapters)"
+
+**Summary**: 224 files changed, 8,164 insertions(+), 1,071 deletions(-)
+
+**Package movements**:
+- `controller/` → `adapter/in/rest/` (all REST controllers)
+- `security/` → `adapter/in/security/` (filters, CustomUserDetails, rate limiters, annotations)
+- `mapper/` → `adapter/out/persistence/mapper/` (all MyBatis-Plus mappers)
+- `entity/` → `adapter/out/persistence/entity/` (all JPA/MyBatis entities)
+- `service/TranslationCacheService`, `CacheVersionService`, `ApiKeyCacheService` → `adapter/out/redis/`
+- `service/SubscriptionService` → `adapter/out/stripe/`
+- `service/AuthService` (email-related) → `adapter/out/email/`
+- `service/state/` → `domain/service/` (CollabStateMachine, TranslationStateMachine)
+- `service/CollabEventPublisher`, `SseEmitterUtil` → `util/` / `domain/service/`
+- `event/` → `domain/event/`
+- `util/` → `util/` (unchanged, plus new extractors: OwnershipVerifier, FilterResponseUtil, SecurityUtil helpers)
+
+**DTO reorganization** (`dto/` → 6 subdirectories):
+- `dto/auth/` — LoginRequest, RegisterRequest, TokenResponse, etc.
+- `dto/subscription/` — SubscriptionResponse, CheckoutRequest, etc.
+- `dto/collab/` — CollabProjectResponse, ChapterTaskResponse, AssignChapterRequest, etc.
+- `dto/translation/` — TranslationRequest, DocumentTranslationRequest, etc.
+- `dto/entity/` — ApiKeyResponse, DocumentInfoResponse, CreateApiKeyRequest, etc.
+- `dto/common/` — Result, PageResponse, ErrorResponse, etc.
+
+**New utilities extracted**:
+- `util/OwnershipVerifier.java` — reusable ownership check pattern
+- `util/FilterResponseUtil.java` — JSON error responses for filters
+- `util/SecurityUtil.java` — added `parseBearerToken()`, `getClientIp()`, `maskApiKey()`
+
+**Compilation result**: 217 source files, BUILD SUCCESS (Java 21, Spring Boot 3.2, MyBatis-Plus 3.5.5)
+
+**Import path migration** (all callers updated):
+- `com.yumu.noveltranslator.mapper.*` → `com.yumu.noveltranslator.adapter.out.persistence.mapper.*`
+- `com.yumu.noveltranslator.entity.*` → `com.yumu.noveltranslator.adapter.out.persistence.entity.*`
+- `com.yumu.noveltranslator.security.*` → `com.yumu.noveltranslator.adapter.in.security.*`
+- `com.yumu.noveltranslator.controller.*` → `com.yumu.noveltranslator.adapter.in.rest.*`
+- `com.yumu.noveltranslator.service.state.*` → `com.yumu.noveltranslator.domain.service.*`
+- `com.yumu.noveltranslator.dto.*` → categorized subdirectory imports
 
 ---
 

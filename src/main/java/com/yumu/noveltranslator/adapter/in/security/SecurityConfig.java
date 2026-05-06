@@ -5,6 +5,7 @@ import com.yumu.noveltranslator.config.tenant.TenantCleanupInterceptor;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.ApiKeyMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.out.redis.ApiKeyCacheService;
+import com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService;
 import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 import com.yumu.noveltranslator.util.JwtUtils;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class SecurityConfig {
     private final TokenBlacklistService tokenBlacklistService;
     private final ApiKeyMapper apiKeyMapper;
     private final ApiKeyCacheService apiKeyCacheService;
+    private final JwtAuthCacheService jwtAuthCacheService;
     private final StringRedisTemplate stringRedisTemplate;
 
     @Value("${translation.ip-rate-limit.window-seconds:60}")
@@ -62,7 +64,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // Create filter instances directly (no longer @Component)
         JwtAuthenticationFilter jwtAuthenticationFilter =
-                new JwtAuthenticationFilter(jwtUtils, userMapper, tokenBlacklistService);
+                new JwtAuthenticationFilter(jwtUtils, userMapper, tokenBlacklistService, jwtAuthCacheService);
         ApiKeyAuthenticationFilter apiKeyAuthenticationFilter =
                 new ApiKeyAuthenticationFilter(apiKeyCacheService, apiKeyMapper, userMapper);
         TranslationRateLimitFilter translationRateLimitFilter =
