@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.util;
 
 import com.yumu.noveltranslator.entity.User;
-import com.yumu.noveltranslator.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
