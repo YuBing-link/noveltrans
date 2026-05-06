@@ -29,7 +29,7 @@
 | **Webhook 幂等性** | 5 层纵深防御（签名 → Redis SETNX → DB lastWebhookEventId → DuplicateKeyException → 时间戳排序），**`invoice.payment_succeeded` 作为 fallback 激活路径** |
 | **引擎弹性容错** | LLM + MTranServer 双引擎，健康检查 + 断路器冷却 + 概率路由 |
 | **RAG 向量检索** | Redis Stack HNSW 索引 + KNN 语义搜索，用户隔离，质量自动过滤 |
-| **分级限流** | **IP 级 Redis 滑动窗口限流**（`/v1/translate/**`，60s/100 次）+ 按用户维度的匿名/免费/Pro/API Key 差异化并发限制 |
+| **分级限流** | **IP + API Key 双 Redis 滑动窗口**，Lua 原子脚本合并（4 操作 → 1 调用）+ 按用户维度的匿名/免费/Pro/API Key 差异化并发限制 |
 | **异步批量处理** | **事件驱动章节拆分**：窄事务 + `@Async` 批量插入（50 章/批）+ 定时补偿任务兜底节点宕机 |
 | **SSE 断线重放** | **Redis Stream 消息重放** — 客户端携带 `lastEventId` 重连可追回丢失的协作事件 |
 | **状态机驱动** | **驱动型状态机** — `transitionProject()` 和 `transitionChapter()` 封装 validate + set，防止 setStatus 绕过校验 |
@@ -200,6 +200,7 @@ noveltrans/
 术语库变更（新增/修改/删除术语）
   │
   ├── putCache() 时从 sourceText 提取单词（长度 >= 3）
+  ├── 写入前剥离已有版本号前缀再追加当前版本（防止 `v1:v1:<md5>` 双前缀 bug）
   ├── 对每个单词：SADD glossary:cache_keys:{word} {cacheKey}
   ├── 术语变更时：SMEMBERS glossary:cache_keys:{term}
   ├── 只删除受影响的 L1、L2、L3 缓存键
@@ -253,8 +254,11 @@ noveltrans/
 - **API Key 管理**：`nt_sk_xxxx` 格式前缀 + 32 位随机字符，列表展示掩码脱敏
 - **BCrypt 密码加密**：用户密码哈希存储
 - **邮箱验证**：注册/密码重置双重验证
-- **IP 级限流**：Redis Sorted Set 滑动窗口（每 IP 60 秒内最多 100 请求），位于 JWT 过滤器之前，跳过 API Key 认证的请求，防止恶意用户多账号轮换绕过限制
-- **分级限流**：匿名用户 / 免费用户 / Pro 用户差异化并发限制
+- **IP 级限流**：Redis Sorted Set 滑动窗口（每 IP 60 秒内最多 100 请求），位于安全过滤器链最前方，跳过 API Key 认证的请求。Lua 原子脚本合并 4 个 Redis 操作为 1 次调用。
+- **API Key 级限流**：独立的 Redis Sorted Set 滑动窗口，专用于 API Key 认证请求，同样 Lua 原子化，配额可配置。
+- **API Key 两级缓存**：Caffeine L1 (5 min) + Redis L2 (30 min) + MySQL 兜底，Redis 异常时 fail-closed（拒绝请求）。
+- **分级限流**：匿名用户 / 免费用户 / Pro 用户差异化并发限制。
+- **月度字符配额**：Redis Lua 原子检查 + INCR + MySQL 异步备份。高配额用户（≥1000 万字符/月）直接跳过 Redis。
 </details>
 
 <details>
@@ -276,12 +280,16 @@ noveltrans/
 
 使用 k6（翻译 + 支付）和 Python 多线程 HTTP（Webhook）进行压测。完整报告：[`load-test/STRESS_TEST_REPORT.md`](load-test/STRESS_TEST_REPORT.md)
 
-### 翻译 API
+### 翻译 API（API Key，500 VU）
 
-| 场景 | 吞吐量 | p95 延迟 | 错误率 |
-|------|--------|---------|--------|
-| 真实场景（1s 用户思考时间） | **93.7 req/s** | 303 ms | 0% |
-| 最大吞吐（无 sleep） | **496.8 req/s** | 302 ms | 0% |
+| 轮次 | 场景 | 吞吐量 | 平均延迟 | p95 延迟 | 错误率 |
+|------|------|--------|---------|---------|--------|
+| 22 | 基线（有问题） | 22.4 req/s | 10,082 ms | — | 28.5% |
+| 27 | 优化后（Lua + 缓存修复 + 配额旁路） | **4,235 req/s** | 118 ms | 250 ms | 0% |
+
+**关键优化**：Redis Lua 脚本合并（每请求省 8 次调用）、缓存键双前缀 bug 修复（命中率 0% → ~95%）、高配额 Redis 旁路（省 1 次调用）、Redis 连接池扩容（16 → 256）。
+
+> 从第 22 轮到第 27 轮，吞吐量提升 **25 倍**。完整报告：[`load-test/STRESS_TEST_REPORT.md`](load-test/STRESS_TEST_REPORT.md)
 
 ### Stripe 支付结账
 
@@ -402,4 +410,4 @@ noveltrans/
 
 ---
 
-**最后更新**：2026-05-05
+**最后更新**：2026-05-06 — 第 27 轮压测（吞吐量提升 25 倍）

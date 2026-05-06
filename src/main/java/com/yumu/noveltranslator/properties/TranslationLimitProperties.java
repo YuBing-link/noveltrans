@@ -69,4 +69,7 @@ public class TranslationLimitProperties {
 
     /** Max 用户每分钟 token 上限 */
     private int maxTpmLimit = 50000;
+
+    /** 匿名用户每分钟 token 上限 */
+    private int anonymousTpmLimit = 2000;
 }

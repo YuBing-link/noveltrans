@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>邮箱验证 - NovelTrans</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        /* 基础样式重置 */
+        body, table, td, p, a, li, blockquote {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        table, td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+
+        /* 主体样式 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Microsoft JhengHei', sans-serif;
+            background-color: #667eea;
+            background-color: #764ba2;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+        }
+
+        /* 渐变背景回退方案 */
+        .body-bg {
+            background-color: #667eea;
+        }
+
+        .email-container {
+            background: #ffffff;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 520px;
+        }
+
+        .header {
+            background: #1a1a2e;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .logo-circle {
+            width: 70px;
+            height: 70px;
+            background-color: #667eea;
+            border-radius: 50%;
+            display: inline-block;
+            line-height: 70px;
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 16px;
+        }
+
+        .header h1 {
+            color: #ffffff;
+            margin: 0 0 8px 0;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: 2px;
+        }
+
+        .header p {
+            color: #cccccc;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 40px 35px;
+        }
+
+        .title {
+            text-align: center;
+            color: #1a1a2e;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666666;
+            font-size: 14px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .code-box {
+            background: #f5f7fa;
+            background: linear-gradient(135deg, #f5f7fa 0%, #eef2f7 100%);
+            border-radius: 16px;
+            padding: 35px 30px;
+            text-align: center;
+            margin: 25px 0;
+            border: 2px solid #e0e5ec;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .code-label {
+            color: #888888;
+            font-size: 13px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .code-value {
+            font-family: 'Courier New', Courier, monospace, monospace;
+            font-size: 42px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 12px;
+            padding: 15px 25px;
+            background: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            display: inline-block;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .code-tips {
+            text-align: center;
+            margin-top: 18px;
+        }
+
+        .tip {
+            display: inline-block;
+            margin: 6px 8px;
+            padding: 6px 14px;
+            background-color: #f5f7fa;
+            border-radius: 16px;
+            font-size: 12px;
+            color: #888888;
+        }
+
+        .tip-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            background-color: #667eea;
+            border-radius: 50%;
+            line-height: 16px;
+            text-align: center;
+            color: #ffffff;
+            font-size: 10px;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+
+        .tip span {
+            display: inline-block;
+            vertical-align: middle;
+            font-size: 11px;
+            color: #666666;
+        }
+
+        .steps-box {
+            background: #fafbfc;
+            background: linear-gradient(135deg, #fafbfc 0%, #f5f7fa 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            border: 1px solid #eef2f5;
+        }
+
+        .steps-title {
+            color: #1a1a2e;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #667eea;
+            display: inline-block;
+        }
+
+        .step {
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #555555;
+            line-height: 1.5;
+        }
+
+        .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-wrapper {
+            margin-bottom: 12px;
+        }
+
+        .step-num {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            background-color: #667eea;
+            color: #ffffff;
+            border-radius: 50%;
+            line-height: 22px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            vertical-align: top;
+            margin-right: 12px;
+        }
+
+        .step-text {
+            display: inline-block;
+            width: calc(100% - 34px);
+            vertical-align: top;
+        }
+
+        .warning-box {
+            background: #fff7ed;
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            border: 1px solid #fed7aa;
+            border-radius: 10px;
+            padding: 15px 18px;
+            margin: 25px 0;
+            box-shadow: 0 2px 8px rgba(251, 146, 60, 0.1);
+        }
+
+        .warning-icon {
+            font-size: 20px;
+            display: inline-block;
+            vertical-align: top;
+            margin-right: 12px;
+        }
+
+        .warning-text {
+            display: inline-block;
+            width: calc(100% - 32px);
+            font-size: 13px;
+            color: #9a3412;
+            line-height: 1.5;
+            vertical-align: top;
+        }
+
+        .divider {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 25px 0;
+            font-size: 0;
+            line-height: 0;
+        }
+
+        .footer-text {
+            text-align: center;
+            color: #999999;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .footer-text a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .copyright {
+            background-color: #f8fafc;
+            padding: 20px 30px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        /* 响应式设计 - 移动端 */
+        @media screen and (max-width: 560px) {
+            /* 容器调整 */
+            .email-container {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            /* 头部优化 */
+            .header {
+                padding: 25px 15px !important;
+            }
+
+            .logo-circle {
+                width: 55px !important;
+                height: 55px !important;
+                line-height: 55px !important;
+                font-size: 28px !important;
+                margin-bottom: 12px !important;
+            }
+
+            .header h1 {
+                font-size: 18px !important;
+                letter-spacing: 1px !important;
+            }
+
+            .header p {
+                font-size: 12px !important;
+            }
+
+            /* 内容区优化 */
+            .content {
+                padding: 25px 15px !important;
+            }
+
+            .title {
+                font-size: 18px !important;
+                margin-bottom: 8px !important;
+            }
+
+            .subtitle {
+                font-size: 13px !important;
+                margin-bottom: 20px !important;
+                padding: 0 5px !important;
+            }
+
+            /* 验证码框优化 */
+            .code-box {
+                padding: 20px 10px !important;
+                border-radius: 12px !important;
+                margin: 20px 0 !important;
+            }
+
+            .code-label {
+                font-size: 12px !important;
+                margin-bottom: 10px !important;
+            }
+
+            .code-value {
+                font-size: 28px !important;
+                letter-spacing: 6px !important;
+                padding: 10px 12px !important;
+                border-radius: 8px !important;
+            }
+
+            .code-tips {
+                margin-top: 15px !important;
+                text-align: center !important;
+            }
+
+            .tip {
+                display: inline-block !important;
+                margin: 6px 8px !important;
+                padding: 6px 14px !important;
+                background-color: #f5f7fa !important;
+                border-radius: 16px !important;
+                min-width: 100px !important;
+            }
+
+            .tip-icon {
+                width: 16px !important;
+                height: 16px !important;
+                line-height: 16px !important;
+                font-size: 10px !important;
+                margin-right: 4px !important;
+                vertical-align: middle !important;
+            }
+
+            .tip span {
+                font-size: 11px !important;
+                vertical-align: middle !important;
+            }
+
+            /* 步骤框优化 */
+            .steps-box {
+                padding: 15px 12px !important;
+                margin: 20px 0 !important;
+                border-radius: 10px !important;
+            }
+
+            .steps-title {
+                font-size: 14px !important;
+                margin-bottom: 12px !important;
+                padding-bottom: 8px !important;
+            }
+
+            .step-num {
+                width: 20px !important;
+                height: 20px !important;
+                line-height: 20px !important;
+                font-size: 11px !important;
+            }
+
+            .step-text {
+                font-size: 13px !important;
+                width: calc(100% - 34px) !important;
+                line-height: 1.4 !important;
+            }
+
+            .step-wrapper {
+                margin-bottom: 10px !important;
+            }
+
+            /* 警告框优化 */
+            .warning-box {
+                padding: 12px 10px !important;
+                margin: 20px 0 !important;
+                border-radius: 8px !important;
+            }
+
+            .warning-icon {
+                font-size: 18px !important;
+                margin-right: 8px !important;
+            }
+
+            .warning-text {
+                font-size: 12px !important;
+                width: calc(100% - 26px) !important;
+            }
+
+            /* 分割线和页脚 */
+            .divider {
+                margin: 20px 0 !important;
+            }
+
+            .footer-text {
+                font-size: 12px !important;
+                padding: 0 10px !important;
+            }
+
+            /* 版权信息 */
+            .copyright {
+                padding: 15px 15px !important;
+                font-size: 11px !important;
+            }
+        }
+
+        /* 平板设备适配 */
+        @media screen and (min-width: 561px) and (max-width: 768px) {
+            .email-container {
+                max-width: 90% !important;
+            }
+
+            .content {
+                padding: 35px 25px !important;
+            }
+        }
+
+        /* 超小屏幕优化（如 iPhone SE） */
+        @media screen and (max-width: 380px) {
+            .code-value {
+                font-size: 24px !important;
+                letter-spacing: 4px !important;
+            }
+
+            .header h1 {
+                font-size: 16px !important;
+            }
+
+            .title {
+                font-size: 16px !important;
+            }
+        }
+
+        /* 深色模式支持 */
+        @media (prefers-color-scheme: dark) {
+            .email-container {
+                background: #1e1e2e !important;
+            }
+
+            .title {
+                color: #ffffff !important;
+            }
+
+            .subtitle {
+                color: #a0a0a0 !important;
+            }
+
+            .code-box {
+                background: #2d2d3f !important;
+                border-color: #3d3d5c !important;
+            }
+
+            .code-value {
+                background: #667eea !important;
+            }
+
+            .steps-box {
+                background: #2d2d3f !important;
+                border-color: #3d3d5c !important;
+            }
+
+            .step-text {
+                color: #c0c0c0 !important;
+            }
+
+            .warning-box {
+                background: #3d2a1a !important;
+                border-color: #5c3a2a !important;
+            }
+
+            .warning-text {
+                color: #ffb8a0 !important;
+            }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #667eea; background-color: #764ba2; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+    <!-- 背景表（用于居中） -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="body-bg">
+        <tr>
+            <td align="center" style="padding: 15px;">
+                <!--[if mso]>
+                <table role="presentation" border="0" cellspacing="0" cellpadding="0" width="520">
+                <tr>
+                <td>
+                <![endif]-->
+                <div class="email-container">
+                    <!-- 头部 -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 520px; margin: 0 auto;">
+                        <tr>
+                            <td class="header">
+                                <div class="logo-circle">📖</div>
+                                <h1 style="color: #ffffff; margin: 0 0 8px 0; font-size: 24px; font-weight: 600; letter-spacing: 2px;">NovelTrans</h1>
+                                <p style="color: #cccccc; margin: 0; font-size: 14px;">小说翻译器</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="content">
+                                <h2 class="title">邮箱验证码</h2>
+                                <p class="subtitle">您正在申请验证邮箱地址，请使用以下验证码完成操作</p>
+
+                                <!-- 验证码框 -->
+                                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                    <tr>
+                                        <td class="code-box">
+                                            <div class="code-label">🔐 验证码</div>
+                                            <div class="code-value" th:text="${verificationCode}">123456</div>
+                                            <div class="code-tips">
+                                                <div class="tip">
+                                                    <span class="tip-icon">⏱</span>
+                                                    <span th:text="${validity} + ' 分钟内有效'">5 分钟内有效</span>
+                                                </div>
+                                                <div class="tip">
+                                                    <span class="tip-icon">🔒</span>
+                                                    <span>请勿泄露给他人</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <!-- 警告框 -->
+                                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                    <tr>
+                                        <td class="warning-box">
+                                            <span class="warning-icon">⚠️</span>
+                                            <span class="warning-text">
+                                                此验证码仅用于邮箱验证。如非本人操作，请忽略此邮件并联系官方客服。
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <!-- 使用步骤 -->
+                                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                    <tr>
+                                        <td class="steps-box">
+                                            <div class="steps-title">
+                                                <span>📝</span> 使用步骤
+                                            </div>
+                                            <div class="step-wrapper">
+                                                <span class="step-num">1</span>
+                                                <span class="step-text">复制上方 6 位验证码</span>
+                                            </div>
+                                            <div class="step-wrapper">
+                                                <span class="step-num">2</span>
+                                                <span class="step-text">返回应用验证页面</span>
+                                            </div>
+                                            <div class="step-wrapper">
+                                                <span class="step-num">3</span>
+                                                <span class="step-text">粘贴验证码并提交</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <div class="divider"></div>
+
+                                <p class="footer-text">
+                                    此邮件由系统自动发送，无需回复。<br>
+                                    如有问题，请联系 <a href="mailto:support@noveltranslator.com">在线客服</a>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="copyright">
+                                &copy; 2026 小说翻译器 NovelTrans. All rights reserved.
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <!--[if mso]>
+                </td>
+                </tr>
+                </table>
+                <![endif]-->
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

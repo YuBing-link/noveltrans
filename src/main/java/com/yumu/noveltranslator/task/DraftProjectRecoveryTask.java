@@ -1,11 +1,11 @@
 package com.yumu.noveltranslator.task;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.yumu.noveltranslator.entity.CollabProject;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
-import com.yumu.noveltranslator.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.service.state.CollabStateMachine;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

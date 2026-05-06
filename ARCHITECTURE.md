@@ -466,7 +466,7 @@ Key components:
 - **`CacheVersionService`** — Maintains per-language-pair version numbers in Redis, handles `INCR` + event publishing
 - **`CachePubSubConfig`** — Redis `MessageListenerContainer` subscribed to `translator:cache:invalidation` channel
 - **`TranslationCacheService.delayedDoubleDelete()`** — Spawns a virtual thread for the pre-delete → version bump → sleep → post-delete sequence
-- **Version-prefixed Redis keys** — Cache keys include version prefix, so post-delete only removes old-version entries without affecting newly written data
+- **Version-prefixed Redis keys** — Cache keys include version prefix (`v{N}:<md5>`), so post-delete only removes old-version entries without affecting newly written data. `putCache()` strips any existing prefix before prepending the service version to prevent double-prefix bugs (`v1:v1:<md5>`).
 
 ---
 
@@ -524,6 +524,7 @@ The system applies 6 translation principles for novel content:
 │            ├── TranslationRateLimitFilter         │
 │            │   └── IP sliding window:             │
 │            │       100 req / 60s per IP           │
+│            │       (atomic Lua: 4 ops → 1 call)   │
 │            │       Skips API Key auth             │
 │            │                                     │
 │            ├── Whitelist paths → Pass directly   │
@@ -532,13 +533,18 @@ The system applies 6 translation principles for novel content:
 │            │                                     │
 │            └── Other paths → Auth required        │
 │                │                                 │
+│                ├── ApiKeyAuthenticationFilter   │
+│                │   ├── Caffeine L1 (5min)       │
+│                │   ├── Redis L2 (30min)         │
+│                │   ├── MySQL fallback (rare)    │
+│                │   ├── incrementUsage → Redis   │
+│                │   │   INCR (async flush)       │
+│                │   └── Fail-closed on Redis err  │
+│                │                                 │
 │                ├── JwtAuthenticationFilter       │
 │                │   ├── Valid token → Allow       │
 │                │   └── Invalid token → 401       │
 │                │                                 │
-│                └── ApiKeyAuthenticationFilter    │
-│                    ├── Valid key → Allow          │
-│                    └── Invalid key → 401         │
 │                                                  │
 │  All /v1/translate/** endpoints require auth     │
 │                                                  │
@@ -572,7 +578,20 @@ The system applies 6 translation principles for novel content:
 | Max requests | 100 per window |
 | Scope | `/v1/translate/**` only |
 | Skip | API Key authenticated requests |
-| Failure | Fail-open (allow on Redis error) |
+| Failure | Fail-open (Redis error → allow) |
+| Lua consolidation | `ZREMRANGEBYSCORE` + `ZADD` + `EXPIRE` + `ZCARD` in single atomic script |
+
+#### Per-API-Key (Security Filter Layer)
+
+| Parameter | Value |
+|-----------|-------|
+| Algorithm | Redis Sorted Set sliding window (atomic Lua script) |
+| Key | `translation:key_limit:{apiKeyId}` |
+| Window | 60 seconds |
+| Max requests | Configurable via `TRANSLATION_KEY_RATE_LIMIT_MAX_REQUESTS` |
+| Scope | API Key authenticated requests only |
+| Failure | Fail-open (Redis error → allow) |
+| Lua consolidation | 4 separate Redis ops → 1 atomic Lua call |
 
 #### Per-User (Application Layer)
 
@@ -586,6 +605,19 @@ The system applies 6 translation principles for novel content:
 - Per-user concurrency enforced via `Semaphore`
 - Daily quota counting via Redis sliding window
 - IP extraction: `X-Forwarded-For` → `X-Real-IP` → `getRemoteAddr()`
+
+#### Monthly Character Quota (Application Layer)
+
+| Parameter | Value |
+|-----------|-------|
+| Storage | Redis (primary) + MySQL (async backup) |
+| Key | `quota:chars:{userId}:{yearMonth}` |
+| Algorithm | Lua script: atomic `GET` → check → `INCRBY` → `EXPIRE` |
+| TTL | Days remaining in month + 10 days buffer |
+| High-quota bypass | Monthly quota ≥ 10,000,000 chars → skip Redis entirely |
+| Fallback | Redis unavailable → MySQL `quota_usage` table query |
+| Refund | Translation failure → Lua script refunds chars (`math.max(0, current - amount)`) |
+| MySQL sync | `@Async` fire-and-forget, non-blocking for quota decision |
 
 ### Data Security
 
@@ -714,6 +746,19 @@ user (1) ──── (N) translation_memory
 - After extracting to `TranslationPipeline`, all translation paths call the same component, ensuring consistent behavior
 - Adding post-processing (residual Chinese correction) only requires a single change
 
+### 6. Why Redis Lua Scripts for Rate Limiting and Quota?
+
+- Each translation request previously made ~20 Redis calls across rate limiters, API key validation, cache lookups, and quota checks
+- Consolidating rate limiter operations (ZREMRANGEBYSCORE + ZADD + EXPIRE + ZCARD) into a single atomic Lua script cuts 6 Redis calls per request (×2 limiters)
+- Quota check + INCR also runs as a single Lua script, guaranteeing atomicity without distributed locks
+- High-quota users (≥10M chars/month) bypass Redis entirely, eliminating 1 more call per request
+
+### 7. Why Scale Redis Connection Pool to 256?
+
+- Under 500 VU concurrent load, the default Lettuce pool (max-active=16) became a bottleneck — threads blocked waiting for connections
+- Scaling to `max-active: 256, max-idle: 128, min-idle: 32` ensures connection availability under high concurrency
+- Combined with Undertow `io-threads: 32, worker-threads: 200`, the full pipeline sustains 4,200+ req/s at sub-120ms average latency
+
 ---
 
-**Last updated**: 2026-05-05
+**Last updated**: 2026-05-06 — Round 27 load testing performance optimizations

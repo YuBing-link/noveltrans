@@ -214,7 +214,7 @@ def record_engine_failure(eng_name: str, error: str):
 # =============================================================================
 # 3. 请求限流（滑动窗口：每秒最多 10 个请求）
 # =============================================================================
-RATE_LIMIT_MAX = 10        # 每秒最大请求数
+RATE_LIMIT_MAX = int(os.getenv("TRANSLATION_RATE_LIMIT_MAX", "10"))
 RATE_LIMIT_WINDOW = 1.0    # 窗口大小（秒）
 _request_timestamps: list[float] = []
 _rate_limit_lock = asyncio.Lock()

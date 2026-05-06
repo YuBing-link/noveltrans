@@ -29,7 +29,7 @@ A SaaS translation platform for web novel authors and translators — batch-tran
 | **Webhook idempotency** | 5-layer defense-in-depth (signature → Redis SETNX → DB lastWebhookEventId → DuplicateKeyException → timestamp ordering), with **`invoice.payment_succeeded` as fallback activation path** |
 | **Engine resilience** | LLM + MTranServer dual-engine with health check, circuit breaker cooling, and probabilistic routing |
 | **RAG vector search** | Redis Stack HNSW index with KNN semantic search, user-scoped isolation, automatic quality filtering |
-| **Rate limiting** | **IP-level Redis sliding window** for `/v1/translate/**` + tiered per-user concurrency (anonymous / free / pro / API key) |
+| **Rate limiting** | **IP + API Key dual Redis sliding window** with atomic Lua scripts (4 ops → 1 call) + tiered per-user concurrency (anonymous / free / pro / API key) |
 | **Async batch processing** | **Event-driven chapter split**: narrow DB transaction + `@Async` batch insert (50/batch) + scheduled compensation task for crash recovery |
 | **SSE reliability** | **Redis Stream message replay** — clients reconnect with `lastEventId` to recover missed collaboration events |
 | **State machine** | **Driving state machine** — `transitionProject()` and `transitionChapter()` encapsulate validate + set, preventing status bypass |
@@ -201,6 +201,7 @@ Data Change (update/delete translation memory)
 Glossary Change (add/update/delete term)
   │
   ├── On putCache(): extract words (length >= 3) from sourceText
+  ├── Strip existing version prefix before prepending current version (prevents v1:v1:<md5> double-prefix bug)
   ├── For each word: SADD glossary:cache_keys:{word} {cacheKey}
   ├── On glossary change: SMEMBERS glossary:cache_keys:{term}
   ├── Delete only affected keys across L1, L2, L3
@@ -252,8 +253,11 @@ Glossary Change (add/update/delete term)
 - **API Key management**: `nt_sk_xxxx` prefix + 32 random chars, list display with mask
 - **BCrypt password hashing**: User passwords hashed before storage
 - **Email verification**: Double verification for registration / password reset
-- **IP-level rate limiting**: Redis Sorted Set sliding window (100 req/60s per IP) on all `/v1/translate/**` endpoints, placed before JWT filter in Security filter chain. Skips API Key authenticated requests.
-- **Tiered per-user rate limiting**: Different concurrency limits for anonymous / free / pro users
+- **IP-level rate limiting**: Redis Sorted Set sliding window (100 req/60s per IP) on all `/v1/translate/**` endpoints, placed before JWT filter in Security filter chain. Skips API Key authenticated requests. Consolidated into atomic Lua script (4 ops → 1 call).
+- **Per-API-Key rate limiting**: Separate Redis Sorted Set sliding window for API Key auth, also atomic Lua, configurable limits.
+- **API Key two-level cache**: Caffeine L1 (5 min) + Redis L2 (30 min) + MySQL fallback, fail-closed on Redis errors.
+- **Tiered per-user rate limiting**: Different concurrency limits for anonymous / free / pro users.
+- **Quota management**: Redis Lua atomic check+INCR + MySQL async backup. High-quota users (≥10M chars/month) bypass Redis entirely.
 </details>
 
 <details>
@@ -275,12 +279,16 @@ Glossary Change (add/update/delete term)
 
 Tested with k6 (translation + checkout) and Python multi-threaded HTTP (webhook). Full report: [`load-test/STRESS_TEST_REPORT.md`](load-test/STRESS_TEST_REPORT.md)
 
-### Translation API
+### Translation API (API Key, 500 VU)
 
-| Scenario | Throughput | p95 Latency | Error Rate |
-|---|---|---|---|
-| Real-world (1s user think time) | **93.7 req/s** | 303 ms | 0% |
-| Max throughput (no sleep) | **496.8 req/s** | 302 ms | 0% |
+| Round | Scenario | Throughput | Avg Latency | p95 Latency | Error Rate |
+|---|---|---|---|---|---|
+| 22 | Baseline (broken) | 22.4 req/s | 10,082 ms | — | 28.5% |
+| 27 | Optimized (Lua + cache fix + quota bypass) | **4,235 req/s** | 118 ms | 250 ms | 0% |
+
+**Key optimizations**: Redis Lua script consolidation (8 calls saved/request), cache key double-prefix fix (0% → ~95% hit rate), high-quota Redis bypass (1 call saved), Redis pool scaling (16 → 256 connections).
+
+> 25× throughput improvement from Round 22 → Round 27. Full report: [`load-test/STRESS_TEST_REPORT.md`](load-test/STRESS_TEST_REPORT.md)
 
 ### Stripe Payment Checkout
 
@@ -407,4 +415,4 @@ For larger changes, please open an issue first to discuss the approach.
 
 ---
 
-**Last updated**: 2026-05-05
+**Last updated**: 2026-05-06 — Round 27 load testing (25× throughput improvement)

@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.task;
 
-import com.yumu.noveltranslator.service.TranslationCacheService;
+import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

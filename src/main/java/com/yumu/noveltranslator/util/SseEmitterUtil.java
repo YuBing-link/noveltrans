@@ -176,6 +176,9 @@ public class SseEmitterUtil {
     private static final String XADD_LUA =
             "redis.call('XADD', KEYS[1], '*', 'event', ARGV[1]); return 'OK'";
 
+    private static final DefaultRedisScript<String> XADD_SCRIPT =
+            new DefaultRedisScript<>(XADD_LUA, String.class);
+
     /**
      * XRANGE Lua 脚本：从 Redis Stream 获取 lastEventId 之后的所有事件
      */
@@ -186,6 +189,9 @@ public class SseEmitterUtil {
             "  out[i] = results[i][2][2]; " +
             "end; " +
             "return out";
+
+    private static final DefaultRedisScript<List> XRANGE_SCRIPT =
+            new DefaultRedisScript<>(XRANGE_LUA, List.class);
 
     /**
      * 发布协作事件到 Redis Stream，支持断线重连后补发。
@@ -204,8 +210,7 @@ public class SseEmitterUtil {
                 "{\"eventId\":\"%s\",\"type\":\"%s\",\"payload\":%s,\"timestamp\":%d}",
                 eventId, eventType, payload, timestamp);
 
-        DefaultRedisScript<String> script = new DefaultRedisScript<>(XADD_LUA, String.class);
-        stringRedisTemplate.execute(script, List.of(streamKey), eventJson);
+        stringRedisTemplate.execute(XADD_SCRIPT, List.of(streamKey), eventJson);
 
         log.debug("发布协作事件: projectId={}, type={}, eventId={}", projectId, eventType, eventId);
         return eventId;
@@ -225,9 +230,8 @@ public class SseEmitterUtil {
         }
 
         String streamKey = "collab:events:" + projectId;
-        DefaultRedisScript<List> script = new DefaultRedisScript<>(XRANGE_LUA, List.class);
         @SuppressWarnings("unchecked")
-        List<String> events = (List<String>) stringRedisTemplate.execute(script, List.of(streamKey), lastEventId);
+        List<String> events = (List<String>) stringRedisTemplate.execute(XRANGE_SCRIPT, List.of(streamKey), lastEventId);
 
         if (events == null || events.isEmpty()) {
             log.debug("无遗漏事件需要重放: projectId={}, lastEventId={}", projectId, lastEventId);

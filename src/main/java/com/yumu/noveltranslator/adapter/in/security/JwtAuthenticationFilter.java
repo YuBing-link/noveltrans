@@ -1,0 +1,144 @@
+package com.yumu.noveltranslator.adapter.in.security;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.yumu.noveltranslator.config.tenant.TenantContext;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
+import com.yumu.noveltranslator.util.JwtUtils;
+import com.yumu.noveltranslator.util.SecurityUtil;
+import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.auth0.jwt.exceptions.TokenExpiredException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+
+@Slf4j
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final JwtUtils jwtUtils;
+    private final UserMapper userMapper;
+    private final TokenBlacklistService tokenBlacklistService;
+
+    private final Cache<String, User> userCache = Caffeine.newBuilder()
+        .maximumSize(10_000)
+        .expireAfterWrite(5, TimeUnit.MINUTES)
+        .build();
+
+    public JwtAuthenticationFilter(JwtUtils jwtUtils, UserMapper userMapper,
+                                    TokenBlacklistService tokenBlacklistService) {
+        this.jwtUtils = jwtUtils;
+        this.userMapper = userMapper;
+        this.tokenBlacklistService = tokenBlacklistService;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+
+        // 跳过不需要认证的路径
+        String requestURI = request.getRequestURI();
+        if (isExcludedPath(requestURI)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // 如果已有认证（例如 API Key 过滤器已设置），跳过
+        if (SecurityContextHolder.getContext().getAuthentication() != null) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        // 从请求头中获取 JWT token
+        String jwt = parseJwt(request);
+        if (jwt == null) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        try {
+            // 验证 JWT token
+            var decodedJWT = jwtUtils.verifyToken(jwt);
+
+            if (tokenBlacklistService.isBlacklisted(jwt)) {
+                sendUnauthorized(response, "Token has been revoked");
+                return;
+            }
+
+            String email = decodedJWT.getClaim("email").asString();
+            Long userId = decodedJWT.getClaim("userId").asLong();
+
+            if (email == null || userId == null) {
+                log.warn("JWT Token 缺少用户信息");
+                sendUnauthorized(response, "Invalid token: missing user info");
+                return;
+            }
+
+            // 检查用户是否被全局吊销令牌（如退款/降级后）
+            if (tokenBlacklistService.isEmailBlacklisted(email)) {
+                sendUnauthorized(response, "Account access has been revoked");
+                return;
+            }
+
+            // 从数据库加载用户，构建 CustomUserDetails
+            User user = userCache.get(email, key -> userMapper.findByEmail(key));
+            if (user == null || !user.getId().equals(userId)) {
+                log.warn("JWT Token 对应的用户不存在: email={}, userId={}", email, userId);
+                sendUnauthorized(response, "Invalid token: user not found");
+                return;
+            }
+
+            CustomUserDetails userDetails = new CustomUserDetails(user);
+            UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+
+            // Set tenant context
+            Long tenantId = decodedJWT.getClaim("tenantId").asLong();
+            if (tenantId == null) {
+                tenantId = user.getTenantId();
+            }
+            // Always set tenant context (fallback to 0L to match DB DEFAULT 0)
+            TenantContext.setTenantIdOrDefault(tenantId);
+
+        } catch (TokenExpiredException e) {
+            log.debug("JWT Token 已过期: {}", e.getMessage());
+            sendUnauthorized(response, "Token expired");
+            return;
+        } catch (JWTVerificationException e) {
+            log.debug("JWT Token 验证失败: {}", e.getMessage());
+            sendUnauthorized(response, "Invalid token");
+            return;
+        }
+
+        // 认证成功，继续过滤器链
+        chain.doFilter(request, response);
+    }
+
+    private boolean isExcludedPath(String requestURI) {
+        return SecurityPermitAllPaths.isPermitted(requestURI);
+    }
+
+    private String parseJwt(HttpServletRequest request) {
+        String token = SecurityUtil.parseBearerToken(request);
+        if (token != null && token.startsWith("nt_sk_")) {
+            return null;
+        }
+        return token;
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        FilterResponseUtil.writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "401", message);
+    }
+}

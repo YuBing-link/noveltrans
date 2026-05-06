@@ -1,0 +1,24 @@
+package com.yumu.noveltranslator.adapter.out.persistence.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
+
+@Mapper
+public interface DocumentMapper extends BaseMapper<Document> {
+
+    @Select("SELECT * FROM document WHERE user_id = #{userId} AND deleted = 0 AND (mode IS NULL OR mode != 'team') ORDER BY create_time DESC")
+    List<Document> findByUserId(Long userId);
+
+    @Select("SELECT * FROM document WHERE id = #{id} AND deleted = 0")
+    Document findById(Long id);
+
+    @Select("SELECT * FROM document WHERE user_id = #{userId} AND id = #{id} AND deleted = 0")
+    Document findByIdAndUserId(Long id, Long userId);
+
+    @org.apache.ibatis.annotations.Update("UPDATE document SET deleted = 1 WHERE id = #{id}")
+    int updateDeletedStatus(Long id);
+}

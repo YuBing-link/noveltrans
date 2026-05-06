@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.bootstrap;
 
-import com.yumu.noveltranslator.entity.User;
-import com.yumu.noveltranslator.mapper.UserMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.util.PasswordUtil;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;

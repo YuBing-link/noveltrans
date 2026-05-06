@@ -12,6 +12,13 @@ public final class TenantContext {
         CURRENT_TENANT.set(tenantId);
     }
 
+    /**
+     * Set tenant ID with null safety: if tenantId is null, defaults to 0L.
+     */
+    public static void setTenantIdOrDefault(Long tenantId) {
+        CURRENT_TENANT.set(tenantId != null ? tenantId : 0L);
+    }
+
     public static Long getTenantId() {
         return CURRENT_TENANT.get();
     }
