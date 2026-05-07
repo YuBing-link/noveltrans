@@ -6,7 +6,7 @@ This document describes the system architecture, component responsibilities, dat
 
 - [README.md](README.md) — Project overview and quick start
 - [SETUP.md](SETUP.md) — Deployment guide
-- [CODE_STYLE.md](CODE_STYLE.md) — Coding standards
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Contributing guide and code style (Spotless)
 - [test-coverage-report.md](test-coverage-report.md) — Test coverage report
 - [load-test/STRESS_TEST_REPORT.md](load-test/STRESS_TEST_REPORT.md) — Performance stress test results
 
