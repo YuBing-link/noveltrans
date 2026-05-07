@@ -130,9 +130,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (TokenExpiredException e) {
             log.debug("JWT Token 已过期: {}", e.getMessage());
             sendUnauthorized(response, "Token expired");
+            return;
         } catch (JWTVerificationException e) {
             log.debug("JWT Token 验证失败: {}", e.getMessage());
             sendUnauthorized(response, "Invalid token");
+            return;
         }
 
         // 认证成功，继续过滤器链

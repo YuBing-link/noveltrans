@@ -8,6 +8,7 @@ import com.yumu.noveltranslator.dto.translation.WebpageTranslateRequest;
 import com.yumu.noveltranslator.port.in.TranslatePort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/v1/translate")
 @RequiredArgsConstructor
+@Slf4j
 public class PluginTranslateController {
 
     private final TranslatePort translatePort;

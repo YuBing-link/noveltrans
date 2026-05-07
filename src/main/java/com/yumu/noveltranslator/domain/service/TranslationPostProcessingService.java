@@ -50,10 +50,10 @@ public class TranslationPostProcessingService {
      * @return 修复后的译文
      */
     public String fixUntranslatedChinese(String sourceText, String translatedText, String targetLang, String engine) {
-        // 日语使用 CJK 统一表意文字（汉字），与中文共享 Unicode 范围，
-        // 后处理的中文检测会产生大量误报（現代社会、目標、本当 等均为合法日语），直接跳过
-        if (isJapaneseTarget(targetLang)) {
-            log.debug("[后处理] 目标语言为日语，跳过残留中文检测（避免汉字误报）");
+        // 日语、韩语、中文目标语言使用 CJK 统一表意文字，与中文共享 Unicode 范围，
+        // 后处理的中文检测会产生大量误报，直接跳过
+        if (isJapaneseTarget(targetLang) || isKoreanTarget(targetLang) || isChineseTarget(targetLang)) {
+            log.debug("[后处理] 目标语言为 {}，跳过残留中文检测（CJK 文字共享 Unicode 范围）", targetLang);
             return translatedText;
         }
 
@@ -108,6 +108,18 @@ public class TranslationPostProcessingService {
      */
     private static boolean isJapaneseTarget(String targetLang) {
         return targetLang != null && (targetLang.equalsIgnoreCase("ja") || targetLang.equalsIgnoreCase("japanese"));
+    }
+
+    private static boolean isKoreanTarget(String targetLang) {
+        return targetLang != null && (targetLang.equalsIgnoreCase("ko") || targetLang.equalsIgnoreCase("korean"));
+    }
+
+    private static boolean isChineseTarget(String targetLang) {
+        return targetLang != null && (
+                targetLang.equalsIgnoreCase("zh") ||
+                targetLang.equalsIgnoreCase("zh-CN") ||
+                targetLang.equalsIgnoreCase("zh-TW") ||
+                targetLang.equalsIgnoreCase("chinese"));
     }
 
     /**

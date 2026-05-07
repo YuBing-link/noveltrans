@@ -102,9 +102,8 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
      * 创建订阅支付会话
      * - 无活跃订阅 → 创建新订阅 Checkout Session（走 Stripe 支付流程）
      * - 有活跃订阅 + 升级套餐 → 直接调用 Subscription.update 变更价格，Stripe 自动按比例结算差价
-     *
-     * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
      */
+    @Transactional
     public CheckoutSessionResponse createCheckoutSession(Long userId, CheckoutSessionRequest request) {
         SubscriptionPlan plan = validatePlan(request.getPlan());
         BillingCycle billingCycle = validateBillingCycle(request.getBillingCycle());
@@ -148,13 +147,13 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     }
 
     /**
-     * 升级现有订阅：Stripe HTTP 在事务外，DB 写在事务内。
+     * 升级现有订阅
      */
     private CheckoutSessionResponse upgradeSubscriptionWithNarrowTx(StripeSubscription existingSub,
                                                                      String newPriceId,
                                                                      SubscriptionPlan newPlan,
                                                                      BillingCycle billingCycle) {
-        // Stripe HTTP 调用在事务外
+        // Stripe HTTP 调用
         Subscription updated;
         try {
             Subscription stripeSub = Subscription.retrieve(existingSub.getStripeSubscriptionId());
@@ -182,11 +181,10 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             throw new RuntimeException("升级订阅失败", e);
         }
 
-        // DB 写操作在窄事务内
+        // DB 写操作在事务内
         return doUpgradeSubscription(existingSub, updated, newPriceId, newPlan, billingCycle);
     }
 
-    @Transactional
     private CheckoutSessionResponse doUpgradeSubscription(StripeSubscription existingSub,
                                                            Subscription updated,
                                                            String newPriceId,
@@ -241,8 +239,8 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
     /**
      * 取消订阅（在周期结束时取消）
-     * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
      */
+    @Transactional
     public SubscriptionStatusResponse cancelSubscription(Long userId) {
         StripeSubscription sub = billingPort.findActiveSubscriptionByUserId(userId);
 
@@ -251,7 +249,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         try {
-            // Stripe HTTP 调用在事务外执行
+            // Stripe HTTP 调用
             Subscription stripeSub = Subscription.retrieve(sub.getStripeSubscriptionId());
             SubscriptionUpdateParams updateParams = SubscriptionUpdateParams.builder()
                 .setCancelAtPeriodEnd(true)
@@ -262,11 +260,9 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             throw new RuntimeException("取消订阅失败", e);
         }
 
-        // 仅 DB 写操作在事务内
         return doCancelSubscription(sub);
     }
 
-    @Transactional
     private SubscriptionStatusResponse doCancelSubscription(StripeSubscription sub) {
         sub.setCancelAtPeriodEnd(true);
         sub.setCanceledAt(LocalDateTime.now());
@@ -299,10 +295,10 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
     /**
      * 处理 checkout.session.completed 事件
-     * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
      */
+    @Transactional
     public void handleCheckoutSessionCompleted(Event event) {
-        // 反序列化在事务外
+        // 反序列化
         Session session = deserializeSession(event, "checkout.session.completed");
         if (session == null) return;
 
@@ -336,11 +332,10 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             return;
         }
 
-        // DB 操作在窄事务内
+        // DB 操作在事务内
         doHandleCheckoutSessionCompleted(event, userId, plan, billingCycle, subscriptionId, stripeSub, customer);
     }
 
-    @Transactional
     private void doHandleCheckoutSessionCompleted(Event event, Long userId, SubscriptionPlan plan,
                                                    BillingCycle billingCycle, String subscriptionId,
                                                    Subscription stripeSub, StripeCustomer customer) {
@@ -681,8 +676,8 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
     /**
      * 处理 invoice.payment_succeeded 事件（作为 checkout.session.completed 的fallback）
-     * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
      */
+    @Transactional
     public void handleInvoicePaymentSucceeded(Event event) {
         com.stripe.model.Invoice invoice = deserializeInvoice(event, "invoice.payment_succeeded");
         if (invoice == null) return;
@@ -735,9 +730,8 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     }
 
     /**
-     * 激活已有订阅（非 narrow transaction 路径：无 Stripe HTTP 调用）
+     * 激活已有订阅
      */
-    @Transactional
     private void doActivateSubscriptionFromInvoice(Event event, StripeSubscription subRecord) {
         long eventCreated = event.getCreated();
         int rows = billingPort.updateSubscriptionByWrapper(
@@ -769,7 +763,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     }
 
     /**
-     * 从孤立发票创建订阅记录（Stripe HTTP 在事务外，DB 写在窄事务内）
+     * 从孤立发票创建订阅记录
      */
     private void createSubscriptionFromOrphanedInvoice(Event event,
                                                        com.stripe.model.Invoice invoice,
@@ -783,7 +777,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         Long userId = Long.parseLong(userIdStr);
 
-        // Stripe HTTP 调用在事务外：获取 customer 和 subscription
+        // Stripe HTTP 调用：获取 customer 和 subscription
         StripeCustomer customer;
         Subscription stripeSub;
         try {
@@ -795,11 +789,10 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             return;
         }
 
-        // DB 操作在窄事务内
+        // DB 操作在事务内
         doCreateSubscriptionFromOrphanedInvoice(event, userId, subscriptionId, stripeSub, customer, invoice);
     }
 
-    @Transactional
     private void doCreateSubscriptionFromOrphanedInvoice(Event event, Long userId,
                                                           String subscriptionId,
                                                           Subscription stripeSub,

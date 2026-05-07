@@ -356,21 +356,28 @@ public class TranslationPipeline {
      * @return 翻译结果，失败时返回原文
      */
     public String executeFast(String text, String targetLang, TranslationMode mode, boolean html) {
+        log.info("[PIPELINE-ENTRY] executeFast START: textLen={}, target={}, mode={}, html={}",
+                text.length(), targetLang, mode.getName(), html);
         String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);
+        log.info("[PIPELINE-L1] Cache key: {}", cacheKey.substring(0, Math.min(32, cacheKey.length())));
 
         // L1: 分层缓存查询
         String cached = cacheService.getCacheByMode(cacheKey, mode.getName()).orElse(null);
         if (cached != null) {
-            log.debug("Pipeline 快速模式缓存命中 mode={}", mode.getName());
+            log.info("[PIPELINE-L1] 缓存命中 mode={}", mode.getName());
             return cached;
         }
+        log.info("[PIPELINE-L1] 缓存未命中，继续 L4");
 
         // L4: 直译（跳过 RAG 和一致性，快速模式直连 MTranServer，注入术语表）
         // 有术语表时强制走 Python 服务（MTranServer 不支持术语表）
         try {
             boolean hasGlossary = !glossaryTerms.isEmpty();
+            log.info("[PIPELINE-L4] 调用翻译客户端: hasGlossary={}, textLen={}", hasGlossary, text.length());
             String rawJson = translationClient.translate(text, targetLang, mode.getName(), html, !hasGlossary, glossaryTerms, userId != null ? userId.toString() : null, userLevel);
+            log.info("[PIPELINE-L4] 翻译客户端返回: rawJsonLen={}", rawJson != null ? rawJson.length() : 0);
             String result = ExternalResponseUtil.extractDataField(rawJson);
+            log.info("[PIPELINE-L4] 提取译文: result={}", result != null ? result.substring(0, Math.min(50, result.length())) : "null");
 
             if (result != null && !result.isBlank()) {
                 if (!isValidTranslation(text, result)) {
@@ -381,10 +388,11 @@ public class TranslationPipeline {
                 if (shouldCache(text, result)) {
                     cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), mode.getName());
                 }
+                log.info("[PIPELINE-EXIT] 翻译成功: {}", result.substring(0, Math.min(50, result.length())));
                 return result;
             }
         } catch (Exception e) {
-            log.warn("Pipeline 快速模式翻译失败: {}", e.getMessage());
+            log.warn("Pipeline 快速模式翻译失败: {}", e.getMessage(), e);
         }
 
         // 失败时返回原文
