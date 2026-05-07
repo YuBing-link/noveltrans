@@ -5,7 +5,7 @@ import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.dto.translation.SelectionTranslateResponse;
 import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
@@ -25,6 +25,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -38,7 +39,7 @@ class TranslationServiceTest {
     private UserLevelThrottledTranslationClient translationClient;
 
     @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
 
     @Mock
     private RagTranslationService ragTranslationService;
@@ -63,7 +64,7 @@ class TranslationServiceTest {
     @BeforeEach
     void setUp() {
         translationService = new TranslationService(
-                translationClient, cacheService, ragTranslationService,
+                translationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         // Pipeline 内部调用 fixUntranslatedChinese，mock 返回原文
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
@@ -110,7 +111,7 @@ class TranslationServiceTest {
 
         @Test
         void 缓存命中直接返回() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("缓存结果");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("缓存结果"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("测试文本");
@@ -125,7 +126,7 @@ class TranslationServiceTest {
 
         @Test
         void 缓存未命中调用翻译客户端() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
@@ -146,7 +147,7 @@ class TranslationServiceTest {
 
         @Test
         void 翻译失败返回错误() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
@@ -164,7 +165,7 @@ class TranslationServiceTest {
 
         @Test
         void 默认语言和引擎() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(ragResp);
@@ -205,7 +206,7 @@ class TranslationServiceTest {
 
         @Test
         void 单段落翻译() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译段落\"}");
 
@@ -221,7 +222,7 @@ class TranslationServiceTest {
 
         @Test
         void 多段落并行翻译() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
@@ -239,7 +240,7 @@ class TranslationServiceTest {
 
         @Test
         void 长文本分段翻译() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
@@ -270,7 +271,7 @@ class TranslationServiceTest {
         void 获取缓存统计() {
             @SuppressWarnings("unchecked")
             var expected = (Map<String, Object>) (Map<?, ?>) Map.of("l1Hits", 5L, "misses", 2L);
-            when(cacheService.getCacheStats()).thenReturn(expected);
+            when(cachePort.getCacheStats()).thenReturn(expected);
 
             var stats = translationService.getCacheStats();
             assertEquals(expected, stats);
@@ -304,7 +305,7 @@ class TranslationServiceTest {
         void 用户不存在跳过配额检查() {
             setAuthenticatedUser(999L);
             when(userMapper.selectById(999L)).thenReturn(null);
-            when(cacheService.getCache(anyString())).thenReturn("cached");
+            when(cachePort.getCache(anyString())).thenReturn(Optional.of("cached"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
@@ -336,7 +337,7 @@ class TranslationServiceTest {
 
         @Test
         void 选中文本翻译异常兜底() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenThrow(new RuntimeException("cache error"));
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenThrow(new RuntimeException("cache error"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");

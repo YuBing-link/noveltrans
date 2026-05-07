@@ -11,16 +11,15 @@ import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.enums.TranslationStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +36,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -67,14 +67,13 @@ public class MultiAgentTranslationService {
      */
     private final Map<Long, Integer> retryCounterMap = new ConcurrentHashMap<>();
 
-    private final CollabChapterTaskMapper chapterTaskMapper;
-    private final CollabProjectMapper collabProjectMapper;
-    private final DocumentMapper documentMapper;
-    private final TranslationTaskMapper translationTaskMapper;
+    private final CollaborationRepositoryPort collabPort;
+    private final DocumentRepositoryPort documentPort;
+    private final TranslationRepositoryPort translationPort;
     private final TeamTranslationService teamTranslationService;
-    private final TranslationCacheService cacheService;
+    private final TranslationCachePort cachePort;
     private final EntityConsistencyService entityConsistencyService;
-    private final GlossaryMapper glossaryMapper;
+    private final GlossaryRepositoryPort glossaryPort;
     private final RagTranslationService ragTranslationService;
     private final AiGlossaryService aiGlossaryService;
     private final TranslationPostProcessingService postProcessingService;
@@ -86,11 +85,7 @@ public class MultiAgentTranslationService {
     @PostConstruct
     public void init() {
         try {
-            List<CollabChapterTask> chaptersWithRetries = chapterTaskMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CollabChapterTask>()
-                            .gt(CollabChapterTask::getRetryCount, 0)
-                            .eq(CollabChapterTask::getDeleted, 0)
-            );
+            List<CollabChapterTask> chaptersWithRetries = collabPort.findChaptersWithRetryCountGreaterThan(0);
             for (CollabChapterTask chapter : chaptersWithRetries) {
                 retryCounterMap.put(chapter.getId(), chapter.getRetryCount());
             }
@@ -109,7 +104,7 @@ public class MultiAgentTranslationService {
         // 恢复上次中断的翻译（TRANSLATING 状态的章节回退到 UNASSIGNED）
         recoverStuckChapters(projectId);
 
-        List<CollabChapterTask> chapters = chapterTaskMapper.selectByProjectIdAndStatus(
+        List<CollabChapterTask> chapters = collabPort.findChapterTasksByProjectIdAndStatus(
                 projectId, ChapterTaskStatus.UNASSIGNED.getValue());
 
         if (chapters.isEmpty()) {
@@ -117,7 +112,7 @@ public class MultiAgentTranslationService {
             return;
         }
 
-        CollabProject project = collabProjectMapper.selectById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null) {
             log.error("项目不存在: projectId={}", projectId);
             return;
@@ -127,11 +122,11 @@ public class MultiAgentTranslationService {
 
         // 更新关联文档状态为处理中
         if (project.getDocumentId() != null) {
-            Document doc = documentMapper.selectById(project.getDocumentId());
+            Document doc = documentPort.findById(project.getDocumentId()).orElse(null);
             if (doc != null) {
                 doc.setStatus(TranslationStatus.PROCESSING.getValue());
                 doc.setUpdateTime(LocalDateTime.now());
-                documentMapper.updateById(doc);
+                documentPort.update(doc);
             }
         }
 
@@ -204,7 +199,7 @@ public class MultiAgentTranslationService {
         collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.TRANSLATING);
         chapter.setAssignedTime(LocalDateTime.now());
         chapter.setProgress(50);
-        chapterTaskMapper.updateById(chapter);
+        collabPort.updateChapterTask(chapter);
 
         String sourceLang = project.getSourceLang();
         String targetLang = project.getTargetLang();
@@ -213,7 +208,7 @@ public class MultiAgentTranslationService {
             // 获取 userId（RAG 需要用户上下文）
             Long userId = chapter.getAssigneeId();
             if (userId == null) {
-                CollabProject proj = collabProjectMapper.selectById(chapter.getProjectId());
+                CollabProject proj = collabPort.findProjectById(chapter.getProjectId()).orElse(null);
                 if (proj != null) {
                     userId = proj.getOwnerId();
                 }
@@ -252,7 +247,7 @@ public class MultiAgentTranslationService {
 
             // 构建 Pipeline 并执行完整管线（L1→L2→L3→L4=Team）
             TranslationPipeline pipeline = new TranslationPipeline(
-                    cacheService, ragTranslationService, entityConsistencyService,
+                    cachePort, ragTranslationService, entityConsistencyService,
                     null, postProcessingService, teamTranslationService, userId, chapter.getProjectId().toString(), glossaryTerms);
 
             String translated = pipeline.executeTeam(
@@ -307,7 +302,7 @@ public class MultiAgentTranslationService {
                 sleepWithBackoff(retryCount, e);
             }
             chapter.setRetryCount(retryCount);
-            chapterTaskMapper.updateById(chapter);
+            collabPort.updateChapterTask(chapter);
             return false;
         }
     }
@@ -316,7 +311,7 @@ public class MultiAgentTranslationService {
      * 恢复上次中断的翻译：将 TRANSLATING 状态的章节回退到 UNASSIGNED
      */
     private void recoverStuckChapters(Long projectId) {
-        List<CollabChapterTask> stuckChapters = chapterTaskMapper.selectByProjectIdAndStatus(
+        List<CollabChapterTask> stuckChapters = collabPort.findChapterTasksByProjectIdAndStatus(
                 projectId, ChapterTaskStatus.TRANSLATING.getValue());
 
         if (stuckChapters.isEmpty()) {
@@ -336,7 +331,7 @@ public class MultiAgentTranslationService {
             collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.UNASSIGNED);
             chapter.setReviewComment("翻译中断，自动重试（第 " + (retryCount + 2) + " 次）");
             chapter.setRetryCount(retryCount + 1);
-            chapterTaskMapper.updateById(chapter);
+            collabPort.updateChapterTask(chapter);
             log.info("章节 {} 回退到 UNASSIGNED，准备重试", chapter.getId());
         }
     }
@@ -361,7 +356,7 @@ public class MultiAgentTranslationService {
     @Scheduled(fixedRate = 300000)
     public void cleanupStuckChapters() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
-        List<CollabChapterTask> stuckChapters = chapterTaskMapper.findByStatusAndUpdateTimeBefore(
+        List<CollabChapterTask> stuckChapters = collabPort.findChapterTasksByStatusAndUpdateTimeBefore(
                 ChapterTaskStatus.TRANSLATING.getValue(), cutoff);
 
         if (stuckChapters.isEmpty()) {
@@ -384,7 +379,7 @@ public class MultiAgentTranslationService {
                 chapter.setRetryCount(retryCount + 1);
                 log.info("定时清理: 章节 {} 回退到 UNASSIGNED", chapter.getId());
             }
-            chapterTaskMapper.updateById(chapter);
+            collabPort.updateChapterTask(chapter);
         }
     }
 
@@ -448,10 +443,7 @@ public class MultiAgentTranslationService {
         }
 
         try {
-            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Glossary> query =
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
-            query.eq(Glossary::getUserId, userId);
-            List<Glossary> allTerms = glossaryMapper.selectList(query);
+            List<Glossary> allTerms = glossaryPort.findActiveGlossaryByUserId(userId);
 
             // 过滤只保留在原文中出现的术语
             return allTerms.stream()
@@ -524,14 +516,14 @@ public class MultiAgentTranslationService {
             chapter.setSubmittedTime(LocalDateTime.now());
         }
 
-        chapterTaskMapper.updateById(chapter);
+        collabPort.updateChapterTask(chapter);
     }
 
     /**
      * 更新项目整体进度
      */
     private void updateProjectProgress(Long projectId) {
-        List<CollabChapterTask> tasks = chapterTaskMapper.selectByProjectId(projectId);
+        List<CollabChapterTask> tasks = collabPort.findChapterTasksByProjectId(projectId);
         if (tasks.isEmpty()) return;
 
         long completed = tasks.stream()
@@ -540,7 +532,7 @@ public class MultiAgentTranslationService {
 
         int progress = (int) Math.round((double) completed / tasks.size() * 100);
 
-        CollabProject project = collabProjectMapper.selectById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project != null) {
             project.setProgress(progress);
             if (progress == 100) {
@@ -550,7 +542,7 @@ public class MultiAgentTranslationService {
                     log.debug("项目无法转换为 COMPLETED 状态（当前状态不允许）: projectId={}", projectId);
                 }
             }
-            collabProjectMapper.updateById(project);
+            collabPort.updateProject(project);
         }
     }
 
@@ -559,7 +551,7 @@ public class MultiAgentTranslationService {
      */
     private void assembleCompleteDocument(Long projectId) {
         // 按 chapterNumber 升序获取所有章节
-        List<CollabChapterTask> chapters = chapterTaskMapper.selectByProjectId(projectId);
+        List<CollabChapterTask> chapters = collabPort.findChapterTasksByProjectId(projectId);
         if (chapters.isEmpty()) return;
 
         chapters.sort(Comparator.comparingInt(CollabChapterTask::getChapterNumber));
@@ -578,13 +570,13 @@ public class MultiAgentTranslationService {
         if (fullText.length() == 0) return;
 
         // 通过项目关联的 documentId 直接获取 Document
-        CollabProject project = collabProjectMapper.selectById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null || project.getDocumentId() == null) {
             log.warn("项目未关联 Document，无法保存完整译文: projectId={}", projectId);
             return;
         }
 
-        Document matchedDoc = documentMapper.selectById(project.getDocumentId());
+        Document matchedDoc = documentPort.findById(project.getDocumentId()).orElse(null);
         if (matchedDoc == null) {
             log.warn("关联的 Document 不存在: documentId={}", project.getDocumentId());
             return;
@@ -602,7 +594,7 @@ public class MultiAgentTranslationService {
         }
 
         // 创建/更新 TranslationTask
-        TranslationTask task = translationTaskMapper.findByDocumentId(matchedDoc.getId());
+        TranslationTask task = translationPort.findTaskByDocumentId(matchedDoc.getId()).orElse(null);
         if (task == null) {
             task = new TranslationTask();
             task.setTaskId("task_" + System.currentTimeMillis() + "_" + projectId);
@@ -613,17 +605,17 @@ public class MultiAgentTranslationService {
             task.setType("document");
             task.setMode("team");
             task.setStatus("completed");
-            translationTaskMapper.insert(task);
+            translationPort.saveTask(task);
         } else {
             task.setStatus("completed");
-            translationTaskMapper.updateById(task);
+            translationPort.updateTask(task);
         }
         log.info("团队模式翻译任务已更新: taskId={}, status=completed", task.getId());
 
         // 更新 Document 状态为 completed
         matchedDoc.setStatus("completed");
         matchedDoc.setTaskId(task.getTaskId());
-        documentMapper.updateById(matchedDoc);
+        documentPort.update(matchedDoc);
         log.info("团队模式文档状态已更新: documentId={}, status=completed, taskId={}", matchedDoc.getId(), task.getTaskId());
     }
 }

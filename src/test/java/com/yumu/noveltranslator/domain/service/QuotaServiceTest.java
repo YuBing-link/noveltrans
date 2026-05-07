@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.domain.service.QuotaService;
 
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.QuotaUsageMapper;
+import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -27,7 +28,7 @@ import static org.mockito.Mockito.*;
 class QuotaServiceTest {
 
     @Mock
-    private QuotaUsageMapper quotaUsageMapper;
+    private BillingRepositoryPort billingPort;
 
     @Mock
     private TranslationLimitProperties limitProperties;
@@ -39,7 +40,7 @@ class QuotaServiceTest {
 
     @BeforeEach
     void setUp() {
-        quotaService = new QuotaService(quotaUsageMapper, limitProperties, stringRedisTemplate);
+        quotaService = new QuotaService(billingPort, limitProperties, stringRedisTemplate);
     }
 
     @Nested
@@ -145,13 +146,13 @@ class QuotaServiceTest {
     class GetUsedThisMonthTests {
 
         @Test
-        void 委托mapper查询() {
-            when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(5_000L);
+        void 委托port查询() {
+            when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(5_000L);
 
             long result = quotaService.getUsedThisMonth(1L);
 
             assertEquals(5_000L, result);
-            verify(quotaUsageMapper).getMonthlyUsage(eq(1L), any(LocalDate.class));
+            verify(billingPort).getMonthlyQuotaUsage(eq(1L), any(LocalDate.class));
         }
     }
 
@@ -162,7 +163,7 @@ class QuotaServiceTest {
         @Test
         void 配额大于已用返回差值() {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
-            when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
+            when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
 
             long result = quotaService.getRemainingChars(1L, "free");
 
@@ -172,7 +173,7 @@ class QuotaServiceTest {
         @Test
         void 配额小于等于已用返回0() {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
-            when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(12_000L);
+            when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(12_000L);
 
             long result = quotaService.getRemainingChars(1L, "free");
 
@@ -182,7 +183,7 @@ class QuotaServiceTest {
         @Test
         void 配额等于已用返回0() {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
-            when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(10_000L);
+            when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(10_000L);
 
             long result = quotaService.getRemainingChars(1L, "free");
 
@@ -198,22 +199,24 @@ class QuotaServiceTest {
         void 配额充足成功扣减() {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
             when(limitProperties.getExpertModeMultiplier()).thenReturn(1.0);
-            when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
+            when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
             ValueOperations<String, String> valueOps = mock(ValueOperations.class);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
             when(valueOps.setIfAbsent(anyString(), anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+            when(stringRedisTemplate.execute(any(), anyList(), anyString(), anyString(), anyString()))
+                    .thenReturn(List.of(1L, 5_000L));
 
             boolean result = quotaService.tryConsumeChars(1L, "free", 2_000L, "expert");
 
             assertTrue(result);
-            verify(quotaUsageMapper).incrementUsage(eq(1L), any(LocalDate.class), eq(2_000L));
+            verify(billingPort).incrementQuotaUsage(eq(1L), any(LocalDate.class), eq(2_000L));
         }
 
         @Test
         void 配额不足返回失败() {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
             when(limitProperties.getExpertModeMultiplier()).thenReturn(1.0);
-            when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(9_000L);
+            when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(9_000L);
             ValueOperations<String, String> valueOps = mock(ValueOperations.class);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
             when(valueOps.setIfAbsent(anyString(), anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
@@ -221,23 +224,25 @@ class QuotaServiceTest {
             boolean result = quotaService.tryConsumeChars(1L, "free", 2_000L, "expert");
 
             assertFalse(result);
-            verify(quotaUsageMapper, never()).incrementUsage(anyLong(), any(), anyLong());
+            verify(billingPort, never()).incrementQuotaUsage(anyLong(), any(), anyLong());
         }
 
         @Test
         void 消耗计算使用模式系数() {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
             when(limitProperties.getTeamModeMultiplier()).thenReturn(2.0);
-            when(quotaUsageMapper.getMonthlyUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
+            when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
             ValueOperations<String, String> valueOps = mock(ValueOperations.class);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
             when(valueOps.setIfAbsent(anyString(), anyString(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+            when(stringRedisTemplate.execute(any(), anyList(), anyString(), anyString(), anyString()))
+                    .thenReturn(List.of(1L, 7_000L));
 
             // team模式: 2000 * 2.0 = 4000, 剩余 7000 >= 4000 成功
             boolean result = quotaService.tryConsumeChars(1L, "free", 2_000L, "team");
 
             assertTrue(result);
-            verify(quotaUsageMapper).incrementUsage(eq(1L), any(LocalDate.class), eq(4_000L));
+            verify(billingPort).incrementQuotaUsage(eq(1L), any(LocalDate.class), eq(4_000L));
         }
     }
 }

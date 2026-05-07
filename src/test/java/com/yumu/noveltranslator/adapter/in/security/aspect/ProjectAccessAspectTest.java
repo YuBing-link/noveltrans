@@ -104,7 +104,7 @@ class ProjectAccessAspectTest {
             when(joinPoint.getArgs()).thenReturn(new Object[]{"someString"});
             when(requireAccess.roles()).thenReturn(new ProjectMemberRole[]{ProjectMemberRole.TRANSLATOR});
 
-            BusinessException ex = assertThrows(IllegalStateException.class,
+            Exception ex = assertThrows(IllegalStateException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("无法从请求中提取 projectId"));
         }
@@ -122,7 +122,7 @@ class ProjectAccessAspectTest {
             when(requireAccess.roles()).thenReturn(new ProjectMemberRole[]{ProjectMemberRole.TRANSLATOR});
             when(projectMemberMapper.selectByProjectAndUser(456L, 1L)).thenReturn(null);
 
-            BusinessException ex = assertThrows(IllegalStateException.class,
+            Exception ex = assertThrows(SecurityException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("无权访问该项目"));
         }
@@ -152,7 +152,7 @@ class ProjectAccessAspectTest {
             member.setRole("TRANSLATOR");
             when(projectMemberMapper.selectByProjectAndUser(100L, 1L)).thenReturn(member);
 
-            BusinessException ex = assertThrows(IllegalStateException.class,
+            Exception ex = assertThrows(SecurityException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("角色权限不足"));
         }
@@ -174,7 +174,7 @@ class ProjectAccessAspectTest {
             when(projectMemberMapper.selectByProjectAndUser(200L, 1L)).thenReturn(member);
 
             // 空roles数组，anyMatch返回false，应该抛出角色权限不足
-            BusinessException ex = assertThrows(IllegalStateException.class,
+            Exception ex = assertThrows(SecurityException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("角色权限不足"));
         }
@@ -233,7 +233,7 @@ class ProjectAccessAspectTest {
             member.setRole("TRANSLATOR");
             when(projectMemberMapper.selectByProjectAndUser(600L, 1L)).thenReturn(member);
 
-            BusinessException ex = assertThrows(IllegalStateException.class,
+            Exception ex = assertThrows(SecurityException.class,
                 () -> aspect.checkAccess(joinPoint, requireAccess));
             assertTrue(ex.getMessage().contains("角色权限不足"));
         }

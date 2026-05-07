@@ -9,12 +9,9 @@ import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Tenant;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TenantMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.adapter.out.email.DeviceTokenService;
-import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
-import com.yumu.noveltranslator.util.EmailVerificationCodeUtil;
+import com.yumu.noveltranslator.port.out.EmailPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.yumu.noveltranslator.util.PasswordUtil;
 import lombok.RequiredArgsConstructor;
@@ -36,16 +33,14 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class AuthService implements UserDetailsService, com.yumu.noveltranslator.port.in.AuthPort {
 
-    private final UserMapper userMapper;
-    private final TenantMapper tenantMapper;
+    private final UserRepositoryPort userRepositoryPort;
     private final JwtUtils jwtUtils;
-    private final EmailVerificationCodeUtil emailVerificationCodeUtil;
-    private final DeviceTokenService deviceTokenService;
-    private final TokenBlacklistService tokenBlacklistService;
+    private final EmailPort emailPort;
+    private final VerificationCodeService verificationCodeService;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userMapper.findByEmail(email);
+        User user = userRepositoryPort.findByEmail(email).orElse(null);
         if (user == null) {
             throw new UsernameNotFoundException("用户不存在：" + email);
         }
@@ -63,7 +58,7 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
         }
 
         try {
-            User user = userMapper.findByEmail(req.getEmail().trim());
+            User user = userRepositoryPort.findByEmail(req.getEmail().trim()).orElse(null);
 
             if (user != null) {
                 if (PasswordUtil.verifyPassword(req.getPassword(), user.getPassword())) {
@@ -101,25 +96,14 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
                               ErrorCodeEnum.USER_EMAIL_INVALID.getMessage());
         }
 
-        User existingUser = userMapper.findByEmail(email.trim());
+        User existingUser = userRepositoryPort.findByEmail(email.trim()).orElse(null);
         if (existingUser != null) {
             return Result.error(ErrorCodeEnum.USER_EMAIL_EXISTS.getCode(),
                               ErrorCodeEnum.USER_EMAIL_EXISTS.getMessage());
         }
 
-        boolean sent = emailVerificationCodeUtil.sendVerificationCode(email.trim());
-        if (!sent) {
-            Long lastSend = emailVerificationCodeUtil.getLastSendTime(email.trim());
-            if (lastSend != null) {
-                long elapsed = System.currentTimeMillis() - lastSend;
-                if (elapsed < 60000) {
-                    int remaining = (int) ((60000 - elapsed) / 1000) + 1;
-                    return Result.error(ErrorCodeEnum.RATE_LIMIT, "请等待 " + remaining + " 秒后再发送验证码");
-                }
-            }
-            return Result.error(ErrorCodeEnum.EMAIL_SEND_FAILED.getCode(),
-                              ErrorCodeEnum.EMAIL_SEND_FAILED.getMessage());
-        }
+        String code = verificationCodeService.generateAndStore(email.trim());
+        emailPort.sendVerificationCode(email.trim(), code);
         return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());
     }
 
@@ -132,25 +116,14 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
                               ErrorCodeEnum.USER_EMAIL_INVALID.getMessage());
         }
 
-        User existingUser = userMapper.findByEmail(email.trim());
+        User existingUser = userRepositoryPort.findByEmail(email.trim()).orElse(null);
         if (existingUser == null) {
             return Result.error(ErrorCodeEnum.USER_NOT_FOUND.getCode(),
                               ErrorCodeEnum.USER_NOT_FOUND.getMessage());
         }
 
-        boolean sent = emailVerificationCodeUtil.sendVerificationCode(email.trim());
-        if (!sent) {
-            Long lastSend = emailVerificationCodeUtil.getLastSendTime(email.trim());
-            if (lastSend != null) {
-                long elapsed = System.currentTimeMillis() - lastSend;
-                if (elapsed < 60000) {
-                    int remaining = (int) ((60000 - elapsed) / 1000) + 1;
-                    return Result.error(ErrorCodeEnum.RATE_LIMIT, "请等待 " + remaining + " 秒后再发送验证码");
-                }
-            }
-            return Result.error(ErrorCodeEnum.EMAIL_SEND_FAILED.getCode(),
-                              ErrorCodeEnum.EMAIL_SEND_FAILED.getMessage());
-        }
+        String code = verificationCodeService.generateAndStore(email.trim());
+        emailPort.sendVerificationCode(email.trim(), code);
         return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());
     }
 
@@ -173,12 +146,12 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
                               ErrorCodeEnum.USER_PASSWORD_TOO_SHORT.getMessage());
         }
 
-        if (!emailVerificationCodeUtil.verifyCode(email.trim(), code)) {
+        if (!verificationCodeService.verifyCode(email.trim(), code)) {
             return Result.error(ErrorCodeEnum.USER_VERIFICATION_CODE_ERROR.getCode(),
                               ErrorCodeEnum.USER_VERIFICATION_CODE_ERROR.getMessage());
         }
 
-        User existingUser = userMapper.findByEmail(email.trim());
+        User existingUser = userRepositoryPort.findByEmail(email.trim()).orElse(null);
         if (existingUser != null) {
             return Result.error(ErrorCodeEnum.USER_EMAIL_EXISTS.getCode(),
                               ErrorCodeEnum.USER_EMAIL_EXISTS.getMessage());
@@ -197,12 +170,13 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
             tenant.setName(req.getUsername() != null ? req.getUsername() + " 的租户" : "Tenant-" + System.currentTimeMillis());
             tenant.setStatus("ACTIVE");
             tenant.setMaxUsers(1);
-            tenantMapper.insert(tenant);
+            userRepositoryPort.saveTenant(tenant);
 
             newUser.setTenantId(tenant.getId());
 
-            int result = userMapper.insert(newUser);
-            if (result > 0) {
+            userRepositoryPort.save(newUser);
+
+            if (newUser.getId() != null) {
                 User registeredUser = new User();
                 registeredUser.setId(newUser.getId());
                 registeredUser.setEmail(newUser.getEmail());
@@ -238,7 +212,7 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
 
             // Fallback: old tokens without tenantId
             if (tenantId == null) {
-                User user = userMapper.findByEmail(email);
+                User user = userRepositoryPort.findByEmail(email).orElse(null);
                 if (user != null) {
                     tenantId = user.getTenantId();
                 }
@@ -266,7 +240,7 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
         }
 
         try {
-            User user = userMapper.selectById(userId);
+            User user = userRepositoryPort.findById(userId).orElse(null);
             if (user == null) {
                 return Result.error(ErrorCodeEnum.USER_NOT_FOUND.getCode(), "用户不存在");
             }
@@ -276,7 +250,7 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
             }
 
             user.setPassword(PasswordUtil.hashPassword(request.getNewPassword()));
-            userMapper.updateById(user);
+            userRepositoryPort.update(user);
 
             return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());
         } catch (Exception e) {
@@ -303,19 +277,19 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
                     ErrorCodeEnum.USER_PASSWORD_TOO_SHORT.getMessage());
         }
 
-        if (!emailVerificationCodeUtil.verifyCode(request.getEmail().trim(), request.getCode())) {
+        if (!verificationCodeService.verifyCode(request.getEmail().trim(), request.getCode())) {
             return Result.error(ErrorCodeEnum.USER_VERIFICATION_CODE_ERROR.getCode(),
                     ErrorCodeEnum.USER_VERIFICATION_CODE_ERROR.getMessage());
         }
 
         try {
-            User user = userMapper.findByEmail(request.getEmail().trim());
+            User user = userRepositoryPort.findByEmail(request.getEmail().trim()).orElse(null);
             if (user == null) {
                 return Result.error(ErrorCodeEnum.USER_NOT_FOUND.getCode(), "用户不存在");
             }
 
             user.setPassword(PasswordUtil.hashPassword(request.getNewPassword()));
-            userMapper.updateById(user);
+            userRepositoryPort.update(user);
 
             return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());
         } catch (Exception e) {
@@ -331,7 +305,7 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
         if (refreshToken != null) {
             try {
                 // 清理 device token
-                deviceTokenService.removeToken(refreshToken);
+                userRepositoryPort.removeDeviceToken(refreshToken);
             } catch (Exception e) {
                 // 忽略 token 解析失败
             }
@@ -342,7 +316,7 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
             try {
                 String email = jwtUtils.getEmailFromToken(jwt);
                 LocalDateTime expiresAt = jwtUtils.getExpiresAtFromToken(jwt);
-                tokenBlacklistService.blacklistToken(jwt, email, "logout", expiresAt);
+                userRepositoryPort.blacklistToken(jwt, email, "logout", expiresAt);
             } catch (Exception e) {
                 // 忽略 token 解析失败
             }

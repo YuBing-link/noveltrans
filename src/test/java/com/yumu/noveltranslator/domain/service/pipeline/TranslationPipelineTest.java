@@ -5,7 +5,7 @@ import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.enums.TranslationMode;
@@ -14,6 +14,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -21,7 +23,7 @@ import static org.mockito.Mockito.*;
 @DisplayName("TranslationPipeline 测试")
 class TranslationPipelineTest {
 
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cacheService;
     private RagTranslationService ragTranslationService;
     private EntityConsistencyService entityConsistencyService;
     private UserLevelThrottledTranslationClient translationClient;
@@ -30,7 +32,7 @@ class TranslationPipelineTest {
 
     @BeforeEach
     void setUp() {
-        cacheService = mock(TranslationCacheService.class);
+        cacheService = mock(TranslationCachePort.class);
         ragTranslationService = mock(RagTranslationService.class);
         entityConsistencyService = mock(EntityConsistencyService.class);
         translationClient = mock(UserLevelThrottledTranslationClient.class);
@@ -111,17 +113,17 @@ class TranslationPipelineTest {
 
         @Test
         void L1缓存命中() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("缓存结果");
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("缓存结果"));
 
             String result = pipeline.execute("Hello", "zh", TranslationMode.FAST);
 
             assertEquals("缓存结果", result);
-            verify(cacheService, never()).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+            verify(cacheService, never()).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
         }
 
         @Test
         void L2RAG直接命中() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(true);
             ragResp.setTranslation("RAG翻译结果");
@@ -137,7 +139,7 @@ class TranslationPipelineTest {
 
         @Test
         void L3实体一致性应用() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
             when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
@@ -156,7 +158,7 @@ class TranslationPipelineTest {
 
         @Test
         void L3一致性未应用走L4() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
             when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
@@ -164,7 +166,7 @@ class TranslationPipelineTest {
             ConsistencyTranslationResult consistencyResult = new ConsistencyTranslationResult();
             consistencyResult.setConsistencyApplied(false);
             when(entityConsistencyService.translateWithConsistency(anyString(), anyString(), anyString(), anyLong(), anyString())).thenReturn(consistencyResult);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"data\":\"L4翻译结果\"}");
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"L4翻译结果\"}");
             when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString())).thenReturn("L4翻译结果");
 
             String result = pipeline.execute("Hello World this is a long text", "zh", TranslationMode.FAST);
@@ -174,12 +176,12 @@ class TranslationPipelineTest {
 
         @Test
         void L4直译成功() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
             when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"data\":\"你好\"}");
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"你好\"}");
             when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString())).thenReturn("你好");
 
             String result = pipeline.execute("Hello", "zh", TranslationMode.FAST);
@@ -190,12 +192,12 @@ class TranslationPipelineTest {
 
         @Test
         void L4返回null() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
             when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"code\":500,\"error\":\"服务不可用\"}");
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"code\":500,\"error\":\"服务不可用\"}");
 
             String result = pipeline.execute("Hello", "zh", TranslationMode.FAST);
 
@@ -204,12 +206,12 @@ class TranslationPipelineTest {
 
         @Test
         void L4返回广告关键词被拒绝() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
             when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"data\":\"Google AI 人工智能助手\"}");
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"Google AI 人工智能助手\"}");
 
             String result = pipeline.execute("Hello", "zh", TranslationMode.FAST);
 
@@ -223,18 +225,18 @@ class TranslationPipelineTest {
 
         @Test
         void 缓存命中() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("快速缓存");
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("快速缓存"));
 
             String result = pipeline.executeFast("Hello", "zh", TranslationMode.FAST);
 
             assertEquals("快速缓存", result);
-            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
         void 直译成功() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"data\":\"快速翻译\"}");
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"快速翻译\"}");
             when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString())).thenReturn("快速翻译");
 
             String result = pipeline.executeFast("Hello", "zh", TranslationMode.FAST);
@@ -244,8 +246,8 @@ class TranslationPipelineTest {
 
         @Test
         void 翻译失败返回原文() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"code\":500}");
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"code\":500}");
 
             String result = pipeline.executeFast("Hello", "zh", TranslationMode.FAST);
 
@@ -254,8 +256,8 @@ class TranslationPipelineTest {
 
         @Test
         void 翻译异常返回原文() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenThrow(new RuntimeException("连接失败"));
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenThrow(new RuntimeException("连接失败"));
 
             String result = pipeline.executeFast("Hello", "zh", TranslationMode.FAST);
 
@@ -264,8 +266,8 @@ class TranslationPipelineTest {
 
         @Test
         void 广告关键词返回原文() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"data\":\"Google AI 助手\"}");
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"Google AI 助手\"}");
 
             String result = pipeline.executeFast("Hello", "zh", TranslationMode.FAST);
 
@@ -274,14 +276,14 @@ class TranslationPipelineTest {
 
         @Test
         void html模式() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"data\":\"<p>翻译</p>\"}");
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"<p>翻译</p>\"}");
             when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString())).thenReturn("<p>翻译</p>");
 
             String result = pipeline.executeFast("<p>Hello</p>", "zh", TranslationMode.FAST, true);
 
             assertEquals("<p>翻译</p>", result);
-            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true), anyList());
+            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), anyBoolean(), anyList(), any(), any());
         }
     }
 
@@ -294,11 +296,11 @@ class TranslationPipelineTest {
             TranslationPipeline nullUserPipeline = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService, translationClient, postProcessingService, null, null);
 
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
             when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList())).thenReturn("{\"data\":\"L4结果\"}");
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"L4结果\"}");
             when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString())).thenReturn("L4结果");
 
             String result = nullUserPipeline.execute("Hello", "zh", TranslationMode.FAST);

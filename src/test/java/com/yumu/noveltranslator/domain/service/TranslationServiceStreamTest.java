@@ -4,7 +4,7 @@ import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslat
 import com.yumu.noveltranslator.domain.service.QuotaService;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.dto.translation.WebpageTranslateRequest;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
@@ -38,6 +38,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -51,7 +52,7 @@ class TranslationServiceStreamTest {
     @Mock
     private UserLevelThrottledTranslationClient translationClient;
     @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
     @Mock
     private RagTranslationService ragTranslationService;
     @Mock
@@ -70,7 +71,7 @@ class TranslationServiceStreamTest {
     @BeforeEach
     void setUp() {
         service = new TranslationService(
-                translationClient, cacheService, ragTranslationService,
+                translationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
@@ -133,7 +134,7 @@ class TranslationServiceStreamTest {
         @Test
         void 无认证用户正常翻译() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
@@ -194,7 +195,7 @@ class TranslationServiceStreamTest {
             user.setUserLevel("free");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
@@ -219,7 +220,7 @@ class TranslationServiceStreamTest {
 
             // No auth user, no quota check
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn(null); // simulate failure
 
@@ -236,7 +237,7 @@ class TranslationServiceStreamTest {
             req.setEngine("google");
 
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"Expert translation\"}");
 
@@ -266,7 +267,7 @@ class TranslationServiceStreamTest {
             user.setUserLevel("pro");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             // fastMode = true -> mode = "fast"
             WebpageTranslateRequest req = new WebpageTranslateRequest();
@@ -287,7 +288,7 @@ class TranslationServiceStreamTest {
             user.setUserLevel("pro");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
@@ -321,7 +322,7 @@ class TranslationServiceStreamTest {
             user.setUserLevel("free");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
@@ -346,7 +347,7 @@ class TranslationServiceStreamTest {
             user.setUserLevel("free");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
@@ -366,7 +367,7 @@ class TranslationServiceStreamTest {
 
         @Test
         void 翻译返回空结果() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
@@ -385,7 +386,7 @@ class TranslationServiceStreamTest {
 
         @Test
         void 翻译客户端抛异常() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
@@ -411,7 +412,7 @@ class TranslationServiceStreamTest {
 
         @Test
         void 缓存全部命中不调用翻译客户端() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached translation");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached translation"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>test</p>");
@@ -426,7 +427,7 @@ class TranslationServiceStreamTest {
 
         @Test
         void 翻译失败时使用原文兜底() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenThrow(new RuntimeException("engine failed"));
 
@@ -443,7 +444,7 @@ class TranslationServiceStreamTest {
 
         @Test
         void 阅读器模式html为true() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 

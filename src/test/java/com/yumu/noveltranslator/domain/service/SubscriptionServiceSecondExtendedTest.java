@@ -20,10 +20,8 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeCustomer;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeCustomerMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeSubscriptionMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserPlanHistoryMapper;
+import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.StripeProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +39,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -58,19 +57,18 @@ class SubscriptionServiceSecondExtendedTest {
     @Mock
     private StripeProperties stripeProperties;
     @Mock
-    private StripeCustomerMapper stripeCustomerMapper;
+    private BillingRepositoryPort billingPort;
     @Mock
-    private StripeSubscriptionMapper stripeSubscriptionMapper;
-    @Mock
-    private UserMapper userMapper;
-    @Mock
-    private UserPlanHistoryMapper userPlanHistoryMapper;
+    private UserRepositoryPort userRepositoryPort;
     @Mock
     private StringRedisTemplate stringRedisTemplate;
     @Mock
     private TokenBlacklistService tokenBlacklistService;
     @Mock
     private com.yumu.noveltranslator.util.JwtUtils jwtUtils;
+
+    @Mock
+    private com.yumu.noveltranslator.port.out.PaymentPort paymentPort;
 
     private SubscriptionService service;
 
@@ -81,9 +79,8 @@ class SubscriptionServiceSecondExtendedTest {
         lenient().when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
 
         service = new SubscriptionService(
-                stripeProperties, stripeCustomerMapper, stripeSubscriptionMapper,
-                userMapper, userPlanHistoryMapper, stringRedisTemplate,
-                tokenBlacklistService, jwtUtils);
+                stripeProperties, billingPort, userRepositoryPort, stringRedisTemplate,
+                tokenBlacklistService, jwtUtils, paymentPort);
     }
 
     // ============ verifyCheckoutSession ============
@@ -137,7 +134,7 @@ class SubscriptionServiceSecondExtendedTest {
                 StripeSubscription localSub = new StripeSubscription();
                 localSub.setId(1L);
                 localSub.setStatus("active");
-                when(stripeSubscriptionMapper.selectOne(any())).thenReturn(localSub);
+                when(billingPort.findSubscriptionByStripeId("sub_123")).thenReturn(localSub);
 
                 PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
@@ -160,7 +157,7 @@ class SubscriptionServiceSecondExtendedTest {
                 sessionStatic.when(() -> Session.retrieve("cs_test"))
                         .thenReturn(mockSession);
 
-                when(stripeSubscriptionMapper.selectOne(any())).thenReturn(null);
+                when(billingPort.findSubscriptionByStripeId("sub_123")).thenReturn(null);
 
                 PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
@@ -241,7 +238,7 @@ class SubscriptionServiceSecondExtendedTest {
             sub.setStatus("active");
             sub.setCurrentPeriodEnd(LocalDateTime.of(2026, 7, 1, 0, 0));
             sub.setCancelAtPeriodEnd(false);
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(sub);
+            when(billingPort.findActiveSubscriptionByUserId(1L)).thenReturn(sub);
 
             try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
                 Subscription mockStripeSub = mock(Subscription.class);
@@ -253,7 +250,7 @@ class SubscriptionServiceSecondExtendedTest {
 
                 assertNotNull(resp);
                 assertTrue(resp.getCancelAtPeriodEnd());
-                verify(stripeSubscriptionMapper).updateById(argThat(s ->
+                verify(billingPort).updateSubscription(argThat(s ->
                         Boolean.TRUE.equals(s.getCancelAtPeriodEnd())));
             }
         }
@@ -267,7 +264,7 @@ class SubscriptionServiceSecondExtendedTest {
             sub.setPlan("MAX");
             sub.setStatus("trialing");
             sub.setCurrentPeriodEnd(LocalDateTime.of(2026, 8, 1, 0, 0));
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(sub);
+            when(billingPort.findActiveSubscriptionByUserId(1L)).thenReturn(sub);
 
             try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
                 Subscription mockStripeSub = mock(Subscription.class);
@@ -289,7 +286,7 @@ class SubscriptionServiceSecondExtendedTest {
             sub.setUserId(1L);
             sub.setStripeSubscriptionId("sub_err");
             sub.setStatus("active");
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(sub);
+            when(billingPort.findActiveSubscriptionByUserId(1L)).thenReturn(sub);
 
             try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
                 subStatic.when(() -> Subscription.retrieve("sub_err"))
@@ -311,7 +308,7 @@ class SubscriptionServiceSecondExtendedTest {
             StripeCustomer existing = new StripeCustomer();
             existing.setUserId(1L);
             existing.setStripeCustomerId("cus_test");
-            when(stripeCustomerMapper.selectOne(any())).thenReturn(existing);
+            when(billingPort.findCustomerByUserIdAndNotDeleted(1L)).thenReturn(existing);
 
             StripeSubscription existingSub = new StripeSubscription();
             existingSub.setId(5L);
@@ -324,7 +321,7 @@ class SubscriptionServiceSecondExtendedTest {
             existingSub.setCurrentPeriodStart(LocalDateTime.of(2026, 1, 1, 0, 0));
             existingSub.setCurrentPeriodEnd(LocalDateTime.of(2026, 2, 1, 0, 0));
             existingSub.setCancelAtPeriodEnd(false);
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class)))
+            when(billingPort.findActiveSubscriptionByUserId(1L))
                     .thenReturn(existingSub);
 
             StripeProperties.PlanPrices maxPrices = new StripeProperties.PlanPrices();
@@ -337,9 +334,9 @@ class SubscriptionServiceSecondExtendedTest {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("PRO");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(userMapper.updateById(any(User.class))).thenReturn(1);
-            when(userPlanHistoryMapper.insert(any(UserPlanHistory.class))).thenReturn(1);
+            when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
+            doNothing().when(userRepositoryPort).update(any(User.class));
+            doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
             try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
                 Subscription mockStripeSub = mock(Subscription.class);
@@ -367,8 +364,8 @@ class SubscriptionServiceSecondExtendedTest {
                 CheckoutSessionResponse resp = service.createCheckoutSession(1L, req);
 
                 assertNull(resp.getCheckoutUrl());
-                verify(stripeSubscriptionMapper, never()).insert(any());
-                verify(stripeSubscriptionMapper).updateById(any());
+                verify(billingPort, never()).saveSubscription(any());
+                verify(billingPort).updateSubscription(any());
             }
         }
     }

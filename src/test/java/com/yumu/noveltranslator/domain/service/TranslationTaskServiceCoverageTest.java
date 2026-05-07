@@ -15,10 +15,10 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +40,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -63,17 +64,15 @@ import static org.mockito.Mockito.*;
 class TranslationTaskServiceCoverageTest {
 
     @Mock
-    private TranslationTaskMapper translationTaskMapper;
+    private TranslationRepositoryPort translationPort;
     @Mock
-    private TranslationHistoryMapper translationHistoryMapper;
+    private DocumentRepositoryPort documentPort;
     @Mock
-    private DocumentMapper documentMapper;
+    private GlossaryRepositoryPort glossaryPort;
     @Mock
-    private GlossaryMapper glossaryMapper;
+    private UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
     @Mock
-    private UserLevelThrottledTranslationClient translationClient;
-    @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
     @Mock
     private RagTranslationService ragTranslationService;
     @Mock
@@ -88,8 +87,8 @@ class TranslationTaskServiceCoverageTest {
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskService(
-                translationTaskMapper, translationHistoryMapper, documentMapper, glossaryMapper,
-                stateMachine, translationClient, cacheService, ragTranslationService,
+                translationPort, documentPort, glossaryPort,
+                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
     }
@@ -127,13 +126,13 @@ class TranslationTaskServiceCoverageTest {
                 task.setDocumentId(1L);
                 task.setSourceLang("en");
                 task.setTargetLang("zh");
-                when(translationTaskMapper.findByTaskId("task-docx")).thenReturn(task);
+                when(translationPort.findTaskByTaskId("task-docx")).thenReturn(Optional.of(task));
 
                 Document doc = new Document();
                 doc.setId(1L);
                 doc.setPath(tempFile.toString());
                 doc.setFileType("docx");
-                when(documentMapper.findById(1L)).thenReturn(doc);
+                when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
                 // getTranslationResult 内部 catch 了 Exception，不应抛出
                 TranslationResultResponse result = taskService.getTranslationResult("task-docx");
@@ -154,13 +153,13 @@ class TranslationTaskServiceCoverageTest {
                 task.setDocumentId(1L);
                 task.setSourceLang("en");
                 task.setTargetLang("zh");
-                when(translationTaskMapper.findByTaskId("task-pdf")).thenReturn(task);
+                when(translationPort.findTaskByTaskId("task-pdf")).thenReturn(Optional.of(task));
 
                 Document doc = new Document();
                 doc.setId(1L);
                 doc.setPath(tempFile.toString());
                 doc.setFileType("pdf");
-                when(documentMapper.findById(1L)).thenReturn(doc);
+                when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
                 TranslationResultResponse result = taskService.getTranslationResult("task-pdf");
                 assertNotNull(result);
@@ -180,13 +179,13 @@ class TranslationTaskServiceCoverageTest {
                 task.setDocumentId(1L);
                 task.setSourceLang("en");
                 task.setTargetLang("zh");
-                when(translationTaskMapper.findByTaskId("task-epub")).thenReturn(task);
+                when(translationPort.findTaskByTaskId("task-epub")).thenReturn(Optional.of(task));
 
                 Document doc = new Document();
                 doc.setId(1L);
                 doc.setPath(tempFile.toString());
                 doc.setFileType("epub");
-                when(documentMapper.findById(1L)).thenReturn(doc);
+                when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
                 TranslationResultResponse result = taskService.getTranslationResult("task-epub");
                 assertNotNull(result);
@@ -211,12 +210,12 @@ class TranslationTaskServiceCoverageTest {
             task.setDocumentId(1L);
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-proc-doc")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-proc-doc")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(1L);
             doc.setPath("/some/path.txt");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-proc-doc");
             assertNotNull(result);
@@ -236,12 +235,12 @@ class TranslationTaskServiceCoverageTest {
             task.setSourceLang("en");
             task.setTargetLang("zh");
             task.setErrorMessage("翻译出错");
-            when(translationTaskMapper.findByTaskId("task-failed-doc")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-failed-doc")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(1L);
             doc.setPath("/some/path.txt");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-failed-doc");
             assertNotNull(result);
@@ -257,7 +256,7 @@ class TranslationTaskServiceCoverageTest {
             task.setType("text");
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-pend-text")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-pend-text")).thenReturn(Optional.of(task));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-pend-text");
             assertNotNull(result);
@@ -279,7 +278,7 @@ class TranslationTaskServiceCoverageTest {
             task.setUserId(1L);
             task.setType("text");
             task.setStatus("completed");
-            when(translationTaskMapper.findByTaskId("task-text-dl")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-text-dl")).thenReturn(Optional.of(task));
 
             String result = taskService.getDownloadPath("task-text-dl", 1L);
             assertNull(result);
@@ -293,12 +292,12 @@ class TranslationTaskServiceCoverageTest {
             task.setType("document");
             task.setStatus("completed");
             task.setDocumentId(1L);
-            when(translationTaskMapper.findByTaskId("task-mock-dl")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-mock-dl")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(1L);
             doc.setPath("/definitely/does/not/exist/file.txt");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             try (var mockedFiles = mockStatic(Files.class)) {
                 Path fakePath = Paths.get("/definitely/does/not/exist/file.txt");
@@ -317,7 +316,7 @@ class TranslationTaskServiceCoverageTest {
             task.setType("document");
             task.setStatus("completed");
             task.setDocumentId(null);
-            when(translationTaskMapper.findByTaskId("task-nodocid-dl")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-nodocid-dl")).thenReturn(Optional.of(task));
 
             String result = taskService.getDownloadPath("task-nodocid-dl", 1L);
             assertNull(result);
@@ -333,7 +332,7 @@ class TranslationTaskServiceCoverageTest {
         @Test
         void type为text仅返回文本翻译() {
             setAuthenticatedUser(1L);
-            when(translationTaskMapper.findByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
                     .thenReturn(new ArrayList<>());
 
             TranslationHistory textH = new TranslationHistory();
@@ -346,7 +345,7 @@ class TranslationTaskServiceCoverageTest {
             docH.setType("document");
             docH.setCreateTime(LocalDateTime.now().minusMinutes(1));
 
-            when(translationHistoryMapper.findByUserId(1L, 0, 10))
+            when(translationPort.findHistoryByUserId(1L, 0, 10))
                     .thenReturn(List.of(textH, docH));
 
             List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "text");
@@ -357,7 +356,7 @@ class TranslationTaskServiceCoverageTest {
         @Test
         void type为document仅返回文档翻译() {
             setAuthenticatedUser(1L);
-            when(translationTaskMapper.findByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
                     .thenReturn(new ArrayList<>());
 
             TranslationHistory textH = new TranslationHistory();
@@ -370,7 +369,7 @@ class TranslationTaskServiceCoverageTest {
             docH.setType("document");
             docH.setCreateTime(LocalDateTime.now().minusMinutes(1));
 
-            when(translationHistoryMapper.findByUserId(1L, 0, 10))
+            when(translationPort.findHistoryByUserId(1L, 0, 10))
                     .thenReturn(List.of(textH, docH));
 
             List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "document");
@@ -381,7 +380,7 @@ class TranslationTaskServiceCoverageTest {
         @Test
         void type为all不过滤() {
             setAuthenticatedUser(1L);
-            when(translationTaskMapper.findByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
                     .thenReturn(new ArrayList<>());
 
             TranslationHistory h1 = new TranslationHistory();
@@ -394,7 +393,7 @@ class TranslationTaskServiceCoverageTest {
             h2.setType("document");
             h2.setCreateTime(LocalDateTime.now().minusMinutes(1));
 
-            when(translationHistoryMapper.findByUserId(1L, 0, 10))
+            when(translationPort.findHistoryByUserId(1L, 0, 10))
                     .thenReturn(List.of(h1, h2));
 
             List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "all");
@@ -404,9 +403,9 @@ class TranslationTaskServiceCoverageTest {
         @Test
         void 空结果返回空列表() {
             setAuthenticatedUser(1L);
-            when(translationTaskMapper.findByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
                     .thenReturn(new ArrayList<>());
-            when(translationHistoryMapper.findByUserId(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findHistoryByUserId(anyLong(), anyInt(), anyInt()))
                     .thenReturn(new ArrayList<>());
 
             List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "text");
@@ -423,13 +422,13 @@ class TranslationTaskServiceCoverageTest {
 
         @Test
         void 空列表不执行任何更新() {
-            when(translationTaskMapper.findByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
+            when(translationPort.findTasksByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
                     .thenReturn(new ArrayList<>());
 
             taskService.cleanupStuckTasks();
 
-            verify(translationTaskMapper, never()).updateById(any());
-            verify(documentMapper, never()).selectById(anyLong());
+            verify(translationPort, never()).updateTask(any());
+            verify(documentPort, never()).findById(anyLong());
         }
 
         @Test
@@ -438,15 +437,15 @@ class TranslationTaskServiceCoverageTest {
             stuckTask.setTaskId("task-nodoc-stuck");
             stuckTask.setDocumentId(null);
             stuckTask.setCreateTime(LocalDateTime.now().minusMinutes(31));
-            when(translationTaskMapper.findByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
+            when(translationPort.findTasksByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
                     .thenReturn(List.of(stuckTask));
 
             taskService.cleanupStuckTasks();
 
             assertEquals("failed", stuckTask.getStatus());
             assertTrue(stuckTask.getErrorMessage().contains("任务超时"));
-            verify(translationTaskMapper).updateById(stuckTask);
-            verify(documentMapper, never()).selectById(anyLong());
+            verify(translationPort).updateTask(stuckTask);
+            verify(documentPort, never()).findById(anyLong());
         }
 
         @Test
@@ -455,15 +454,15 @@ class TranslationTaskServiceCoverageTest {
             stuckTask.setTaskId("task-docnull-stuck");
             stuckTask.setDocumentId(999L);
             stuckTask.setCreateTime(LocalDateTime.now().minusMinutes(31));
-            when(translationTaskMapper.findByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
+            when(translationPort.findTasksByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
                     .thenReturn(List.of(stuckTask));
-            when(documentMapper.selectById(999L)).thenReturn(null);
+            when(documentPort.findById(999L)).thenReturn(Optional.empty());
 
             taskService.cleanupStuckTasks();
 
             assertEquals("failed", stuckTask.getStatus());
-            verify(translationTaskMapper).updateById(stuckTask);
-            verify(documentMapper, never()).updateById(any());
+            verify(translationPort).updateTask(stuckTask);
+            verify(documentPort, never()).update(any());
         }
 
         @Test
@@ -472,19 +471,19 @@ class TranslationTaskServiceCoverageTest {
             stuckTask.setTaskId("task-doc-completed");
             stuckTask.setDocumentId(5L);
             stuckTask.setCreateTime(LocalDateTime.now().minusMinutes(31));
-            when(translationTaskMapper.findByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
+            when(translationPort.findTasksByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
                     .thenReturn(List.of(stuckTask));
 
             Document doc = new Document();
             doc.setId(5L);
             doc.setStatus("completed");
-            when(documentMapper.selectById(5L)).thenReturn(doc);
+            when(documentPort.findById(5L)).thenReturn(Optional.of(doc));
 
             taskService.cleanupStuckTasks();
 
             assertEquals("failed", stuckTask.getStatus());
-            verify(translationTaskMapper).updateById(stuckTask);
-            verify(documentMapper, never()).updateById(doc);
+            verify(translationPort).updateTask(stuckTask);
+            verify(documentPort, never()).update(doc);
         }
 
         @Test
@@ -493,19 +492,19 @@ class TranslationTaskServiceCoverageTest {
             stuckTask.setTaskId("task-doc-proc");
             stuckTask.setDocumentId(7L);
             stuckTask.setCreateTime(LocalDateTime.now().minusMinutes(31));
-            when(translationTaskMapper.findByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
+            when(translationPort.findTasksByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
                     .thenReturn(List.of(stuckTask));
 
             Document doc = new Document();
             doc.setId(7L);
             doc.setStatus("processing");
-            when(documentMapper.selectById(7L)).thenReturn(doc);
+            when(documentPort.findById(7L)).thenReturn(Optional.of(doc));
 
             taskService.cleanupStuckTasks();
 
             assertEquals("failed", stuckTask.getStatus());
             assertEquals("failed", doc.getStatus());
-            verify(documentMapper).updateById(doc);
+            verify(documentPort).update(doc);
         }
 
         @Test
@@ -520,14 +519,14 @@ class TranslationTaskServiceCoverageTest {
             task2.setDocumentId(null);
             task2.setCreateTime(LocalDateTime.now().minusMinutes(45));
 
-            when(translationTaskMapper.findByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
+            when(translationPort.findTasksByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
                     .thenReturn(List.of(task1, task2));
 
             taskService.cleanupStuckTasks();
 
             assertEquals("failed", task1.getStatus());
             assertEquals("failed", task2.getStatus());
-            verify(translationTaskMapper, times(2)).updateById(any());
+            verify(translationPort, times(2)).updateTask(any());
         }
     }
 
@@ -543,7 +542,7 @@ class TranslationTaskServiceCoverageTest {
             task.setTaskId("task-failed-cancel");
             task.setUserId(1L);
             task.setStatus("failed");
-            when(translationTaskMapper.findByTaskId("task-failed-cancel")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-failed-cancel")).thenReturn(Optional.of(task));
 
             boolean result = taskService.cancelTask("task-failed-cancel", 1L);
             assertFalse(result);
@@ -556,14 +555,14 @@ class TranslationTaskServiceCoverageTest {
             task.setUserId(1L);
             task.setStatus("pending");
             task.setDocumentId(null);
-            when(translationTaskMapper.findByTaskId("task-pending-nodoc")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-pending-nodoc")).thenReturn(Optional.of(task));
 
             boolean result = taskService.cancelTask("task-pending-nodoc", 1L);
 
             assertTrue(result);
             assertEquals("failed", task.getStatus());
             assertEquals("用户取消任务", task.getErrorMessage());
-            verify(documentMapper, never()).selectById(anyLong());
+            verify(documentPort, never()).findById(anyLong());
         }
     }
 
@@ -577,7 +576,7 @@ class TranslationTaskServiceCoverageTest {
         void current任务为null正常更新() {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-no-current");
-            when(translationTaskMapper.findByTaskId("task-no-current")).thenReturn(null);
+            when(translationPort.findTaskByTaskId("task-no-current")).thenReturn(Optional.empty());
 
             // 注意：updateTaskProgress 是 protected，测试类在同包下可直接调用
             taskService.updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
@@ -585,7 +584,7 @@ class TranslationTaskServiceCoverageTest {
             assertEquals("completed", task.getStatus());
             assertEquals(100, task.getProgress());
             assertNotNull(task.getCompletedTime());
-            verify(translationTaskMapper).updateById(task);
+            verify(translationPort).updateTask(task);
         }
 
         @Test
@@ -597,12 +596,12 @@ class TranslationTaskServiceCoverageTest {
             current.setTaskId("task-other-failed");
             current.setStatus("failed");
             current.setErrorMessage("网络错误"); // 不是"用户取消任务"
-            when(translationTaskMapper.findByTaskId("task-other-failed")).thenReturn(current);
+            when(translationPort.findTaskByTaskId("task-other-failed")).thenReturn(Optional.of(current));
 
             taskService.updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
 
             assertEquals("completed", task.getStatus());
-            verify(translationTaskMapper).updateById(task);
+            verify(translationPort).updateTask(task);
         }
 
         @Test
@@ -613,12 +612,12 @@ class TranslationTaskServiceCoverageTest {
             TranslationTask current = new TranslationTask();
             current.setTaskId("task-complete-time");
             current.setStatus("processing");
-            when(translationTaskMapper.findByTaskId("task-complete-time")).thenReturn(current);
+            when(translationPort.findTaskByTaskId("task-complete-time")).thenReturn(Optional.of(current));
 
             taskService.updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
 
             assertNotNull(task.getCompletedTime());
-            verify(translationTaskMapper).updateById(task);
+            verify(translationPort).updateTask(task);
         }
 
         @Test
@@ -629,12 +628,12 @@ class TranslationTaskServiceCoverageTest {
             TranslationTask current = new TranslationTask();
             current.setTaskId("task-no-complete-time");
             current.setStatus("processing");
-            when(translationTaskMapper.findByTaskId("task-no-complete-time")).thenReturn(current);
+            when(translationPort.findTaskByTaskId("task-no-complete-time")).thenReturn(Optional.of(current));
 
             taskService.updateTaskProgress(task, TranslationStatus.PROCESSING, 50, null);
 
             assertNull(task.getCompletedTime());
-            verify(translationTaskMapper).updateById(task);
+            verify(translationPort).updateTask(task);
         }
     }
 
@@ -647,8 +646,8 @@ class TranslationTaskServiceCoverageTest {
         @Test
         void task和doc均为null() {
             taskService.startDocumentTranslation(null, null);
-            verify(documentMapper, never()).updateById(any());
-            verify(translationTaskMapper, never()).updateById(any());
+            verify(documentPort, never()).update(any());
+            verify(translationPort, never()).updateTask(any());
         }
 
         @Test
@@ -661,7 +660,7 @@ class TranslationTaskServiceCoverageTest {
             taskService.startDocumentTranslation(task, doc);
 
             // 只有 pending/failed 才能启动，processing 应被跳过
-            verify(documentMapper, never()).updateById(any());
+            verify(documentPort, never()).update(any());
         }
 
         @Test
@@ -673,7 +672,7 @@ class TranslationTaskServiceCoverageTest {
 
             taskService.startDocumentTranslation(task, doc);
 
-            verify(documentMapper, never()).updateById(any());
+            verify(documentPort, never()).update(any());
         }
     }
 
@@ -693,7 +692,7 @@ class TranslationTaskServiceCoverageTest {
             history.setTargetLang("zh");
             history.setDocumentId(null);
             history.setCreateTime(LocalDateTime.now());
-            when(translationTaskMapper.findByTaskId("task-doc-name")).thenReturn(null);
+            when(translationPort.findTaskByTaskId("task-doc-name")).thenReturn(Optional.empty());
 
             TranslationHistoryResponse result = taskService.toHistoryResponse(history);
 
@@ -715,12 +714,12 @@ class TranslationTaskServiceCoverageTest {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-via-doc");
             task.setDocumentId(10L);
-            when(translationTaskMapper.findByTaskId("task-via-doc")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-via-doc")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(10L);
             doc.setName("via-task-doc.txt");
-            when(documentMapper.findById(10L)).thenReturn(doc);
+            when(documentPort.findById(10L)).thenReturn(Optional.of(doc));
 
             TranslationHistoryResponse result = taskService.toHistoryResponse(history);
 
@@ -742,7 +741,7 @@ class TranslationTaskServiceCoverageTest {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-nodocid-fallback");
             task.setDocumentId(null);
-            when(translationTaskMapper.findByTaskId("task-nodocid-fallback")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-nodocid-fallback")).thenReturn(Optional.of(task));
 
             TranslationHistoryResponse result = taskService.toHistoryResponse(history);
 
@@ -760,7 +759,7 @@ class TranslationTaskServiceCoverageTest {
             history.setTargetLang("zh");
             history.setDocumentId(null);
             history.setCreateTime(LocalDateTime.now());
-            when(translationTaskMapper.findByTaskId("task-null-fallback")).thenReturn(null);
+            when(translationPort.findTaskByTaskId("task-null-fallback")).thenReturn(Optional.empty());
 
             TranslationHistoryResponse result = taskService.toHistoryResponse(history);
 
@@ -781,7 +780,7 @@ class TranslationTaskServiceCoverageTest {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-status-check");
             task.setStatus("completed");
-            when(translationTaskMapper.findByTaskId("task-status-check")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-status-check")).thenReturn(Optional.of(task));
 
             TranslationHistoryResponse result = taskService.toHistoryResponse(history);
 
@@ -801,7 +800,7 @@ class TranslationTaskServiceCoverageTest {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-lookup");
             task.setStatus("processing");
-            when(translationTaskMapper.findByTaskId("task-lookup")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-lookup")).thenReturn(Optional.of(task));
 
             TranslationTask result = taskService.getTaskByTaskId("task-lookup");
             assertNotNull(result);
@@ -810,7 +809,7 @@ class TranslationTaskServiceCoverageTest {
 
         @Test
         void getTaskByTaskId不存在返回null() {
-            when(translationTaskMapper.findByTaskId("missing")).thenReturn(null);
+            when(translationPort.findTaskByTaskId("missing")).thenReturn(Optional.empty());
             assertNull(taskService.getTaskByTaskId("missing"));
         }
 
@@ -818,7 +817,7 @@ class TranslationTaskServiceCoverageTest {
         void getTaskByDocumentId返回任务() {
             TranslationTask task = new TranslationTask();
             task.setDocumentId(42L);
-            when(translationTaskMapper.findByDocumentId(42L)).thenReturn(task);
+            when(translationPort.findTaskByDocumentId(42L)).thenReturn(Optional.of(task));
 
             TranslationTask result = taskService.getTaskByDocumentId(42L);
             assertNotNull(result);
@@ -827,7 +826,7 @@ class TranslationTaskServiceCoverageTest {
 
         @Test
         void getTaskByDocumentId不存在返回null() {
-            when(translationTaskMapper.findByDocumentId(999L)).thenReturn(null);
+            when(translationPort.findTaskByDocumentId(999L)).thenReturn(Optional.empty());
             assertNull(taskService.getTaskByDocumentId(999L));
         }
     }
@@ -891,13 +890,13 @@ class TranslationTaskServiceCoverageTest {
 
         @Test
         void 返回零() {
-            when(translationHistoryMapper.countByUserId(1L)).thenReturn(0);
+            when(translationPort.countHistoryByUserId(1L)).thenReturn(0);
             assertEquals(0, taskService.countTranslationHistory(1L));
         }
 
         @Test
         void 返回正数() {
-            when(translationHistoryMapper.countByUserId(1L)).thenReturn(100);
+            when(translationPort.countHistoryByUserId(1L)).thenReturn(100);
             assertEquals(100, taskService.countTranslationHistory(1L));
         }
     }

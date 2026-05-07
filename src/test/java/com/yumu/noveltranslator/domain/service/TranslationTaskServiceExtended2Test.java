@@ -14,10 +14,10 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
@@ -43,6 +43,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -67,17 +68,15 @@ import static org.mockito.Mockito.*;
 class TranslationTaskServiceExtended2Test {
 
     @Mock
-    private TranslationTaskMapper translationTaskMapper;
+    private TranslationRepositoryPort translationPort;
     @Mock
-    private TranslationHistoryMapper translationHistoryMapper;
+    private DocumentRepositoryPort documentPort;
     @Mock
-    private DocumentMapper documentMapper;
+    private GlossaryRepositoryPort glossaryPort;
     @Mock
-    private GlossaryMapper glossaryMapper;
+    private UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
     @Mock
-    private UserLevelThrottledTranslationClient translationClient;
-    @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
     @Mock
     private RagTranslationService ragTranslationService;
     @Mock
@@ -95,8 +94,8 @@ class TranslationTaskServiceExtended2Test {
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskService(
-                translationTaskMapper, translationHistoryMapper, documentMapper, glossaryMapper,
-                stateMachine, translationClient, cacheService, ragTranslationService,
+                translationPort, documentPort, glossaryPort,
+                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
     }
@@ -106,8 +105,8 @@ class TranslationTaskServiceExtended2Test {
         SecurityContextHolder.clearContext();
         // Reset mocks to prevent cross-test interference in async tests
         org.mockito.Mockito.reset(
-                translationTaskMapper, translationHistoryMapper, documentMapper, glossaryMapper,
-                translationClient, cacheService, ragTranslationService,
+                translationPort, documentPort, glossaryPort,
+                userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService, stateMachine);
     }
 
@@ -129,7 +128,7 @@ class TranslationTaskServiceExtended2Test {
 
         @Test
         void 文档不存在发送错误并完成() throws Exception {
-            when(documentMapper.findById(999L)).thenReturn(null);
+            when(documentPort.findById(999L)).thenReturn(Optional.empty());
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(999L, "zh", "fast");
             assertNotNull(emitter);
@@ -137,7 +136,7 @@ class TranslationTaskServiceExtended2Test {
             // 虚拟线程异步执行，等待一小段时间
             Thread.sleep(500);
             // 验证错误路径：文档不存在时不会调用后续方法
-            verify(documentMapper).findById(999L);
+            verify(documentPort).findById(999L);
         }
 
         @Test
@@ -152,13 +151,13 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(1L, "zh", "fast");
             assertNotNull(emitter);
 
             Thread.sleep(500);
-            verify(translationTaskMapper).insert(any(TranslationTask.class));
+            verify(translationPort).saveTask(any(TranslationTask.class));
         }
 
         @Test
@@ -173,10 +172,10 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             // Mock translation client responses
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}")
                     .thenReturn("{\"code\":200,\"data\":\"世界\"}");
 
@@ -184,7 +183,7 @@ class TranslationTaskServiceExtended2Test {
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-stream");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(1L, "zh", "fast");
             assertNotNull(emitter);
@@ -192,9 +191,9 @@ class TranslationTaskServiceExtended2Test {
             // Wait for async thread to complete
             Thread.sleep(1500);
 
-            verify(documentMapper, atLeastOnce()).findById(1L);
-            verify(translationTaskMapper).insert(any(TranslationTask.class));
-            verify(translationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true));
+            verify(documentPort, atLeastOnce()).findById(1L);
+            verify(translationPort).saveTask(any(TranslationTask.class));
+            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true));
         }
 
         @Test
@@ -209,20 +208,20 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(2L)).thenReturn(doc);
+            when(documentPort.findById(2L)).thenReturn(Optional.of(doc));
 
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-expert");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(2L, "zh", "expert");
             assertNotNull(emitter);
 
             Thread.sleep(1500);
 
-            verify(documentMapper).findById(2L);
-            verify(translationTaskMapper).insert(any(TranslationTask.class));
+            verify(documentPort).findById(2L);
+            verify(translationPort).saveTask(any(TranslationTask.class));
         }
 
         @Test
@@ -237,7 +236,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("docx");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(3L)).thenReturn(doc);
+            when(documentPort.findById(3L)).thenReturn(Optional.of(doc));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(3L, "zh", "fast");
             assertNotNull(emitter);
@@ -257,16 +256,16 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(4L)).thenReturn(doc);
+            when(documentPort.findById(4L)).thenReturn(Optional.of(doc));
 
             // Mock translation to throw exception
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenThrow(new RuntimeException("Translation API down"));
 
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-fail");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(4L, "zh", "fast");
             assertNotNull(emitter);
@@ -297,7 +296,7 @@ class TranslationTaskServiceExtended2Test {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", "text/plain", "Line one\nLine two\n".getBytes());
 
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"第一行\"}")
                     .thenReturn("{\"code\":200,\"data\":\"第二行\"}");
 
@@ -306,7 +305,7 @@ class TranslationTaskServiceExtended2Test {
 
             Thread.sleep(1500);
 
-            verify(translationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true));
+            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true));
         }
 
         @Test
@@ -336,7 +335,7 @@ class TranslationTaskServiceExtended2Test {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "error.txt", "text/plain", "Hello\n".getBytes());
 
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenThrow(new RuntimeException("Network error"));
 
             SseEmitter emitter = taskService.streamTranslateDocument(file, "en", "zh", "fast");
@@ -350,7 +349,7 @@ class TranslationTaskServiceExtended2Test {
             MockMultipartFile noExtFile = new MockMultipartFile(
                     "file", "noextension", "text/plain", "content\n".getBytes());
 
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译内容\"}");
 
             SseEmitter emitter = taskService.streamTranslateDocument(noExtFile, "en", "zh", "fast");
@@ -375,7 +374,7 @@ class TranslationTaskServiceExtended2Test {
             assertNotNull(emitter);
 
             Thread.sleep(1000);
-            verify(translationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true));
+            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true));
         }
 
         @Test
@@ -430,12 +429,12 @@ class TranslationTaskServiceExtended2Test {
             task.setDocumentId(1L);
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-proc-doc")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-proc-doc")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(1L);
             doc.setPath(sourceFile.toString());
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-proc-doc");
             assertNotNull(result);
@@ -453,12 +452,12 @@ class TranslationTaskServiceExtended2Test {
             task.setDocumentId(1L);
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-readfail")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-readfail")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(1L);
             doc.setPath("/nonexistent/invalid/path.txt");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-readfail");
             assertNotNull(result);
@@ -479,12 +478,12 @@ class TranslationTaskServiceExtended2Test {
             task.setDocumentId(1L);
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-transreadfail")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-transreadfail")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(1L);
             doc.setPath(sourceFile.toString());
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-transreadfail");
             assertNotNull(result);
@@ -501,12 +500,12 @@ class TranslationTaskServiceExtended2Test {
             task.setSourceLang("en");
             task.setTargetLang("zh");
             task.setCompletedTime(LocalDateTime.of(2024, 6, 1, 12, 0, 0));
-            when(translationTaskMapper.findByTaskId("task-time")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-time")).thenReturn(Optional.of(task));
 
             TranslationHistory history = new TranslationHistory();
             history.setTargetText("translated");
             history.setSourceText("original");
-            when(translationHistoryMapper.findByTaskId("task-time")).thenReturn(history);
+            when(translationPort.findHistoryByTaskId("task-time")).thenReturn(Optional.of(history));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-time");
             assertNotNull(result);
@@ -522,12 +521,12 @@ class TranslationTaskServiceExtended2Test {
             task.setSourceLang("en");
             task.setTargetLang("zh");
             task.setCompletedTime(null);
-            when(translationTaskMapper.findByTaskId("task-notime")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-notime")).thenReturn(Optional.of(task));
 
             TranslationHistory history = new TranslationHistory();
             history.setTargetText("translated");
             history.setSourceText("original");
-            when(translationHistoryMapper.findByTaskId("task-notime")).thenReturn(history);
+            when(translationPort.findHistoryByTaskId("task-notime")).thenReturn(Optional.of(history));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-notime");
             assertNotNull(result);
@@ -561,15 +560,15 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(50L)).thenReturn(doc);
+            when(documentPort.findById(50L)).thenReturn(Optional.of(doc));
 
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"译\"}");
 
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-trunc-src");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(50L, "zh", "fast");
             assertNotNull(emitter);
@@ -578,7 +577,7 @@ class TranslationTaskServiceExtended2Test {
             Thread.sleep(8000);
 
             var cap = org.mockito.ArgumentCaptor.forClass(TranslationHistory.class);
-            verify(translationHistoryMapper).insert(cap.capture());
+            verify(translationPort).saveHistory(cap.capture());
             TranslationHistory inserted = cap.getValue();
             assertNotNull(inserted.getSourceText());
             assertTrue(inserted.getSourceText().length() <= 500, "Source text should be truncated to 500 chars");
@@ -601,15 +600,15 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(51L)).thenReturn(doc);
+            when(documentPort.findById(51L)).thenReturn(Optional.of(doc));
 
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-trunc-trans");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(51L, "zh", "fast");
             assertNotNull(emitter);
@@ -617,7 +616,7 @@ class TranslationTaskServiceExtended2Test {
             Thread.sleep(5000);
 
             var cap = org.mockito.ArgumentCaptor.forClass(TranslationHistory.class);
-            verify(translationHistoryMapper).insert(cap.capture());
+            verify(translationPort).saveHistory(cap.capture());
             TranslationHistory inserted = cap.getValue();
             // Source text is short, not truncated
             assertEquals("Hi\n", inserted.getSourceText());
@@ -637,15 +636,15 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(52L)).thenReturn(doc);
+            when(documentPort.findById(52L)).thenReturn(Optional.of(doc));
 
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"你好世界\"}");
 
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-short-src");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(52L, "zh", "fast");
             assertNotNull(emitter);
@@ -653,7 +652,7 @@ class TranslationTaskServiceExtended2Test {
             Thread.sleep(5000);
 
             var cap = org.mockito.ArgumentCaptor.forClass(TranslationHistory.class);
-            verify(translationHistoryMapper).insert(cap.capture());
+            verify(translationPort).saveHistory(cap.capture());
             TranslationHistory inserted = cap.getValue();
             assertEquals("Hello World", inserted.getSourceText());
         }
@@ -678,7 +677,7 @@ class TranslationTaskServiceExtended2Test {
 
         @Test
         void glossaryMapper抛出异常时返回空列表() throws Exception {
-            when(glossaryMapper.selectList(any()))
+            when(glossaryPort.findActiveGlossaryByUserId(anyLong()))
                     .thenThrow(new RuntimeException("DB error"));
 
             java.lang.reflect.Method method = getLoadGlossaryTermsMethod();
@@ -688,12 +687,12 @@ class TranslationTaskServiceExtended2Test {
 
             assertNotNull(result);
             assertTrue(result.isEmpty());
-            verify(glossaryMapper).selectList(any());
+            verify(glossaryPort).findActiveGlossaryByUserId(anyLong());
         }
 
         @Test
         void 无术语表时返回空列表() throws Exception {
-            when(glossaryMapper.selectList(any())).thenReturn(new ArrayList<>());
+            when(glossaryPort.findActiveGlossaryByUserId(anyLong())).thenReturn(new ArrayList<>());
 
             java.lang.reflect.Method method = getLoadGlossaryTermsMethod();
 
@@ -702,7 +701,7 @@ class TranslationTaskServiceExtended2Test {
 
             assertNotNull(result);
             assertTrue(result.isEmpty());
-            verify(glossaryMapper).selectList(any());
+            verify(glossaryPort).findActiveGlossaryByUserId(anyLong());
         }
 
         @Test
@@ -721,7 +720,7 @@ class TranslationTaskServiceExtended2Test {
             nonMatching.setTargetWord("再见");
             nonMatching.setDeleted(0);
 
-            when(glossaryMapper.selectList(any())).thenReturn(List.of(matching, nonMatching));
+            when(glossaryPort.findActiveGlossaryByUserId(anyLong())).thenReturn(List.of(matching, nonMatching));
 
             java.lang.reflect.Method method = getLoadGlossaryTermsMethod();
 
@@ -732,7 +731,7 @@ class TranslationTaskServiceExtended2Test {
             assertEquals(1, result.size());
             Glossary returned = (Glossary) result.get(0);
             assertEquals("Hello", returned.getSourceWord());
-            verify(glossaryMapper).selectList(any());
+            verify(glossaryPort).findActiveGlossaryByUserId(anyLong());
         }
     }
 
@@ -754,7 +753,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("docx");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(10L)).thenReturn(doc);
+            when(documentPort.findById(10L)).thenReturn(Optional.of(doc));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(10L, "zh", "fast");
             assertNotNull(emitter);
@@ -774,7 +773,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("pdf");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(11L)).thenReturn(doc);
+            when(documentPort.findById(11L)).thenReturn(Optional.of(doc));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(11L, "zh", "fast");
             assertNotNull(emitter);
@@ -791,7 +790,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(12L)).thenReturn(doc);
+            when(documentPort.findById(12L)).thenReturn(Optional.of(doc));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(12L, "zh", "fast");
             assertNotNull(emitter);
@@ -819,7 +818,7 @@ class TranslationTaskServiceExtended2Test {
             task.setSourceLang("en");
             task.setTargetLang("zh");
             task.setEngine("google");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(task);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(task));
 
             // Make the pipeline throw an exception
             Document doc = new Document();
@@ -827,7 +826,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setPath(sourceFile.toString());
             doc.setFileType("txt");
             doc.setMode("expert");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             taskService.startDocumentTranslation(task, doc);
 
@@ -852,12 +851,12 @@ class TranslationTaskServiceExtended2Test {
             task.setUserId(1L);
             task.setStatus("processing");
             task.setDocumentId(5L);
-            when(translationTaskMapper.findByTaskId("task-cancel-sync")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-cancel-sync")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(5L);
             doc.setStatus("processing");
-            when(documentMapper.selectById(5L)).thenReturn(doc);
+            when(documentPort.findById(5L)).thenReturn(Optional.of(doc));
 
             boolean result = taskService.cancelTask("task-cancel-sync", 1L);
 
@@ -866,7 +865,7 @@ class TranslationTaskServiceExtended2Test {
             assertEquals("用户取消任务", task.getErrorMessage());
             assertEquals("failed", doc.getStatus());
             assertEquals("用户取消任务", doc.getErrorMessage());
-            verify(documentMapper).updateById(doc);
+            verify(documentPort).update(doc);
         }
 
         @Test
@@ -876,8 +875,8 @@ class TranslationTaskServiceExtended2Test {
             task.setUserId(1L);
             task.setStatus("processing");
             task.setDocumentId(99L);
-            when(translationTaskMapper.findByTaskId("task-cancel-nodoc")).thenReturn(task);
-            when(documentMapper.selectById(99L)).thenReturn(null);
+            when(translationPort.findTaskByTaskId("task-cancel-nodoc")).thenReturn(Optional.of(task));
+            when(documentPort.findById(99L)).thenReturn(Optional.empty());
 
             boolean result = taskService.cancelTask("task-cancel-nodoc", 1L);
 
@@ -904,16 +903,16 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(20L)).thenReturn(doc);
+            when(documentPort.findById(20L)).thenReturn(Optional.of(doc));
 
             // Return a response that extracts to null or empty
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-empty-result");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(20L, "zh", "fast");
             assertNotNull(emitter);
@@ -926,7 +925,7 @@ class TranslationTaskServiceExtended2Test {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", "text/plain", "Hello\n".getBytes());
 
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
             SseEmitter emitter = taskService.streamTranslateDocument(file, "en", "zh", "fast");
@@ -947,15 +946,15 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(21L)).thenReturn(doc);
+            when(documentPort.findById(21L)).thenReturn(Optional.of(doc));
 
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-newline");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(21L, "zh", "fast");
             assertNotNull(emitter);
@@ -968,7 +967,7 @@ class TranslationTaskServiceExtended2Test {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", "text/plain", "Hello\r".getBytes());
 
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             SseEmitter emitter = taskService.streamTranslateDocument(file, "en", "zh", "fast");
@@ -989,16 +988,16 @@ class TranslationTaskServiceExtended2Test {
             doc.setFileType("txt");
             doc.setSourceLang("en");
             doc.setTargetLang("zh");
-            when(documentMapper.findById(22L)).thenReturn(doc);
+            when(documentPort.findById(22L)).thenReturn(Optional.of(doc));
 
-            when(translationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true)))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}")
                     .thenReturn("{\"code\":200,\"data\":\"世界\"}");
 
             TranslationTask runningTask = new TranslationTask();
             runningTask.setTaskId("task-blank-para");
             runningTask.setStatus("processing");
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(runningTask);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.of(runningTask));
 
             SseEmitter emitter = taskService.streamTranslateDocumentById(22L, "zh", "fast");
             assertNotNull(emitter);

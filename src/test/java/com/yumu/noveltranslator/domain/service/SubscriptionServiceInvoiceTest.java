@@ -17,10 +17,9 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeCustomer;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeCustomerMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeSubscriptionMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserPlanHistoryMapper;
+import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.properties.StripeProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
@@ -49,16 +48,13 @@ import static org.mockito.Mockito.*;
 class SubscriptionServiceInvoiceTest {
 
     @Mock
-    private StripeCustomerMapper stripeCustomerMapper;
+    private StripeProperties stripeProperties;
 
     @Mock
-    private StripeSubscriptionMapper stripeSubscriptionMapper;
+    private BillingRepositoryPort billingPort;
 
     @Mock
-    private UserMapper userMapper;
-
-    @Mock
-    private UserPlanHistoryMapper userPlanHistoryMapper;
+    private UserRepositoryPort userRepositoryPort;
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;
@@ -69,14 +65,16 @@ class SubscriptionServiceInvoiceTest {
     @Mock
     private com.yumu.noveltranslator.util.JwtUtils jwtUtils;
 
+    @Mock
+    private com.yumu.noveltranslator.port.out.PaymentPort paymentPort;
+
     private SubscriptionService subscriptionService;
 
     @BeforeEach
     void setUp() {
         subscriptionService = new SubscriptionService(
-                null, stripeCustomerMapper, stripeSubscriptionMapper,
-                userMapper, userPlanHistoryMapper, stringRedisTemplate,
-                tokenBlacklistService, jwtUtils);
+                stripeProperties, billingPort, userRepositoryPort, stringRedisTemplate,
+                tokenBlacklistService, jwtUtils, paymentPort);
     }
 
     // ==================== Fallback activation: existing record, non-active status ====================
@@ -117,7 +115,7 @@ class SubscriptionServiceInvoiceTest {
             subRecord.setStatus("active");
             subRecord.setPlan("PRO");
 
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
 
             Invoice invoice = mock(Invoice.class);
             when(invoice.getSubscription()).thenReturn("sub_test123");
@@ -129,7 +127,7 @@ class SubscriptionServiceInvoiceTest {
 
             subscriptionService.handleInvoicePaymentSucceeded(event);
 
-            verify(stripeSubscriptionMapper, never()).update(any(), any());
+            verify(billingPort, never()).updateSubscriptionByWrapper(any());
             verifyNoInteractions(stringRedisTemplate);
         }
 
@@ -142,7 +140,7 @@ class SubscriptionServiceInvoiceTest {
             subRecord.setStatus("trialing");
             subRecord.setPlan("PRO");
 
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
 
             Invoice invoice = mock(Invoice.class);
             when(invoice.getSubscription()).thenReturn("sub_test123");
@@ -154,7 +152,7 @@ class SubscriptionServiceInvoiceTest {
 
             subscriptionService.handleInvoicePaymentSucceeded(event);
 
-            verify(stripeSubscriptionMapper, never()).update(any(), any());
+            verify(billingPort, never()).updateSubscriptionByWrapper(any());
         }
 
         // 注意：此测试被禁用，因为 MyBatis-Plus LambdaUpdateWrapper 需要 Spring 上下文初始化实体缓存
@@ -173,13 +171,13 @@ class SubscriptionServiceInvoiceTest {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("FREE");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(userMapper.updateById(any(User.class))).thenReturn(1);
-            when(userPlanHistoryMapper.insert(any(UserPlanHistory.class))).thenReturn(1);
+            when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
+            doNothing().when(userRepositoryPort).update(any(User.class));
+            doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
             // Mock the update for atomic activation (LambdaUpdateWrapper triggers MP table cache issue in tests)
-            lenient().when(stripeSubscriptionMapper.update(any(), any())).thenReturn(1);
+            lenient().when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
 
             ValueOperations<String, String> valueOps = mock(ValueOperations.class);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
@@ -198,9 +196,9 @@ class SubscriptionServiceInvoiceTest {
             subscriptionService.handleInvoicePaymentSucceeded(event);
 
             // Verify the atomic update was called
-            verify(stripeSubscriptionMapper).update(any(), any());
+            verify(billingPort).updateSubscriptionByWrapper(any());
             // Verify user level was updated
-            verify(userMapper).updateById(argThat(u -> "PRO".equals(u.getUserLevel())));
+            verify(userRepositoryPort).update(argThat(u -> "PRO".equals(u.getUserLevel())));
         }
 
         @Disabled("需要 Spring 上下文初始化 MyBatis-Plus 实体缓存")
@@ -214,9 +212,9 @@ class SubscriptionServiceInvoiceTest {
             subRecord.setPlan("PRO");
             subRecord.setLastWebhookEventId("evt_same");
 
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
             // 原子更新返回0表示被幂等拦截
-            lenient().when(stripeSubscriptionMapper.update(any(), any())).thenReturn(0);
+            lenient().when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(0);
 
             Invoice invoice = mock(Invoice.class);
             when(invoice.getSubscription()).thenReturn("sub_test123");
@@ -230,8 +228,7 @@ class SubscriptionServiceInvoiceTest {
 
             subscriptionService.handleInvoicePaymentSucceeded(event);
 
-            verify(userMapper, never()).selectById(any());
-            verify(userMapper, never()).updateById(any());
+            verify(userRepositoryPort, never()).update(any());
         }
     }
 
@@ -243,7 +240,7 @@ class SubscriptionServiceInvoiceTest {
 
         @Test
         void 无userId时记录警告并返回() {
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(billingPort.findSubscriptionByStripeId("sub_orphan")).thenReturn(null);
 
             Invoice invoice = mock(Invoice.class);
             when(invoice.getSubscription()).thenReturn("sub_orphan");
@@ -256,13 +253,13 @@ class SubscriptionServiceInvoiceTest {
 
             assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
 
-            verify(stripeCustomerMapper, never()).selectOne(any());
-            verify(stripeSubscriptionMapper, never()).insert(any());
+            verify(billingPort, never()).saveCustomer(any());
+            verify(billingPort, never()).saveSubscription(any());
         }
 
         @Test
         void StripeAPI失败时正常返回() {
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(billingPort.findSubscriptionByStripeId("sub_orphan")).thenReturn(null);
 
             Invoice invoice = mock(Invoice.class);
             when(invoice.getSubscription()).thenReturn("sub_orphan");
@@ -272,7 +269,7 @@ class SubscriptionServiceInvoiceTest {
             existingCustomer.setId(1L);
             existingCustomer.setUserId(1L);
             existingCustomer.setStripeCustomerId("cus_test123");
-            when(stripeCustomerMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existingCustomer);
+            when(billingPort.findCustomerByUserIdAndNotDeleted(1L)).thenReturn(existingCustomer);
 
             Event event = mock(Event.class);
             EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
@@ -287,12 +284,12 @@ class SubscriptionServiceInvoiceTest {
                 assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
             }
 
-            verify(stripeSubscriptionMapper, never()).insert(any());
+            verify(billingPort, never()).saveSubscription(any());
         }
 
         @Test
         void 孤立发票创建完整订阅记录() {
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(billingPort.findSubscriptionByStripeId("sub_orphan123")).thenReturn(null);
 
             Invoice invoice = mock(Invoice.class);
             when(invoice.getSubscription()).thenReturn("sub_orphan123");
@@ -306,15 +303,14 @@ class SubscriptionServiceInvoiceTest {
             existingCustomer.setId(1L);
             existingCustomer.setUserId(1L);
             existingCustomer.setStripeCustomerId("cus_test123");
-            // First selectOne for orphan check (returns null), second for customer lookup
-            when(stripeCustomerMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existingCustomer);
+            when(billingPort.findCustomerByUserIdAndNotDeleted(1L)).thenReturn(existingCustomer);
 
             User user = new User();
             user.setId(1L);
             user.setUserLevel("FREE");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(userMapper.updateById(any(User.class))).thenReturn(1);
-            when(userPlanHistoryMapper.insert(any(UserPlanHistory.class))).thenReturn(1);
+            when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
+            doNothing().when(userRepositoryPort).update(any(User.class));
+            doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
             Subscription stripeSub = mock(Subscription.class);
             when(stripeSub.getId()).thenReturn("sub_orphan123");
@@ -354,19 +350,19 @@ class SubscriptionServiceInvoiceTest {
             }
 
             // Verify insert was called
-            verify(stripeSubscriptionMapper).insert(argThat(sub ->
+            verify(billingPort).saveSubscription(argThat(sub ->
                     sub.getStripeSubscriptionId().equals("sub_orphan123")
                         && sub.getUserId().equals(1L)
                         && sub.getPlan().equals("MAX")
                         && sub.getBillingCycle().equals("yearly")
             ));
             // Verify user level was updated
-            verify(userMapper).updateById(argThat(u -> "MAX".equals(u.getUserLevel())));
+            verify(userRepositoryPort).update(argThat(u -> "MAX".equals(u.getUserLevel())));
         }
 
         @Test
         void 孤立发票无plan时使用默认PRO() {
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(billingPort.findSubscriptionByStripeId("sub_orphan_noplan")).thenReturn(null);
 
             Invoice invoice = mock(Invoice.class);
             when(invoice.getSubscription()).thenReturn("sub_orphan_noplan");
@@ -376,14 +372,14 @@ class SubscriptionServiceInvoiceTest {
             existingCustomer.setId(1L);
             existingCustomer.setUserId(1L);
             existingCustomer.setStripeCustomerId("cus_test123");
-            when(stripeCustomerMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existingCustomer);
+            when(billingPort.findCustomerByUserIdAndNotDeleted(1L)).thenReturn(existingCustomer);
 
             User user = new User();
             user.setId(1L);
             user.setUserLevel("FREE");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(userMapper.updateById(any(User.class))).thenReturn(1);
-            when(userPlanHistoryMapper.insert(any(UserPlanHistory.class))).thenReturn(1);
+            when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
+            doNothing().when(userRepositoryPort).update(any(User.class));
+            doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
             Subscription stripeSub = mock(Subscription.class);
             when(stripeSub.getId()).thenReturn("sub_orphan_noplan");
@@ -418,7 +414,7 @@ class SubscriptionServiceInvoiceTest {
                 subscriptionService.handleInvoicePaymentSucceeded(event);
             }
 
-            verify(stripeSubscriptionMapper).insert(argThat(sub ->
+            verify(billingPort).saveSubscription(argThat(sub ->
                     "PRO".equals(sub.getPlan()) && "monthly".equals(sub.getBillingCycle())
             ));
         }
@@ -427,7 +423,7 @@ class SubscriptionServiceInvoiceTest {
         @Test
         void 并发竞态时双重检查防止重复创建() {
             // First call (orphan check) returns null, but by the time we insert another thread already created it
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class)))
+            when(billingPort.findSubscriptionByStripeId("sub_race"))
                 .thenReturn(null)  // orphan check
                 .thenReturn(new StripeSubscription()); // re-query after concurrent insert
 
@@ -442,7 +438,7 @@ class SubscriptionServiceInvoiceTest {
             existingCustomer.setId(1L);
             existingCustomer.setUserId(1L);
             existingCustomer.setStripeCustomerId("cus_test123");
-            when(stripeCustomerMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existingCustomer);
+            when(billingPort.findCustomerByUserIdAndNotDeleted(1L)).thenReturn(existingCustomer);
 
             Subscription stripeSub = mock(Subscription.class);
             when(stripeSub.getId()).thenReturn("sub_race");
@@ -468,11 +464,8 @@ class SubscriptionServiceInvoiceTest {
             when(event.getCreated()).thenReturn(1700000000L);
 
             // Simulate duplicate key exception
-            when(stripeSubscriptionMapper.insert(any())).thenThrow(
-                    new org.springframework.dao.DuplicateKeyException("duplicate")
-            );
-            // For the re-query path after DuplicateKeyException, the update might be called
-            lenient().when(stripeSubscriptionMapper.update(any(), any())).thenReturn(0);
+            doThrow(new org.springframework.dao.DuplicateKeyException("duplicate"))
+                    .when(billingPort).saveSubscription(any());
 
             try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
                 subStatic.when(() -> Subscription.retrieve("sub_race")).thenReturn(stripeSub);
@@ -502,14 +495,13 @@ class SubscriptionServiceInvoiceTest {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("FREE");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(userMapper.updateById(any(User.class))).thenReturn(1);
-            when(userPlanHistoryMapper.insert(any(UserPlanHistory.class))).thenReturn(1);
+            when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
+            doNothing().when(userRepositoryPort).update(any(User.class));
+            doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
-            when(stripeSubscriptionMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(subRecord);
+            when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
             // 第一次调用成功更新（返回1），后续调用被幂等拦截（返回0）
-            // Use lenient() and generic matchers to avoid MyBatis-Plus LambdaUpdateWrapper cache issue
-            lenient().when(stripeSubscriptionMapper.update(any(), any()))
+            lenient().when(billingPort.updateSubscriptionByWrapper(any()))
                     .thenReturn(1)
                     .thenReturn(0)
                     .thenReturn(0);
@@ -533,10 +525,10 @@ class SubscriptionServiceInvoiceTest {
             subscriptionService.handleInvoicePaymentSucceeded(event);
             subscriptionService.handleInvoicePaymentSucceeded(event);
 
-            // updateUserLevel 里的 markEventProcessed 只允许一次，所以 selectById 只被调用一次
-            verify(userMapper, times(1)).selectById(1L);
-            verify(userMapper, times(1)).updateById(any(User.class));
-            verify(userPlanHistoryMapper, times(1)).insert(any(UserPlanHistory.class));
+            // updateUserLevel 里的 markEventProcessed 只允许一次，所以 findById 只被调用一次
+            verify(userRepositoryPort, times(1)).findById(1L);
+            verify(userRepositoryPort, times(1)).update(any(User.class));
+            verify(userRepositoryPort, times(1)).savePlanHistory(any(UserPlanHistory.class));
         }
     }
 }

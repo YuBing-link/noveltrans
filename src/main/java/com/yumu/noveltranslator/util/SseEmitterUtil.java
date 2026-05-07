@@ -171,10 +171,10 @@ public class SseEmitterUtil {
     // ==================== 实例方法（Redis Stream 支持） ====================
 
     /**
-     * XADD Lua 脚本：向 Redis Stream 添加事件
+     * XADD Lua 脚本：向 Redis Stream 添加事件，带 MAXLEN 限制防止无限增长
      */
     private static final String XADD_LUA =
-            "redis.call('XADD', KEYS[1], '*', 'event', ARGV[1]); return 'OK'";
+            "redis.call('XADD', KEYS[1], 'MAXLEN', '~', '10000', '*', 'event', ARGV[1]); return 'OK'";
 
     private static final DefaultRedisScript<String> XADD_SCRIPT =
             new DefaultRedisScript<>(XADD_LUA, String.class);

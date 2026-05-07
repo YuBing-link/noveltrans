@@ -20,7 +20,12 @@ import java.util.concurrent.TimeUnit;
 /**
  * 邮箱验证码工具类
  * 支持生成、发送、验证验证码
+ *
+ * @deprecated Use {@link com.yumu.noveltranslator.domain.service.VerificationCodeService}
+ * for code lifecycle management and {@link com.yumu.noveltranslator.port.out.EmailPort}
+ * for email delivery. This class combines both concerns and will be removed in a future version.
  */
+@Deprecated
 @Slf4j
 @Component
 public class EmailVerificationCodeUtil {

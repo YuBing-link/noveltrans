@@ -7,13 +7,9 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.springframework.context.ApplicationEventPublisher;
@@ -27,12 +23,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -42,13 +38,9 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class CollabProjectServiceStatusTest {
 
-    private CollabProjectMapper collabProjectMapper;
-    private CollabProjectMemberMapper collabProjectMemberMapper;
-    private CollabChapterTaskMapper collabChapterTaskMapper;
-    private CollabCommentMapper collabCommentMapper;
-    private CollabInviteCodeMapper collabInviteCodeMapper;
-    private DocumentMapper documentMapper;
-    private UserMapper userMapper;
+    private CollaborationRepositoryPort collabPort;
+    private DocumentRepositoryPort documentPort;
+    private UserRepositoryPort userPort;
     private CollabStateMachine collabStateMachine;
     private MultiAgentTranslationService multiAgentTranslationService;
 
@@ -59,23 +51,16 @@ class CollabProjectServiceStatusTest {
 
     @BeforeEach
     void setUp() {
-        collabProjectMapper = mock(CollabProjectMapper.class);
-        collabProjectMemberMapper = mock(CollabProjectMemberMapper.class);
-        collabChapterTaskMapper = mock(CollabChapterTaskMapper.class);
-        collabCommentMapper = mock(CollabCommentMapper.class);
-        collabInviteCodeMapper = mock(CollabInviteCodeMapper.class);
-        documentMapper = mock(DocumentMapper.class);
-        userMapper = mock(UserMapper.class);
+        collabPort = mock(CollaborationRepositoryPort.class);
+        documentPort = mock(DocumentRepositoryPort.class);
+        userPort = mock(UserRepositoryPort.class);
         collabStateMachine = mock(CollabStateMachine.class);
         multiAgentTranslationService = mock(MultiAgentTranslationService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
         service = new CollabProjectService(
-                collabProjectMapper, collabProjectMemberMapper, collabChapterTaskMapper,
-                collabCommentMapper, collabInviteCodeMapper, documentMapper, userMapper,
+                collabPort, documentPort, userPort,
                 collabStateMachine, multiAgentTranslationService, eventPublisher);
-        // ServiceImpl has its own baseMapper field that needs to be set
-        ReflectionTestUtils.setField(service, "baseMapper", collabProjectMapper);
     }
 
     @Nested
@@ -92,21 +77,21 @@ class CollabProjectServiceStatusTest {
             request.setSourceLang("en");
             request.setTargetLang("zh");
 
-            // Capture the project being inserted by save() -> baseMapper.insert()
+            // Capture the project being saved by saveProject()
             List<CollabProject> capturedProjects = new ArrayList<>();
             doAnswer(invocation -> {
-                capturedProjects.add(invocation.getArgument(0));
-                // Set ID so the service can continue
                 CollabProject p = invocation.getArgument(0);
+                capturedProjects.add(p);
+                // Set ID so the service can continue
                 p.setId(1L);
-                return 1;
-            }).when(collabProjectMapper).insert(any(CollabProject.class));
+                return null;
+            }).when(collabPort).saveProject(any(CollabProject.class));
 
             // when
             service.createProject(request, 1L);
 
             // then
-            assertFalse(capturedProjects.isEmpty(), "Project should have been inserted");
+            assertFalse(capturedProjects.isEmpty(), "Project should have been saved");
             assertEquals(CollabProjectStatus.DRAFT.getValue(), capturedProjects.get(0).getStatus(),
                     "createProject should set initial status to DRAFT");
         }
@@ -134,25 +119,25 @@ class CollabProjectServiceStatusTest {
             doc.setId(100L);
             doc.setName("test-novel.txt");
             doc.setStatus("UPLOADED");
-            when(documentMapper.selectById(100L)).thenReturn(doc);
+            when(documentPort.findById(100L)).thenReturn(Optional.of(doc));
 
-            // Capture the project being inserted
+            // Capture the project being saved
             List<CollabProject> capturedProjects = new ArrayList<>();
             doAnswer(invocation -> {
-                capturedProjects.add(invocation.getArgument(0));
                 CollabProject p = invocation.getArgument(0);
+                capturedProjects.add(p);
                 p.setId(1L);
-                return 1;
-            }).when(collabProjectMapper).insert(any(CollabProject.class));
+                return null;
+            }).when(collabPort).saveProject(any(CollabProject.class));
 
-            doAnswer(invocation -> 1).when(collabChapterTaskMapper).insert(any(CollabChapterTask.class));
+            doNothing().when(collabPort).saveChapterTask(any(CollabChapterTask.class));
 
             // when
             CollabProjectService.TeamProjectCreateResult result = service.createProjectFromDocument(
                     1L, 100L, "test-novel.txt", testFile.toString(), "txt", "en", "zh");
 
             // then
-            assertFalse(capturedProjects.isEmpty(), "Project should have been inserted");
+            assertFalse(capturedProjects.isEmpty(), "Project should have been saved");
             assertEquals(CollabProjectStatus.DRAFT.getValue(), capturedProjects.get(0).getStatus(),
                     "createProjectFromDocument should set initial status to DRAFT, not ACTIVE");
             assertEquals(2, result.chapterCount(), "Should split into 2 chapters");
@@ -174,24 +159,24 @@ class CollabProjectServiceStatusTest {
             doc.setId(200L);
             doc.setName("plain-text.txt");
             doc.setStatus("UPLOADED");
-            when(documentMapper.selectById(200L)).thenReturn(doc);
+            when(documentPort.findById(200L)).thenReturn(Optional.of(doc));
 
             List<CollabProject> capturedProjects = new ArrayList<>();
             doAnswer(invocation -> {
-                capturedProjects.add(invocation.getArgument(0));
                 CollabProject p = invocation.getArgument(0);
+                capturedProjects.add(p);
                 p.setId(1L);
-                return 1;
-            }).when(collabProjectMapper).insert(any(CollabProject.class));
+                return null;
+            }).when(collabPort).saveProject(any(CollabProject.class));
 
-            doAnswer(invocation -> 1).when(collabChapterTaskMapper).insert(any(CollabChapterTask.class));
+            doNothing().when(collabPort).saveChapterTask(any(CollabChapterTask.class));
 
             // when
             service.createProjectFromDocument(
                     1L, 200L, "plain-text.txt", testFile.toString(), "txt", null, "zh");
 
             // then
-            assertFalse(capturedProjects.isEmpty(), "Project should have been inserted");
+            assertFalse(capturedProjects.isEmpty(), "Project should have been saved");
             assertEquals(CollabProjectStatus.DRAFT.getValue(), capturedProjects.get(0).getStatus(),
                     "createProjectFromDocument should set initial status to DRAFT regardless of chapter detection");
         }

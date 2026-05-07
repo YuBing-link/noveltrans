@@ -1,4 +1,5 @@
 package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.dto.translation.GlossaryItemRequest;
 import com.yumu.noveltranslator.domain.service.QuotaService;
 import com.yumu.noveltranslator.dto.translation.GlossaryResponse;
@@ -17,10 +18,9 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserPreferenceMapper;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -30,10 +30,12 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.yumu.noveltranslator.util.PasswordUtil;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -42,16 +44,14 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
-    @Mock private UserMapper userMapper;
-    @Mock private TranslationHistoryMapper translationHistoryMapper;
-    @Mock private GlossaryMapper glossaryMapper;
-    @Mock private UserPreferenceMapper userPreferenceMapper;
+    @Mock private UserRepositoryPort userPort;
+    @Mock private TranslationRepositoryPort translationPort;
+    @Mock private GlossaryRepositoryPort glossaryPort;
     @Mock private TranslationLimitProperties limitProperties;
     @Mock private QuotaService quotaService;
 
     private UserService createUserService() {
-        return new UserService(userMapper, translationHistoryMapper, glossaryMapper,
-                userPreferenceMapper, limitProperties, quotaService);
+        return new UserService(userPort, translationPort, glossaryPort, limitProperties, quotaService);
     }
 
     @Nested
@@ -61,11 +61,11 @@ class UserServiceTest {
         @Test
         void 返回完整统计数据() {
             UserService userService = createUserService();
-            when(translationHistoryMapper.countByUserId(1L)).thenReturn(50);
-            when(translationHistoryMapper.countByUserIdAndType(1L, "text")).thenReturn(30);
-            when(translationHistoryMapper.countByUserIdAndType(1L, "document")).thenReturn(20);
-            when(translationHistoryMapper.sumSourceTextLengthByUserId(1L)).thenReturn(10000L);
-            when(translationHistoryMapper.countByUserIdAfter(anyLong(), any())).thenReturn(10);
+            when(translationPort.countHistoryByUserId(1L)).thenReturn(50);
+            when(translationPort.countHistoryByUserIdAndType(1L, "text")).thenReturn(30);
+            when(translationPort.countHistoryByUserIdAndType(1L, "document")).thenReturn(20);
+            when(translationPort.sumHistorySourceTextLengthByUserId(1L)).thenReturn(10000L);
+            when(translationPort.countHistoryByUserIdAfter(anyLong(), any())).thenReturn(10);
 
             var response = userService.getUserStatistics(1L);
 
@@ -109,7 +109,11 @@ class UserServiceTest {
         @Test
         void 创建术语项成功() {
             UserService userService = createUserService();
-            when(glossaryMapper.insert(any(Glossary.class))).thenReturn(1);
+            doAnswer(invocation -> {
+                Glossary g = invocation.getArgument(0);
+                g.setId(1L);
+                return null;
+            }).when(glossaryPort).saveGlossary(any(Glossary.class));
 
             GlossaryItemRequest req = new GlossaryItemRequest();
             req.setSourceWord("hello");
@@ -129,8 +133,8 @@ class UserServiceTest {
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(1L);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
-            when(glossaryMapper.deleteById(1L)).thenReturn(1);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
+            doNothing().when(glossaryPort).updateGlossary(any(Glossary.class));
 
             boolean result = userService.deleteGlossaryItem(1L, 1L);
 
@@ -143,7 +147,7 @@ class UserServiceTest {
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(2L);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
 
             boolean result = userService.deleteGlossaryItem(1L, 1L);
 
@@ -158,8 +162,12 @@ class UserServiceTest {
         @Test
         void 首次设置创建新偏好() {
             UserService userService = createUserService();
-            when(userPreferenceMapper.findByUserId(1L)).thenReturn(null);
-            when(userPreferenceMapper.insert(any(UserPreference.class))).thenReturn(1);
+            when(userPort.findPreferenceByUserId(1L)).thenReturn(Optional.empty());
+            doAnswer(invocation -> {
+                UserPreference p = invocation.getArgument(0);
+                p.setId(1L);
+                return null;
+            }).when(userPort).savePreference(any(UserPreference.class));
 
             UserPreferencesRequest req = new UserPreferencesRequest();
             req.setDefaultEngine("deepl");
@@ -181,7 +189,7 @@ class UserServiceTest {
         @Test
         void 获取不存在的偏好返回默认值() {
             UserService userService = createUserService();
-            when(userPreferenceMapper.findByUserId(1L)).thenReturn(null);
+            when(userPort.findPreferenceByUserId(1L)).thenReturn(Optional.empty());
 
             UserPreferencesResponse result = userService.getUserPreferences(1L);
 
@@ -199,13 +207,13 @@ class UserServiceTest {
         @Test
         void 返回完整平台统计() {
             UserService userService = createUserService();
-            when(userMapper.countActiveUsers()).thenReturn(1000);
-            when(translationHistoryMapper.countActiveUsersAfter(any())).thenReturn(100);
-            when(translationHistoryMapper.countAll()).thenReturn(50000L);
-            when(translationHistoryMapper.countAfter(any())).thenReturn(500L);
-            when(translationHistoryMapper.sumAllSourceTextLength()).thenReturn(1000000L);
-            when(translationHistoryMapper.countDocumentTranslations()).thenReturn(200);
-            when(glossaryMapper.selectCount(any())).thenReturn(500L);
+            when(userPort.countActiveUsers()).thenReturn(1000);
+            when(translationPort.countActiveUsersAfter(any())).thenReturn(100);
+            when(translationPort.countAllHistory()).thenReturn(50000L);
+            when(translationPort.countHistoryAfter(any())).thenReturn(500L);
+            when(translationPort.sumAllHistorySourceTextLength()).thenReturn(1000000L);
+            when(translationPort.countDocumentTranslations()).thenReturn(200);
+            when(glossaryPort.countAllGlossaries()).thenReturn(500);
 
             var response = userService.getPlatformStats();
 
@@ -229,7 +237,7 @@ class UserServiceTest {
             Page<Glossary> page = new Page<>(1, 20);
             page.setRecords(List.of(g1, g2));
             page.setTotal(2);
-            when(glossaryMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+            when(glossaryPort.findGlossaryPaged(eq(1L), isNull(), eq(1), eq(20))).thenReturn(page);
 
             PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, null);
 
@@ -248,7 +256,7 @@ class UserServiceTest {
             Page<Glossary> page = new Page<>(2, 20);
             page.setRecords(List.of());
             page.setTotal(2);
-            when(glossaryMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+            when(glossaryPort.findGlossaryPaged(eq(1L), isNull(), eq(2), eq(20))).thenReturn(page);
 
             PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 2, 20, null);
 
@@ -265,7 +273,7 @@ class UserServiceTest {
             Page<Glossary> page = new Page<>(1, 20);
             page.setRecords(List.of(g));
             page.setTotal(1);
-            when(glossaryMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+            when(glossaryPort.findGlossaryPaged(eq(1L), eq("hello"), eq(1), eq(20))).thenReturn(page);
 
             PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, "hello");
 
@@ -280,7 +288,7 @@ class UserServiceTest {
             Page<Glossary> page = new Page<>(1, 20);
             page.setRecords(List.of());
             page.setTotal(0);
-            when(glossaryMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
+            when(glossaryPort.findGlossaryPaged(eq(1L), isNull(), eq(1), eq(20))).thenReturn(page);
 
             PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, null);
 
@@ -312,7 +320,7 @@ class UserServiceTest {
             glossary.setSourceWord("hello");
             glossary.setTargetWord("你好");
             glossary.setDeleted(0);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
 
             GlossaryResponse result = userService.getGlossaryDetail(1L, 1L);
 
@@ -323,7 +331,7 @@ class UserServiceTest {
         @Test
         void 术语不存在返回null() {
             UserService userService = createUserService();
-            when(glossaryMapper.selectById(999L)).thenReturn(null);
+            when(glossaryPort.findGlossaryById(999L)).thenReturn(Optional.empty());
 
             GlossaryResponse result = userService.getGlossaryDetail(1L, 999L);
 
@@ -337,7 +345,7 @@ class UserServiceTest {
             glossary.setId(1L);
             glossary.setUserId(1L);
             glossary.setDeleted(1);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
 
             GlossaryResponse result = userService.getGlossaryDetail(1L, 1L);
 
@@ -351,7 +359,7 @@ class UserServiceTest {
             glossary.setId(1L);
             glossary.setUserId(2L);
             glossary.setDeleted(0);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
 
             GlossaryResponse result = userService.getGlossaryDetail(1L, 1L);
 
@@ -366,11 +374,11 @@ class UserServiceTest {
         @Test
         void 创建成功返回术语响应() {
             UserService userService = createUserService();
-            when(glossaryMapper.insert(any(Glossary.class))).thenAnswer(invocation -> {
+            doAnswer(invocation -> {
                 Glossary g = invocation.getArgument(0);
                 g.setId(10L);
-                return 1;
-            });
+                return null;
+            }).when(glossaryPort).saveGlossary(any(Glossary.class));
 
             GlossaryItemRequest req = new GlossaryItemRequest();
             req.setSourceWord("apple");
@@ -400,8 +408,8 @@ class UserServiceTest {
             glossary.setTargetWord("旧");
             glossary.setRemark("old remark");
             glossary.setDeleted(0);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
-            when(glossaryMapper.updateById(any(Glossary.class))).thenReturn(1);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
+            doNothing().when(glossaryPort).updateGlossary(any(Glossary.class));
 
             GlossaryItemRequest req = new GlossaryItemRequest();
             req.setSourceWord("new");
@@ -419,7 +427,7 @@ class UserServiceTest {
         @Test
         void 术语不存在返回null() {
             UserService userService = createUserService();
-            when(glossaryMapper.selectById(999L)).thenReturn(null);
+            when(glossaryPort.findGlossaryById(999L)).thenReturn(Optional.empty());
 
             GlossaryItemRequest req = new GlossaryItemRequest();
             req.setSourceWord("new");
@@ -435,7 +443,7 @@ class UserServiceTest {
             glossary.setId(1L);
             glossary.setUserId(2L);
             glossary.setDeleted(0);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
 
             GlossaryItemRequest req = new GlossaryItemRequest();
             GlossaryResponse result = userService.updateGlossaryItem(1L, 1L, req);
@@ -450,7 +458,7 @@ class UserServiceTest {
             glossary.setId(1L);
             glossary.setUserId(1L);
             glossary.setDeleted(1);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
 
             GlossaryItemRequest req = new GlossaryItemRequest();
             GlossaryResponse result = userService.updateGlossaryItem(1L, 1L, req);
@@ -468,8 +476,8 @@ class UserServiceTest {
             glossary.setTargetWord("原始");
             glossary.setRemark("original remark");
             glossary.setDeleted(0);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
-            when(glossaryMapper.updateById(any())).thenReturn(1);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
+            doNothing().when(glossaryPort).updateGlossary(any());
 
             GlossaryItemRequest req = new GlossaryItemRequest();
             req.setTargetWord("更新后的");
@@ -491,7 +499,7 @@ class UserServiceTest {
         @Test
         void 术语不存在返回false() {
             UserService userService = createUserService();
-            when(glossaryMapper.selectById(999L)).thenReturn(null);
+            when(glossaryPort.findGlossaryById(999L)).thenReturn(Optional.empty());
 
             boolean result = userService.deleteGlossaryItem(1L, 999L);
 
@@ -505,7 +513,7 @@ class UserServiceTest {
             glossary.setId(1L);
             glossary.setUserId(1L);
             glossary.setDeleted(1);
-            when(glossaryMapper.selectById(1L)).thenReturn(glossary);
+            when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
 
             boolean result = userService.deleteGlossaryItem(1L, 1L);
 
@@ -520,7 +528,11 @@ class UserServiceTest {
         @Test
         void 全部导入成功() {
             UserService userService = createUserService();
-            when(glossaryMapper.insert(any(Glossary.class))).thenReturn(1);
+            doAnswer(invocation -> {
+                Glossary g = invocation.getArgument(0);
+                g.setId(1L);
+                return null;
+            }).when(glossaryPort).saveGlossary(any(Glossary.class));
 
             List<GlossaryItemRequest> items = List.of(
                 buildItem("word1", "词1", "remark1"),
@@ -536,10 +548,16 @@ class UserServiceTest {
         @Test
         void 部分失败跳过() {
             UserService userService = createUserService();
-            when(glossaryMapper.insert(any(Glossary.class)))
-                .thenReturn(1)
-                .thenThrow(new RuntimeException("DB error"))
-                .thenReturn(1);
+            doAnswer(invocation -> {
+                Glossary g = invocation.getArgument(0);
+                g.setId(1L);
+                return null;
+            }).doThrow(new RuntimeException("DB error"))
+              .doAnswer(invocation -> {
+                Glossary g = invocation.getArgument(0);
+                g.setId(1L);
+                return null;
+            }).when(glossaryPort).saveGlossary(any(Glossary.class));
 
             List<GlossaryItemRequest> items = List.of(
                 buildItem("word1", "词1", null),
@@ -578,8 +596,8 @@ class UserServiceTest {
             existing.setAutoTranslateSelection(true);
             existing.setFontSize(14);
             existing.setThemeMode("light");
-            when(userPreferenceMapper.findByUserId(1L)).thenReturn(existing);
-            when(userPreferenceMapper.updateById(any())).thenReturn(1);
+            when(userPort.findPreferenceByUserId(1L)).thenReturn(Optional.of(existing));
+            doNothing().when(userPort).updatePreference(any());
 
             UserPreferencesRequest req = new UserPreferencesRequest();
             req.setDefaultEngine("deepl");
@@ -596,8 +614,12 @@ class UserServiceTest {
         @Test
         void 创建新偏好使用默认值() {
             UserService userService = createUserService();
-            when(userPreferenceMapper.findByUserId(1L)).thenReturn(null);
-            when(userPreferenceMapper.insert(any())).thenReturn(1);
+            when(userPort.findPreferenceByUserId(1L)).thenReturn(Optional.empty());
+            doAnswer(invocation -> {
+                UserPreference p = invocation.getArgument(0);
+                p.setId(1L);
+                return null;
+            }).when(userPort).savePreference(any());
 
             UserPreferencesRequest req = new UserPreferencesRequest();
             req.setDefaultEngine(null);
@@ -685,11 +707,11 @@ class UserServiceTest {
         @Test
         void sumSourceTextLength为null时返回0() {
             UserService userService = createUserService();
-            when(translationHistoryMapper.countByUserId(1L)).thenReturn(10);
-            when(translationHistoryMapper.countByUserIdAndType(1L, "text")).thenReturn(8);
-            when(translationHistoryMapper.countByUserIdAndType(1L, "document")).thenReturn(2);
-            when(translationHistoryMapper.sumSourceTextLengthByUserId(1L)).thenReturn(null);
-            when(translationHistoryMapper.countByUserIdAfter(anyLong(), any())).thenReturn(3);
+            when(translationPort.countHistoryByUserId(1L)).thenReturn(10);
+            when(translationPort.countHistoryByUserIdAndType(1L, "text")).thenReturn(8);
+            when(translationPort.countHistoryByUserIdAndType(1L, "document")).thenReturn(2);
+            when(translationPort.sumHistorySourceTextLengthByUserId(1L)).thenReturn(null);
+            when(translationPort.countHistoryByUserIdAfter(anyLong(), any())).thenReturn(3);
 
             var response = userService.getUserStatistics(1L);
 
@@ -703,7 +725,7 @@ class UserServiceTest {
     class UpdateUserTests {
 
         @Test
-        void 调用mapper更新() {
+        void 调用port更新() {
             UserService userService = createUserService();
             User user = new User();
             user.setId(1L);
@@ -711,7 +733,7 @@ class UserServiceTest {
 
             userService.updateUser(user);
 
-            verify(userMapper).updateById(user);
+            verify(userPort).update(user);
         }
     }
 }

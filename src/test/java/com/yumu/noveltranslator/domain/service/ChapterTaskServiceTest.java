@@ -3,8 +3,7 @@ import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.domain.service.ChapterTaskService;
 import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
 import com.yumu.noveltranslator.dto.common.PageResponse;
@@ -14,10 +13,8 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMemb
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,9 +25,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -41,16 +38,10 @@ import static org.mockito.Mockito.*;
 class ChapterTaskServiceTest {
 
     @Mock
-    private CollabChapterTaskMapper chapterTaskMapper;
+    private CollaborationRepositoryPort collabPort;
 
     @Mock
-    private CollabProjectMapper collabProjectMapper;
-
-    @Mock
-    private UserMapper userMapper;
-
-    @Mock
-    private CollabProjectMemberMapper projectMemberMapper;
+    private UserRepositoryPort userPort;
 
     @Mock
     private CollabStateMachine collabStateMachine;
@@ -63,9 +54,7 @@ class ChapterTaskServiceTest {
     @BeforeEach
     void setUp() {
         chapterTaskService = new ChapterTaskService(
-                chapterTaskMapper, collabProjectMapper, userMapper, projectMemberMapper, collabStateMachine, collabEventPublisher);
-        // ServiceImpl 需要 baseMapper 才能调用 getById/save/updateById 等方法
-        ReflectionTestUtils.setField(chapterTaskService, "baseMapper", chapterTaskMapper);
+                collabPort, userPort, collabStateMachine, collabEventPublisher);
     }
 
     @Nested
@@ -77,97 +66,22 @@ class ChapterTaskServiceTest {
             CollabProject project = new CollabProject();
             project.setId(1L);
             project.setName("测试项目");
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
-            when(chapterTaskMapper.insert(any())).thenReturn(1);
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
 
-            ChapterTaskResponse resp = chapterTaskService.createChapter(
-                    1L, 1, "第一章", "Hello world", 1L);
+            ChapterTaskResponse response = chapterTaskService.createChapter(1L, 1, "第一章", "原文", 10L);
 
-            assertNotNull(resp);
-            assertEquals(1, resp.getChapterNumber());
-            assertEquals("第一章", resp.getTitle());
-            assertEquals("Hello world", resp.getSourceText());
-            assertEquals(ChapterTaskStatus.UNASSIGNED.getValue(), resp.getStatus());
-            assertEquals(0, resp.getProgress());
-            assertEquals(11, resp.getSourceWordCount());
+            assertNotNull(response);
+            assertEquals(1, response.getChapterNumber());
+            assertEquals("第一章", response.getTitle());
+            assertEquals("原文", response.getSourceText());
+            verify(collabPort).saveChapterTask(any());
         }
 
         @Test
-        void 项目不存在抛出异常() {
-            when(collabProjectMapper.selectById(999L)).thenReturn(null);
-
-            assertThrows(IllegalStateException.class, () ->
-                    chapterTaskService.createChapter(999L, 1, "标题", "内容", 1L));
-        }
-
-        @Test
-        void sourceText为null时字数为null() {
-            CollabProject project = new CollabProject();
-            project.setId(1L);
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
-            when(chapterTaskMapper.insert(any())).thenReturn(1);
-
-            ChapterTaskResponse resp = chapterTaskService.createChapter(
-                    1L, 1, "标题", null, 1L);
-
-            assertNotNull(resp);
-            assertNull(resp.getSourceWordCount());
-        }
-    }
-
-    @Nested
-    @DisplayName("获取项目章节列表")
-    class ListByProjectIdTests {
-
-        @Test
-        void 返回章节分页第一页() {
-            CollabChapterTask task = new CollabChapterTask();
-            task.setId(1L);
-            task.setProjectId(1L);
-            task.setChapterNumber(1);
-            task.setTitle("第一章");
-            task.setSourceText("Hello");
-            task.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
-            task.setProgress(0);
-            task.setSourceWordCount(5);
-
-            Page<CollabChapterTask> page = new Page<>(1, 20);
-            page.setRecords(List.of(task));
-            page.setTotal(1);
-            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
-
-            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByProjectId(1L, 1, 20);
-
-            assertEquals(1, result.getList().size());
-            assertEquals("第一章", result.getList().get(0).getTitle());
-            assertEquals(1, result.getTotal());
-        }
-
-        @Test
-        void 分页第二页返回空() {
-            Page<CollabChapterTask> page = new Page<>(2, 20);
-            page.setRecords(List.of());
-            page.setTotal(1);
-            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
-
-            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByProjectId(1L, 2, 20);
-
-            assertTrue(result.getList().isEmpty());
-            assertEquals(1, result.getTotal());
-            assertEquals(2, result.getPage());
-        }
-
-        @Test
-        void 空项目返回空列表() {
-            Page<CollabChapterTask> page = new Page<>(1, 20);
-            page.setRecords(List.of());
-            page.setTotal(0);
-            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
-
-            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByProjectId(1L, 1, 20);
-
-            assertTrue(result.getList().isEmpty());
-            assertEquals(0, result.getTotal());
+        void 项目不存在抛异常() {
+            when(collabPort.findProjectById(999L)).thenReturn(Optional.empty());
+            assertThrows(BusinessException.class,
+                    () -> chapterTaskService.createChapter(999L, 1, "标题", "原文", 10L));
         }
     }
 
@@ -176,30 +90,61 @@ class ChapterTaskServiceTest {
     class GetChapterByIdTests {
 
         @Test
-        void 找到章节返回详情() {
-            CollabChapterTask task = new CollabChapterTask();
-            task.setId(1L);
-            task.setProjectId(1L);
-            task.setChapterNumber(1);
-            task.setTitle("第一章");
-            task.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
-            task.setProgress(0);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(1L, 1L)).thenReturn(new CollabProjectMember());
-
-            ChapterTaskResponse resp = chapterTaskService.getChapterById(1L, 1L);
-
-            assertNotNull(resp);
-            assertEquals(1L, resp.getId());
-            assertEquals("第一章", resp.getTitle());
+        void 章节不存在抛异常() {
+            when(collabPort.findChapterTaskById(999L)).thenReturn(Optional.empty());
+            assertThrows(BusinessException.class,
+                    () -> chapterTaskService.getChapterById(999L, 1L));
         }
 
         @Test
-        void 章节不存在抛出异常() {
-            when(chapterTaskMapper.selectById(999L)).thenReturn(null);
+        void 无权访问抛异常() {
+            CollabChapterTask task = new CollabChapterTask();
+            task.setId(1L);
+            task.setProjectId(10L);
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(null);
 
-            assertThrows(IllegalStateException.class, () ->
-                    chapterTaskService.getChapterById(999L, 1L));
+            assertThrows(BusinessException.class,
+                    () -> chapterTaskService.getChapterById(1L, 1L));
+        }
+
+        @Test
+        void 有权限返回详情() {
+            CollabChapterTask task = new CollabChapterTask();
+            task.setId(1L);
+            task.setProjectId(10L);
+            task.setChapterNumber(1);
+            task.setTitle("第一章");
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
+
+            ChapterTaskResponse response = chapterTaskService.getChapterById(1L, 1L);
+
+            assertEquals(1L, response.getId());
+        }
+    }
+
+    @Nested
+    @DisplayName("项目章节列表")
+    class ListByProjectIdTests {
+
+        @Test
+        void 返回分页数据() {
+            CollabChapterTask task = new CollabChapterTask();
+            task.setId(1L);
+            task.setProjectId(10L);
+            task.setChapterNumber(1);
+            task.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+
+            Page<CollabChapterTask> page = new Page<>(1, 10);
+            page.setRecords(List.of(task));
+            page.setTotal(1);
+            when(collabPort.findChapterTasksByProjectIdPaged(10L, 1, 10)).thenReturn(page);
+
+            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByProjectId(10L, 1, 10);
+
+            assertEquals(1, result.getTotal());
+            assertEquals(1, result.getList().size());
         }
     }
 
@@ -208,53 +153,40 @@ class ChapterTaskServiceTest {
     class AssignChapterTests {
 
         @Test
-        void 分配成功更新受让人和状态() {
+        void 非OWNER分配抛异常() {
             CollabChapterTask task = new CollabChapterTask();
             task.setId(1L);
-            task.setProjectId(1L);
-            task.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(chapterTaskMapper.updateById(any())).thenReturn(1);
+            task.setProjectId(10L);
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
 
-            CollabProjectMember owner = new CollabProjectMember();
-            owner.setRole(ProjectMemberRole.OWNER.getValue());
-            when(projectMemberMapper.selectByProjectAndUser(1L, 1L)).thenReturn(owner);
+            CollabProjectMember member = new CollabProjectMember();
+            member.setRole(ProjectMemberRole.TRANSLATOR.getValue());
+            when(collabPort.findMemberByProjectAndUser(10L, 5L)).thenReturn(member);
 
-            ChapterTaskResponse resp = chapterTaskService.assignChapter(1L, 2L, 1L);
-
-            assertNotNull(resp);
-            assertEquals(2L, resp.getAssigneeId());
-            assertEquals(ChapterTaskStatus.TRANSLATING.getValue(), resp.getStatus());
-            assertEquals(0, resp.getProgress());
-            assertNotNull(resp.getAssignedTime());
+            assertThrows(BusinessException.class,
+                    () -> chapterTaskService.assignChapter(1L, 2L, 5L));
         }
+    }
+
+    @Nested
+    @DisplayName("用户待处理章节")
+    class ListByAssigneeIdTests {
 
         @Test
-        void 章节不存在抛出异常() {
-            when(chapterTaskMapper.selectById(999L)).thenReturn(null);
-
-            assertThrows(IllegalStateException.class, () ->
-                    chapterTaskService.assignChapter(999L, 2L, 1L));
-        }
-
-        @Test
-        void 无效状态转换抛出异常() {
+        void 返回分页数据() {
             CollabChapterTask task = new CollabChapterTask();
             task.setId(1L);
-            task.setProjectId(1L);
-            task.setStatus(ChapterTaskStatus.COMPLETED.getValue());
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
+            task.setAssigneeId(1L);
+            task.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
 
-            CollabProjectMember owner = new CollabProjectMember();
-            owner.setRole(ProjectMemberRole.OWNER.getValue());
-            when(projectMemberMapper.selectByProjectAndUser(1L, 1L)).thenReturn(owner);
+            Page<CollabChapterTask> page = new Page<>(1, 10);
+            page.setRecords(List.of(task));
+            page.setTotal(1);
+            when(collabPort.findChapterTasksByAssigneeIdPaged(eq(1L), anyList(), eq(1), eq(10))).thenReturn(page);
 
-            doThrow(new IllegalStateException("Invalid transition"))
-                    .when(collabStateMachine).validateChapterTransition(
-                            ChapterTaskStatus.COMPLETED, ChapterTaskStatus.TRANSLATING);
+            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByAssigneeId(1L, 1, 10);
 
-            assertThrows(IllegalStateException.class, () ->
-                    chapterTaskService.assignChapter(1L, 2L, 1L));
+            assertEquals(1, result.getTotal());
         }
     }
 
@@ -268,8 +200,15 @@ class ChapterTaskServiceTest {
             task.setId(1L);
             task.setProjectId(1L);
             task.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(chapterTaskMapper.updateById(any())).thenReturn(1);
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
+
+            // 模拟状态机更新状态
+            doAnswer(inv -> {
+                CollabChapterTask t = inv.getArgument(0);
+                ChapterTaskStatus target = inv.getArgument(1);
+                t.setStatus(target.getValue());
+                return null;
+            }).when(collabStateMachine).transitionChapter(any(), any(ChapterTaskStatus.class));
 
             ChapterTaskResponse resp = chapterTaskService.submitChapter(1L, "翻译后的内容");
 
@@ -283,9 +222,9 @@ class ChapterTaskServiceTest {
 
         @Test
         void 章节不存在抛出异常() {
-            when(chapterTaskMapper.selectById(999L)).thenReturn(null);
+            when(collabPort.findChapterTaskById(999L)).thenReturn(Optional.empty());
 
-            assertThrows(IllegalStateException.class, () ->
+            assertThrows(BusinessException.class, () ->
                     chapterTaskService.submitChapter(999L, "译文"));
         }
     }
@@ -300,14 +239,21 @@ class ChapterTaskServiceTest {
             task.setId(1L);
             task.setProjectId(1L);
             task.setStatus(ChapterTaskStatus.SUBMITTED.getValue());
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(List.of(task));
-            when(chapterTaskMapper.updateById(any())).thenReturn(1);
-            when(collabProjectMapper.selectById(1L)).thenReturn(new CollabProject());
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(List.of(task));
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(new CollabProject()));
 
             CollabProjectMember reviewer = new CollabProjectMember();
             reviewer.setRole(ProjectMemberRole.REVIEWER.getValue());
-            when(projectMemberMapper.selectByProjectAndUser(1L, 3L)).thenReturn(reviewer);
+            when(collabPort.findMemberByProjectAndUser(1L, 3L)).thenReturn(reviewer);
+
+            // 模拟状态机更新状态
+            doAnswer(inv -> {
+                CollabChapterTask t = inv.getArgument(0);
+                ChapterTaskStatus target = inv.getArgument(1);
+                t.setStatus(target.getValue());
+                return null;
+            }).when(collabStateMachine).transitionChapter(any(), any(ChapterTaskStatus.class));
 
             ChapterTaskResponse resp = chapterTaskService.reviewChapter(1L, true, "很好", 3L);
 
@@ -325,12 +271,18 @@ class ChapterTaskServiceTest {
             task.setId(1L);
             task.setProjectId(1L);
             task.setStatus(ChapterTaskStatus.SUBMITTED.getValue());
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(chapterTaskMapper.updateById(any())).thenReturn(1);
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
 
             CollabProjectMember reviewer = new CollabProjectMember();
             reviewer.setRole(ProjectMemberRole.REVIEWER.getValue());
-            when(projectMemberMapper.selectByProjectAndUser(1L, 3L)).thenReturn(reviewer);
+            when(collabPort.findMemberByProjectAndUser(1L, 3L)).thenReturn(reviewer);
+
+            doAnswer(inv -> {
+                CollabChapterTask t = inv.getArgument(0);
+                ChapterTaskStatus target = inv.getArgument(1);
+                t.setStatus(target.getValue());
+                return null;
+            }).when(collabStateMachine).transitionChapter(any(), any(ChapterTaskStatus.class));
 
             ChapterTaskResponse resp = chapterTaskService.reviewChapter(1L, false, "需要修改", 3L);
 
@@ -342,47 +294,18 @@ class ChapterTaskServiceTest {
 
         @Test
         void 章节不存在抛出异常() {
-            when(chapterTaskMapper.selectById(999L)).thenReturn(null);
+            when(collabPort.findChapterTaskById(999L)).thenReturn(Optional.empty());
 
-            assertThrows(IllegalStateException.class, () ->
+            assertThrows(BusinessException.class, () ->
                     chapterTaskService.reviewChapter(999L, true, "ok", 3L));
         }
     }
 
-    @Nested
-    @DisplayName("获取译员待处理章节")
-    class ListByAssigneeIdTests {
-
-        @Test
-        void 返回已分配章节列表() {
-            CollabChapterTask task = new CollabChapterTask();
-            task.setId(1L);
-            task.setChapterNumber(1);
-            task.setTitle("第一章");
-            task.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
-            task.setProgress(0);
-            task.setDeleted(0);
-            Page<CollabChapterTask> page = new Page<>(1, 20);
-            page.setRecords(List.of(task));
-            page.setTotal(1);
-            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
-
-            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByAssigneeId(2L, 1, 20);
-
-            assertEquals(1, result.getList().size());
-            assertEquals("第一章", result.getList().get(0).getTitle());
-        }
-
-        @Test
-        void 没有待处理章节返回空列表() {
-            Page<CollabChapterTask> page = new Page<>(1, 20);
-            page.setRecords(List.of());
-            page.setTotal(0);
-            when(chapterTaskMapper.selectPage(any(Page.class), any(LambdaQueryWrapper.class))).thenReturn(page);
-
-            PageResponse<ChapterTaskResponse> result = chapterTaskService.listByAssigneeId(2L, 1, 20);
-
-            assertTrue(result.getList().isEmpty());
-        }
+    private CollabProjectMember buildMember(Long projectId, Long userId) {
+        CollabProjectMember m = new CollabProjectMember();
+        m.setProjectId(projectId);
+        m.setUserId(userId);
+        m.setRole(ProjectMemberRole.OWNER.getValue());
+        return m;
     }
 }

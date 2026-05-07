@@ -2,16 +2,15 @@ package com.yumu.noveltranslator.domain.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.yumu.noveltranslator.dto.translation.EntityExtractionResponse;
 import com.yumu.noveltranslator.dto.translation.EntityTranslationResponse;
 import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.dto.translation.EntityMapping;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserPreferenceMapper;
-import com.yumu.noveltranslator.adapter.out.redis.DocumentEntityCache;
+import com.yumu.noveltranslator.port.out.EntityCachePort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,9 +65,9 @@ public class EntityConsistencyService {
     @Value("${translation.python.api-key:}")
     private String pythonApiKey;
 
-    private final DocumentEntityCache documentEntityCache;
-    private final GlossaryMapper glossaryMapper;
-    private final UserPreferenceMapper userPreferenceMapper;
+    private final EntityCachePort entityCachePort;
+    private final GlossaryRepositoryPort glossaryPort;
+    private final UserRepositoryPort userPort;
 
     /**
      * 判断是否需要启用实体一致性
@@ -89,7 +88,7 @@ public class EntityConsistencyService {
 
         try {
             // 1. 先从文档缓存获取已有的实体映射
-            Map<String, String> cachedEntities = documentEntityCache.getEntityMap(userId, documentId);
+            Map<String, String> cachedEntities = entityCachePort.getEntityMap(userId, documentId);
 
             // 2. 分段提取实体（长文本自动分段）
             List<String> extractedEntities = extractEntitiesSegmented(sourceText, targetLang);
@@ -148,7 +147,7 @@ public class EntityConsistencyService {
             // 11. 合并到文档缓存（不包含术语库，术语库始终来自 DB）
             Map<String, String> nonGlossaryMap = new LinkedHashMap<>(dedupedMap);
             glossaryKeys.forEach(nonGlossaryMap::remove);
-            documentEntityCache.mergeEntityMap(userId, documentId, nonGlossaryMap);
+            entityCachePort.mergeEntityMap(userId, documentId, nonGlossaryMap);
 
             // 构建返回结果
             result.setTranslatedText(finalTranslated);
@@ -515,9 +514,7 @@ public class EntityConsistencyService {
 
         // 检查用户是否启用了术语库
         try {
-            LambdaQueryWrapper<UserPreference> prefQuery = new LambdaQueryWrapper<>();
-            prefQuery.eq(UserPreference::getUserId, userId);
-            UserPreference pref = userPreferenceMapper.selectOne(prefQuery);
+            UserPreference pref = userPort.findPreferenceByUserId(userId).orElse(null);
             if (pref == null || !Boolean.TRUE.equals(pref.getEnableGlossary())) {
                 log.debug("用户未启用术语库或偏好不存在");
                 return terms;
@@ -529,9 +526,7 @@ public class EntityConsistencyService {
 
         // 查询用户的所有术语条目
         try {
-            LambdaQueryWrapper<Glossary> query = new LambdaQueryWrapper<>();
-            query.eq(Glossary::getUserId, userId);
-            List<Glossary> allTerms = glossaryMapper.selectList(query);
+            List<Glossary> allTerms = glossaryPort.findActiveGlossaryByUserId(userId);
 
             // 只在原文中实际出现的术语
             for (Glossary term : allTerms) {

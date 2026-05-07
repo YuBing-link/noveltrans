@@ -187,20 +187,22 @@ public class TranslationCacheService {
         }
 
         // L1 全未命中 → MGET 批量查 L2
-        List<String> values = stringRedisTemplate.opsForValue().multiGet(redisKeys);
-        if (values != null) {
-            for (int i = 0; i < modesToSearch.size(); i++) {
-                String modeKey = cacheKey + "_" + modesToSearch.get(i);
-                String v = values.get(i);
-                if (v != null) {
-                    if (NULL_PLACEHOLDER.equals(v)) {
-                        caffeineCache.put(modeKey, NULL_PLACEHOLDER);
-                        return null;
+        if (!redisKeys.isEmpty()) {
+            List<String> values = stringRedisTemplate.opsForValue().multiGet(redisKeys);
+            if (values != null && !values.isEmpty()) {
+                for (int i = 0; i < values.size() && i < modesToSearch.size(); i++) {
+                    String modeKey = cacheKey + "_" + modesToSearch.get(i);
+                    String v = values.get(i);
+                    if (v != null) {
+                        if (NULL_PLACEHOLDER.equals(v)) {
+                            caffeineCache.put(modeKey, NULL_PLACEHOLDER);
+                            return null;
+                        }
+                        caffeineCache.put(modeKey, v);
+                        l2HitCount.incrementAndGet();
+                        log.debug("L2 模式缓存命中: mode={}", modesToSearch.get(i));
+                        return v;
                     }
-                    caffeineCache.put(modeKey, v);
-                    l2HitCount.incrementAndGet();
-                    log.debug("L2 模式缓存命中: mode={}", modesToSearch.get(i));
-                    return v;
                 }
             }
         }

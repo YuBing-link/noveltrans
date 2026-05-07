@@ -2,7 +2,7 @@ package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.AiGlossaryService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
@@ -15,11 +15,10 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +26,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -48,28 +49,25 @@ import static org.mockito.Mockito.*;
 class MultiAgentTranslationServiceTest {
 
     @Mock
-    private CollabChapterTaskMapper chapterTaskMapper;
+    private CollaborationRepositoryPort collabPort;
 
     @Mock
-    private CollabProjectMapper collabProjectMapper;
+    private DocumentRepositoryPort documentPort;
 
     @Mock
-    private DocumentMapper documentMapper;
-
-    @Mock
-    private TranslationTaskMapper translationTaskMapper;
+    private TranslationRepositoryPort translationPort;
 
     @Mock
     private TeamTranslationService teamTranslationService;
 
     @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
 
     @Mock
     private EntityConsistencyService entityConsistencyService;
 
     @Mock
-    private GlossaryMapper glossaryMapper;
+    private GlossaryRepositoryPort glossaryPort;
 
     @Mock
     private RagTranslationService ragTranslationService;
@@ -88,9 +86,9 @@ class MultiAgentTranslationServiceTest {
     @BeforeEach
     void setUp() {
         service = new MultiAgentTranslationService(
-                chapterTaskMapper, collabProjectMapper, documentMapper, translationTaskMapper,
-                teamTranslationService, cacheService, entityConsistencyService,
-                glossaryMapper, ragTranslationService, aiGlossaryService, postProcessingService,
+                collabPort, documentPort, translationPort,
+                teamTranslationService, cachePort, entityConsistencyService,
+                glossaryPort, ragTranslationService, aiGlossaryService, postProcessingService,
                 collabStateMachine);
     }
 
@@ -100,27 +98,27 @@ class MultiAgentTranslationServiceTest {
 
         @Test
         void 没有待翻译章节直接返回() {
-            when(chapterTaskMapper.selectByProjectIdAndStatus(anyLong(), anyString()))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(anyLong(), anyString()))
                     .thenReturn(Collections.emptyList());
 
             service.startMultiAgentTranslation(1L);
 
-            verify(collabProjectMapper, never()).selectById(anyLong());
-            verify(chapterTaskMapper, atLeastOnce()).selectByProjectIdAndStatus(anyLong(), anyString());
+            verify(collabPort, never()).findProjectById(anyLong());
+            verify(collabPort, atLeastOnce()).findChapterTasksByProjectIdAndStatus(anyLong(), anyString());
         }
 
         @Test
         void 项目不存在记录错误并返回() {
             List<CollabChapterTask> chapters = new ArrayList<>();
             chapters.add(createChapter(1L, 1L, "Some text"));
-            when(chapterTaskMapper.selectByProjectIdAndStatus(anyLong(), anyString()))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(anyLong(), anyString()))
                     .thenReturn(chapters);
-            when(collabProjectMapper.selectById(1L)).thenReturn(null);
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.empty());
 
-            // Since virtual threads are involved, we just verify the mapper calls
+            // Since virtual threads are involved, we just verify the port calls
             service.startMultiAgentTranslation(1L);
 
-            verify(collabProjectMapper).selectById(1L);
+            verify(collabPort).findProjectById(1L);
         }
     }
 
@@ -139,11 +137,11 @@ class MultiAgentTranslationServiceTest {
 
         @Test
         void 无章节直接返回() throws Exception {
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(Collections.emptyList());
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(Collections.emptyList());
 
             invokeAssembleCompleteDocument(1L);
 
-            verify(documentMapper, never()).selectById(anyLong());
+            verify(documentPort, never()).findById(anyLong());
         }
 
         @Test
@@ -152,16 +150,16 @@ class MultiAgentTranslationServiceTest {
             CollabChapterTask chapter = createChapter(1L, 1L, "Hello");
             chapter.setTargetText("你好");
             chapters.add(chapter);
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(chapters);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(chapters);
 
             CollabProject project = new CollabProject();
             project.setId(1L);
             project.setDocumentId(null);
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
 
             invokeAssembleCompleteDocument(1L);
 
-            verify(documentMapper, never()).selectById(anyLong());
+            verify(documentPort, never()).findById(anyLong());
         }
 
         @Test
@@ -170,7 +168,7 @@ class MultiAgentTranslationServiceTest {
             CollabChapterTask chapter = createChapter(1L, 1L, "Hello");
             chapter.setTargetText("你好");
             chapters.add(chapter);
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(chapters);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(chapters);
 
             CollabProject project = new CollabProject();
             project.setId(1L);
@@ -178,13 +176,13 @@ class MultiAgentTranslationServiceTest {
             project.setOwnerId(1L);
             project.setSourceLang("en");
             project.setTargetLang("zh");
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
-            when(documentMapper.selectById(99L)).thenReturn(null);
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
+            when(documentPort.findById(99L)).thenReturn(Optional.empty());
 
             invokeAssembleCompleteDocument(1L);
 
             // Should not attempt file operations
-            verify(translationTaskMapper, never()).insert(any());
+            verify(translationPort, never()).saveTask(any());
         }
 
         @Test
@@ -202,7 +200,7 @@ class MultiAgentTranslationServiceTest {
             chapter1.setTargetText("第一章译文");
             chapters.add(chapter1);
 
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(chapters);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(chapters);
 
             CollabProject project = new CollabProject();
             project.setId(1L);
@@ -210,13 +208,13 @@ class MultiAgentTranslationServiceTest {
             project.setOwnerId(5L);
             project.setSourceLang("en");
             project.setTargetLang("zh");
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
 
             Document doc = new Document();
             doc.setId(10L);
             doc.setPath(originalPath);
-            when(documentMapper.selectById(10L)).thenReturn(doc);
-            when(translationTaskMapper.findByDocumentId(10L)).thenReturn(null);
+            when(documentPort.findById(10L)).thenReturn(Optional.of(doc));
+            when(translationPort.findTaskByDocumentId(10L)).thenReturn(Optional.empty());
 
             invokeAssembleCompleteDocument(1L);
 
@@ -231,11 +229,11 @@ class MultiAgentTranslationServiceTest {
             assertTrue(content.indexOf("第一章译文") < content.indexOf("第二章译文"));
 
             // Verify TranslationTask was created
-            verify(translationTaskMapper).insert(argThat(task ->
+            verify(translationPort).saveTask(argThat(task ->
                     task.getUserId().equals(5L) && "completed".equals(task.getStatus())));
 
             // Verify Document status updated
-            verify(documentMapper).updateById(argThat(d -> "completed".equals(d.getStatus())));
+            verify(documentPort).update(argThat(d -> "completed".equals(d.getStatus())));
         }
 
         @Test
@@ -257,7 +255,7 @@ class MultiAgentTranslationServiceTest {
             chapter3.setTargetText("第三章");
             chapters.add(chapter3);
 
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(chapters);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(chapters);
 
             CollabProject project = new CollabProject();
             project.setId(1L);
@@ -265,13 +263,13 @@ class MultiAgentTranslationServiceTest {
             project.setOwnerId(5L);
             project.setSourceLang("en");
             project.setTargetLang("zh");
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
 
             Document doc = new Document();
             doc.setId(10L);
             doc.setPath(originalPath);
-            when(documentMapper.selectById(10L)).thenReturn(doc);
-            when(translationTaskMapper.findByDocumentId(10L)).thenReturn(null);
+            when(documentPort.findById(10L)).thenReturn(Optional.of(doc));
+            when(translationPort.findTaskByDocumentId(10L)).thenReturn(Optional.empty());
 
             invokeAssembleCompleteDocument(1L);
 
@@ -290,23 +288,23 @@ class MultiAgentTranslationServiceTest {
             chapter.setChapterNumber(1);
             chapter.setTargetText("");
             chapters.add(chapter);
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(chapters);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(chapters);
 
             CollabProject project = new CollabProject();
             project.setId(1L);
             project.setDocumentId(10L);
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
 
             Document doc = new Document();
             doc.setId(10L);
             doc.setPath(originalPath);
-            when(documentMapper.selectById(10L)).thenReturn(doc);
+            when(documentPort.findById(10L)).thenReturn(Optional.of(doc));
 
             invokeAssembleCompleteDocument(1L);
 
             // Should not create translation task or update document
-            verify(translationTaskMapper, never()).insert(any());
-            verify(documentMapper, never()).updateById(any());
+            verify(translationPort, never()).saveTask(any());
+            verify(documentPort, never()).update(any());
         }
 
         @Test
@@ -316,7 +314,7 @@ class MultiAgentTranslationServiceTest {
             chapter.setChapterNumber(1);
             chapter.setTargetText("你好");
             chapters.add(chapter);
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(chapters);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(chapters);
 
             CollabProject project = new CollabProject();
             project.setId(1L);
@@ -324,22 +322,22 @@ class MultiAgentTranslationServiceTest {
             project.setOwnerId(5L);
             project.setSourceLang("en");
             project.setTargetLang("zh");
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
 
             Document doc = new Document();
             doc.setId(10L);
             doc.setPath(originalPath);
-            when(documentMapper.selectById(10L)).thenReturn(doc);
+            when(documentPort.findById(10L)).thenReturn(Optional.of(doc));
 
             TranslationTask existingTask = new TranslationTask();
             existingTask.setId(100L);
             existingTask.setTaskId("existing_task");
-            when(translationTaskMapper.findByDocumentId(10L)).thenReturn(existingTask);
+            when(translationPort.findTaskByDocumentId(10L)).thenReturn(Optional.of(existingTask));
 
             invokeAssembleCompleteDocument(1L);
 
-            verify(translationTaskMapper, never()).insert(any());
-            verify(translationTaskMapper).updateById(argThat(task ->
+            verify(translationPort, never()).saveTask(any());
+            verify(translationPort).updateTask(argThat(task ->
                     task.getId().equals(100L) && "completed".equals(task.getStatus())));
         }
 
@@ -481,7 +479,7 @@ class MultiAgentTranslationServiceTest {
             term3.setSourceWord("not_in_text");
             term3.setTargetWord("不在文本中");
 
-            when(glossaryMapper.selectList(any(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class)))
+            when(glossaryPort.findActiveGlossaryByUserId(1L))
                     .thenReturn(List.of(term1, term2, term3));
 
             @SuppressWarnings("unchecked")
@@ -501,7 +499,7 @@ class MultiAgentTranslationServiceTest {
             term2.setSourceWord("hello");
             term2.setTargetWord("你好");
 
-            when(glossaryMapper.selectList(any(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class)))
+            when(glossaryPort.findActiveGlossaryByUserId(1L))
                     .thenReturn(List.of(term1, term2));
 
             @SuppressWarnings("unchecked")
@@ -514,7 +512,7 @@ class MultiAgentTranslationServiceTest {
 
         @Test
         void 查询异常返回空列表() {
-            when(glossaryMapper.selectList(any(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class)))
+            when(glossaryPort.findActiveGlossaryByUserId(1L))
                     .thenThrow(new RuntimeException("DB error"));
 
             @SuppressWarnings("unchecked")
@@ -531,14 +529,24 @@ class MultiAgentTranslationServiceTest {
     @DisplayName("recoverStuckChapters - 恢复中断章节")
     class RecoverStuckChaptersTests {
 
+        @BeforeEach
+        void setUpStateMachine() {
+            doAnswer(inv -> {
+                CollabChapterTask t = inv.getArgument(0);
+                ChapterTaskStatus target = inv.getArgument(1);
+                t.setStatus(target.getValue());
+                return null;
+            }).when(collabStateMachine).transitionChapter(any(), any(ChapterTaskStatus.class));
+        }
+
         @Test
         void 无中断章节直接返回() {
-            when(chapterTaskMapper.selectByProjectIdAndStatus(anyLong(), eq("TRANSLATING")))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(anyLong(), eq("TRANSLATING")))
                     .thenReturn(List.of());
 
             service.startMultiAgentTranslation(1L);
 
-            verify(chapterTaskMapper).selectByProjectIdAndStatus(1L, "TRANSLATING");
+            verify(collabPort).findChapterTasksByProjectIdAndStatus(1L, "TRANSLATING");
         }
 
         @Test
@@ -553,10 +561,10 @@ class MultiAgentTranslationServiceTest {
                 ReflectionTestUtils.invokeMethod(service, "incrementRetryCount", chapter);
             }
 
-            when(chapterTaskMapper.selectByProjectIdAndStatus(eq(1L), eq("TRANSLATING")))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(eq(1L), eq("TRANSLATING")))
                     .thenReturn(List.of(chapter))
                     .thenReturn(List.of());
-            when(chapterTaskMapper.selectByProjectIdAndStatus(eq(1L), eq("UNASSIGNED")))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(eq(1L), eq("UNASSIGNED")))
                     .thenReturn(List.of());
 
             service.startMultiAgentTranslation(1L);
@@ -572,10 +580,10 @@ class MultiAgentTranslationServiceTest {
             chapter.setProjectId(1L);
             chapter.setStatus("TRANSLATING");
 
-            when(chapterTaskMapper.selectByProjectIdAndStatus(eq(1L), eq("TRANSLATING")))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(eq(1L), eq("TRANSLATING")))
                     .thenReturn(List.of(chapter))
                     .thenReturn(List.of());
-            when(chapterTaskMapper.selectByProjectIdAndStatus(eq(1L), eq("UNASSIGNED")))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(eq(1L), eq("UNASSIGNED")))
                     .thenReturn(List.of());
 
             service.startMultiAgentTranslation(1L);
@@ -583,7 +591,7 @@ class MultiAgentTranslationServiceTest {
             // 章节应被回退到 UNASSIGNED
             assertEquals("UNASSIGNED", chapter.getStatus());
             assertTrue(chapter.getReviewComment().contains("翻译中断"));
-            verify(chapterTaskMapper).updateById(chapter);
+            verify(collabPort).updateChapterTask(chapter);
         }
     }
 
@@ -604,13 +612,13 @@ class MultiAgentTranslationServiceTest {
             CollabChapterTask task2 = new CollabChapterTask();
             task2.setStatus("COMPLETED");
 
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(List.of(task1, task2));
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(List.of(task1, task2));
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
 
             ReflectionTestUtils.invokeMethod(service, "updateProjectProgress", 1L);
 
             assertEquals(100, project.getProgress());
-            verify(collabProjectMapper).updateById(project);
+            verify(collabPort).updateProject(project);
         }
 
         @Test
@@ -625,8 +633,8 @@ class MultiAgentTranslationServiceTest {
             CollabChapterTask task3 = new CollabChapterTask();
             task3.setStatus("UNASSIGNED");
 
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(List.of(task1, task2, task3));
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(List.of(task1, task2, task3));
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
 
             ReflectionTestUtils.invokeMethod(service, "updateProjectProgress", 1L);
 
@@ -635,11 +643,11 @@ class MultiAgentTranslationServiceTest {
 
         @Test
         void 无章节时不更新() {
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(List.of());
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(List.of());
 
             ReflectionTestUtils.invokeMethod(service, "updateProjectProgress", 1L);
 
-            verify(collabProjectMapper, never()).selectById(anyLong());
+            verify(collabPort, never()).findProjectById(anyLong());
         }
 
         @Test
@@ -647,8 +655,8 @@ class MultiAgentTranslationServiceTest {
             CollabChapterTask task = new CollabChapterTask();
             task.setStatus("COMPLETED");
 
-            when(chapterTaskMapper.selectByProjectId(1L)).thenReturn(List.of(task));
-            when(collabProjectMapper.selectById(1L)).thenReturn(null);
+            when(collabPort.findChapterTasksByProjectId(1L)).thenReturn(List.of(task));
+            when(collabPort.findProjectById(1L)).thenReturn(Optional.empty());
 
             assertDoesNotThrow(() ->
                     ReflectionTestUtils.invokeMethod(service, "updateProjectProgress", 1L));
@@ -660,6 +668,16 @@ class MultiAgentTranslationServiceTest {
     @Nested
     @DisplayName("applyTranslationResult - 翻译结果应用")
     class ApplyTranslationResultTests {
+
+        @BeforeEach
+        void setUpStateMachine() {
+            doAnswer(inv -> {
+                CollabChapterTask t = inv.getArgument(0);
+                ChapterTaskStatus target = inv.getArgument(1);
+                t.setStatus(target.getValue());
+                return null;
+            }).when(collabStateMachine).transitionChapter(any(), any(ChapterTaskStatus.class));
+        }
 
         @Test
         void 缓存命中标记为COMPLETED() {

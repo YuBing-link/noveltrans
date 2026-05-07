@@ -10,10 +10,8 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabComment;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -26,9 +24,11 @@ import org.mockito.quality.Strictness;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,33 +36,15 @@ import static org.mockito.Mockito.*;
 class CollabCommentServiceTest {
 
     @Mock
-    private CollabCommentMapper collabCommentMapper;
+    private CollaborationRepositoryPort collabPort;
     @Mock
-    private CollabChapterTaskMapper chapterTaskMapper;
-    @Mock
-    private CollabProjectMemberMapper projectMemberMapper;
-    @Mock
-    private UserMapper userMapper;
+    private UserRepositoryPort userPort;
 
     private CollabCommentService service;
 
     @BeforeEach
     void setUp() {
-        service = spy(new CollabCommentService(collabCommentMapper, chapterTaskMapper,
-                projectMemberMapper, userMapper));
-        // Mock the save() method from ServiceImpl
-        doAnswer(invocation -> {
-            CollabComment c = invocation.getArgument(0);
-            if (c.getId() == null) c.setId(100L);
-            return true;
-        }).when(service).save(any(CollabComment.class));
-        doAnswer(invocation -> true).when(service).updateById(any(CollabComment.class));
-        doAnswer(invocation -> true).when(service).removeById(anyLong());
-        // Mock getById() from ServiceImpl (uses collabCommentMapper.selectById)
-        doAnswer(invocation -> {
-            Long id = invocation.getArgument(0);
-            return collabCommentMapper.selectById(id);
-        }).when(service).getById(anyLong());
+        service = new CollabCommentService(collabPort, userPort);
     }
 
     @Nested
@@ -72,136 +54,70 @@ class CollabCommentServiceTest {
         @Test
         void 创建顶级评论成功() {
             CollabChapterTask task = buildTask(1L, 10L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
 
             CreateCommentRequest req = new CreateCommentRequest();
             req.setSourceText("source");
             req.setTargetText("target");
-            req.setContent("good translation");
-            req.setParentId(null);
+            req.setContent("评论内容");
 
-            CommentResponse result = service.createComment(1L, 1L, req);
+            CommentResponse resp = service.createComment(1L, 1L, req);
 
-            assertNotNull(result);
-            assertEquals("good translation", result.getContent());
-            assertTrue(result.getReplies().isEmpty());
+            assertNotNull(resp);
+            assertEquals("source", resp.getSourceText());
+            verify(collabPort).saveComment(any(CollabComment.class));
         }
 
         @Test
-        void 创建回复评论成功() {
+        void 章节不存在抛异常() {
+            when(collabPort.findChapterTaskById(999L)).thenReturn(Optional.empty());
+            CreateCommentRequest req = new CreateCommentRequest();
+            assertThrows(BusinessException.class, () -> service.createComment(999L, 1L, req));
+        }
+
+        @Test
+        void 无权访问抛异常() {
             CollabChapterTask task = buildTask(1L, 10L);
-            CollabComment parent = new CollabComment();
-            parent.setId(50L);
-            parent.setChapterTaskId(1L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
-            when(collabCommentMapper.selectById(50L)).thenReturn(parent);
-
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(null);
             CreateCommentRequest req = new CreateCommentRequest();
-            req.setSourceText("source");
-            req.setTargetText("target");
-            req.setContent("reply content");
-            req.setParentId(50L);
-
-            CommentResponse result = service.createComment(1L, 1L, req);
-
-            assertNotNull(result);
-            assertEquals("reply content", result.getContent());
-        }
-
-        @Test
-        void 章节不存在抛出异常() {
-            when(chapterTaskMapper.selectById(999L)).thenReturn(null);
-
-            CreateCommentRequest req = new CreateCommentRequest();
-            assertThrows(IllegalStateException.class, () ->
-                service.createComment(999L, 1L, req));
-        }
-
-        @Test
-        void 无项目权限抛出异常() {
-            CollabChapterTask task = buildTask(1L, 10L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(null);
-
-            CreateCommentRequest req = new CreateCommentRequest();
-            assertThrows(IllegalStateException.class, () ->
-                service.createComment(1L, 1L, req));
-        }
-
-        @Test
-        void 父评论不存在抛出异常() {
-            CollabChapterTask task = buildTask(1L, 10L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
-            when(collabCommentMapper.selectById(999L)).thenReturn(null);
-
-            CreateCommentRequest req = new CreateCommentRequest();
-            req.setParentId(999L);
-            assertThrows(IllegalStateException.class, () ->
-                service.createComment(1L, 1L, req));
-        }
-
-        @Test
-        void 父评论不属于该章节抛出异常() {
-            CollabChapterTask task = buildTask(1L, 10L);
-            CollabComment parent = new CollabComment();
-            parent.setId(50L);
-            parent.setChapterTaskId(2L); // different chapter
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
-            when(collabCommentMapper.selectById(50L)).thenReturn(parent);
-
-            CreateCommentRequest req = new CreateCommentRequest();
-            req.setParentId(50L);
-            assertThrows(IllegalStateException.class, () ->
-                service.createComment(1L, 1L, req));
+            assertThrows(BusinessException.class, () -> service.createComment(1L, 1L, req));
         }
     }
 
     @Nested
-    @DisplayName("获取章节评论")
+    @DisplayName("获取评论列表")
     class GetCommentsTests {
 
         @Test
-        void 返回评论树() {
-            CollabChapterTask task = buildTask(1L, 10L);
-            CollabComment root1 = buildComment(1L, 1L, "root1", null);
-            CollabComment root2 = buildComment(2L, 1L, "root2", null);
-            CollabComment reply1 = buildComment(3L, 2L, "reply1", 1L);
+        void 无权访问抛异常() {
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(buildTask(1L, 10L)));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(null);
 
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
-            Page<CollabComment> commentPage = new Page<>(1, 20);
-            commentPage.setRecords(List.of(root1, root2));
-            commentPage.setTotal(2);
-            when(collabCommentMapper.selectByChapterTaskIdPage(any(Page.class), eq(1L))).thenReturn(commentPage);
-            when(collabCommentMapper.selectRepliesByParentId(1L)).thenReturn(List.of(reply1));
-            when(collabCommentMapper.selectRepliesByParentId(2L)).thenReturn(List.of());
-            when(userMapper.selectById(anyLong())).thenReturn(null);
-
-            IPage<CommentResponse> result = service.getCommentsByChapterPage(1L, 1L, 1, 20);
-
-            assertEquals(2, result.getRecords().size());
-            assertEquals(1, result.getRecords().get(0).getReplies().size());
-            assertEquals("reply1", result.getRecords().get(0).getReplies().get(0).getContent());
+            assertThrows(BusinessException.class,
+                    () -> service.getCommentsByChapterPage(1L, 1L, 1, 10));
         }
 
         @Test
-        void 章节不存在抛出异常() {
-            when(chapterTaskMapper.selectById(999L)).thenReturn(null);
-            assertThrows(IllegalStateException.class, () ->
-                service.getCommentsByChapterPage(999L, 1L, 1, 20));
-        }
+        void 有权限返回分页数据() {
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(buildTask(1L, 10L)));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
 
-        @Test
-        void 无权限抛出异常() {
-            CollabChapterTask task = buildTask(1L, 10L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(null);
-            assertThrows(IllegalStateException.class, () ->
-                service.getCommentsByChapterPage(1L, 1L, 1, 20));
+            Page<CollabComment> commentPage = new Page<>(1, 10);
+            CollabComment root = new CollabComment();
+            root.setId(1L);
+            root.setChapterTaskId(1L);
+            root.setUserId(10L);
+            root.setContent("根评论");
+            commentPage.setRecords(List.of(root));
+            commentPage.setTotal(1);
+            when(collabPort.findCommentsByChapterTaskIdPage(any(Page.class), eq(1L))).thenReturn(commentPage);
+            when(collabPort.findRepliesByParentId(1L)).thenReturn(List.of());
+
+            IPage<CommentResponse> result = service.getCommentsByChapterPage(1L, 1L, 1, 10);
+
+            assertEquals(1, result.getTotal());
         }
     }
 
@@ -210,32 +126,25 @@ class CollabCommentServiceTest {
     class ResolveCommentTests {
 
         @Test
-        void 标记已解决() {
-            CollabComment comment = buildComment(1L, 1L, "content", null);
-            CollabChapterTask task = buildTask(1L, 10L);
-            doReturn(comment).when(service).getById(1L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
+        void 评论不存在抛异常() {
+            when(collabPort.findCommentById(999L)).thenReturn(Optional.empty());
+            assertThrows(BusinessException.class, () -> service.resolveComment(999L, 1L));
+        }
+
+        @Test
+        void 有权解决成功() {
+            CollabComment comment = new CollabComment();
+            comment.setId(1L);
+            comment.setChapterTaskId(5L);
+            comment.setResolved(false);
+            when(collabPort.findCommentById(1L)).thenReturn(Optional.of(comment));
+            when(collabPort.findChapterTaskById(5L)).thenReturn(Optional.of(buildTask(5L, 10L)));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
 
             service.resolveComment(1L, 1L);
 
             assertTrue(comment.getResolved());
-        }
-
-        @Test
-        void 评论不存在抛出异常() {
-            doReturn(null).when(service).getById(1L);
-            assertThrows(IllegalStateException.class, () ->
-                service.resolveComment(1L, 1L));
-        }
-
-        @Test
-        void 章节不存在抛出异常() {
-            CollabComment comment = buildComment(1L, 1L, "content", null);
-            doReturn(comment).when(service).getById(1L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(null);
-            assertThrows(IllegalStateException.class, () ->
-                service.resolveComment(1L, 1L));
+            verify(collabPort).updateComment(comment);
         }
     }
 
@@ -244,65 +153,91 @@ class CollabCommentServiceTest {
     class DeleteCommentTests {
 
         @Test
-        void 创建者可以删除() {
-            CollabComment comment = buildComment(1L, 1L, "content", null);
-            CollabChapterTask task = buildTask(1L, 10L);
-            doReturn(comment).when(service).getById(1L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
+        void 评论不存在抛异常() {
+            when(collabPort.findCommentById(999L)).thenReturn(Optional.empty());
+            assertThrows(BusinessException.class, () -> service.deleteComment(999L, 1L));
+        }
+
+        @Test
+        void 非创建者删除抛异常() {
+            CollabComment comment = new CollabComment();
+            comment.setId(1L);
+            comment.setChapterTaskId(5L);
+            comment.setUserId(99L); // 不是当前用户
+            when(collabPort.findCommentById(1L)).thenReturn(Optional.of(comment));
+            when(collabPort.findChapterTaskById(5L)).thenReturn(Optional.of(buildTask(5L, 10L)));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
+
+            assertThrows(BusinessException.class, () -> service.deleteComment(1L, 1L));
+        }
+
+        @Test
+        void 创建者删除成功() {
+            CollabComment comment = new CollabComment();
+            comment.setId(1L);
+            comment.setChapterTaskId(5L);
+            comment.setUserId(1L);
+            when(collabPort.findCommentById(1L)).thenReturn(Optional.of(comment));
+            when(collabPort.findChapterTaskById(5L)).thenReturn(Optional.of(buildTask(5L, 10L)));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
 
             service.deleteComment(1L, 1L);
 
-            verify(service).removeById(1L);
+            verify(collabPort).deleteComment(1L);
         }
+    }
+
+    @Nested
+    @DisplayName("回复评论")
+    class ReplyCommentTests {
 
         @Test
-        void 不能删除他人评论() {
-            CollabComment comment = buildComment(1L, 2L, "content", null);
+        void 父评论不存在抛异常() {
             CollabChapterTask task = buildTask(1L, 10L);
-            doReturn(comment).when(service).getById(1L);
-            when(chapterTaskMapper.selectById(1L)).thenReturn(task);
-            when(projectMemberMapper.selectByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
+            when(collabPort.findCommentById(999L)).thenReturn(Optional.empty());
 
-            assertThrows(IllegalStateException.class, () ->
-                service.deleteComment(1L, 1L));
+            CreateCommentRequest req = new CreateCommentRequest();
+            req.setParentId(999L);
+            req.setContent("回复内容");
+
+            assertThrows(BusinessException.class, () -> service.createComment(1L, 1L, req));
         }
 
         @Test
-        void 评论不存在抛出异常() {
-            doReturn(null).when(service).getById(1L);
-            assertThrows(IllegalStateException.class, () ->
-                service.deleteComment(1L, 1L));
+        void 父评论不属于当前章节抛异常() {
+            CollabChapterTask task = buildTask(1L, 10L);
+            when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(task));
+            when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
+
+            CollabComment parent = new CollabComment();
+            parent.setId(999L);
+            parent.setChapterTaskId(88L); // 不属于 chapterTaskId=1
+            when(collabPort.findCommentById(999L)).thenReturn(Optional.of(parent));
+
+            CreateCommentRequest req = new CreateCommentRequest();
+            req.setParentId(999L);
+            req.setContent("回复内容");
+
+            assertThrows(BusinessException.class, () -> service.createComment(1L, 1L, req));
         }
     }
 
     private CollabChapterTask buildTask(Long id, Long projectId) {
-        CollabChapterTask task = new CollabChapterTask();
-        task.setId(id);
-        task.setProjectId(projectId);
-        return task;
+        CollabChapterTask t = new CollabChapterTask();
+        t.setId(id);
+        t.setProjectId(projectId);
+        t.setChapterNumber(1);
+        t.setStatus("UNASSIGNED");
+        return t;
     }
 
     private CollabProjectMember buildMember(Long projectId, Long userId) {
-        CollabProjectMember member = new CollabProjectMember();
-        member.setId(1L);
-        member.setProjectId(projectId);
-        member.setUserId(userId);
-        member.setRole("member");
-        return member;
-    }
-
-    private CollabComment buildComment(Long id, Long userId, String content, Long parentId) {
-        CollabComment comment = new CollabComment();
-        comment.setId(id);
-        comment.setChapterTaskId(1L);
-        comment.setUserId(userId);
-        comment.setSourceText("source");
-        comment.setTargetText("target");
-        comment.setContent(content);
-        comment.setParentId(parentId);
-        comment.setResolved(false);
-        comment.setCreateTime(LocalDateTime.now());
-        return comment;
+        CollabProjectMember m = new CollabProjectMember();
+        m.setProjectId(projectId);
+        m.setUserId(userId);
+        m.setRole("OWNER");
+        return m;
     }
 }

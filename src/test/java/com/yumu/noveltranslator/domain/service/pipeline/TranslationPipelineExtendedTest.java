@@ -9,7 +9,7 @@ import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +24,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -39,7 +40,7 @@ import static org.mockito.Mockito.*;
 class TranslationPipelineExtendedTest {
 
     @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cacheService;
     @Mock
     private RagTranslationService ragTranslationService;
     @Mock
@@ -86,7 +87,7 @@ class TranslationPipelineExtendedTest {
                 teamTranslationService, USER_ID, DOC_ID, List.of(glossary));
 
         // Common stubs — lenient so they don't interfere with test-specific stubs
-        lenient().doReturn(null).when(cacheService).getCacheByMode(anyString(), anyString());
+        lenient().doReturn(Optional.empty()).when(cacheService).getCacheByMode(anyString(), anyString());
         lenient().doNothing().when(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
 
         RagTranslationResponse ragMiss = buildRagMiss();
@@ -100,7 +101,7 @@ class TranslationPipelineExtendedTest {
 
         // Translation client: default success for any args
         lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                .translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList());
+                .translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
         lenient().doReturn("Team translated result")
                 .when(teamTranslationService)
@@ -150,24 +151,24 @@ class TranslationPipelineExtendedTest {
         @Test
         @DisplayName("L1 缓存命中 — 直接返回缓存结果")
         void cacheHit() {
-            lenient().doReturn(TRANSLATED_TEXT).when(cacheService).getCacheByMode(anyString(), eq("fast"));
+            lenient().doReturn(Optional.of(TRANSLATED_TEXT)).when(cacheService).getCacheByMode(anyString(), eq("fast"));
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
         @DisplayName("L1 缓存未命中 — 走完整管线到 L4")
         void cacheMissFullPipeline() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
@@ -179,7 +180,7 @@ class TranslationPipelineExtendedTest {
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
             assertEquals("RAG翻译结果", result);
-            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any());
             verify(cacheService).putCache(anyString(), anyString(), eq("RAG翻译结果"), anyString(), anyString(), anyString(), anyString());
         }
 
@@ -194,7 +195,7 @@ class TranslationPipelineExtendedTest {
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
             assertEquals("一致性翻译结果", result);
-            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
@@ -202,12 +203,12 @@ class TranslationPipelineExtendedTest {
         void entityConsistencyNotEnabled() {
             lenient().doReturn(false).when(entityConsistencyService).shouldUseConsistency(anyString());
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
@@ -218,12 +219,12 @@ class TranslationPipelineExtendedTest {
             lenient().doReturn(notApplied).when(entityConsistencyService)
                     .translateWithConsistency(anyString(), anyString(), anyString(), anyLong(), anyString());
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
@@ -234,19 +235,19 @@ class TranslationPipelineExtendedTest {
             lenient().doReturn(nullText).when(entityConsistencyService)
                     .translateWithConsistency(anyString(), anyString(), anyString(), anyLong(), anyString());
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
         @DisplayName("L4 直译成功")
         void l4DirectTranslationSuccess() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -258,7 +259,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("L4 直译返回 null — 整体返回 null")
         void l4ReturnsNull() {
             lenient().doReturn(null).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -270,7 +271,7 @@ class TranslationPipelineExtendedTest {
         void l4AdKeywords() {
             String adJson = "{\"code\":200,\"data\":\"人工智能助手很强大\"}";
             lenient().doReturn(adJson).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -283,7 +284,7 @@ class TranslationPipelineExtendedTest {
             String longResult = "a".repeat(SOURCE_TEXT.length() * 10 + 1);
             String longJson = "{\"code\":200,\"data\":\"" + longResult + "\"}";
             lenient().doReturn(longJson).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -296,7 +297,7 @@ class TranslationPipelineExtendedTest {
             // Empty string passes isValidTranslation (no ad keywords, length OK)
             // postProcessing returns it, shouldCache("Hello World", "") = true
             lenient().doReturn("{\"code\":200,\"data\":\"\"}").when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -308,7 +309,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("译文与原文一致 — 跳过缓存")
         void shouldCacheSkippedWhenIdentical() {
             lenient().doReturn("{\"code\":200,\"data\":\"Hello World\"}").when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -319,7 +320,7 @@ class TranslationPipelineExtendedTest {
         @Test
         @DisplayName("FAST 模式可读取 expert 和 team 层级缓存")
         void fastModeCacheHierarchy() {
-            lenient().doReturn("cached result").when(cacheService).getCacheByMode(anyString(), eq("fast"));
+            lenient().doReturn(Optional.of("cached result")).when(cacheService).getCacheByMode(anyString(), eq("fast"));
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -330,7 +331,7 @@ class TranslationPipelineExtendedTest {
         @Test
         @DisplayName("EXPERT 模式可读取 team 层级缓存")
         void expertModeCacheHierarchy() {
-            lenient().doReturn("cached expert").when(cacheService).getCacheByMode(anyString(), eq("expert"));
+            lenient().doReturn(Optional.of("cached expert")).when(cacheService).getCacheByMode(anyString(), eq("expert"));
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
@@ -348,7 +349,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("短文本 — 不分段直接翻译")
         void shortTextNoSegmentation() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute("Hello", TARGET_LANG, TranslationMode.FAST);
 
@@ -363,13 +364,13 @@ class TranslationPipelineExtendedTest {
             String longText = longParagraph + "\n\n" + "Another paragraph here.";
 
             lenient().doReturn("{\"code\":200,\"data\":\"翻译结果\"}").when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(longText, TARGET_LANG, TranslationMode.FAST);
 
             assertNotNull(result);
             // At least one segment was translated
-            verify(translationClient, atLeastOnce()).translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+            verify(translationClient, atLeastOnce()).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
@@ -387,7 +388,7 @@ class TranslationPipelineExtendedTest {
                     return "{\"code\":200,\"data\":\"翻译结果\"}";
                 }
                 return null;
-            }).when(translationClient).translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+            }).when(translationClient).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(longText, TARGET_LANG, TranslationMode.FAST);
 
@@ -410,7 +411,7 @@ class TranslationPipelineExtendedTest {
             assertTrue(veryLongText.length() > 5000, "Text must exceed 5000 chars, was " + veryLongText.length());
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(veryLongText, TARGET_LANG, TranslationMode.FAST);
 
@@ -418,7 +419,7 @@ class TranslationPipelineExtendedTest {
             // 600 sentences * 10 chars = 6000 chars total
             // splitAtSentenceBoundary produces segments of ~3000 chars each
             // So 6000 / 3000 = 2 segments minimum
-            verify(translationClient, atLeast(2)).translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+            verify(translationClient, atLeast(2)).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
     }
 
@@ -431,19 +432,19 @@ class TranslationPipelineExtendedTest {
         @Test
         @DisplayName("缓存命中")
         void cacheHit() {
-            lenient().doReturn("fast cached").when(cacheService).getCacheByMode(anyString(), eq("fast"));
+            lenient().doReturn(Optional.of("fast cached")).when(cacheService).getCacheByMode(anyString(), eq("fast"));
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals("fast cached", result);
-            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
         @DisplayName("缓存未命中 — 直译成功")
         void cacheMissDirectTranslationSuccess() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), anyBoolean(), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -454,19 +455,19 @@ class TranslationPipelineExtendedTest {
         @DisplayName("HTML 模式翻译")
         void htmlMode() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(true), anyBoolean(), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), eq(true), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST, true);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), anyBoolean(), anyList());
+            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
         @DisplayName("直译返回 null — 返回原文")
         void directTranslationReturnsNullReturnsOriginal() {
             lenient().doReturn(null).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), anyBoolean(), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -477,7 +478,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("直译抛出异常 — 返回原文")
         void directTranslationThrowsReturnsOriginal() {
             lenient().doThrow(new RuntimeException("Connection refused")).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), anyBoolean(), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -489,7 +490,7 @@ class TranslationPipelineExtendedTest {
         void adKeywordsReturnsOriginal() {
             String adJson = "{\"code\":200,\"data\":\"体验生成式人工智能\"}";
             lenient().doReturn(adJson).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), anyBoolean(), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -500,7 +501,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("译文与原文一致 — 跳过缓存")
         void identicalTextSkipsCache() {
             lenient().doReturn("{\"code\":200,\"data\":\"" + SOURCE_TEXT + "\"}").when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), anyBoolean(), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -512,20 +513,20 @@ class TranslationPipelineExtendedTest {
         @DisplayName("术语表非空时强制走 Python（hasGlossary=true）")
         void glossaryForcesPythonService() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipelineWithGlossary.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals(TRANSLATED_TEXT, result);
             // useGlossary=false, fastMode=false because glossary is non-empty
-            verify(translationClient).translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
         @DisplayName("直译结果为空字符串 — 返回原文")
         void blankResultReturnsOriginal() {
             lenient().doReturn("{\"code\":200,\"data\":\"  \"}").when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), anyBoolean(), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -542,7 +543,7 @@ class TranslationPipelineExtendedTest {
         @Test
         @DisplayName("L1 缓存命中 — 直接返回")
         void cacheHit() {
-            lenient().doReturn("team cached").when(cacheService).getCacheByMode(anyString(), eq("team"));
+            lenient().doReturn(Optional.of("team cached")).when(cacheService).getCacheByMode(anyString(), eq("team"));
 
             String result = teamPipeline.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "fantasy", List.of());
 
@@ -629,7 +630,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("L4 teamTranslationService 为 null — 降级到 executeSegment")
         void teamServiceNullFallsBackToStandardPipeline() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("team"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("team"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "daily", List.of());
 
@@ -720,48 +721,48 @@ class TranslationPipelineExtendedTest {
         @DisplayName("无术语表 — 不带术语表参数")
         void noGlossary() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
         @DisplayName("有术语表 — glossaryTerms 传入")
         void withGlossary() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(true), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(true), anyList(), any(), any());
 
             String result = pipelineWithGlossary.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("fast"), eq(false), eq(true), argThat(terms -> terms != null && terms.size() == 1));
+            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("fast"), eq(false), eq(true), argThat(terms -> terms != null && terms.size() == 1), any(), any());
         }
 
         @Test
         @DisplayName("快速模式有术语表 — 强制 Python 服务")
         void fastModeWithGlossaryForcesPython() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipelineWithGlossary.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("fast"), eq(false), eq(false), argThat(terms -> terms != null && terms.size() == 1));
+            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("fast"), anyBoolean(), anyBoolean(), argThat(terms -> terms != null && terms.size() == 1), any(), any());
         }
 
         @Test
         @DisplayName("executeSegment 有术语表 — L4 调用携带术语表")
         void executeSegmentWithGlossary() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("expert"), eq(false), eq(true), anyList());
+                    .translate(anyString(), anyString(), eq("expert"), eq(false), eq(true), anyList(), any(), any());
 
             String result = pipelineWithGlossary.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("expert"), eq(false), eq(true), argThat(terms -> terms != null && !terms.isEmpty()));
+            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("expert"), eq(false), eq(true), argThat(terms -> terms != null && !terms.isEmpty()), any(), any());
         }
     }
 
@@ -796,7 +797,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("翻译客户端抛出异常 — executeFast 捕获返回原文")
         void translationClientExceptionInFastMode() {
             lenient().doThrow(new RuntimeException("Network error")).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), anyBoolean(), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeFast(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -807,7 +808,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("后处理服务抛出异常")
         void postProcessingException() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
             lenient().doThrow(new RuntimeException("Post-processing error"))
                     .when(postProcessingService).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
 
@@ -839,20 +840,20 @@ class TranslationPipelineExtendedTest {
         @DisplayName("null 文本 — 分段为空字符串，翻译长度校验失败返回 null")
         void nullTextHandled() {
             // Create fresh mocks to avoid interference from setUp stubs
-            TranslationCacheService cs = mock(TranslationCacheService.class);
+            TranslationCachePort cs = mock(TranslationCachePort.class);
             RagTranslationService rag = mock(RagTranslationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
 
-            lenient().doReturn(null).when(cs).getCacheByMode(anyString(), anyString());
+            lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
             lenient().doNothing().when(cs).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
             lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(any(), any(), any());
             lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
             lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
             lenient().doReturn(false).when(ecs).shouldUseConsistency(anyString());
             lenient().doReturn("{\"code\":200,\"data\":\"翻译\"}").when(tc)
-                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any());
+                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
             lenient().doAnswer(inv -> inv.getArgument(1)).when(pps).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
 
             TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
@@ -867,20 +868,20 @@ class TranslationPipelineExtendedTest {
         @Test
         @DisplayName("空字符串文本 — 翻译长度校验失败返回 null")
         void emptyText() {
-            TranslationCacheService cs = mock(TranslationCacheService.class);
+            TranslationCachePort cs = mock(TranslationCachePort.class);
             RagTranslationService rag = mock(RagTranslationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
 
-            lenient().doReturn(null).when(cs).getCacheByMode(anyString(), anyString());
+            lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
             lenient().doNothing().when(cs).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
             lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(any(), any(), any());
             lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
             lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
             lenient().doReturn(false).when(ecs).shouldUseConsistency(anyString());
             lenient().doReturn("{\"code\":200,\"data\":\"空翻译\"}").when(tc)
-                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any());
+                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
             lenient().doAnswer(inv -> inv.getArgument(1)).when(pps).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
 
             TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
@@ -894,20 +895,20 @@ class TranslationPipelineExtendedTest {
         @Test
         @DisplayName("空白字符串文本")
         void blankText() {
-            TranslationCacheService cs = mock(TranslationCacheService.class);
+            TranslationCachePort cs = mock(TranslationCachePort.class);
             RagTranslationService rag = mock(RagTranslationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
 
-            lenient().doReturn(null).when(cs).getCacheByMode(anyString(), anyString());
+            lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
             lenient().doNothing().when(cs).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
             lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(any(), any(), any());
             lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
             lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
             lenient().doReturn(false).when(ecs).shouldUseConsistency(anyString());
             lenient().doReturn("{\"code\":200,\"data\":\"空白翻译\"}").when(tc)
-                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any());
+                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
             lenient().doAnswer(inv -> inv.getArgument(1)).when(pps).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
 
             TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
@@ -921,15 +922,15 @@ class TranslationPipelineExtendedTest {
         @DisplayName("快速模式 — null 文本返回原文(null)")
         void fastModeNullText() {
             // executeFast(null, ...) calls translate(null, ...) directly
-            TranslationCacheService cs = mock(TranslationCacheService.class);
+            TranslationCachePort cs = mock(TranslationCachePort.class);
             RagTranslationService rag = mock(RagTranslationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
 
-            lenient().doReturn(null).when(cs).getCacheByMode(anyString(), anyString());
+            lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
             lenient().doReturn(null).when(tc)
-                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any());
+                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
 
             TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
 
@@ -941,15 +942,15 @@ class TranslationPipelineExtendedTest {
         @Test
         @DisplayName("executeFast — 空字符串返回原文")
         void fastModeEmptyText() {
-            TranslationCacheService cs = mock(TranslationCacheService.class);
+            TranslationCachePort cs = mock(TranslationCachePort.class);
             RagTranslationService rag = mock(RagTranslationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
 
-            lenient().doReturn(null).when(cs).getCacheByMode(anyString(), anyString());
+            lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
             lenient().doReturn(null).when(tc)
-                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any());
+                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
 
             TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
 
@@ -1064,11 +1065,11 @@ class TranslationPipelineExtendedTest {
         @DisplayName("FAST 模式 — useGlossary=true, 可读取所有层级缓存")
         void fastMode() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
-            verify(translationClient).translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
             verify(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), eq(List.of("team", "expert", "fast")));
         }
 
@@ -1076,11 +1077,11 @@ class TranslationPipelineExtendedTest {
         @DisplayName("EXPERT 模式 — useGlossary=true, 可读取 team/expert 缓存")
         void expertMode() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
-            verify(translationClient).translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
             verify(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), eq(List.of("team", "expert")));
         }
 
@@ -1096,12 +1097,12 @@ class TranslationPipelineExtendedTest {
         @DisplayName("TEAM 模式 — 无 teamService 时降级到 executeSegment")
         void teamModeFallsBackWhenNoTeamService() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("team"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("team"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "daily", List.of());
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(anyString(), anyString(), eq("team"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("team"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
     }
 
@@ -1120,7 +1121,7 @@ class TranslationPipelineExtendedTest {
                     USER_ID, DOC_ID);
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = p.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
             assertEquals(TRANSLATED_TEXT, result);
@@ -1150,7 +1151,7 @@ class TranslationPipelineExtendedTest {
                     teamTranslationService, USER_ID, DOC_ID, List.of(g));
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = p.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
             assertEquals(TRANSLATED_TEXT, result);
@@ -1165,12 +1166,12 @@ class TranslationPipelineExtendedTest {
                     null, USER_ID, DOC_ID, null);
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = p.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
             assertEquals(TRANSLATED_TEXT, result);
             // null glossary -> converted to empty list -> !isEmpty() = false
-            verify(translationClient).translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+            verify(translationClient).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
     }
 
@@ -1214,7 +1215,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("L4 直译成功 — 后处理 + 条件缓存 + RAG 存储")
         void l4PostProcessCacheAndRag() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -1262,7 +1263,7 @@ class TranslationPipelineExtendedTest {
                     null, DOC_ID);
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList());
+                    .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
 
             String result = p.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 

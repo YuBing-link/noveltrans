@@ -7,6 +7,7 @@ import com.yumu.noveltranslator.domain.service.RagTranslationService;
 import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.port.out.VectorStorePort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,14 +18,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.data.redis.core.HashOperations;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,13 +44,13 @@ class RagTranslationServiceExtendedTest {
     @Mock
     private TranslationMemoryService translationMemoryService;
     @Mock
-    private StringRedisTemplate stringRedisTemplate;
+    private VectorStorePort vectorStorePort;
 
     private RagTranslationService service;
 
     @BeforeEach
     void setUp() {
-        service = new RagTranslationService(embeddingService, translationMemoryService, stringRedisTemplate);
+        service = new RagTranslationService(embeddingService, translationMemoryService, vectorStorePort);
         ReflectionTestUtils.setField(service, "directHitThreshold", 0.85);
         ReflectionTestUtils.setField(service, "referenceThreshold", 0.5);
         ReflectionTestUtils.setField(service, "knnTopK", 5);
@@ -119,9 +117,9 @@ class RagTranslationServiceExtendedTest {
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
             when(embeddingService.embed("Hello")).thenReturn(vec);
 
-            List<Object> redisResult = buildRedisResult(1,
+            List<Map<String, String>> redisResult = buildVectorSearchResult(1,
                     "Hello", "你好", "0.05", "42");
-            mockRedisExecute(redisResult);
+            mockVectorSearch(redisResult);
 
             RagTranslationResponse response = invokeSearchSimilarWithUser(
                     "Hello", "zh", "ai-team", 1L);
@@ -135,7 +133,7 @@ class RagTranslationServiceExtendedTest {
         void Redis无结果走MySQL降级() throws Exception {
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
             when(embeddingService.embed("Hello")).thenReturn(vec);
-            mockRedisExecute(Collections.emptyList());
+            mockVectorSearch(Collections.emptyList());
 
             TranslationMemory mem = new TranslationMemory();
             mem.setId(10L);
@@ -200,8 +198,7 @@ class RagTranslationServiceExtendedTest {
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 
-            HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
-            when(stringRedisTemplate.opsForHash()).thenReturn(hashOps);
+            mockStoreVector();
 
             invokeStoreMemoryWithUser("Hello", "你好世界", "zh", "ai-team", 1L);
 
@@ -475,81 +472,6 @@ class RagTranslationServiceExtendedTest {
         }
     }
 
-    // ============ parseSearchResult 边界测试 ============
-
-    @Nested
-    @DisplayName("parseSearchResult - 解析边界情况")
-    class ParseSearchResultTests {
-
-        @Test
-        void null结果返回空列表() throws Exception {
-            List<?> result = invokeParseSearchResult(null);
-            assertTrue(result.isEmpty());
-        }
-
-        @Test
-        void 非List结果返回空列表() throws Exception {
-            List<?> result = invokeParseSearchResult("not a list");
-            assertTrue(result.isEmpty());
-        }
-
-        @Test
-        void 空List返回空列表() throws Exception {
-            List<?> result = invokeParseSearchResult(new ArrayList<>());
-            assertTrue(result.isEmpty());
-        }
-
-        @Test
-        void score解析失败跳过该条目() throws Exception {
-            List<Object> result = new ArrayList<>();
-            result.add(1L);
-            result.add("tm:1".getBytes(StandardCharsets.UTF_8));
-            List<byte[]> fields = new ArrayList<>();
-            fields.add("source_text".getBytes(StandardCharsets.UTF_8));
-            fields.add("Hello".getBytes(StandardCharsets.UTF_8));
-            fields.add("target_text".getBytes(StandardCharsets.UTF_8));
-            fields.add("你好".getBytes(StandardCharsets.UTF_8));
-            fields.add("score".getBytes(StandardCharsets.UTF_8));
-            fields.add("not_a_number".getBytes(StandardCharsets.UTF_8));
-            fields.add("id".getBytes(StandardCharsets.UTF_8));
-            fields.add("1".getBytes(StandardCharsets.UTF_8));
-            result.add(fields);
-
-            List<?> matches = invokeParseSearchResult(result);
-            assertTrue(matches.isEmpty()); // score 解析失败被 continue 跳过
-        }
-
-        @Test
-        void 正常解析多条结果() throws Exception {
-            List<Object> result = buildRedisResult(2, "Hello", "你好", "0.1", "1");
-            // Add second document
-            result.add("tm:2".getBytes(StandardCharsets.UTF_8));
-            List<byte[]> fields2 = new ArrayList<>();
-            fields2.add("source_text".getBytes(StandardCharsets.UTF_8));
-            fields2.add("World".getBytes(StandardCharsets.UTF_8));
-            fields2.add("target_text".getBytes(StandardCharsets.UTF_8));
-            fields2.add("世界".getBytes(StandardCharsets.UTF_8));
-            fields2.add("score".getBytes(StandardCharsets.UTF_8));
-            fields2.add("0.3".getBytes(StandardCharsets.UTF_8));
-            fields2.add("id".getBytes(StandardCharsets.UTF_8));
-            fields2.add("2".getBytes(StandardCharsets.UTF_8));
-            result.add(fields2);
-
-            List<?> matches = invokeParseSearchResult(result);
-            assertEquals(2, matches.size());
-            // 按相似度排序 (score 0.1 → sim 0.9 first, score 0.3 → sim 0.7 second)
-            RagTranslationResponse.RagMatch first = (RagTranslationResponse.RagMatch) matches.get(0);
-            assertEquals(1L, first.getMemoryId());
-            assertEquals(0.9, first.getSimilarity(), 0.01);
-        }
-
-        private List<?> invokeParseSearchResult(Object result) throws Exception {
-            Method m = RagTranslationService.class.getDeclaredMethod("parseSearchResult", Object.class);
-            m.setAccessible(true);
-            return (List<?>) m.invoke(service, result);
-        }
-    }
-
     // ============ storeToRedisVector 测试 ============
 
     @Nested
@@ -563,7 +485,7 @@ class RagTranslationServiceExtendedTest {
                     .thenReturn(Collections.emptyList());
 
             invokeStoreToRedisVector("Hello", "你好", "zh", 1L, "google");
-            verify(stringRedisTemplate, never()).opsForHash();
+            verify(vectorStorePort, never()).storeVector(anyString(), anyMap());
         }
 
         @Test
@@ -577,12 +499,11 @@ class RagTranslationServiceExtendedTest {
             when(translationMemoryService.searchByUserAndLang(eq(1L), eq("auto"), eq("zh"), eq(1)))
                     .thenReturn(List.of(mem));
 
-            HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
-            when(stringRedisTemplate.opsForHash()).thenReturn(hashOps);
+            mockStoreVector();
 
             invokeStoreToRedisVector("Hello", "你好", "zh", 1L, "google");
 
-            verify(hashOps).put(eq("tm:99"), eq("id"), eq("99"));
+            verify(vectorStorePort).storeVector(eq("tm:99"), anyMap());
         }
 
         @Test
@@ -596,13 +517,11 @@ class RagTranslationServiceExtendedTest {
             when(translationMemoryService.searchByUserAndLang(eq(1L), eq("auto"), eq("zh"), eq(1)))
                     .thenReturn(List.of(mem));
 
-            HashOperations<String, Object, Object> hashOps = mock(HashOperations.class);
-            when(stringRedisTemplate.opsForHash()).thenReturn(hashOps);
+            mockStoreVector();
 
             invokeStoreToRedisVector("Hello", "你好", "zh", 1L, "google");
 
-            // 应该使用 UUID key
-            verify(hashOps).put(argThat(key -> key.startsWith("tm:")), eq("id"), eq("0"));
+            verify(vectorStorePort).storeVector(argThat(key -> key.startsWith("tm:")), anyMap());
         }
 
         @Test
@@ -622,29 +541,25 @@ class RagTranslationServiceExtendedTest {
 
     // ============ 辅助方法 ============
 
-    private List<Object> buildRedisResult(long total, String sourceText, String targetText, String score, String id) {
-        List<Object> result = new ArrayList<>();
-        result.add(total);
+    private List<Map<String, String>> buildVectorSearchResult(long total, String sourceText, String targetText, String score, String id) {
+        List<Map<String, String>> result = new ArrayList<>();
         if (total > 0) {
-            result.add(("tm:" + id).getBytes(StandardCharsets.UTF_8));
-            List<byte[]> fieldArray = new ArrayList<>();
-            fieldArray.add("source_text".getBytes(StandardCharsets.UTF_8));
-            fieldArray.add(sourceText.getBytes(StandardCharsets.UTF_8));
-            fieldArray.add("target_text".getBytes(StandardCharsets.UTF_8));
-            fieldArray.add(targetText.getBytes(StandardCharsets.UTF_8));
-            fieldArray.add("score".getBytes(StandardCharsets.UTF_8));
-            fieldArray.add(score.getBytes(StandardCharsets.UTF_8));
-            fieldArray.add("id".getBytes(StandardCharsets.UTF_8));
-            fieldArray.add(id.getBytes(StandardCharsets.UTF_8));
-            result.add(fieldArray);
+            Map<String, String> match = new LinkedHashMap<>();
+            match.put("source_text", sourceText);
+            match.put("target_text", targetText);
+            match.put("score", score);
+            match.put("id", id);
+            result.add(match);
         }
         return result;
     }
 
-    private void mockRedisExecute(List<Object> result) {
-        doAnswer(invocation -> {
-            org.springframework.data.redis.core.RedisCallback<Object> callback = invocation.getArgument(0);
-            return result;
-        }).when(stringRedisTemplate).execute(any(org.springframework.data.redis.core.RedisCallback.class));
+    private void mockVectorSearch(List<Map<String, String>> result) {
+        when(vectorStorePort.vectorSearch(any(float[].class), anyLong(), anyString(), anyList(), anyInt()))
+                .thenReturn(result);
+    }
+
+    private void mockStoreVector() {
+        doNothing().when(vectorStorePort).storeVector(anyString(), anyMap());
     }
 }

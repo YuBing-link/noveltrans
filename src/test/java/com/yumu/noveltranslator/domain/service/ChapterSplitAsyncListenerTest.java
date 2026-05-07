@@ -7,10 +7,9 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.domain.event.ChapterSplitEvent;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,13 +34,10 @@ import static org.mockito.Mockito.*;
 class ChapterSplitAsyncListenerTest {
 
     @Mock
-    private CollabChapterTaskMapper collabChapterTaskMapper;
+    private CollaborationRepositoryPort collaborationRepository;
 
     @Mock
-    private CollabProjectMapper collabProjectMapper;
-
-    @Mock
-    private DocumentMapper documentMapper;
+    private DocumentRepositoryPort documentRepository;
 
     @Mock
     private CollabStateMachine collabStateMachine;
@@ -50,7 +47,7 @@ class ChapterSplitAsyncListenerTest {
     @BeforeEach
     void setUp() {
         listener = new ChapterSplitAsyncListener(
-                collabChapterTaskMapper, collabProjectMapper, documentMapper, collabStateMachine);
+                collaborationRepository, documentRepository, collabStateMachine);
     }
 
     private ChapterSplitEvent createTestEvent(Long projectId, Long documentId, List<String> chapters) {
@@ -71,10 +68,10 @@ class ChapterSplitAsyncListenerTest {
 
             listener.insertChapterBatch(event, chapters, 0);
 
-            verify(collabChapterTaskMapper, times(3)).insert(any(CollabChapterTask.class));
+            verify(collaborationRepository, times(3)).saveChapterTask(any(CollabChapterTask.class));
 
             ArgumentCaptor<CollabChapterTask> captor = ArgumentCaptor.forClass(CollabChapterTask.class);
-            verify(collabChapterTaskMapper, times(3)).insert(captor.capture());
+            verify(collaborationRepository, times(3)).saveChapterTask(captor.capture());
 
             List<CollabChapterTask> inserted = captor.getAllValues();
             assertEquals(3, inserted.size());
@@ -95,7 +92,7 @@ class ChapterSplitAsyncListenerTest {
             listener.insertChapterBatch(event, chapters, 50);
 
             ArgumentCaptor<CollabChapterTask> captor = ArgumentCaptor.forClass(CollabChapterTask.class);
-            verify(collabChapterTaskMapper, times(2)).insert(captor.capture());
+            verify(collaborationRepository, times(2)).saveChapterTask(captor.capture());
 
             List<CollabChapterTask> inserted = captor.getAllValues();
             assertEquals(51, inserted.get(0).getChapterNumber());
@@ -109,7 +106,7 @@ class ChapterSplitAsyncListenerTest {
 
             listener.insertChapterBatch(event, List.of(), 0);
 
-            verify(collabChapterTaskMapper, never()).insert(any());
+            verify(collaborationRepository, never()).saveChapterTask(any());
         }
     }
 
@@ -123,12 +120,12 @@ class ChapterSplitAsyncListenerTest {
             CollabProject project = new CollabProject();
             project.setId(1L);
             project.setStatus(CollabProjectStatus.DRAFT.getValue());
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
+            when(collaborationRepository.findProjectById(1L)).thenReturn(Optional.of(project));
 
             Document doc = new Document();
             doc.setId(10L);
             doc.setStatus("pending");
-            when(documentMapper.selectById(10L)).thenReturn(doc);
+            when(documentRepository.findById(10L)).thenReturn(Optional.of(doc));
 
             doAnswer(invocation -> {
                 CollabProject p = invocation.getArgument(0);
@@ -139,20 +136,20 @@ class ChapterSplitAsyncListenerTest {
             listener.activateProject(1L, 10L);
 
             verify(collabStateMachine).transitionProject(project, CollabProjectStatus.ACTIVE);
-            verify(collabProjectMapper).updateById(project);
+            verify(collaborationRepository).updateProject(project);
             assertEquals(CollabProjectStatus.ACTIVE.getValue(), project.getStatus());
             assertEquals(0, project.getProgress());
-            verify(documentMapper).updateById(doc);
+            verify(documentRepository).update(doc);
         }
 
         @Test
         @DisplayName("项目不存在时不抛异常")
         void activateProjectNotFound() {
-            when(collabProjectMapper.selectById(99L)).thenReturn(null);
+            when(collaborationRepository.findProjectById(99L)).thenReturn(Optional.empty());
 
             assertDoesNotThrow(() -> listener.activateProject(99L, 10L));
 
-            verify(collabProjectMapper).selectById(99L);
+            verify(collaborationRepository).findProjectById(99L);
             verifyNoInteractions(collabStateMachine);
         }
 
@@ -162,8 +159,8 @@ class ChapterSplitAsyncListenerTest {
             CollabProject project = new CollabProject();
             project.setId(1L);
             project.setStatus(CollabProjectStatus.DRAFT.getValue());
-            when(collabProjectMapper.selectById(1L)).thenReturn(project);
-            when(documentMapper.selectById(10L)).thenReturn(null);
+            when(collaborationRepository.findProjectById(1L)).thenReturn(Optional.of(project));
+            when(documentRepository.findById(10L)).thenReturn(Optional.empty());
 
             doAnswer(invocation -> {
                 CollabProject p = invocation.getArgument(0);
@@ -174,8 +171,8 @@ class ChapterSplitAsyncListenerTest {
             assertDoesNotThrow(() -> listener.activateProject(1L, 10L));
 
             verify(collabStateMachine).transitionProject(project, CollabProjectStatus.ACTIVE);
-            verify(collabProjectMapper).updateById(project);
-            verify(documentMapper, never()).updateById(any());
+            verify(collaborationRepository).updateProject(project);
+            verify(documentRepository, never()).update(any());
         }
     }
 
@@ -197,7 +194,7 @@ class ChapterSplitAsyncListenerTest {
 
             listener.insertChapterBatch(event, chapters, 0);
 
-            verify(collabChapterTaskMapper, times(50)).insert(any(CollabChapterTask.class));
+            verify(collaborationRepository, times(50)).saveChapterTask(any(CollabChapterTask.class));
         }
 
         @Test
@@ -221,11 +218,11 @@ class ChapterSplitAsyncListenerTest {
             List<String> batch2 = chapters.subList(50, 51);
             listener.insertChapterBatch(event, batch2, 50);
 
-            verify(collabChapterTaskMapper, times(51)).insert(any(CollabChapterTask.class));
+            verify(collaborationRepository, times(51)).saveChapterTask(any(CollabChapterTask.class));
 
             // Verify the last chapter has number 51
             ArgumentCaptor<CollabChapterTask> captor = ArgumentCaptor.forClass(CollabChapterTask.class);
-            verify(collabChapterTaskMapper, atLeast(1)).insert(captor.capture());
+            verify(collaborationRepository, atLeast(1)).saveChapterTask(captor.capture());
             List<CollabChapterTask> allInserted = captor.getAllValues();
             assertTrue(allInserted.stream().anyMatch(c -> c.getChapterNumber() == 51));
         }

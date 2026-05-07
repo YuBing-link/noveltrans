@@ -15,10 +15,9 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserPreferenceMapper;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,10 +35,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserMapper userMapper;
-    private final TranslationHistoryMapper translationHistoryMapper;
-    private final GlossaryMapper glossaryMapper;
-    private final UserPreferenceMapper userPreferenceMapper;
+    private final UserRepositoryPort userPort;
+    private final TranslationRepositoryPort translationPort;
+    private final GlossaryRepositoryPort glossaryPort;
     private final TranslationLimitProperties limitProperties;
     private final QuotaService quotaService;
 
@@ -47,7 +45,7 @@ public class UserService {
      * 更新用户信息
      */
     public void updateUser(User user) {
-        userMapper.updateById(user);
+        userPort.update(user);
     }
 
     /**
@@ -56,22 +54,22 @@ public class UserService {
     public UserStatisticsResponse getUserStatistics(Long userId) {
         UserStatisticsResponse response = new UserStatisticsResponse();
 
-        int totalCount = translationHistoryMapper.countByUserId(userId);
+        int totalCount = translationPort.countHistoryByUserId(userId);
         response.setTotalTranslations(totalCount);
 
-        int textCount = translationHistoryMapper.countByUserIdAndType(userId, "text");
-        int docCount = translationHistoryMapper.countByUserIdAndType(userId, "document");
+        int textCount = translationPort.countHistoryByUserIdAndType(userId, "text");
+        int docCount = translationPort.countHistoryByUserIdAndType(userId, "document");
         response.setTextTranslations(textCount);
         response.setDocumentTranslations(docCount);
 
-        Long totalChars = translationHistoryMapper.sumSourceTextLengthByUserId(userId);
+        Long totalChars = translationPort.sumHistorySourceTextLengthByUserId(userId);
         response.setTotalCharacters(totalChars != null ? totalChars : 0L);
         response.setTotalDocuments(docCount);
 
         LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
         LocalDateTime monthAgo = LocalDateTime.now().minusMonths(1);
-        response.setWeekTranslations(translationHistoryMapper.countByUserIdAfter(userId, weekAgo));
-        response.setMonthTranslations(translationHistoryMapper.countByUserIdAfter(userId, monthAgo));
+        response.setWeekTranslations(translationPort.countHistoryByUserIdAfter(userId, weekAgo));
+        response.setMonthTranslations(translationPort.countHistoryByUserIdAfter(userId, monthAgo));
 
         return response;
     }
@@ -116,37 +114,24 @@ public class UserService {
      * 获取术语库列表
      */
     public PageResponse<GlossaryResponse> getGlossaryList(Long userId, int page, int pageSize, String search) {
-        LambdaQueryWrapper<Glossary> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Glossary::getUserId, userId);
-        if (search != null && !search.isEmpty()) {
-            wrapper.and(w -> w.like(Glossary::getSourceWord, search)
-                              .or()
-                              .like(Glossary::getTargetWord, search));
-        }
-        wrapper.orderByDesc(Glossary::getCreateTime);
+        var glossaryPage = glossaryPort.findGlossaryPaged(userId, search, page, pageSize);
 
-        Page<Glossary> pageParam = new Page<>(page, pageSize);
-        Page<Glossary> resultPage = glossaryMapper.selectPage(pageParam, wrapper);
-
-        List<GlossaryResponse> list = resultPage.getRecords().stream()
+        List<GlossaryResponse> list = glossaryPage.getRecords().stream()
                 .map(this::toGlossaryResponse)
                 .collect(Collectors.toList());
 
-        return PageResponse.of(page, pageSize, resultPage.getTotal(), list);
+        return PageResponse.of(page, pageSize, glossaryPage.getTotal(), list);
     }
 
     /**
      * 获取术语库详情
      */
     public GlossaryResponse getGlossaryDetail(Long userId, Long glossaryId) {
-        Glossary glossary = glossaryMapper.selectById(glossaryId);
-        if (glossary == null || glossary.getDeleted() != null && glossary.getDeleted() == 1) {
-            return null;
-        }
-        if (!glossary.getUserId().equals(userId)) {
-            return null;
-        }
-        return toGlossaryResponse(glossary);
+        return glossaryPort.findGlossaryById(glossaryId)
+                .filter(g -> g.getDeleted() == null || g.getDeleted() != 1)
+                .filter(g -> g.getUserId().equals(userId))
+                .map(this::toGlossaryResponse)
+                .orElse(null);
     }
 
     /**
@@ -157,10 +142,7 @@ public class UserService {
     }
 
     private List<GlossaryResponse> fetchAllGlossaries(Long userId) {
-        LambdaQueryWrapper<Glossary> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Glossary::getUserId, userId)
-               .orderByDesc(Glossary::getCreateTime);
-        return glossaryMapper.selectList(wrapper).stream()
+        return glossaryPort.findGlossaryByUserId(userId).stream()
                 .map(this::toGlossaryResponse)
                 .collect(Collectors.toList());
     }
@@ -175,7 +157,7 @@ public class UserService {
         glossary.setTargetWord(request.getTargetWord());
         glossary.setRemark(request.getRemark());
 
-        glossaryMapper.insert(glossary);
+        glossaryPort.saveGlossary(glossary);
         return toGlossaryResponse(glossary);
     }
 
@@ -183,42 +165,35 @@ public class UserService {
      * 更新术语项
      */
     public GlossaryResponse updateGlossaryItem(Long userId, Long glossaryId, GlossaryItemRequest request) {
-        Glossary glossary = glossaryMapper.selectById(glossaryId);
-        if (glossary == null || glossary.getDeleted() != null && glossary.getDeleted() == 1) {
-            return null;
-        }
-        if (!glossary.getUserId().equals(userId)) {
-            return null;
-        }
-
-        if (request.getSourceWord() != null) {
-            glossary.setSourceWord(request.getSourceWord());
-        }
-        if (request.getTargetWord() != null) {
-            glossary.setTargetWord(request.getTargetWord());
-        }
-        if (request.getRemark() != null) {
-            glossary.setRemark(request.getRemark());
-        }
-
-        glossaryMapper.updateById(glossary);
-        return toGlossaryResponse(glossary);
+        return glossaryPort.findGlossaryById(glossaryId)
+                .filter(g -> g.getDeleted() == null || g.getDeleted() != 1)
+                .filter(g -> g.getUserId().equals(userId))
+                .map(glossary -> {
+                    if (request.getSourceWord() != null) {
+                        glossary.setSourceWord(request.getSourceWord());
+                    }
+                    if (request.getTargetWord() != null) {
+                        glossary.setTargetWord(request.getTargetWord());
+                    }
+                    if (request.getRemark() != null) {
+                        glossary.setRemark(request.getRemark());
+                    }
+                    glossaryPort.updateGlossary(glossary);
+                    return toGlossaryResponse(glossary);
+                }).orElse(null);
     }
 
     /**
      * 删除术语项
      */
     public boolean deleteGlossaryItem(Long userId, Long glossaryId) {
-        Glossary glossary = glossaryMapper.selectById(glossaryId);
-        if (glossary == null || glossary.getDeleted() != null && glossary.getDeleted() == 1) {
-            return false;
-        }
-        if (!glossary.getUserId().equals(userId)) {
-            return false;
-        }
-
-        glossaryMapper.deleteById(glossaryId);
-        return true;
+        return glossaryPort.findGlossaryById(glossaryId)
+                .filter(g -> g.getDeleted() == null || g.getDeleted() != 1)
+                .filter(g -> g.getUserId().equals(userId))
+                .map(g -> {
+                    glossaryPort.updateGlossary(g);
+                    return true;
+                }).orElse(false);
     }
 
     /**
@@ -241,20 +216,28 @@ public class UserService {
      * 获取用户偏好设置
      */
     public UserPreferencesResponse getUserPreferences(Long userId) {
-        UserPreference pref = userPreferenceMapper.findByUserId(userId);
-        if (pref == null) {
-            return buildDefaultPreferences();
-        }
-        return toPreferencesResponse(pref);
+        return userPort.findPreferenceByUserId(userId)
+                .map(this::toPreferencesResponse)
+                .orElseGet(this::buildDefaultPreferences);
     }
 
     /**
      * 更新用户偏好设置
      */
     public UserPreferencesResponse updateUserPreferences(Long userId, UserPreferencesRequest request) {
-        UserPreference pref = userPreferenceMapper.findByUserId(userId);
-        if (pref == null) {
-            pref = new UserPreference();
+        return userPort.findPreferenceByUserId(userId).map(pref -> {
+            if (request.getDefaultEngine() != null) pref.setDefaultEngine(request.getDefaultEngine());
+            if (request.getDefaultTargetLang() != null) pref.setDefaultTargetLang(request.getDefaultTargetLang());
+            if (request.getEnableGlossary() != null) pref.setEnableGlossary(request.getEnableGlossary());
+            if (request.getDefaultGlossaryId() != null) pref.setDefaultGlossaryId(request.getDefaultGlossaryId());
+            if (request.getEnableCache() != null) pref.setEnableCache(request.getEnableCache());
+            if (request.getAutoTranslateSelection() != null) pref.setAutoTranslateSelection(request.getAutoTranslateSelection());
+            if (request.getFontSize() != null) pref.setFontSize(request.getFontSize());
+            if (request.getThemeMode() != null) pref.setThemeMode(request.getThemeMode());
+            userPort.updatePreference(pref);
+            return toPreferencesResponse(pref);
+        }).orElseGet(() -> {
+            UserPreference pref = new UserPreference();
             pref.setUserId(userId);
             pref.setDefaultEngine(request.getDefaultEngine() != null ? request.getDefaultEngine() : "google");
             pref.setDefaultTargetLang(request.getDefaultTargetLang() != null ? request.getDefaultTargetLang() : "zh");
@@ -264,19 +247,9 @@ public class UserService {
             pref.setAutoTranslateSelection(request.getAutoTranslateSelection() != null ? request.getAutoTranslateSelection() : true);
             pref.setFontSize(request.getFontSize() != null ? request.getFontSize() : 14);
             pref.setThemeMode(request.getThemeMode() != null ? request.getThemeMode() : "light");
-            userPreferenceMapper.insert(pref);
-        } else {
-            if (request.getDefaultEngine() != null) pref.setDefaultEngine(request.getDefaultEngine());
-            if (request.getDefaultTargetLang() != null) pref.setDefaultTargetLang(request.getDefaultTargetLang());
-            if (request.getEnableGlossary() != null) pref.setEnableGlossary(request.getEnableGlossary());
-            if (request.getDefaultGlossaryId() != null) pref.setDefaultGlossaryId(request.getDefaultGlossaryId());
-            if (request.getEnableCache() != null) pref.setEnableCache(request.getEnableCache());
-            if (request.getAutoTranslateSelection() != null) pref.setAutoTranslateSelection(request.getAutoTranslateSelection());
-            if (request.getFontSize() != null) pref.setFontSize(request.getFontSize());
-            if (request.getThemeMode() != null) pref.setThemeMode(request.getThemeMode());
-            userPreferenceMapper.updateById(pref);
-        }
-        return toPreferencesResponse(pref);
+            userPort.savePreference(pref);
+            return toPreferencesResponse(pref);
+        });
     }
 
     /**
@@ -288,20 +261,20 @@ public class UserService {
         try {
             TenantContext.setBypassTenant(true);
 
-            response.setTotalUsers(userMapper.countActiveUsers());
+            response.setTotalUsers(userPort.countActiveUsers());
 
             LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
             LocalDateTime monthAgo = LocalDateTime.now().minusMonths(1);
             LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-            response.setActiveUsersWeek(translationHistoryMapper.countActiveUsersAfter(weekAgo));
-            response.setActiveUsersMonth(translationHistoryMapper.countActiveUsersAfter(monthAgo));
-            response.setActiveUsersToday(translationHistoryMapper.countActiveUsersAfter(todayStart));
+            response.setActiveUsersWeek(translationPort.countActiveUsersAfter(weekAgo));
+            response.setActiveUsersMonth(translationPort.countActiveUsersAfter(monthAgo));
+            response.setActiveUsersToday(translationPort.countActiveUsersAfter(todayStart));
 
-            response.setTotalTranslations(translationHistoryMapper.countAll());
-            response.setTranslationsToday(translationHistoryMapper.countAfter(todayStart));
-            response.setTotalCharacters(translationHistoryMapper.sumAllSourceTextLength());
-            response.setTotalDocumentTranslations(translationHistoryMapper.countDocumentTranslations());
-            response.setTotalGlossaries(glossaryMapper.selectCount(new LambdaQueryWrapper<>()).intValue());
+            response.setTotalTranslations(translationPort.countAllHistory());
+            response.setTranslationsToday(translationPort.countHistoryAfter(todayStart));
+            response.setTotalCharacters(translationPort.sumAllHistorySourceTextLength());
+            response.setTotalDocumentTranslations(translationPort.countDocumentTranslations());
+            response.setTotalGlossaries(glossaryPort.countAllGlossaries());
 
             response.setSystemStatus("normal");
         } finally {

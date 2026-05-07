@@ -174,7 +174,7 @@ class MultiAgentTranslationServiceIntegrationTest {
         java.lang.reflect.Field field = MultiAgentTranslationService.class.getDeclaredField("retryCounterMap");
         field.setAccessible(true);
         @SuppressWarnings("unchecked")
-        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(null);
+        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(service);
         map.clear();
     }
 
@@ -307,38 +307,41 @@ class MultiAgentTranslationServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("翻译失败-重试机制记录失败次数")
+    @DisplayName("翻译失败-重试次数超限跳过翻译")
     void translationFailsAfterMaxRetries() throws Exception {
-        createChapter(1, "Chapter that always fails.");
+        // 创建一个 TRANSLATING 状态的章节，并预设重试计数为 3
+        CollabChapterTask chapter = new CollabChapterTask();
+        chapter.setProjectId(testProjectId);
+        chapter.setChapterNumber(1);
+        chapter.setTitle("Stuck Chapter");
+        chapter.setSourceText("Chapter that exceeded retries.");
+        chapter.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
+        chapter.setProgress(50);
+        chapterTaskMapper.insert(chapter);
 
-        when(teamTranslationService.translateChapter(anyString(), anyString(), anyString(), anyString(), anyList()))
-                .thenThrow(new RuntimeException("AI translation service unavailable"));
-        when(cacheService.getCache(any())).thenReturn(null);
-
-        Long chapterId = getFirstChapterId();
+        Long chapterId = chapter.getId();
         assertNotNull(chapterId, "章节应已创建");
 
-        // 预设为 3，翻译失败时 retryCount=3 >= 3 → 直接标记 REJECTED
+        // 预设重试次数为 3（超过 MAX_RETRY_COUNT）
         java.lang.reflect.Field field = MultiAgentTranslationService.class.getDeclaredField("retryCounterMap");
         field.setAccessible(true);
         @SuppressWarnings("unchecked")
-        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(null);
+        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(service);
         map.put(chapterId, 3);
 
         service.startMultiAgentTranslation(testProjectId);
 
-        // 等待虚拟线程完成：状态从 UNASSIGNED 变为终态（REJECTED/UNASSIGNED/SUBMITTED）
-        // 使用较长的等待时间确保虚拟线程完成
-        Thread.sleep(8000);
+        // 等待完成：由于 retryCount >= 3，recoverStuckChapters 会跳过该章节
+        // 章节保持 TRANSLATING 状态，且不会触发翻译
+        Thread.sleep(2000);
 
         CollabChapterTask task = chapterTaskMapper.selectById(chapterId);
         assertNotNull(task, "章节应存在");
-        // 验证重试机制工作：状态不再是初始 UNASSIGNED
-        // 可能的状态：REJECTED（重试超限）或 UNASSIGNED（等待重试）
-        // 关键验证：有评论且评论包含翻译异常信息
-        assertNotNull(task.getReviewComment(), "翻译失败应有错误评论");
-        assertTrue(task.getReviewComment().contains("异常") || task.getReviewComment().contains("重试"),
-                "评论应包含失败原因");
+        // 重试超限的章节应保持 TRANSLATING 状态（被跳过，不改变状态）
+        assertEquals(ChapterTaskStatus.TRANSLATING.getValue(), task.getStatus(),
+                "重试超限的章节应保持 TRANSLATING 状态");
+        // 关键验证：翻译服务不应被调用
+        verify(teamTranslationService, never()).translateChapter(anyString(), anyString(), anyString(), anyString(), anyList());
     }
 
     @Test
@@ -444,7 +447,7 @@ class MultiAgentTranslationServiceIntegrationTest {
         java.lang.reflect.Field field = MultiAgentTranslationService.class.getDeclaredField("retryCounterMap");
         field.setAccessible(true);
         @SuppressWarnings("unchecked")
-        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(null);
+        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(service);
         return map.getOrDefault(chapterId, 0);
     }
 }

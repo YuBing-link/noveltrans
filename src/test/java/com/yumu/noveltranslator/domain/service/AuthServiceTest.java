@@ -1,5 +1,4 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.adapter.out.email.DeviceTokenService;
 import com.yumu.noveltranslator.dto.auth.ChangePasswordRequest;
 import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
 import com.yumu.noveltranslator.dto.auth.RegisterRequest;
@@ -7,21 +6,13 @@ import com.yumu.noveltranslator.dto.auth.LoginRequest;
 import com.yumu.noveltranslator.domain.service.AuthService;
 import com.yumu.noveltranslator.dto.auth.RefreshTokenRequest;
 import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
-import com.yumu.noveltranslator.dto.common.*;
-import com.yumu.noveltranslator.dto.collab.*;
-import com.yumu.noveltranslator.dto.entity.*;
-import com.yumu.noveltranslator.dto.translation.*;
-import com.yumu.noveltranslator.dto.subscription.*;
-import com.yumu.noveltranslator.dto.auth.*;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TenantMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.util.EmailVerificationCodeUtil;
+import com.yumu.noveltranslator.port.out.EmailPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.yumu.noveltranslator.util.PasswordUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +28,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -47,28 +39,22 @@ import static org.mockito.Mockito.*;
 class AuthServiceTest {
 
     @Mock
-    private UserMapper userMapper;
-
-    @Mock
-    private TenantMapper tenantMapper;
+    private UserRepositoryPort userRepositoryPort;
 
     @Mock
     private JwtUtils jwtUtils;
 
     @Mock
-    private EmailVerificationCodeUtil emailVerificationCodeUtil;
+    private EmailPort emailPort;
 
     @Mock
-    private DeviceTokenService deviceTokenService;
-
-    @Mock
-    private TokenBlacklistService tokenBlacklistService;
+    private VerificationCodeService verificationCodeService;
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userMapper, tenantMapper, jwtUtils, emailVerificationCodeUtil, deviceTokenService, tokenBlacklistService);
+        authService = new AuthService(userRepositoryPort, jwtUtils, emailPort, verificationCodeService);
     }
 
     @Nested
@@ -81,7 +67,7 @@ class AuthServiceTest {
             user.setId(1L);
             user.setEmail("test@test.com");
             user.setPassword(PasswordUtil.hashPassword("password123"));
-            when(userMapper.findByEmail("test@test.com")).thenReturn(user);
+            when(userRepositoryPort.findByEmail("test@test.com")).thenReturn(Optional.of(user));
 
             UserDetails userDetails = authService.loadUserByUsername("test@test.com");
 
@@ -92,7 +78,7 @@ class AuthServiceTest {
 
         @Test
         void 用户不存在抛出异常() {
-            when(userMapper.findByEmail("notfound@test.com")).thenReturn(null);
+            when(userRepositoryPort.findByEmail("notfound@test.com")).thenReturn(Optional.empty());
 
             assertThrows(UsernameNotFoundException.class, () ->
                     authService.loadUserByUsername("notfound@test.com"));
@@ -112,7 +98,7 @@ class AuthServiceTest {
             user.setPassword(hashedPassword);
             user.setUsername("testuser");
             user.setUserLevel("free");
-            when(userMapper.findByEmail("test@test.com")).thenReturn(user);
+            when(userRepositoryPort.findByEmail("test@test.com")).thenReturn(Optional.of(user));
             when(jwtUtils.createToken(eq(1L), eq("test@test.com"), any())).thenReturn("jwt-token");
 
             LoginRequest req = new LoginRequest();
@@ -134,7 +120,7 @@ class AuthServiceTest {
             user.setId(1L);
             user.setEmail("test@test.com");
             user.setPassword(hashedPassword);
-            when(userMapper.findByEmail("test@test.com")).thenReturn(user);
+            when(userRepositoryPort.findByEmail("test@test.com")).thenReturn(Optional.of(user));
 
             LoginRequest req = new LoginRequest();
             req.setEmail("test@test.com");
@@ -148,7 +134,7 @@ class AuthServiceTest {
 
         @Test
         void 用户不存在返回错误() {
-            when(userMapper.findByEmail("notfound@test.com")).thenReturn(null);
+            when(userRepositoryPort.findByEmail("notfound@test.com")).thenReturn(Optional.empty());
 
             LoginRequest req = new LoginRequest();
             req.setEmail("notfound@test.com");
@@ -185,7 +171,7 @@ class AuthServiceTest {
 
         @Test
         void 异常被捕获返回错误() {
-            when(userMapper.findByEmail("test@test.com")).thenThrow(new RuntimeException("DB error"));
+            when(userRepositoryPort.findByEmail("test@test.com")).thenThrow(new RuntimeException("DB error"));
 
             LoginRequest req = new LoginRequest();
             req.setEmail("test@test.com");
@@ -204,13 +190,14 @@ class AuthServiceTest {
 
         @Test
         void 发送成功() {
-            when(userMapper.findByEmail("new@test.com")).thenReturn(null);
-            when(emailVerificationCodeUtil.sendVerificationCode("new@test.com")).thenReturn(true);
+            when(userRepositoryPort.findByEmail("new@test.com")).thenReturn(Optional.empty());
+            when(verificationCodeService.generateAndStore("new@test.com")).thenReturn("123456");
+            doNothing().when(emailPort).sendVerificationCode(eq("new@test.com"), eq("123456"));
 
             Result result = authService.sendVerificationCode("new@test.com");
 
             assertTrue(result.isSuccess());
-            verify(emailVerificationCodeUtil).sendVerificationCode("new@test.com");
+            verify(emailPort).sendVerificationCode("new@test.com", "123456");
         }
 
         @Test
@@ -218,7 +205,7 @@ class AuthServiceTest {
             User existingUser = new User();
             existingUser.setId(1L);
             existingUser.setEmail("exists@test.com");
-            when(userMapper.findByEmail("exists@test.com")).thenReturn(existingUser);
+            when(userRepositoryPort.findByEmail("exists@test.com")).thenReturn(Optional.of(existingUser));
 
             Result result = authService.sendVerificationCode("exists@test.com");
 
@@ -233,20 +220,6 @@ class AuthServiceTest {
             assertFalse(result.isSuccess());
             assertEquals(ErrorCodeEnum.USER_EMAIL_INVALID.getCode(), result.getCode());
         }
-
-        @Test
-        void 频率限制返回错误() {
-            when(userMapper.findByEmail("test@test.com")).thenReturn(null);
-            when(emailVerificationCodeUtil.sendVerificationCode("test@test.com")).thenReturn(false);
-            long now = System.currentTimeMillis();
-            when(emailVerificationCodeUtil.getLastSendTime("test@test.com")).thenReturn(now);
-
-            Result result = authService.sendVerificationCode("test@test.com");
-
-            assertFalse(result.isSuccess());
-            assertEquals("429", result.getCode());
-            assertTrue(result.getMessage().contains("请等待"));
-        }
     }
 
     @Nested
@@ -258,8 +231,9 @@ class AuthServiceTest {
             User user = new User();
             user.setId(1L);
             user.setEmail("test@test.com");
-            when(userMapper.findByEmail("test@test.com")).thenReturn(user);
-            when(emailVerificationCodeUtil.sendVerificationCode("test@test.com")).thenReturn(true);
+            when(userRepositoryPort.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+            when(verificationCodeService.generateAndStore("test@test.com")).thenReturn("123456");
+            doNothing().when(emailPort).sendVerificationCode(eq("test@test.com"), eq("123456"));
 
             Result result = authService.sendResetCode("test@test.com");
 
@@ -268,7 +242,7 @@ class AuthServiceTest {
 
         @Test
         void 用户不存在返回错误() {
-            when(userMapper.findByEmail("notfound@test.com")).thenReturn(null);
+            when(userRepositoryPort.findByEmail("notfound@test.com")).thenReturn(Optional.empty());
 
             Result result = authService.sendResetCode("notfound@test.com");
 
@@ -291,9 +265,13 @@ class AuthServiceTest {
 
         @Test
         void 注册成功() {
-            when(emailVerificationCodeUtil.verifyCode("new@test.com", "123456")).thenReturn(true);
-            when(userMapper.findByEmail("new@test.com")).thenReturn(null);
-            when(userMapper.insert(any(User.class))).thenReturn(1);
+            when(verificationCodeService.verifyCode("new@test.com", "123456")).thenReturn(true);
+            when(userRepositoryPort.findByEmail("new@test.com")).thenReturn(Optional.empty());
+            doAnswer(invocation -> {
+                User u = invocation.getArgument(0);
+                u.setId(1L);
+                return null;
+            }).when(userRepositoryPort).save(any(User.class));
 
             RegisterRequest req = new RegisterRequest();
             req.setEmail("new@test.com");
@@ -350,7 +328,7 @@ class AuthServiceTest {
 
         @Test
         void 验证码错误返回错误() {
-            when(emailVerificationCodeUtil.verifyCode("test@test.com", "wrong")).thenReturn(false);
+            when(verificationCodeService.verifyCode("test@test.com", "wrong")).thenReturn(false);
 
             RegisterRequest req = new RegisterRequest();
             req.setEmail("test@test.com");
@@ -365,11 +343,11 @@ class AuthServiceTest {
 
         @Test
         void 邮箱已存在返回错误() {
-            when(emailVerificationCodeUtil.verifyCode("exists@test.com", "123456")).thenReturn(true);
+            when(verificationCodeService.verifyCode("exists@test.com", "123456")).thenReturn(true);
             User existingUser = new User();
             existingUser.setId(1L);
             existingUser.setEmail("exists@test.com");
-            when(userMapper.findByEmail("exists@test.com")).thenReturn(existingUser);
+            when(userRepositoryPort.findByEmail("exists@test.com")).thenReturn(Optional.of(existingUser));
 
             RegisterRequest req = new RegisterRequest();
             req.setEmail("exists@test.com");
@@ -380,23 +358,6 @@ class AuthServiceTest {
 
             assertFalse(result.isSuccess());
             assertEquals(ErrorCodeEnum.USER_EMAIL_EXISTS.getCode(), result.getCode());
-        }
-
-        @Test
-        void 插入失败返回错误() {
-            when(emailVerificationCodeUtil.verifyCode("new@test.com", "123456")).thenReturn(true);
-            when(userMapper.findByEmail("new@test.com")).thenReturn(null);
-            when(userMapper.insert(any(User.class))).thenReturn(0);
-
-            RegisterRequest req = new RegisterRequest();
-            req.setEmail("new@test.com");
-            req.setPassword("password123");
-            req.setCode("123456");
-
-            Result<User> result = authService.register(req);
-
-            assertFalse(result.isSuccess());
-            assertTrue(result.getMessage().contains("注册失败"));
         }
     }
 
@@ -465,8 +426,8 @@ class AuthServiceTest {
             user.setId(1L);
             user.setEmail("test@test.com");
             user.setPassword(PasswordUtil.hashPassword("oldPassword"));
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(userMapper.updateById(any(User.class))).thenReturn(1);
+            when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
+            doNothing().when(userRepositoryPort).update(any(User.class));
 
             ChangePasswordRequest req = new ChangePasswordRequest();
             req.setOldPassword("oldPassword");
@@ -479,7 +440,7 @@ class AuthServiceTest {
 
         @Test
         void 用户不存在返回错误() {
-            when(userMapper.selectById(1L)).thenReturn(null);
+            when(userRepositoryPort.findById(1L)).thenReturn(Optional.empty());
 
             ChangePasswordRequest req = new ChangePasswordRequest();
             req.setOldPassword("oldPassword");
@@ -495,8 +456,8 @@ class AuthServiceTest {
         void 旧密码错误返回错误() {
             User user = new User();
             user.setId(1L);
-            user.setPassword(PasswordUtil.hashPassword("correctOld"));
-            when(userMapper.selectById(1L)).thenReturn(user);
+            user.setPassword(PasswordUtil.hashPassword("correct0"));
+            when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
 
             ChangePasswordRequest req = new ChangePasswordRequest();
             req.setOldPassword("wrongOld");
@@ -527,13 +488,13 @@ class AuthServiceTest {
 
         @Test
         void 重置成功() {
-            when(emailVerificationCodeUtil.verifyCode("test@test.com", "123456")).thenReturn(true);
+            when(verificationCodeService.verifyCode("test@test.com", "123456")).thenReturn(true);
             User user = new User();
             user.setId(1L);
             user.setEmail("test@test.com");
             user.setPassword(PasswordUtil.hashPassword("oldPassword"));
-            when(userMapper.findByEmail("test@test.com")).thenReturn(user);
-            when(userMapper.updateById(any(User.class))).thenReturn(1);
+            when(userRepositoryPort.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+            doNothing().when(userRepositoryPort).update(any(User.class));
 
             ResetPasswordRequest req = new ResetPasswordRequest();
             req.setEmail("test@test.com");
@@ -586,7 +547,7 @@ class AuthServiceTest {
 
         @Test
         void 验证码错误返回错误() {
-            when(emailVerificationCodeUtil.verifyCode("test@test.com", "wrong")).thenReturn(false);
+            when(verificationCodeService.verifyCode("test@test.com", "wrong")).thenReturn(false);
 
             ResetPasswordRequest req = new ResetPasswordRequest();
             req.setEmail("test@test.com");
@@ -606,12 +567,12 @@ class AuthServiceTest {
 
         @Test
         void 带刷新令牌成功() {
-            doNothing().when(deviceTokenService).removeToken("refresh-token");
+            doNothing().when(userRepositoryPort).removeDeviceToken("refresh-token");
 
             Result result = authService.logout(1L, "refresh-token", "test-jwt");
 
             assertTrue(result.isSuccess());
-            verify(deviceTokenService).removeToken("refresh-token");
+            verify(userRepositoryPort).removeDeviceToken("refresh-token");
         }
 
         @Test
@@ -619,7 +580,7 @@ class AuthServiceTest {
             Result result = authService.logout(1L, null, null);
 
             assertTrue(result.isSuccess());
-            verify(deviceTokenService, never()).removeToken(anyString());
+            verify(userRepositoryPort, never()).removeDeviceToken(anyString());
         }
     }
 }

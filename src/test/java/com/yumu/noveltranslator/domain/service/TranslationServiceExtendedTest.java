@@ -5,7 +5,7 @@ import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslat
 import com.yumu.noveltranslator.domain.service.QuotaService;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.dto.translation.WebpageTranslateRequest;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
@@ -39,6 +39,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -60,7 +61,7 @@ class TranslationServiceExtendedTest {
     @Mock
     private UserLevelThrottledTranslationClient translationClient;
     @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
     @Mock
     private RagTranslationService ragTranslationService;
     @Mock
@@ -79,7 +80,7 @@ class TranslationServiceExtendedTest {
     @BeforeEach
     void setUp() {
         translationService = new TranslationService(
-                translationClient, cacheService, ragTranslationService,
+                translationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
@@ -110,7 +111,7 @@ class TranslationServiceExtendedTest {
         void 翻译返回空字符串判定失败() {
             // 快速模式 (默认) 使用 executeFast，失败时返回原文
             // 测试需要验证空结果行为：直接模式走 executeFast，返回原文
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
@@ -127,7 +128,7 @@ class TranslationServiceExtendedTest {
 
         @Test
         void 翻译返回null判定失败() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn(null);
 
@@ -144,7 +145,7 @@ class TranslationServiceExtendedTest {
 
         @Test
         void 缓存返回翻译结果() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("context-cached");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("context-cached"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("test-text");
@@ -173,7 +174,7 @@ class TranslationServiceExtendedTest {
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(true);
 
             // 缓存全部未命中
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             // 翻译抛出异常 → 管线捕获异常并返回原文
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenThrow(new RuntimeException("translation error"));
@@ -198,7 +199,7 @@ class TranslationServiceExtendedTest {
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(true);
 
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
                     .thenReturn("{\"code\":200,\"data\":\"translated\"}");
 

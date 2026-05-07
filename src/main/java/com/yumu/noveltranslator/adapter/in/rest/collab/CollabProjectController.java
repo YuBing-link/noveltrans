@@ -91,7 +91,7 @@ public class CollabProjectController {
     @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
     public Result<CollabPort.InviteCodeResult> generateInviteCode(@PathVariable Long projectId) {
         Long userId = SecurityUtil.getRequiredUserId();
-        CollabProjectService.InviteCodeResult result = collabPort.generateInviteCode(projectId, userId);
+        CollabPort.InviteCodeResult result = collabPort.generateInviteCode(projectId, userId);
         return Result.ok(result);
     }
 

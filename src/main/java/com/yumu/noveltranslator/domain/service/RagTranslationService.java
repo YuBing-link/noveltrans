@@ -3,14 +3,12 @@ package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import com.yumu.noveltranslator.util.SecurityUtil;
+import com.yumu.noveltranslator.port.out.VectorStorePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.*;
 
 /**
@@ -26,7 +24,7 @@ public class RagTranslationService {
 
     private final EmbeddingService embeddingService;
     private final TranslationMemoryService translationMemoryService;
-    private final StringRedisTemplate stringRedisTemplate;
+    private final VectorStorePort vectorStorePort;
 
     @Value("${embedding.provider:openai}")
     private String provider;
@@ -291,148 +289,52 @@ public class RagTranslationService {
     }
 
     /**
-     * 构建 RediSearch 模式过滤条件
-     * 例: ["team","expert"] → "(@translation_mode:{team|expert})"
-     */
-    private String buildModeFilter(List<String> allowedModes) {
-        if (allowedModes == null || allowedModes.isEmpty()) {
-            return "";
-        }
-        String modes = String.join("|", allowedModes);
-        return String.format("(@translation_mode:{%s})", modes);
-    }
-
-    /**
-     * Redis KNN 向量搜索（按用户、目标语言和翻译模式过滤）
+     * 向量搜索（按用户、目标语言和翻译模式过滤）
      */
     private List<RagTranslationResponse.RagMatch> searchInRedis(float[] queryVector, Long userId, String targetLang, List<String> allowedModes) {
-        String vectorStr = formatVectorForRedis(queryVector);
-
-        // 构建模式过滤条件
-        String modeFilter = buildModeFilter(allowedModes);
-
-        // 使用 RediSearch 过滤语法：先按 TAG 字段过滤，再在子集中做 KNN
-        String filterQuery = String.format("(@user_id:{%s} @target_lang:{%s} %s)", userId, targetLang, modeFilter);
-        String knnQuery = String.format("%s=>[KNN %d @embedding $query_vector AS score]", filterQuery, knnTopK);
-
-        Object result = stringRedisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>) connection ->
-                connection.execute("FT.SEARCH",
-                        "translation_memory_idx".getBytes(),
-                        knnQuery.getBytes(),
-                        "PARAMS".getBytes(), "2".getBytes(),
-                        "query_vector".getBytes(), vectorStr.getBytes(),
-                        "RETURN".getBytes(), "4".getBytes(),
-                        "source_text".getBytes(), "target_text".getBytes(), "score".getBytes(), "id".getBytes(),
-                        "SORTBY".getBytes(), "score".getBytes(), "ASC".getBytes(),
-                        "LIMIT".getBytes(), "0".getBytes(), String.valueOf(knnTopK).getBytes(),
-                        "DIALECT".getBytes(), "2".getBytes()
-                )
-        );
-
-        return parseSearchResult(result);
+        List<Map<String, String>> results = vectorStorePort.vectorSearch(queryVector, userId, targetLang, allowedModes, knnTopK);
+        return convertToRagMatches(results);
     }
 
     /**
-     * 解析 RediSearch FT.SEARCH 返回结果
-     *
-     * 返回格式：List<Object>，结构为：
-     *   [0]: 总记录数 (Long)
-     *   [1]: 文档1的 key (byte[])
-     *   [2]: 文档1的字段值数组 (byte[][]) - [field1, value1, field2, value2, ...]
-     *   [3]: 文档2的 key
-     *   [4]: 文档2的字段值数组
-     *   ...
+     * 将 VectorStorePort 返回的 Map 列表转换为 RagMatch 对象
      */
-    private List<RagTranslationResponse.RagMatch> parseSearchResult(Object result) {
+    private List<RagTranslationResponse.RagMatch> convertToRagMatches(List<Map<String, String>> results) {
         List<RagTranslationResponse.RagMatch> matches = new ArrayList<>();
-        if (result == null) {
+        if (results == null) {
             return matches;
         }
 
-        // Lettuce 返回的是 java.util.List
-        if (!(result instanceof List<?> resultList)) {
-            log.warn("Redis FT.SEARCH 返回格式异常: {}", result.getClass().getName());
-            return matches;
-        }
-
-        if (resultList.isEmpty()) {
-            return matches;
-        }
-
-        // 从索引 1 开始遍历文档（索引 0 是总记录数）
-        for (int i = 1; i < resultList.size(); i += 2) {
-            Object keyObj = resultList.get(i);
-            Object fieldsObj = (i + 1 < resultList.size()) ? resultList.get(i + 1) : null;
-
-            if (fieldsObj == null) {
-                continue;
-            }
-
-            Map<String, byte[]> fieldMap = parseFieldArray(fieldsObj);
-            if (fieldMap.isEmpty()) {
-                continue;
-            }
-
+        for (Map<String, String> row : results) {
             RagTranslationResponse.RagMatch match = new RagTranslationResponse.RagMatch();
-            match.setSourceText(getFieldAsString(fieldMap, "source_text"));
-            match.setTargetText(getFieldAsString(fieldMap, "target_text"));
+            match.setSourceText(row.getOrDefault("source_text", ""));
+            match.setTargetText(row.getOrDefault("target_text", ""));
 
-            // RediSearch 返回的 score 是距离值（0 = 完全相同，1 = 完全不同）
-            // 相似度 = 1 - score
-            byte[] scoreBytes = fieldMap.get("score");
-            if (scoreBytes != null) {
+            String scoreStr = row.get("score");
+            if (scoreStr != null) {
                 try {
-                    double distance = Double.parseDouble(new String(scoreBytes));
+                    double distance = Double.parseDouble(scoreStr);
                     match.setSimilarity(1.0 - distance);
                 } catch (NumberFormatException e) {
-                    log.warn("score 解析失败: {}", new String(scoreBytes));
+                    log.warn("score 解析失败: {}", scoreStr);
                     continue;
                 }
             }
 
-            // 从 Redis key 中提取 MySQL id（key 格式：tm:<mysql_id>）
-            byte[] keyBytes = keyObj instanceof byte[] kb ? kb : null;
-            if (keyBytes != null) {
-                String keyStr = new String(keyBytes);
-                if (keyStr.startsWith("tm:")) {
-                    try {
-                        match.setMemoryId(Long.parseLong(keyStr.substring(3)));
-                    } catch (NumberFormatException e) {
-                        log.warn("从 Redis key 提取 memoryId 失败: {}", keyStr);
-                    }
+            String idStr = row.get("id");
+            if (idStr != null) {
+                try {
+                    match.setMemoryId(Long.parseLong(idStr));
+                } catch (NumberFormatException e) {
+                    log.warn("id 解析失败: {}", idStr);
                 }
             }
 
             matches.add(match);
         }
 
-        // 按相似度降序排序
         matches.sort((a, b) -> Double.compare(b.getSimilarity(), a.getSimilarity()));
         return matches;
-    }
-
-    /**
-     * 解析 RediSearch 返回的字段数组（byte[][] 格式：[field1, value1, field2, value2, ...]）
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, byte[]> parseFieldArray(Object fieldsObj) {
-        Map<String, byte[]> map = new LinkedHashMap<>();
-        if (!(fieldsObj instanceof List<?> fieldList)) {
-            return map;
-        }
-        for (int j = 0; j + 1 < fieldList.size(); j += 2) {
-            Object nameObj = fieldList.get(j);
-            Object valueObj = fieldList.get(j + 1);
-            if (nameObj instanceof byte[] nb && valueObj instanceof byte[] vb) {
-                map.put(new String(nb), vb);
-            }
-        }
-        return map;
-    }
-
-    private String getFieldAsString(Map<String, byte[]> map, String fieldName) {
-        byte[] bytes = map.get(fieldName);
-        return bytes != null ? new String(bytes) : "";
     }
 
     /**
@@ -510,8 +412,8 @@ public class RagTranslationService {
     }
 
     /**
-     * 存储到 Redis 向量索引（带 translation_mode）
-     * 使用 MySQL 返回的自增 ID 作为 Redis key 的一部分，确保可追溯
+     * 存储到向量索引（带 translation_mode）
+     * 使用 MySQL 返回的自增 ID 作为 key，确保可追溯
      */
     private void storeToRedisVector(String sourceText, String targetText, String targetLang, Long userId, String engine, String translationMode) {
         try {
@@ -520,37 +422,36 @@ public class RagTranslationService {
                 return;
             }
 
-            String vectorStr = formatVectorForRedis(embedding);
-
             // 先查 MySQL 获取最新插入的记录 ID
             List<TranslationMemory> recent = translationMemoryService
                     .searchByUserAndLang(userId, "auto", targetLang, 1);
 
             Long memoryId = null;
             if (!recent.isEmpty()) {
-                // 检查最近的一条是否匹配当前原文（精确匹配确认）
                 TranslationMemory latest = recent.get(0);
                 if (latest.getSourceText().equals(sourceText) && latest.getTargetText().equals(targetText)) {
                     memoryId = latest.getId();
                 }
             }
 
-            // 使用 MySQL ID 作为 Redis key，方便 parseSearchResult 提取
             String key = "tm:" + (memoryId != null ? memoryId : UUID.randomUUID());
 
-            stringRedisTemplate.opsForHash().put(key, "id", memoryId != null ? memoryId.toString() : "0");
-            stringRedisTemplate.opsForHash().put(key, "source_text", sourceText);
-            stringRedisTemplate.opsForHash().put(key, "target_text", targetText);
-            stringRedisTemplate.opsForHash().put(key, "source_lang", "auto");
-            stringRedisTemplate.opsForHash().put(key, "target_lang", targetLang);
-            stringRedisTemplate.opsForHash().put(key, "user_id", userId.toString());
-            stringRedisTemplate.opsForHash().put(key, "embedding", vectorStr);
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("id", memoryId != null ? memoryId.toString() : "0");
+            fields.put("source_text", sourceText);
+            fields.put("target_text", targetText);
+            fields.put("source_lang", "auto");
+            fields.put("target_lang", targetLang);
+            fields.put("user_id", userId.toString());
+            fields.put("embedding", formatVectorForRedis(embedding));
             if (translationMode != null) {
-                stringRedisTemplate.opsForHash().put(key, "translation_mode", translationMode);
+                fields.put("translation_mode", translationMode);
             }
 
+            vectorStorePort.storeVector(key, fields);
+
         } catch (Exception e) {
-            log.warn("Redis 向量存储失败: {}", e.getMessage());
+            log.warn("向量存储失败: {}", e.getMessage());
         }
     }
 
@@ -569,16 +470,16 @@ public class RagTranslationService {
      */
     public void clearAllTranslationMemory() {
         try {
-            translationMemoryService.remove(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>());
+            translationMemoryService.deleteAllTranslationMemory();
             log.info("MySQL translation_memory 表已清空");
         } catch (Exception e) {
             log.warn("MySQL translation_memory 清空失败：{}", e.getMessage());
         }
         try {
-            stringRedisTemplate.delete(stringRedisTemplate.keys("tm:*"));
-            log.info("Redis RAG 向量索引已清空");
+            vectorStorePort.clearAllVectors();
+            log.info("向量索引已清空");
         } catch (Exception e) {
-            log.warn("Redis RAG 向量索引清空失败：{}", e.getMessage());
+            log.warn("向量索引清空失败：{}", e.getMessage());
         }
     }
 

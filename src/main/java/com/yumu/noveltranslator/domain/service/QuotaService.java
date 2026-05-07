@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.QuotaUsageMapper;
+import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,7 +64,7 @@ public class QuotaService {
             return new_val
             """;
 
-    private final QuotaUsageMapper quotaUsageMapper;
+    private final BillingRepositoryPort billingPort;
     private final TranslationLimitProperties limitProperties;
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -74,9 +74,6 @@ public class QuotaService {
     private final DefaultRedisScript<Long> refundScript = new DefaultRedisScript<>(
             REFUND_SCRIPT, Long.class);
 
-    /**
-     * 获取用户月度字符配额
-     */
     /**
      * 获取用户月度配额（原始值）
      */
@@ -115,7 +112,7 @@ public class QuotaService {
      */
     public long getUsedThisMonth(Long userId) {
         LocalDate monthStart = LocalDate.now().withDayOfMonth(1);
-        return quotaUsageMapper.getMonthlyUsage(userId, monthStart);
+        return billingPort.getMonthlyQuotaUsage(userId, monthStart);
     }
 
     /**
@@ -176,7 +173,7 @@ public class QuotaService {
      */
     private boolean fallbackConsumeChars(Long userId, String userLevel, long cost) {
         long quota = getMonthlyQuota(userLevel);
-        long used = quotaUsageMapper.getMonthlyUsage(userId, LocalDate.now().withDayOfMonth(1));
+        long used = billingPort.getMonthlyQuotaUsage(userId, LocalDate.now().withDayOfMonth(1));
         if (quota - used < cost) {
             return false;
         }
@@ -213,7 +210,7 @@ public class QuotaService {
     @Async
     protected void incrementDailyUsageAsync(Long userId, long cost) {
         try {
-            quotaUsageMapper.incrementUsage(userId, LocalDate.now(), cost);
+            billingPort.incrementQuotaUsage(userId, LocalDate.now(), cost);
         } catch (Exception e) {
             log.warn("异步写入每日配额用量失败: userId={}, cost={}, error={}", userId, cost, e.getMessage());
         }
@@ -225,7 +222,7 @@ public class QuotaService {
     @Async
     protected void decrementDailyUsageAsync(Long userId, long amount) {
         try {
-            quotaUsageMapper.decrementUsage(userId, LocalDate.now(), amount);
+            billingPort.decrementQuotaUsage(userId, LocalDate.now(), amount);
         } catch (Exception e) {
             log.warn("异步扣减每日配额用量失败: userId={}, amount={}, error={}", userId, amount, e.getMessage());
         }

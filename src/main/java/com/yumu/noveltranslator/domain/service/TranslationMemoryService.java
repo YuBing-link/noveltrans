@@ -1,11 +1,9 @@
 package com.yumu.noveltranslator.domain.service;
 
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationMemoryMapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -17,9 +15,9 @@ import java.util.*;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class TranslationMemoryService extends ServiceImpl<TranslationMemoryMapper, TranslationMemory> {
+public class TranslationMemoryService {
 
-    private final TranslationMemoryMapper translationMemoryMapper;
+    private final GlossaryRepositoryPort glossaryPort;
     private final EmbeddingService embeddingService;
 
     /**
@@ -48,7 +46,7 @@ public class TranslationMemoryService extends ServiceImpl<TranslationMemoryMappe
             memory.setEmbedding(toFloatList(embedding));
         }
 
-        save(memory);
+        glossaryPort.saveTranslationMemory(memory);
         log.debug("存储翻译记忆: id={}, sourceLen={}", memory.getId(), sourceText.length());
     }
 
@@ -56,25 +54,25 @@ public class TranslationMemoryService extends ServiceImpl<TranslationMemoryMappe
      * 增加使用计数
      */
     public void incrementUsage(Long memoryId) {
-        TranslationMemory memory = getById(memoryId);
-        if (memory != null) {
-            memory.setUsageCount(memory.getUsageCount() + 1);
-            updateById(memory);
-        }
+        glossaryPort.incrementMemoryUsage(memoryId);
     }
 
     /**
      * 按用户和语言对查询翻译记忆（MySQL 层，精确匹配）
      */
     public List<TranslationMemory> searchByUserAndLang(Long userId, String sourceLang, String targetLang, int limit) {
-        return translationMemoryMapper.selectTopByUserAndLang(userId, sourceLang, targetLang, limit);
+        return glossaryPort.findTopMemoryByUserAndLang(userId, sourceLang, targetLang, limit);
     }
 
     /**
      * 按项目查询翻译记忆
      */
     public List<TranslationMemory> searchByProject(Long projectId) {
-        return translationMemoryMapper.selectByProjectId(projectId);
+        return glossaryPort.findMemoryByProjectId(projectId);
+    }
+
+    public void deleteAllTranslationMemory() {
+        glossaryPort.deleteAllTranslationMemory();
     }
 
     private List<Float> toFloatList(float[] array) {

@@ -7,7 +7,7 @@ import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
@@ -43,7 +43,7 @@ public class TranslationPipeline {
     /** 分段翻译的目标段大小（字符数） */
     private static final int TRANSLATION_SEGMENT_SIZE = 3000;
 
-    private final TranslationCacheService cacheService;
+    private final TranslationCachePort cacheService;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
     private final UserLevelThrottledTranslationClient translationClient;
@@ -58,7 +58,7 @@ public class TranslationPipeline {
      * 创建翻译管线实例（标准模式，L4 走直译）
      */
     public TranslationPipeline(
-            TranslationCacheService cacheService,
+            TranslationCachePort cacheService,
             RagTranslationService ragTranslationService,
             EntityConsistencyService entityConsistencyService,
             UserLevelThrottledTranslationClient translationClient,
@@ -75,7 +75,7 @@ public class TranslationPipeline {
      * @param teamTranslationService 团队翻译服务（可为 null，null 时 executeTeam 降级为标准直译）
      */
     public TranslationPipeline(
-            TranslationCacheService cacheService,
+            TranslationCachePort cacheService,
             RagTranslationService ragTranslationService,
             EntityConsistencyService entityConsistencyService,
             UserLevelThrottledTranslationClient translationClient,
@@ -91,7 +91,7 @@ public class TranslationPipeline {
      * 创建翻译管线实例（完整构造，支持术语表）
      */
     public TranslationPipeline(
-            TranslationCacheService cacheService,
+            TranslationCachePort cacheService,
             RagTranslationService ragTranslationService,
             EntityConsistencyService entityConsistencyService,
             UserLevelThrottledTranslationClient translationClient,
@@ -108,7 +108,7 @@ public class TranslationPipeline {
      * 创建翻译管线实例（完整构造，支持术语表和 userLevel）
      */
     public TranslationPipeline(
-            TranslationCacheService cacheService,
+            TranslationCachePort cacheService,
             RagTranslationService ragTranslationService,
             EntityConsistencyService entityConsistencyService,
             UserLevelThrottledTranslationClient translationClient,
@@ -198,7 +198,7 @@ public class TranslationPipeline {
         String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);
 
         // L1: 分层缓存查询
-        String cached = cacheService.getCacheByMode(cacheKey, mode.getName());
+        String cached = cacheService.getCacheByMode(cacheKey, mode.getName()).orElse(null);
         if (cached != null) {
             log.debug("Pipeline 团队模式缓存命中 [{}]", cacheKey.substring(0, Math.min(16, cacheKey.length())));
             return cached;
@@ -277,7 +277,7 @@ public class TranslationPipeline {
         String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);
 
         // L1: 分层缓存查询
-        String cached = cacheService.getCacheByMode(cacheKey, mode.getName());
+        String cached = cacheService.getCacheByMode(cacheKey, mode.getName()).orElse(null);
         if (cached != null) {
             log.debug("Pipeline 缓存命中 mode={}, key={}", mode.getName(), cacheKey);
             return cached;
@@ -359,7 +359,7 @@ public class TranslationPipeline {
         String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);
 
         // L1: 分层缓存查询
-        String cached = cacheService.getCacheByMode(cacheKey, mode.getName());
+        String cached = cacheService.getCacheByMode(cacheKey, mode.getName()).orElse(null);
         if (cached != null) {
             log.debug("Pipeline 快速模式缓存命中 mode={}", mode.getName());
             return cached;

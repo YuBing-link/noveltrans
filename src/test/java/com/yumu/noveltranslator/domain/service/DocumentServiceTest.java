@@ -5,8 +5,8 @@ import com.yumu.noveltranslator.dto.entity.DocumentInfoResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
 import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -32,10 +33,10 @@ import static org.mockito.Mockito.*;
 class DocumentServiceTest {
 
     @Mock
-    private DocumentMapper documentMapper;
+    private DocumentRepositoryPort documentPort;
 
     @Mock
-    private TranslationTaskMapper translationTaskMapper;
+    private TranslationRepositoryPort translationPort;
 
     @Mock
     private TranslationStateMachine stateMachine;
@@ -44,8 +45,7 @@ class DocumentServiceTest {
 
     @BeforeEach
     void setUp() {
-        documentService = new DocumentService(documentMapper, translationTaskMapper, stateMachine);
-        // 注入 uploadDir 字段
+        documentService = new DocumentService(documentPort, translationPort, stateMachine);
         try {
             java.lang.reflect.Field field = DocumentService.class.getDeclaredField("uploadDir");
             field.setAccessible(true);
@@ -67,7 +67,7 @@ class DocumentServiceTest {
             Document doc2 = new Document();
             doc2.setId(2L);
             doc2.setStatus("pending");
-            when(documentMapper.findByUserId(1L)).thenReturn(Arrays.asList(doc1, doc2));
+            when(documentPort.findByUserId(1L)).thenReturn(Arrays.asList(doc1, doc2));
 
             List<Document> result = documentService.getUserDocuments(1L, "all");
 
@@ -82,7 +82,7 @@ class DocumentServiceTest {
             Document doc2 = new Document();
             doc2.setId(2L);
             doc2.setStatus("pending");
-            when(documentMapper.findByUserId(1L)).thenReturn(Arrays.asList(doc1, doc2));
+            when(documentPort.findByUserId(1L)).thenReturn(Arrays.asList(doc1, doc2));
 
             List<Document> result = documentService.getUserDocuments(1L, "completed");
 
@@ -95,7 +95,7 @@ class DocumentServiceTest {
             Document doc1 = new Document();
             doc1.setId(1L);
             doc1.setStatus("completed");
-            when(documentMapper.findByUserId(1L)).thenReturn(Collections.singletonList(doc1));
+            when(documentPort.findByUserId(1L)).thenReturn(Collections.singletonList(doc1));
 
             List<Document> result = documentService.getUserDocuments(1L, null);
 
@@ -112,18 +112,18 @@ class DocumentServiceTest {
             Document doc = new Document();
             doc.setId(1L);
             doc.setUserId(1L);
-            when(documentMapper.findByIdAndUserId(1L, 1L)).thenReturn(doc);
+            when(documentPort.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(doc));
 
             Document result = documentService.getDocumentById(1L, 1L);
 
             assertNotNull(result);
             assertEquals(1L, result.getId());
-            verify(documentMapper).findByIdAndUserId(1L, 1L);
+            verify(documentPort).findByIdAndUserId(1L, 1L);
         }
 
         @Test
         void 文档不存在返回null() {
-            when(documentMapper.findByIdAndUserId(999L, 1L)).thenReturn(null);
+            when(documentPort.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
             Document result = documentService.getDocumentById(999L, 1L);
 
@@ -141,23 +141,22 @@ class DocumentServiceTest {
             doc.setId(1L);
             doc.setUserId(1L);
             doc.setPath("/tmp/test-file.txt");
-            when(documentMapper.findByIdAndUserId(1L, 1L)).thenReturn(doc);
-            when(documentMapper.updateDeletedStatus(1L)).thenReturn(1);
+            when(documentPort.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(doc));
 
             boolean result = documentService.deleteDocument(1L, 1L);
 
             assertTrue(result);
-            verify(documentMapper).updateDeletedStatus(1L);
+            verify(documentPort).markDeleted(1L);
         }
 
         @Test
         void 文档不存在返回false() {
-            when(documentMapper.findByIdAndUserId(999L, 1L)).thenReturn(null);
+            when(documentPort.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
             boolean result = documentService.deleteDocument(999L, 1L);
 
             assertFalse(result);
-            verify(documentMapper, never()).updateDeletedStatus(anyLong());
+            verify(documentPort, never()).markDeleted(anyLong());
         }
     }
 
@@ -172,15 +171,13 @@ class DocumentServiceTest {
             doc.setUserId(1L);
             doc.setStatus("failed");
             doc.setErrorMessage("翻译失败");
-            when(documentMapper.findByIdAndUserId(1L, 1L)).thenReturn(doc);
-            when(documentMapper.updateById(any(Document.class))).thenReturn(1);
+            when(documentPort.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(doc));
 
             TranslationTask task = new TranslationTask();
             task.setId(1L);
             task.setDocumentId(1L);
             task.setStatus("failed");
-            when(translationTaskMapper.selectList(any())).thenReturn(List.of(task));
-            when(translationTaskMapper.updateById(any())).thenReturn(1);
+            when(translationPort.findTasksByDocumentId(1L)).thenReturn(List.of(task));
 
             boolean result = documentService.retryTranslation(1L, 1L);
 
@@ -194,7 +191,7 @@ class DocumentServiceTest {
 
         @Test
         void 文档不存在返回false() {
-            when(documentMapper.findByIdAndUserId(999L, 1L)).thenReturn(null);
+            when(documentPort.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
             boolean result = documentService.retryTranslation(999L, 1L);
 
@@ -248,7 +245,7 @@ class DocumentServiceTest {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-123");
             task.setProgress(45);
-            when(translationTaskMapper.findByTaskId("task-123")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-123")).thenReturn(Optional.of(task));
 
             DocumentInfoResponse result = documentService.toDocumentInfoResponse(doc);
 
@@ -268,12 +265,11 @@ class DocumentServiceTest {
             doc.setStatus("pending");
             doc.setCreateTime(LocalDateTime.now().minusMinutes(1));
 
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(null);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.empty());
 
             DocumentInfoResponse result = documentService.toDocumentInfoResponse(doc);
 
             assertNotNull(result);
-            // pending 且无任务进度，返回基于时间的进度（至少5%）
             assertTrue(result.getProgress() >= 5);
         }
     }
@@ -294,12 +290,11 @@ class DocumentServiceTest {
             doc.setStatus("pending");
             doc.setCreateTime(LocalDateTime.now().minusSeconds(60));
 
-            when(translationTaskMapper.findByTaskId(anyString())).thenReturn(null);
+            when(translationPort.findTaskByTaskId(anyString())).thenReturn(Optional.empty());
 
             DocumentInfoResponse result = documentService.toDocumentInfoResponse(doc);
 
             assertNotNull(result);
-            // pending 且无任务进度，返回基于时间的进度（至少5%）
             assertTrue(result.getProgress() >= 5);
             assertTrue(result.getProgress() <= 95);
         }

@@ -6,7 +6,7 @@ import com.yumu.noveltranslator.domain.service.QuotaService;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.util.TextSegmentationUtil;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.dto.translation.WebpageTranslateRequest;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
@@ -39,6 +39,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -62,7 +63,7 @@ class TranslationServiceExtended2Test {
     @Mock
     private UserLevelThrottledTranslationClient translationClient;
     @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
     @Mock
     private RagTranslationService ragTranslationService;
     @Mock
@@ -81,7 +82,7 @@ class TranslationServiceExtended2Test {
     @BeforeEach
     void setUp() {
         translationService = new TranslationService(
-                translationClient, cacheService, ragTranslationService,
+                translationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         lenient().when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
@@ -116,7 +117,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void ai引擎映射为expert模式() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"专家翻译结果\"}");
 
@@ -133,7 +134,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void aiTeam引擎映射为team模式() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"团队翻译结果\"}");
 
@@ -150,7 +151,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void deepl引擎映射为expert模式() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"DeepL结果\"}");
 
@@ -166,7 +167,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void google引擎映射为fast模式() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"Google结果\"}");
 
@@ -182,7 +183,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void 未知引擎降级为fast() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -208,7 +209,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("free");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"))).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -230,7 +231,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("free");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("team"))).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -253,7 +254,7 @@ class TranslationServiceExtended2Test {
         void 翻译客户端抛异常时executeFast返回原文() {
             // 无认证用户，不检查配额
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenThrow(new RuntimeException("network error"));
 
@@ -271,7 +272,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 翻译返回null时executeFast返回原文() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn(null);
 
@@ -288,7 +289,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 翻译返回空data时executeFast返回原文() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
@@ -310,7 +311,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 翻译结果中的script标签被净化() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"<script>alert(1)</script>翻译结果\"}");
 
@@ -327,7 +328,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 翻译结果中的iframe标签被净化() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"<iframe src='evil'>内容</iframe>正常文本\"}");
 
@@ -344,7 +345,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 安全的p和b标签被保留() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"<p><b>加粗文本</b></p>\"}");
 
@@ -371,7 +372,7 @@ class TranslationServiceExtended2Test {
         @Test
         void ai引擎映射为expert模式() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -388,7 +389,7 @@ class TranslationServiceExtended2Test {
         @Test
         void aiTeam引擎映射为team模式() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -405,7 +406,7 @@ class TranslationServiceExtended2Test {
         @Test
         void null引擎默认为fast模式() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -431,7 +432,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("free");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenThrow(new RuntimeException("engine down"));
 
@@ -451,7 +452,7 @@ class TranslationServiceExtended2Test {
         void 用户不存在时跳过配额检查() {
             setAuthenticatedUser(999L);
             when(userMapper.selectById(999L)).thenReturn(null);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
@@ -472,7 +473,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("pro");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("pro"), anyLong(), eq("expert"))).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"translated\"}");
 
@@ -494,7 +495,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void 阅读器翻译中缓存全部命中不调用翻译客户端() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached-result");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached-result"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>p1</p><p>p2</p>");
@@ -509,7 +510,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void 阅读器翻译中缓存未命中调用翻译客户端() throws InterruptedException {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"translated-by-client\"}");
 
@@ -552,7 +553,7 @@ class TranslationServiceExtended2Test {
         @Test
         void targetLang为null时使用默认中文() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -567,7 +568,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 特殊字符内容正常翻译() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
@@ -593,7 +594,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 无认证用户选中文本翻译() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
@@ -612,7 +613,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 无认证用户阅读器翻译() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
@@ -628,7 +629,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 安全上下文完全为null() {
             // 不调用 setAuthenticatedUser，SecurityContextHolder 为空
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("test");
@@ -651,7 +652,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("pro");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("pro"), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"pro翻译结果\"}");
 
@@ -673,7 +674,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("max");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("max"), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"max翻译结果\"}");
 
@@ -695,7 +696,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("premium");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("premium"), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"premium翻译结果\"}");
 
@@ -716,7 +717,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("pro");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("pro"), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"pro阅读翻译\"}");
 
@@ -741,7 +742,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 多段落翻译() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"translated-line\"}");
 
@@ -758,7 +759,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 段落内空行被保留() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"translated-line\"}");
 
@@ -775,7 +776,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 仅含空行段落被跳过() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("\n\n");
@@ -790,7 +791,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 翻译行失败时使用原文兜底() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenThrow(new RuntimeException("translation failed"));
 
@@ -806,7 +807,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 翻译返回空行时使用原文兜底() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
@@ -822,7 +823,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 翻译返回null行时使用原文兜底() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn(null);
 
@@ -848,7 +849,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("free");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenThrow(new RuntimeException("critical failure"));
 
@@ -866,7 +867,7 @@ class TranslationServiceExtended2Test {
         void 用户不存在跳过配额() {
             setAuthenticatedUser(999L);
             when(userMapper.selectById(999L)).thenReturn(null);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -892,7 +893,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 翻译线程异常时executeFast用原文兜底() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenThrow(new RuntimeException("engine unavailable"));
 
@@ -931,7 +932,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 文本项id为null时使用空字符串() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译\"}");
 
@@ -957,7 +958,7 @@ class TranslationServiceExtended2Test {
             user.setUserLevel("free");
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"))).thenReturn(true);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             List<WebpageTranslateRequest.TextItem> items = new ArrayList<>();
@@ -978,7 +979,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 多条文本并发翻译() throws InterruptedException {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"translated\"}");
 
@@ -1013,8 +1014,8 @@ class TranslationServiceExtended2Test {
             when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
 
-            // 让 cacheService 在虚拟线程中抛异常来触发全局 catch
-            when(cacheService.getCacheByMode(anyString(), anyString()))
+            // 让 cachePort 在虚拟线程中抛异常来触发全局 catch
+            when(cachePort.getCacheByMode(anyString(), anyString()))
                     .thenThrow(new RuntimeException("cache service unavailable"));
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
@@ -1062,7 +1063,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 超多段落并行翻译() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
@@ -1087,7 +1088,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 超长内容触发TextSegmentationUtil分段() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenAnswer(invocation -> {
                         String text = invocation.getArgument(0);
@@ -1123,7 +1124,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void 缓存查询抛异常时selectionTranslate兜底() {
-            when(cacheService.getCacheByMode(anyString(), anyString()))
+            when(cachePort.getCacheByMode(anyString(), anyString()))
                     .thenThrow(new RuntimeException("Redis connection refused"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -1138,7 +1139,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void 阅读器翻译中缓存全部命中() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached-result");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached-result"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("p1 p2");
@@ -1153,7 +1154,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void 阅读器翻译中缓存全部命中不调用翻译客户端() {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached-result");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached-result"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>p1</p><p>p2</p>");
@@ -1170,7 +1171,7 @@ class TranslationServiceExtended2Test {
 
         @Test
         void 阅读器翻译中缓存未命中调用翻译客户端() throws InterruptedException {
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"translated-by-client\"}");
 
@@ -1235,7 +1236,7 @@ class TranslationServiceExtended2Test {
         void userMapper返回null时跳过配额() {
             setAuthenticatedUser(1L, "free");
             when(userMapper.selectById(1L)).thenReturn(null);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
@@ -1250,7 +1251,7 @@ class TranslationServiceExtended2Test {
         void readerTranslate用户不存在跳过配额() {
             setAuthenticatedUser(1L, "free");
             when(userMapper.selectById(1L)).thenReturn(null);
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn("cached");
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
@@ -1293,7 +1294,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 带前后空格的文本被trim后非空() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
@@ -1309,7 +1310,7 @@ class TranslationServiceExtended2Test {
         @Test
         void targetLang为null时使用默认中文() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -1324,7 +1325,7 @@ class TranslationServiceExtended2Test {
         @Test
         void sourceLang为null时正常处理() {
             SecurityContextHolder.clearContext();
-            when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(null);
+            when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
@@ -1344,13 +1345,13 @@ class TranslationServiceExtended2Test {
     class CacheStatsDelegationTests {
 
         @Test
-        void 获取缓存统计委托给cacheService() {
+        void 获取缓存统计委托给cachePort() {
             java.util.Map<String, Object> expected = java.util.Map.of("hits", 10L, "misses", 5L);
-            when(cacheService.getCacheStats()).thenReturn(expected);
+            when(cachePort.getCacheStats()).thenReturn(expected);
 
             var stats = translationService.getCacheStats();
             assertEquals(expected, stats);
-            verify(cacheService).getCacheStats();
+            verify(cachePort).getCacheStats();
         }
     }
 }

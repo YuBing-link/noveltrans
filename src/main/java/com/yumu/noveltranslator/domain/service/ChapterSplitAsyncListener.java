@@ -1,6 +1,5 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
@@ -8,10 +7,9 @@ import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.domain.event.ChapterSplitEvent;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -33,9 +31,8 @@ public class ChapterSplitAsyncListener {
 
     private static final int BATCH_SIZE = 50;
 
-    private final CollabChapterTaskMapper collabChapterTaskMapper;
-    private final CollabProjectMapper collabProjectMapper;
-    private final DocumentMapper documentMapper;
+    private final CollaborationRepositoryPort collaborationRepository;
+    private final DocumentRepositoryPort documentRepository;
     private final CollabStateMachine collabStateMachine;
 
     @Async("chapterSplitExecutor")
@@ -77,14 +74,14 @@ public class ChapterSplitAsyncListener {
             chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
             chapter.setProgress(0);
             chapter.setSourceWordCount(chapterText.length());
-            collabChapterTaskMapper.insert(chapter);
+            collaborationRepository.saveChapterTask(chapter);
         }
         log.debug("批次插入成功: projectId={}, batchStart={}, count={}", projectId, startIndex + 1, batch.size());
     }
 
     @Transactional
     protected void activateProject(Long projectId, Long documentId) {
-        CollabProject project = collabProjectMapper.selectById(projectId);
+        CollabProject project = collaborationRepository.findProjectById(projectId).orElse(null);
         if (project == null) {
             log.error("激活项目失败: 项目不存在, projectId={}", projectId);
             return;
@@ -93,14 +90,14 @@ public class ChapterSplitAsyncListener {
         // 通过状态机将项目从 DRAFT 转换到 ACTIVE
         collabStateMachine.transitionProject(project, CollabProjectStatus.ACTIVE);
         project.setProgress(0);
-        collabProjectMapper.updateById(project);
+        collaborationRepository.updateProject(project);
 
         // 更新文档状态为已完成
-        Document doc = documentMapper.selectById(documentId);
+        Document doc = documentRepository.findById(documentId).orElse(null);
         if (doc != null) {
             doc.setStatus(TranslationStatus.COMPLETED.getValue());
             doc.setUpdateTime(LocalDateTime.now());
-            documentMapper.updateById(doc);
+            documentRepository.update(doc);
         }
 
         log.info("项目已激活: projectId={}", projectId);

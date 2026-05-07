@@ -3,7 +3,7 @@ import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.AiGlossaryService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
@@ -13,11 +13,10 @@ import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.*;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -44,28 +44,26 @@ import static org.mockito.Mockito.*;
 class MultiAgentTranslationServiceExtendedTest {
 
     @Mock
-    private CollabChapterTaskMapper chapterTaskMapper;
+    private CollaborationRepositoryPort collabPort;
     @Mock
-    private CollabProjectMapper collabProjectMapper;
+    private DocumentRepositoryPort documentPort;
     @Mock
-    private DocumentMapper documentMapper;
-    @Mock
-    private TranslationTaskMapper translationTaskMapper;
+    private TranslationRepositoryPort translationPort;
     @Mock
     private TeamTranslationService teamTranslationService;
     @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
     @Mock
     private EntityConsistencyService entityConsistencyService;
     @Mock
-    private GlossaryMapper glossaryMapper;
+    private GlossaryRepositoryPort glossaryPort;
     @Mock
     private RagTranslationService ragTranslationService;
     @Mock
     private AiGlossaryService aiGlossaryService;
     @Mock
     private TranslationPostProcessingService postProcessingService;
-    @Mock
+    @Spy
     private CollabStateMachine collabStateMachine;
 
     private MultiAgentTranslationService service;
@@ -73,17 +71,16 @@ class MultiAgentTranslationServiceExtendedTest {
     @BeforeEach
     void setUp() throws Exception {
         service = new MultiAgentTranslationService(
-                chapterTaskMapper, collabProjectMapper, documentMapper, translationTaskMapper,
-                teamTranslationService, cacheService, entityConsistencyService,
-                glossaryMapper, ragTranslationService, aiGlossaryService, postProcessingService,
+                collabPort, documentPort, translationPort,
+                teamTranslationService, cachePort, entityConsistencyService,
+                glossaryPort, ragTranslationService, aiGlossaryService, postProcessingService,
                 collabStateMachine);
         clearRetryCounterMap();
         // postProcessingService fixUntranslatedChinese 默认返回译文本身
         lenient().doAnswer(inv -> inv.getArgument(1)).when(postProcessingService).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
         // cache stubs
-        lenient().doReturn(null).when(cacheService).getCache(anyString());
-        lenient().doNothing().when(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
-        lenient().doNothing().when(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        lenient().when(cachePort.getCache(anyString())).thenReturn(Optional.empty());
+        lenient().doNothing().when(cachePort).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
         // RAG stubs
         lenient().doReturn(new RagTranslationResponse()).when(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), anyList());
         lenient().doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
@@ -102,7 +99,7 @@ class MultiAgentTranslationServiceExtendedTest {
         java.lang.reflect.Field field = MultiAgentTranslationService.class.getDeclaredField("retryCounterMap");
         field.setAccessible(true);
         @SuppressWarnings("unchecked")
-        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(null);
+        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(service);
         map.clear();
     }
 
@@ -302,10 +299,10 @@ class MultiAgentTranslationServiceExtendedTest {
         }
 
         private void invokeSetRetryCount(CollabChapterTask chapter, int count) throws Exception {
-            Method m = MultiAgentTranslationService.class.getDeclaredMethod("incrementRetryCount", CollabChapterTask.class);
-            m.setAccessible(true);
+            Method inc = MultiAgentTranslationService.class.getDeclaredMethod("incrementRetryCount", CollabChapterTask.class);
+            inc.setAccessible(true);
             for (int i = 0; i < count; i++) {
-                m.invoke(service, chapter);
+                inc.invoke(service, chapter);
             }
         }
     }
@@ -318,12 +315,12 @@ class MultiAgentTranslationServiceExtendedTest {
 
         @Test
         void 没有中断章节直接返回() throws Exception {
-            when(chapterTaskMapper.selectByProjectIdAndStatus(anyLong(), eq("TRANSLATING")))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(anyLong(), eq("TRANSLATING")))
                     .thenReturn(List.of());
 
             invokeRecoverStuckChapters(1L);
 
-            verify(chapterTaskMapper, never()).updateById(any());
+            verify(collabPort, never()).updateChapterTask(any());
         }
 
         @Test
@@ -332,7 +329,7 @@ class MultiAgentTranslationServiceExtendedTest {
             stuck.setId(1L);
             stuck.setProjectId(1L);
             stuck.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
-            when(chapterTaskMapper.selectByProjectIdAndStatus(anyLong(), eq("TRANSLATING")))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(anyLong(), eq("TRANSLATING")))
                     .thenReturn(List.of(stuck));
 
             invokeRecoverStuckChapters(1L);
@@ -347,7 +344,7 @@ class MultiAgentTranslationServiceExtendedTest {
             stuck.setId(1L);
             stuck.setProjectId(1L);
             stuck.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
-            when(chapterTaskMapper.selectByProjectIdAndStatus(anyLong(), eq("TRANSLATING")))
+            when(collabPort.findChapterTasksByProjectIdAndStatus(anyLong(), eq("TRANSLATING")))
                     .thenReturn(List.of(stuck));
 
             // Pre-set retry count to 3
@@ -403,6 +400,7 @@ class MultiAgentTranslationServiceExtendedTest {
             CollabChapterTask c = new CollabChapterTask();
             c.setId(1L);
             c.setProjectId(1L);
+            c.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
             return c;
         }
 
@@ -428,7 +426,7 @@ class MultiAgentTranslationServiceExtendedTest {
 
         @Test
         void 没有术语表返回空列表() throws Exception {
-            when(glossaryMapper.selectList(any())).thenReturn(List.of());
+            when(glossaryPort.findActiveGlossaryByUserId(anyLong())).thenReturn(List.of());
             List<?> result = invokeLoadGlossaryTerms(1L, "Hello World");
             assertTrue(result.isEmpty());
         }
@@ -443,7 +441,7 @@ class MultiAgentTranslationServiceExtendedTest {
             g2.setSourceWord("Goodbye");
             g2.setTargetWord("再见");
 
-            when(glossaryMapper.selectList(any())).thenReturn(List.of(g1, g2));
+            when(glossaryPort.findActiveGlossaryByUserId(1L)).thenReturn(List.of(g1, g2));
 
             List<?> result = invokeLoadGlossaryTerms(1L, "Hello World");
 
@@ -460,7 +458,7 @@ class MultiAgentTranslationServiceExtendedTest {
             g2.setSourceWord("Hello");
             g2.setTargetWord("你好");
 
-            when(glossaryMapper.selectList(any())).thenReturn(List.of(g1, g2));
+            when(glossaryPort.findActiveGlossaryByUserId(1L)).thenReturn(List.of(g1, g2));
 
             List<?> result = invokeLoadGlossaryTerms(1L, "Hello World");
 
@@ -469,7 +467,7 @@ class MultiAgentTranslationServiceExtendedTest {
 
         @Test
         void 查询异常返回空列表() throws Exception {
-            when(glossaryMapper.selectList(any())).thenThrow(new RuntimeException("DB error"));
+            when(glossaryPort.findActiveGlossaryByUserId(anyLong())).thenThrow(new RuntimeException("DB error"));
             List<?> result = invokeLoadGlossaryTerms(1L, "Hello");
             assertTrue(result.isEmpty());
         }

@@ -3,12 +3,10 @@ package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.dto.entity.DocumentInfoResponse;
 import com.yumu.noveltranslator.dto.translation.DocumentTranslationRequest;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
 import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,8 +33,8 @@ public class DocumentService {
     @Value("${translation.upload-dir:#{systemProperties['user.home']}/novel-translator/uploads}")
     private String uploadDir;
 
-    private final DocumentMapper documentMapper;
-    private final TranslationTaskMapper translationTaskMapper;
+    private final DocumentRepositoryPort documentPort;
+    private final TranslationRepositoryPort translationPort;
     private final TranslationStateMachine stateMachine;
 
     /**
@@ -73,7 +71,7 @@ public class DocumentService {
         doc.setMode(request.getMode());
         doc.setCreateTime(LocalDateTime.now());
 
-        documentMapper.insert(doc);
+        documentPort.save(doc);
 
         return doc;
     }
@@ -82,7 +80,7 @@ public class DocumentService {
      * 获取用户文档列表
      */
     public List<Document> getUserDocuments(Long userId, String status) {
-        List<Document> documents = documentMapper.findByUserId(userId);
+        List<Document> documents = documentPort.findByUserId(userId);
         if (status != null && !"all".equals(status)) {
             return documents.stream()
                     .filter(doc -> status.equals(doc.getStatus()))
@@ -95,52 +93,44 @@ public class DocumentService {
      * 获取文档详情
      */
     public Document getDocumentById(Long docId, Long userId) {
-        return documentMapper.findByIdAndUserId(docId, userId);
+        return documentPort.findByIdAndUserId(docId, userId).orElse(null);
     }
 
     /**
      * 删除文档
      */
     public boolean deleteDocument(Long docId, Long userId) {
-        Document doc = documentMapper.findByIdAndUserId(docId, userId);
-        if (doc != null) {
-            // 删除文件
+        return documentPort.findByIdAndUserId(docId, userId).map(doc -> {
             try {
                 Files.deleteIfExists(Paths.get(doc.getPath()));
             } catch (IOException e) {
                 // 忽略文件删除失败
             }
-            // 逻辑删除 - 使用直接更新避免 MyBatis-Plus @TableLogic 干扰
-            documentMapper.updateDeletedStatus(docId);
+            documentPort.markDeleted(docId);
             return true;
-        }
-        return false;
+        }).orElse(false);
     }
 
     /**
      * 重新翻译文档（仅重置状态，实际翻译由前端 SSE 触发）
      */
     public boolean retryTranslation(Long docId, Long userId) {
-        Document doc = documentMapper.findByIdAndUserId(docId, userId);
-        if (doc != null) {
+        return documentPort.findByIdAndUserId(docId, userId).map(doc -> {
             doc.setStatus(TranslationStatus.PENDING.getValue());
             doc.setErrorMessage(null);
             doc.setUpdateTime(LocalDateTime.now());
-            documentMapper.updateById(doc);
-            // 同时重置关联的所有翻译任务状态（避免多任务时 TooManyResultsException）
-            List<TranslationTask> tasks = translationTaskMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<TranslationTask>()
-                            .eq(TranslationTask::getDocumentId, docId));
+            documentPort.update(doc);
+            // 同时重置关联的所有翻译任务状态
+            List<TranslationTask> tasks = translationPort.findTasksByDocumentId(docId);
             for (TranslationTask task : tasks) {
                 task.setStatus("pending");
                 task.setErrorMessage(null);
                 task.setProgress(0);
                 task.setUpdateTime(LocalDateTime.now());
-                translationTaskMapper.updateById(task);
+                translationPort.updateTask(task);
             }
             return true;
-        }
-        return false;
+        }).orElse(false);
     }
 
     /**
@@ -194,11 +184,10 @@ public class DocumentService {
     }
 
     private int getRealProgress(Document doc) {
-        if (doc.getTaskId() != null && translationTaskMapper != null) {
-            TranslationTask task = translationTaskMapper.findByTaskId(doc.getTaskId());
-            if (task != null) {
-                return task.getProgress() != null ? task.getProgress() : 0;
-            }
+        if (doc.getTaskId() != null) {
+            return translationPort.findTaskByTaskId(doc.getTaskId())
+                    .map(task -> task.getProgress() != null ? task.getProgress() : 0)
+                    .orElse(0);
         }
         return 0;
     }

@@ -6,9 +6,8 @@ import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
 import com.yumu.noveltranslator.dto.collab.InviteMemberRequest;
 import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
 import com.yumu.noveltranslator.dto.common.PageResponse;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabComment;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabInviteCode;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
@@ -20,19 +19,14 @@ import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.domain.event.ChapterSplitEvent;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -58,15 +52,11 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CollabProjectService extends ServiceImpl<CollabProjectMapper, CollabProject> implements com.yumu.noveltranslator.port.in.CollabPort {
+public class CollabProjectService implements com.yumu.noveltranslator.port.in.CollabPort {
 
-    private final CollabProjectMapper collabProjectMapper;
-    private final CollabProjectMemberMapper collabProjectMemberMapper;
-    private final CollabChapterTaskMapper collabChapterTaskMapper;
-    private final CollabCommentMapper collabCommentMapper;
-    private final CollabInviteCodeMapper collabInviteCodeMapper;
-    private final DocumentMapper documentMapper;
-    private final UserMapper userMapper;
+    private final CollaborationRepositoryPort collabPort;
+    private final DocumentRepositoryPort documentPort;
+    private final UserRepositoryPort userPort;
     private final CollabStateMachine collabStateMachine;
     private final MultiAgentTranslationService multiAgentTranslationService;
     private final ApplicationEventPublisher eventPublisher;
@@ -84,7 +74,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         project.setTargetLang(request.getTargetLang());
         project.setStatus(CollabProjectStatus.DRAFT.getValue());
         project.setProgress(0);
-        save(project);
+        collabPort.saveProject(project);
 
         // 创建者自动成为 OWNER
         CollabProjectMember owner = new CollabProjectMember();
@@ -93,7 +83,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         owner.setRole(ProjectMemberRole.OWNER.getValue());
         owner.setInviteStatus("ACTIVE");
         owner.setJoinedTime(LocalDateTime.now());
-        collabProjectMemberMapper.insert(owner);
+        collabPort.saveMember(owner);
 
         log.info("创建协作项目: projectId={}, name={}, ownerId={}", project.getId(), project.getName(), userId);
         return toProjectResponse(project);
@@ -101,21 +91,11 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
 
     /**
      * 从上传文档创建协作项目（团队模式）
-     * 自动按章节标题拆分章节，创建项目后直接进入 ACTIVE 状态
-     *
-     * @param userId 用户ID
-     * @param documentName 文档名称
-     * @param filePath 文档路径
-     * @param fileType 文件类型
-     * @param sourceLang 源语言
-     * @param targetLang 目标语言
-     * @return 项目ID和章节数
      */
     @Transactional
-    public TeamProjectCreateResult createProjectFromDocument(Long userId, Long documentId, String documentName,
+    public CollabPort.TeamProjectCreateResult createProjectFromDocument(Long userId, Long documentId, String documentName,
                                                               String filePath, String fileType,
                                                               String sourceLang, String targetLang) {
-        // 在事务外读取文档内容，避免长时间占用数据库连接
         String content;
         try {
             content = Files.readString(Paths.get(filePath), java.nio.charset.StandardCharsets.UTF_8);
@@ -127,41 +107,30 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new BusinessException(ErrorCodeEnum.PARAMETER_ERROR, "文档内容为空");
         }
 
-        // 在事务外拆分章节，避免长时间占用数据库连接
         List<String> chapters = splitIntoChapters(content);
 
         return doCreateProject(userId, documentId, documentName, chapters, sourceLang, targetLang);
     }
 
-    /**
-     * 从上传文档创建协作项目的核心逻辑。
-     * 1. 窄事务：仅创建项目 + OWNER 成员
-     * 2. 发布 ChapterSplitEvent 事件，由异步监听器批量插入章节
-     * 3. 更新文档状态为 PROCESSING
-     * 4. 立即返回，不等待章节插入完成
-     */
-    private TeamProjectCreateResult doCreateProject(Long userId, Long documentId, String documentName,
+    private CollabPort.TeamProjectCreateResult doCreateProject(Long userId, Long documentId, String documentName,
                                                      List<String> chapters, String sourceLang, String targetLang) {
-        // 窄事务：仅创建项目 + OWNER 成员
         CollabProject project = createProjectAndOwner(userId, documentId, documentName, sourceLang, targetLang);
 
         log.info("团队模式创建项目（窄事务）: projectId={}, docName={}, chapters={}, 将异步插入",
                 project.getId(), documentName, chapters.size());
 
         // 更新文档状态为处理中
-        Document doc = documentMapper.selectById(documentId);
-        if (doc != null) {
+        documentPort.findById(documentId).ifPresent(doc -> {
             doc.setStatus(TranslationStatus.PROCESSING.getValue());
             doc.setUpdateTime(LocalDateTime.now());
-            documentMapper.updateById(doc);
-        }
+            documentPort.update(doc);
+        });
 
-        // 发布章节拆分事件，由异步监听器处理批量插入
         eventPublisher.publishEvent(new ChapterSplitEvent(
                 project.getId(), userId, documentId, documentName,
                 chapters, sourceLang, targetLang));
 
-        return new TeamProjectCreateResult(project.getId(), documentName, chapters.size());
+        return new CollabPort.TeamProjectCreateResult(project.getId(), documentName, chapters.size());
     }
 
     /**
@@ -179,7 +148,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         project.setTargetLang(targetLang);
         project.setStatus(CollabProjectStatus.DRAFT.getValue());
         project.setProgress(0);
-        save(project);
+        collabPort.saveProject(project);
 
         CollabProjectMember owner = new CollabProjectMember();
         owner.setProjectId(project.getId());
@@ -187,33 +156,27 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         owner.setRole(ProjectMemberRole.OWNER.getValue());
         owner.setInviteStatus("ACTIVE");
         owner.setJoinedTime(LocalDateTime.now());
-        collabProjectMemberMapper.insert(owner);
+        collabPort.saveMember(owner);
 
         return project;
     }
 
     /**
      * 将文档章节添加到已有协作项目
-     *
-     * @param userId 用户ID
-     * @param projectId 目标项目ID
-     * @param document 上传的文档
-     * @return 添加的章节数量
      */
     @Transactional
     public int addChaptersToProject(Long userId, Long projectId, Document document) {
-        CollabProject project = getById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
 
-        // 权限校验：只有项目所有者或成员才能添加章节
-        CollabProjectMember member = collabProjectMemberMapper.selectByProjectAndUser(projectId, userId);
+        // 权限校验
+        var member = collabPort.findMemberByProjectAndUser(projectId, userId);
         if (member == null && !project.getOwnerId().equals(userId)) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权向该项目添加章节");
         }
 
-        // 在事务外读取文档内容，避免长时间占用数据库连接
         String content;
         try {
             content = Files.readString(Paths.get(document.getPath()), java.nio.charset.StandardCharsets.UTF_8);
@@ -225,7 +188,6 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new BusinessException(ErrorCodeEnum.PARAMETER_ERROR, "文档内容为空");
         }
 
-        // 在事务外拆分章节
         List<String> chapters = splitIntoChapters(content);
 
         return doAddChaptersToProject(project, document, chapters);
@@ -235,20 +197,17 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     private int doAddChaptersToProject(CollabProject project, Document document, List<String> chapters) {
         Long projectId = project.getId();
 
-        // 关联文档（如果项目尚未关联）
         if (project.getDocumentId() == null) {
             project.setDocumentId(document.getId());
-            updateById(project);
+            collabPort.updateProject(project);
         }
 
-        // 获取当前最大章节号
-        List<CollabChapterTask> existingChapters = collabChapterTaskMapper.selectByProjectId(projectId);
+        List<CollabChapterTask> existingChapters = collabPort.findChapterTasksByProjectId(projectId);
         int nextChapterNumber = existingChapters.stream()
                 .mapToInt(CollabChapterTask::getChapterNumber)
                 .max()
                 .orElse(0) + 1;
 
-        // 创建章节
         for (String chapterText : chapters) {
             CollabChapterTask chapter = new CollabChapterTask();
             chapter.setProjectId(projectId);
@@ -259,32 +218,26 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
             chapter.setProgress(0);
             chapter.setSourceWordCount(chapterText.length());
-            collabChapterTaskMapper.insert(chapter);
+            collabPort.saveChapterTask(chapter);
         }
 
-        // 更新文档状态
         document.setStatus(TranslationStatus.PROCESSING.getValue());
         document.setUpdateTime(java.time.LocalDateTime.now());
-        documentMapper.updateById(document);
+        documentPort.update(document);
 
         log.info("添加章节到项目: projectId={}, docName={}, chapters={}", projectId, document.getName(), chapters.size());
         return chapters.size();
     }
 
     /**
-     * 启动多 Agent 翻译（在事务外调用，确保数据已提交）
+     * 启动多 Agent 翻译
      */
     public void startMultiAgentTranslation(Long projectId) {
         multiAgentTranslationService.startMultiAgentTranslation(projectId);
     }
 
     /**
-     * 智能章节分割：优先按章节标题分割，无标题时按字符数分组
-     * <p>
-     * 分割策略：
-     * 1. 检测章节标题行（如"第1章"、"Chapter 1"、"一、"等），按标题分割
-     * 2. 若无章节标题，按段落累加到 ~2000 字符分组
-     * 3. 若总段落很少，保持完整不分割
+     * 智能章节分割
      */
     private List<String> splitIntoChapters(String content) {
         String[] lines = content.split("\n");
@@ -292,7 +245,6 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         StringBuilder currentChapter = new StringBuilder();
         boolean hasChapterTitle = false;
 
-        // 章节标题正则（中文小说 + 英文小说常见格式）
         java.util.regex.Pattern chapterPattern = java.util.regex.Pattern.compile(
                 "^\\s*(?:\\*\\*?)?\\s*(?:" +
                         "(?:第\\s*[零一二三四五六七八九十百千\\d]+\\s*(?:章|节|回|卷|篇))" +
@@ -307,9 +259,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         for (String line : lines) {
             String trimmed = line.trim();
 
-            // 检测是否为章节标题
             if (chapterPattern.matcher(trimmed).find()) {
-                // 如果之前有累积内容，保存为前一章
                 if (currentChapter.length() > 0) {
                     String chapterText = currentChapter.toString().trim();
                     if (!chapterText.isEmpty()) {
@@ -324,7 +274,6 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             }
         }
 
-        // 保存最后一章
         if (currentChapter.length() > 0) {
             String chapterText = currentChapter.toString().trim();
             if (!chapterText.isEmpty()) {
@@ -332,7 +281,6 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             }
         }
 
-        // 如果没有检测到章节标题，回退到按段落+字符数分组
         if (!hasChapterTitle) {
             chapters.clear();
             String[] paragraphs = content.split("\n+");
@@ -353,7 +301,6 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             }
         }
 
-        // 至少返回一章
         if (chapters.isEmpty()) {
             chapters.add(content.trim());
         }
@@ -366,7 +313,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      * 获取项目详情
      */
     public CollabProjectResponse getProjectById(Long projectId) {
-        CollabProject project = getById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
@@ -377,7 +324,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      * 获取用户创建的项目列表
      */
     public List<CollabProjectResponse> listOwnedByUserId(Long userId) {
-        List<CollabProject> projects = collabProjectMapper.selectByOwnerId(userId);
+        List<CollabProject> projects = collabPort.findProjectsByOwnerId(userId);
         Map<Long, User> userMap = batchLoadOwnerUsers(projects);
         return projects.stream()
                 .map(p -> toProjectResponse(p, userMap))
@@ -385,12 +332,12 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     }
 
     /**
-     * 获取用户参与的项目列表（包括作为成员，可能跨租户）
+     * 获取用户参与的项目列表
      */
     public PageResponse<CollabProjectResponse> listByUserId(Long userId, int page, int pageSize) {
         try {
             TenantContext.setBypassTenant(true);
-            List<CollabProject> allProjects = collabProjectMapper.selectByMemberUserId(userId);
+            List<CollabProject> allProjects = collabPort.findProjectsByMemberUserId(userId);
             long total = allProjects.size();
             int fromIndex = Math.min((page - 1) * pageSize, (int) total);
             int toIndex = Math.min(fromIndex + pageSize, (int) total);
@@ -408,11 +355,11 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
     }
 
     /**
-     * 更新项目信息（仅 OWNER/REVIEWER）
+     * 更新项目信息
      */
     @Transactional
     public CollabProjectResponse updateProject(Long projectId, CreateCollabProjectRequest request, Long userId) {
-        CollabProject project = getById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
@@ -421,7 +368,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         project.setDescription(request.getDescription());
         project.setSourceLang(request.getSourceLang());
         project.setTargetLang(request.getTargetLang());
-        updateById(project);
+        collabPort.updateProject(project);
 
         return toProjectResponse(project);
     }
@@ -431,7 +378,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      */
     @Transactional
     public void changeProjectStatus(Long projectId, CollabProjectStatus targetStatus, Long userId) {
-        CollabProject project = getById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
@@ -441,17 +388,17 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         if (targetStatus == CollabProjectStatus.COMPLETED) {
             project.setProgress(100);
         }
-        updateById(project);
+        collabPort.updateProject(project);
 
         log.info("项目状态变更: projectId={}, {} -> {}", projectId, current, targetStatus);
     }
 
     /**
-     * 生成项目邀请码（8位随机码，有效期72小时）
+     * 生成项目邀请码
      */
     @Transactional
-    public InviteCodeResult generateInviteCode(Long projectId, Long operatorId) {
-        CollabProject project = getById(projectId);
+    public CollabPort.InviteCodeResult generateInviteCode(Long projectId, Long operatorId) {
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
@@ -464,24 +411,20 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         inviteCode.setCode(code);
         inviteCode.setExpiresAt(expiresAt);
         inviteCode.setUsed(0);
-        collabInviteCodeMapper.insert(inviteCode);
+        collabPort.saveInviteCode(inviteCode);
 
         log.info("生成邀请码: projectId={}, code={}, expiresAt={}", projectId, code, expiresAt);
-        return new InviteCodeResult(code, expiresAt);
+        return new CollabPort.InviteCodeResult(code, expiresAt);
     }
 
-    /**
-     * 生成8位随机邀请码（大写字母+数字）
-     */
     private String generateRandomInviteCode() {
-        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去除易混淆字符 I/O/0/1
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         java.security.SecureRandom random = new java.security.SecureRandom();
         StringBuilder code = new StringBuilder(8);
         for (int i = 0; i < 8; i++) {
             code.append(chars.charAt(random.nextInt(chars.length())));
         }
-        // 确保唯一性，如果重复则重试
-        if (collabInviteCodeMapper.selectByCode(code.toString()) != null) {
+        if (collabPort.findInviteCodeByCode(code.toString()) != null) {
             return generateRandomInviteCode();
         }
         return code.toString();
@@ -492,13 +435,12 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      */
     @Transactional
     public ProjectMemberResponse inviteMember(Long projectId, InviteMemberRequest request, Long inviterId) {
-        User user = userMapper.findByEmail(request.getEmail());
+        User user = userPort.findByEmail(request.getEmail()).orElse(null);
         if (user == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "用户不存在: " + request.getEmail());
         }
 
-        // 检查是否已是成员
-        CollabProjectMember existing = collabProjectMemberMapper.selectByProjectAndUser(projectId, user.getId());
+        var existing = collabPort.findMemberByProjectAndUser(projectId, user.getId());
         if (existing != null) {
             throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "该用户已是项目成员");
         }
@@ -511,22 +453,20 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         member.setRole(request.getRole().getValue());
         member.setInviteCode(inviteCode);
         member.setInviteStatus("INVITED");
-        collabProjectMemberMapper.insert(member);
+        collabPort.saveMember(member);
 
         log.info("邀请成员: projectId={}, email={}, role={}", projectId, request.getEmail(), request.getRole());
         return toMemberResponse(member, user);
     }
 
     /**
-     * 通过邀请码加入项目（跨租户操作，需要绕过租户过滤）
+     * 通过邀请码加入项目
      */
     @Transactional
     public ProjectMemberResponse joinByInviteCode(String inviteCode, Long userId) {
-        // 查询有效邀请码（未过期、未使用）
-        CollabInviteCode codeRecord = collabInviteCodeMapper.selectByValidCode(inviteCode);
+        CollabInviteCode codeRecord = collabPort.findValidInviteCode(inviteCode);
         if (codeRecord == null) {
-            // 进一步检查是否是已过期或已使用
-            CollabInviteCode anyCode = collabInviteCodeMapper.selectByCode(inviteCode);
+            CollabInviteCode anyCode = collabPort.findInviteCodeByCode(inviteCode);
             if (anyCode == null) {
                 throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "邀请码无效");
             }
@@ -539,15 +479,12 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "邀请码不可用");
         }
 
-        // 标记为已使用
-        collabInviteCodeMapper.markAsUsed(codeRecord.getId());
+        collabPort.markInviteCodeAsUsed(codeRecord.getId());
 
-        // 跨租户查询项目和创建成员（邀请码允许不同租户的用户加入同一项目）
         try {
             TenantContext.setBypassTenant(true);
 
-            // 检查项目是否存在且为 ACTIVE
-            CollabProject project = getById(codeRecord.getProjectId());
+            CollabProject project = collabPort.findProjectById(codeRecord.getProjectId()).orElse(null);
             if (project == null) {
                 throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "关联项目不存在");
             }
@@ -555,13 +492,11 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
                 throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "项目当前不可加入");
             }
 
-            // 检查是否已是成员
-            CollabProjectMember existing = collabProjectMemberMapper.selectByProjectAndUser(codeRecord.getProjectId(), userId);
+            var existing = collabPort.findMemberByProjectAndUser(codeRecord.getProjectId(), userId);
             if (existing != null) {
                 throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "您已是该项目成员");
             }
 
-            // 创建成员记录（成员的 tenant_id 与项目一致）
             CollabProjectMember member = new CollabProjectMember();
             member.setProjectId(codeRecord.getProjectId());
             member.setUserId(userId);
@@ -569,10 +504,10 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             member.setInviteCode(inviteCode);
             member.setInviteStatus("ACTIVE");
             member.setJoinedTime(LocalDateTime.now());
-            member.setTenantId(project.getTenantId()); // 成员的租户与项目一致
-            collabProjectMemberMapper.insert(member);
+            member.setTenantId(project.getTenantId());
+            collabPort.saveMember(member);
 
-            User user = userMapper.selectById(userId);
+            User user = userPort.findById(userId).orElse(null);
             log.info("加入项目: userId={}, projectId={}, inviteCode={}", userId, codeRecord.getProjectId(), inviteCode);
             return toMemberResponse(member, user);
         } finally {
@@ -587,7 +522,7 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         List<CollabProjectMember> allMembers;
         try {
             TenantContext.setBypassTenant(true);
-            allMembers = collabProjectMemberMapper.selectByProjectId(projectId);
+            allMembers = collabPort.findMembersByProjectId(projectId);
         } finally {
             TenantContext.setBypassTenant(false);
         }
@@ -598,17 +533,13 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
                 ? allMembers.subList(fromIndex, toIndex)
                 : List.of();
 
-        // 批量加载关联用户，避免 N+1
-        java.util.Set<Long> userIds = new java.util.HashSet<>();
+        Set<Long> userIds = new HashSet<>();
         for (CollabProjectMember m : pagedMembers) {
             if (m.getUserId() != null) userIds.add(m.getUserId());
         }
-        java.util.Map<Long, User> userMap = new java.util.HashMap<>();
-        if (!userIds.isEmpty()) {
-            List<User> users = userMapper.selectBatchIds(userIds);
-            for (User user : users) {
-                userMap.put(user.getId(), user);
-            }
+        Map<Long, User> userMap = new HashMap<>();
+        for (Long uid : userIds) {
+            userPort.findById(uid).ifPresent(u -> userMap.put(uid, u));
         }
 
         List<ProjectMemberResponse> responseList = pagedMembers.stream()
@@ -622,26 +553,25 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
      */
     @Transactional
     public void removeMember(Long projectId, Long memberId, Long operatorId) {
-        CollabProjectMember member = collabProjectMemberMapper.selectById(memberId);
+        var member = collabPort.findMemberById(memberId).orElse(null);
         if (member == null || !member.getProjectId().equals(projectId)) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "成员不存在");
         }
 
-        // OWNER 不能被移除（除非自己转让）
         if (ProjectMemberRole.OWNER.getValue().equals(member.getRole())) {
             throw new BusinessException(ErrorCodeEnum.INVALID_STATE, "所有者不能直接移除，需先转让项目");
         }
 
         member.setInviteStatus("REMOVED");
-        collabProjectMemberMapper.updateById(member);
+        collabPort.updateMember(member);
     }
 
     /**
-     * 删除项目（仅 OWNER 可操作，级联逻辑删除所有关联数据）
+     * 删除项目
      */
     @Transactional
     public void deleteProject(Long projectId, Long userId) {
-        CollabProject project = getById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在");
         }
@@ -650,22 +580,21 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         }
 
         // 级联逻辑删除：评论 → 章节 → 成员 → 项目
-        List<CollabChapterTask> chapters = collabChapterTaskMapper.selectByProjectId(projectId);
+        List<CollabChapterTask> chapters = collabPort.findChapterTasksByProjectId(projectId);
         for (CollabChapterTask chapter : chapters) {
-            collabCommentMapper.delete(new QueryWrapper<CollabComment>().eq("chapter_task_id", chapter.getId()));
+            collabPort.deleteCommentsByChapterTaskId(chapter.getId());
         }
-        collabChapterTaskMapper.delete(new QueryWrapper<CollabChapterTask>().eq("project_id", projectId));
-        collabProjectMemberMapper.delete(new QueryWrapper<CollabProjectMember>().eq("project_id", projectId));
-        removeById(projectId);
+        collabPort.deleteChapterTasksByProjectId(projectId);
+        collabPort.deleteMembersByProjectId(projectId);
+        collabPort.deleteProject(projectId);
 
         log.info("删除协作项目: projectId={}, name={}, ownerId={}", projectId, project.getName(), userId);
     }
 
     /**
-     * 计算项目进度（基于章节完成百分比）
+     * 计算项目进度
      */
     public int getProjectProgress(Long projectId) {
-        // 由 ChapterTaskService 提供
         return 0;
     }
 
@@ -686,17 +615,15 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         resp.setCreateTime(project.getCreateTime());
         resp.setUpdateTime(project.getUpdateTime());
 
-        // 设置所有者名称
         User owner = userMap.get(project.getOwnerId());
         if (owner == null) {
-            owner = userMapper.selectById(project.getOwnerId());
+            owner = userPort.findById(project.getOwnerId()).orElse(null);
         }
         if (owner != null) {
             resp.setOwnerName(owner.getUsername());
         }
 
-        // 设置成员数
-        int memberCount = collabProjectMemberMapper.countByProjectId(project.getId());
+        int memberCount = collabPort.countMembersByProjectId(project.getId());
         resp.setMemberCount(memberCount);
 
         return resp;
@@ -708,11 +635,8 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
             if (p.getOwnerId() != null) userIds.add(p.getOwnerId());
         }
         Map<Long, User> userMap = new HashMap<>();
-        if (!userIds.isEmpty()) {
-            List<User> users = userMapper.selectBatchIds(userIds);
-            for (User user : users) {
-                userMap.put(user.getId(), user);
-            }
+        for (Long uid : userIds) {
+            userPort.findById(uid).ifPresent(u -> userMap.put(uid, u));
         }
         return userMap;
     }
@@ -732,13 +656,4 @@ public class CollabProjectService extends ServiceImpl<CollabProjectMapper, Colla
         return resp;
     }
 
-    /**
-     * 团队模式创建项目返回结果
-     */
-    public record TeamProjectCreateResult(Long projectId, String documentName, int chapterCount) {}
-
-    /**
-     * 邀请码生成结果
-     */
-    public record InviteCodeResult(String code, LocalDateTime expiresAt) {}
 }

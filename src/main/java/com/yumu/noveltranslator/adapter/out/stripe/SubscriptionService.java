@@ -22,10 +22,8 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
 import com.yumu.noveltranslator.enums.BillingCycle;
 import com.yumu.noveltranslator.enums.SubscriptionPlan;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeCustomerMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.StripeSubscriptionMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserPlanHistoryMapper;
+import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.StripeProperties;
 import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
@@ -46,16 +44,15 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class SubscriptionService implements com.yumu.noveltranslator.port.in.SubscriptionPort, com.yumu.noveltranslator.port.out.PaymentPort {
+public class SubscriptionService implements com.yumu.noveltranslator.port.in.SubscriptionPort {
 
     private final StripeProperties stripeProperties;
-    private final StripeCustomerMapper stripeCustomerMapper;
-    private final StripeSubscriptionMapper stripeSubscriptionMapper;
-    private final UserMapper userMapper;
-    private final UserPlanHistoryMapper userPlanHistoryMapper;
+    private final BillingRepositoryPort billingPort;
+    private final UserRepositoryPort userRepositoryPort;
     private final StringRedisTemplate stringRedisTemplate;
     private final TokenBlacklistService tokenBlacklistService;
     private final com.yumu.noveltranslator.util.JwtUtils jwtUtils;
+    private final com.yumu.noveltranslator.port.out.PaymentPort paymentPort;
 
     // ==================== 用户端 API ====================
 
@@ -64,7 +61,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
      */
     public PaymentVerificationResponse verifyCheckoutSession(String sessionId, Long userId) {
         if (sessionId == null || sessionId.isBlank()) {
-            return new PaymentVerificationResponse(false, null, null, null, "缺少 session_id 参数");
+            return new PaymentVerificationResponse(false, sessionId, null, null, "缺少 session_id 参数");
         }
 
         try {
@@ -81,10 +78,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
             if ("paid".equals(paymentStatus)) {
                 // 检查本地是否已处理（webhook 是否已送达）
-                StripeSubscription sub = stripeSubscriptionMapper.selectOne(
-                    new LambdaQueryWrapper<StripeSubscription>()
-                        .eq(StripeSubscription::getStripeSubscriptionId, session.getSubscription())
-                );
+                StripeSubscription sub = billingPort.findSubscriptionByStripeId(session.getSubscription());
 
                 if (sub != null) {
                     return new PaymentVerificationResponse(true, sessionId, plan, sub.getStatus(), "支付成功，订阅已激活");
@@ -120,13 +114,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         StripeCustomer customer = getOrCreateCustomer(userId);
 
         // 2. 检查是否已有活跃订阅
-        StripeSubscription existingSub = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getUserId, userId)
-                .eq(StripeSubscription::getDeleted, 0)
-                .in(StripeSubscription::getStatus, "active", "trialing")
-                .last("LIMIT 1")
-        );
+        StripeSubscription existingSub = billingPort.findActiveSubscriptionByUserId(userId);
 
         // 3. 已有活跃订阅 → 升级现有订阅（Stripe HTTP + DB 写，拆分为事务外+内）
         if (existingSub != null) {
@@ -220,7 +208,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         existingSub.setLastWebhookEventId("upgrade_" + System.currentTimeMillis());
-        stripeSubscriptionMapper.updateById(existingSub);
+        billingPort.updateSubscription(existingSub);
 
         // 更新用户等级
         updateUserLevel(existingSub.getUserId(), newPlan.getValue(), "subscription_upgrade", "upgrade_" + existingSub.getStripeSubscriptionId() + "_" + newPriceId);
@@ -236,13 +224,8 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
      * 获取当前订阅状态
      */
     public SubscriptionStatusResponse getSubscriptionStatus(Long userId) {
-        StripeSubscription sub = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getUserId, userId)
-                .eq(StripeSubscription::getDeleted, 0)
-                .orderByDesc(StripeSubscription::getCreateTime)
-                .last("LIMIT 1")
-        );
+        var subscriptions = billingPort.findSubscriptionsByUserId(userId);
+        StripeSubscription sub = subscriptions.isEmpty() ? null : subscriptions.get(0);
 
         if (sub == null) {
             return new SubscriptionStatusResponse("FREE", "none", null, false);
@@ -261,13 +244,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
      * Stripe HTTP 调用在事务外执行，仅 DB 写操作在事务内。
      */
     public SubscriptionStatusResponse cancelSubscription(Long userId) {
-        StripeSubscription sub = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getUserId, userId)
-                .eq(StripeSubscription::getDeleted, 0)
-                .in(StripeSubscription::getStatus, "active", "trialing")
-                .last("LIMIT 1")
-        );
+        StripeSubscription sub = billingPort.findActiveSubscriptionByUserId(userId);
 
         if (sub == null) {
             throw new RuntimeException("没有可取消的活跃订阅");
@@ -294,7 +271,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         sub.setCancelAtPeriodEnd(true);
         sub.setCanceledAt(LocalDateTime.now());
         sub.setLastWebhookEventId("manual_cancel_" + System.currentTimeMillis());
-        stripeSubscriptionMapper.updateById(sub);
+        billingPort.updateSubscription(sub);
 
         return new SubscriptionStatusResponse(
             sub.getPlan(),
@@ -308,31 +285,14 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
      * 创建 Portal Session（账单管理跳转）
      */
     public PortalSessionResponse createPortalSession(Long userId) {
-        StripeCustomer customer = stripeCustomerMapper.selectOne(
-            new LambdaQueryWrapper<StripeCustomer>()
-                .eq(StripeCustomer::getUserId, userId)
-                .eq(StripeCustomer::getDeleted, 0)
-        );
+        StripeCustomer customer = billingPort.findCustomerByUserIdAndNotDeleted(userId);
 
         if (customer == null) {
             throw new RuntimeException("未找到 Stripe 客户");
         }
 
-        try {
-            com.stripe.param.billingportal.SessionCreateParams params =
-                com.stripe.param.billingportal.SessionCreateParams.builder()
-                    .setCustomer(customer.getStripeCustomerId())
-                    .setReturnUrl(stripeProperties.getCancelUrl())
-                    .build();
-
-            com.stripe.model.billingportal.Session portalSession =
-                com.stripe.model.billingportal.Session.create(params);
-
-            return new PortalSessionResponse(portalSession.getUrl());
-        } catch (StripeException e) {
-            log.error("Failed to create Stripe Portal Session for user {}: {}", userId, e.getMessage(), e);
-            throw new RuntimeException("创建账单管理链接失败", e);
-        }
+        String url = paymentPort.createBillingPortalSession(customer.getStripeCustomerId(), stripeProperties.getCancelUrl());
+        return new PortalSessionResponse(url);
     }
 
     // ==================== Webhook 事件处理 ====================
@@ -385,10 +345,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
                                                    BillingCycle billingCycle, String subscriptionId,
                                                    Subscription stripeSub, StripeCustomer customer) {
         // 幂等检查：是否已存在该 subscription
-        StripeSubscription subRecord = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-        );
+        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         // 幂等检查：是否已处理过该 event
         if (subRecord != null && event.getId().equals(subRecord.getLastWebhookEventId())) {
@@ -421,13 +378,10 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             boolean insertSucceeded = false;
 
             try {
-                stripeSubscriptionMapper.insert(subRecord);
+                billingPort.saveSubscription(subRecord);
                 insertSucceeded = true;
             } catch (DuplicateKeyException e) {
-                subRecord = stripeSubscriptionMapper.selectOne(
-                    new LambdaQueryWrapper<StripeSubscription>()
-                        .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-                );
+                subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
                 if (subRecord == null) {
                     log.error("DuplicateKeyException caught but re-query returned null for subscriptionId {}", subscriptionId);
                     return;
@@ -478,20 +432,16 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         String subscriptionId = stripeSub.getId();
-        StripeSubscription subRecord = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-        );
+        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         if (subRecord == null) {
             log.warn("subscription.updated: no local record for subscription {}", subscriptionId);
             return;
         }
 
-        // 原子幂等检查 + 更新：lastWebhookEventId 为 NULL 或与当前 event 不同时才更新
-        // 额外校验事件时间戳，防止 Stripe 乱序投递（如 deleted 先到、updated 后到）导致状态回退
+        // 原子幂等检查 + 更新：lastWebhookEventId 为 NULL 或与当前 event 不同且时间戳更新时才更新
         long eventCreated = event.getCreated();
-        int rows = stripeSubscriptionMapper.update(null,
+        int rows = billingPort.updateSubscriptionByWrapper(
             new LambdaUpdateWrapper<StripeSubscription>()
                 .eq(StripeSubscription::getId, subRecord.getId())
                 .and(w -> w
@@ -538,7 +488,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         if (hasTimeUpdate) {
-            stripeSubscriptionMapper.update(null, timeUpdate);
+            billingPort.updateSubscriptionByWrapper(timeUpdate);
         }
 
         // 同步 userLevel
@@ -578,10 +528,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         String subscriptionId = stripeSub.getId();
-        StripeSubscription subRecord = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-        );
+        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         if (subRecord == null) {
             log.warn("subscription.deleted: no local record for subscription {}", subscriptionId);
@@ -590,7 +537,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         // 原子幂等检查 + 更新 + 事件时间戳排序校验
         long eventCreated = event.getCreated();
-        int rows = stripeSubscriptionMapper.update(null,
+        int rows = billingPort.updateSubscriptionByWrapper(
             new LambdaUpdateWrapper<StripeSubscription>()
                 .eq(StripeSubscription::getId, subRecord.getId())
                 .and(w -> w
@@ -640,10 +587,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         String subscriptionId = stripeSub.getId();
-        StripeSubscription subRecord = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-        );
+        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         if (subRecord == null) {
             log.warn("subscription.resumed: no local record for subscription {}", subscriptionId);
@@ -651,7 +595,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         long eventCreated = event.getCreated();
-        int rows = stripeSubscriptionMapper.update(null,
+        int rows = billingPort.updateSubscriptionByWrapper(
             new LambdaUpdateWrapper<StripeSubscription>()
                 .eq(StripeSubscription::getId, subRecord.getId())
                 .and(w -> w
@@ -703,14 +647,11 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             return;
         }
 
-        StripeSubscription subRecord = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-        );
+        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         if (subRecord != null) {
             long eventCreated = event.getCreated();
-            int rows = stripeSubscriptionMapper.update(null,
+            int rows = billingPort.updateSubscriptionByWrapper(
                 new LambdaUpdateWrapper<StripeSubscription>()
                     .eq(StripeSubscription::getId, subRecord.getId())
                     .and(w -> w
@@ -752,10 +693,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             return;
         }
 
-        StripeSubscription subRecord = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-        );
+        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         // 已有记录且状态已是 active/trialing → 已由 checkout.session.completed 处理，跳过
         if (subRecord != null
@@ -802,7 +740,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     @Transactional
     private void doActivateSubscriptionFromInvoice(Event event, StripeSubscription subRecord) {
         long eventCreated = event.getCreated();
-        int rows = stripeSubscriptionMapper.update(null,
+        int rows = billingPort.updateSubscriptionByWrapper(
             new LambdaUpdateWrapper<StripeSubscription>()
                 .eq(StripeSubscription::getId, subRecord.getId())
                 .and(w -> w
@@ -868,10 +806,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
                                                           StripeCustomer customer,
                                                           com.stripe.model.Invoice invoice) {
         // 双重检查：并发情况下可能已经被 checkout.session.completed 创建
-        StripeSubscription existing = stripeSubscriptionMapper.selectOne(
-            new LambdaQueryWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-        );
+        StripeSubscription existing = billingPort.findSubscriptionByStripeId(subscriptionId);
         if (existing != null
             && ("active".equals(existing.getStatus()) || "trialing".equals(existing.getStatus()))) {
             log.info("invoice.payment_succeeded: orphaned path race, subscription {} already active, skipping",
@@ -932,13 +867,10 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         boolean insertSucceeded = false;
         try {
-            stripeSubscriptionMapper.insert(subRecord);
+            billingPort.saveSubscription(subRecord);
             insertSucceeded = true;
         } catch (DuplicateKeyException e) {
-            subRecord = stripeSubscriptionMapper.selectOne(
-                new LambdaQueryWrapper<StripeSubscription>()
-                    .eq(StripeSubscription::getStripeSubscriptionId, subscriptionId)
-            );
+            subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
             if (subRecord == null) {
                 log.error("DuplicateKeyException caught but re-query returned null for subscriptionId {}", subscriptionId);
                 return;
@@ -982,17 +914,13 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     }
 
     private StripeCustomer getOrCreateCustomer(Long userId) {
-        StripeCustomer existing = stripeCustomerMapper.selectOne(
-            new LambdaQueryWrapper<StripeCustomer>()
-                .eq(StripeCustomer::getUserId, userId)
-                .eq(StripeCustomer::getDeleted, 0)
-        );
+        StripeCustomer existing = billingPort.findCustomerByUserIdAndNotDeleted(userId);
 
         if (existing != null) {
             return existing;
         }
 
-        User user = userMapper.selectById(userId);
+        User user = userRepositoryPort.findById(userId).orElse(null);
         if (user == null) {
             throw new RuntimeException("用户不存在");
         }
@@ -1007,7 +935,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             StripeCustomer newCustomer = new StripeCustomer();
             newCustomer.setUserId(userId);
             newCustomer.setStripeCustomerId(customer.getId());
-            stripeCustomerMapper.insert(newCustomer);
+            billingPort.saveCustomer(newCustomer);
 
             log.info("Created Stripe Customer for user {}: {}", userId, customer.getId());
             return newCustomer;
@@ -1060,7 +988,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
      * 原子性地设置 lastWebhookEventId：只有当前值为 NULL 时才设置（用于 claim 事件处理权）
      */
     private int atomicClaimEventId(Long subscriptionRecordId, String eventId) {
-        return stripeSubscriptionMapper.update(null,
+        return billingPort.updateSubscriptionByWrapper(
             new LambdaUpdateWrapper<StripeSubscription>()
                 .eq(StripeSubscription::getId, subscriptionRecordId)
                 .isNull(StripeSubscription::getLastWebhookEventId)
@@ -1089,7 +1017,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     }
 
     private void updateUserLevel(Long userId, String newLevel, String reason) {
-        User user = userMapper.selectById(userId);
+        User user = userRepositoryPort.findById(userId).orElse(null);
         if (user == null) {
             log.error("Cannot update userLevel: user {} not found", userId);
             return;
@@ -1101,7 +1029,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         user.setUserLevel(newLevel);
-        userMapper.updateById(user);
+        userRepositoryPort.update(user);
 
         // 记录变更历史
         UserPlanHistory history = new UserPlanHistory();
@@ -1109,12 +1037,12 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         history.setOldPlan(oldLevel != null ? oldLevel : "UNKNOWN");
         history.setNewPlan(newLevel);
         history.setNote(reason);
-        userPlanHistoryMapper.insert(history);
+        userRepositoryPort.savePlanHistory(history);
 
         log.info("User {} level changed: {} -> {} (reason: {})", userId, oldLevel, newLevel, reason);
 
         // 降级到 FREE 时吊销用户所有 JWT，防止退款后继续白嫖高级 API
-        if ("FREE".equals(newLevel) && !oldLevel.equals("FREE")) {
+        if ("FREE".equals(newLevel) && !"FREE".equals(oldLevel)) {
             revokeAllUserTokens(user.getEmail(), "subscription_downgrade: " + reason);
         }
     }
@@ -1133,45 +1061,4 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
     }
 
-    // ==================== PaymentPort ====================
-
-    @Override
-    public String createCheckoutSession(String customerId, String priceId, String successUrl, String cancelUrl) {
-        try {
-            SessionCreateParams params = SessionCreateParams.builder()
-                .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
-                .setCustomer(customerId)
-                .addLineItem(
-                    SessionCreateParams.LineItem.builder()
-                        .setPrice(priceId)
-                        .setQuantity(1L)
-                        .build()
-                )
-                .setSuccessUrl(successUrl)
-                .setCancelUrl(cancelUrl)
-                .build();
-            Session session = Session.create(params);
-            return session.getUrl();
-        } catch (StripeException e) {
-            log.error("Failed to create checkout session for customer {}: {}", customerId, e.getMessage(), e);
-            throw new RuntimeException("创建支付会话失败", e);
-        }
-    }
-
-    @Override
-    public String createBillingPortalSession(String customerId, String returnUrl) {
-        try {
-            com.stripe.param.billingportal.SessionCreateParams params =
-                com.stripe.param.billingportal.SessionCreateParams.builder()
-                    .setCustomer(customerId)
-                    .setReturnUrl(returnUrl)
-                    .build();
-            com.stripe.model.billingportal.Session portalSession =
-                com.stripe.model.billingportal.Session.create(params);
-            return portalSession.getUrl();
-        } catch (StripeException e) {
-            log.error("Failed to create billing portal session for customer {}: {}", customerId, e.getMessage(), e);
-            throw new RuntimeException("创建账单管理链接失败", e);
-        }
-    }
 }

@@ -1,9 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.AiGlossary;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.AiGlossaryMapper;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,7 +18,7 @@ import java.util.List;
 @Slf4j
 public class AiGlossaryService {
 
-    private final AiGlossaryMapper aiGlossaryMapper;
+    private final GlossaryRepositoryPort glossaryPort;
 
     /**
      * 获取项目所有已确认的术语
@@ -28,7 +26,7 @@ public class AiGlossaryService {
      */
     public List<AiGlossary> getProjectGlossary(Long projectId) {
         try {
-            return aiGlossaryMapper.selectByProjectIdAndStatus(projectId, "confirmed");
+            return glossaryPort.findAiGlossaryByProjectIdAndStatus(projectId, "confirmed");
         } catch (Exception e) {
             log.warn("获取 AI 术语表失败（可能表未创建）: {}", e.getMessage());
             return List.of();
@@ -42,39 +40,8 @@ public class AiGlossaryService {
      */
     public void addTerm(Long projectId, String sourceWord, String targetWord,
                         String context, String entityType, Long chapterId) {
-        // 先查找是否已存在
-        LambdaQueryWrapper<AiGlossary> query = new LambdaQueryWrapper<>();
-        query.eq(AiGlossary::getProjectId, projectId)
-             .eq(AiGlossary::getSourceWord, sourceWord);
-        AiGlossary existing = aiGlossaryMapper.selectOne(query);
-
-        if (existing != null) {
-            // 更新译文（覆盖已有的译法）
-            LambdaUpdateWrapper<AiGlossary> update = new LambdaUpdateWrapper<>();
-            update.eq(AiGlossary::getId, existing.getId())
-                  .set(AiGlossary::getTargetWord, targetWord);
-            if (context != null) {
-                update.set(AiGlossary::getContext, context);
-            }
-            if (chapterId != null) {
-                update.set(AiGlossary::getChapterId, chapterId);
-            }
-            aiGlossaryMapper.update(null, update);
-            log.debug("AI 术语表 upsert - 更新: projectId={}, sourceWord={}", projectId, sourceWord);
-        } else {
-            // 插入新术语
-            AiGlossary term = new AiGlossary();
-            term.setProjectId(projectId);
-            term.setSourceWord(sourceWord);
-            term.setTargetWord(targetWord);
-            term.setContext(context);
-            term.setEntityType(entityType);
-            term.setChapterId(chapterId);
-            term.setConfidence(0.8);
-            term.setStatus("pending");
-            aiGlossaryMapper.insert(term);
-            log.debug("AI 术语表 upsert - 新增: projectId={}, sourceWord={}", projectId, sourceWord);
-        }
+        glossaryPort.upsertAiGlossary(projectId, sourceWord, targetWord, context, entityType, chapterId);
+        log.debug("AI 术语表 upsert: projectId={}, sourceWord={}", projectId, sourceWord);
     }
 
     /**
@@ -102,26 +69,28 @@ public class AiGlossaryService {
      * 更新术语状态（pending -> confirmed / rejected）
      */
     public boolean updateTermStatus(Long termId, String status) {
-        AiGlossary term = aiGlossaryMapper.selectById(termId);
-        if (term == null) {
+        return glossaryPort.findAiGlossaryById(termId).map(term -> {
+            term.setStatus(status);
+            glossaryPort.updateAiGlossary(term);
+            return true;
+        }).orElseGet(() -> {
             log.warn("术语不存在: termId={}", termId);
             return false;
-        }
-        term.setStatus(status);
-        return aiGlossaryMapper.updateById(term) > 0;
+        });
     }
 
     /**
      * 删除术语
      */
     public boolean deleteTerm(Long termId) {
-        return aiGlossaryMapper.deleteById(termId) > 0;
+        glossaryPort.deleteAiGlossary(termId);
+        return true;
     }
 
     /**
      * 获取项目的待确认术语
      */
     public List<AiGlossary> getPendingTerms(Long projectId) {
-        return aiGlossaryMapper.selectByProjectIdAndStatus(projectId, "pending");
+        return glossaryPort.findAiGlossaryByProjectIdAndStatus(projectId, "pending");
     }
 }

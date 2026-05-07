@@ -2,23 +2,17 @@ package com.yumu.noveltranslator.domain.service;
 
 import com.yumu.noveltranslator.dto.collab.CommentResponse;
 import com.yumu.noveltranslator.dto.collab.CreateCommentRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabComment;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.exception.BusinessException;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,30 +28,28 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CollabCommentService extends ServiceImpl<CollabCommentMapper, CollabComment> {
+public class CollabCommentService {
 
-    private final CollabCommentMapper collabCommentMapper;
-    private final CollabChapterTaskMapper chapterTaskMapper;
-    private final CollabProjectMemberMapper projectMemberMapper;
-    private final UserMapper userMapper;
+    private final CollaborationRepositoryPort collabPort;
+    private final UserRepositoryPort userPort;
 
     /**
      * 创建评论
      */
     public CommentResponse createComment(Long chapterTaskId, Long userId, CreateCommentRequest request) {
-        CollabChapterTask task = chapterTaskMapper.selectById(chapterTaskId);
-        if (task == null) {
+        var task = collabPort.findChapterTaskById(chapterTaskId);
+        if (task.isEmpty()) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterTaskId);
         }
-        CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
+        var member = collabPort.findMemberByProjectAndUser(task.get().getProjectId(), userId);
         if (member == null) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
 
         // 如果是回复，验证父评论是否存在
         if (request.getParentId() != null) {
-            CollabComment parent = collabCommentMapper.selectById(request.getParentId());
-            if (parent == null || !parent.getChapterTaskId().equals(chapterTaskId)) {
+            var parent = collabPort.findCommentById(request.getParentId());
+            if (parent.isEmpty() || !parent.get().getChapterTaskId().equals(chapterTaskId)) {
                 throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "父评论不存在");
             }
         }
@@ -70,7 +62,7 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
         comment.setContent(request.getContent());
         comment.setParentId(request.getParentId());
         comment.setResolved(false);
-        save(comment);
+        collabPort.saveComment(comment);
 
         log.info("创建评论: chapterTaskId={}, userId={}, parentId={}", chapterTaskId, userId, request.getParentId());
         return toCommentResponse(comment, Map.of());
@@ -80,25 +72,25 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
      * 获取章节评论列表（分页，树形结构）
      */
     public IPage<CommentResponse> getCommentsByChapterPage(Long chapterTaskId, Long userId, int page, int size) {
-        CollabChapterTask task = chapterTaskMapper.selectById(chapterTaskId);
-        if (task == null) {
+        var task = collabPort.findChapterTaskById(chapterTaskId);
+        if (task.isEmpty()) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterTaskId);
         }
-        CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
+        var member = collabPort.findMemberByProjectAndUser(task.get().getProjectId(), userId);
         if (member == null) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
 
         // 分页查询根评论
         Page<CollabComment> commentPage = new Page<>(page, size);
-        var rootPage = collabCommentMapper.selectByChapterTaskIdPage(commentPage, chapterTaskId);
+        var rootPage = collabPort.findCommentsByChapterTaskIdPage(commentPage, chapterTaskId);
 
         // 批量加载回复和用户，避免 N+1
         Set<Long> userIds = new HashSet<>();
         Map<Long, List<CollabComment>> repliesByRoot = new HashMap<>();
         for (CollabComment root : rootPage.getRecords()) {
             userIds.add(root.getUserId());
-            List<CollabComment> replies = collabCommentMapper.selectRepliesByParentId(root.getId());
+            List<CollabComment> replies = collabPort.findRepliesByParentId(root.getId());
             repliesByRoot.put(root.getId(), replies);
             for (CollabComment reply : replies) {
                 userIds.add(reply.getUserId());
@@ -107,9 +99,8 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
 
         Map<Long, User> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
-            List<User> users = userMapper.selectBatchIds(userIds);
-            for (User user : users) {
-                userMap.put(user.getId(), user);
+            for (Long uid : userIds) {
+                userPort.findById(uid).ifPresent(u -> userMap.put(uid, u));
             }
         }
 
@@ -133,35 +124,35 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
      * 标记评论已解决
      */
     public void resolveComment(Long commentId, Long userId) {
-        CollabComment comment = getById(commentId);
+        CollabComment comment = collabPort.findCommentById(commentId).orElse(null);
         if (comment == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "评论不存在");
         }
-        CollabChapterTask task = chapterTaskMapper.selectById(comment.getChapterTaskId());
-        if (task == null) {
+        var task = collabPort.findChapterTaskById(comment.getChapterTaskId());
+        if (task.isEmpty()) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在");
         }
-        CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
+        var member = collabPort.findMemberByProjectAndUser(task.get().getProjectId(), userId);
         if (member == null) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
         comment.setResolved(true);
-        updateById(comment);
+        collabPort.updateComment(comment);
     }
 
     /**
      * 删除评论
      */
     public void deleteComment(Long commentId, Long userId) {
-        CollabComment comment = getById(commentId);
+        CollabComment comment = collabPort.findCommentById(commentId).orElse(null);
         if (comment == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "评论不存在");
         }
-        CollabChapterTask task = chapterTaskMapper.selectById(comment.getChapterTaskId());
-        if (task == null) {
+        var task = collabPort.findChapterTaskById(comment.getChapterTaskId());
+        if (task.isEmpty()) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在");
         }
-        CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
+        var member = collabPort.findMemberByProjectAndUser(task.get().getProjectId(), userId);
         if (member == null) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
@@ -169,7 +160,7 @@ public class CollabCommentService extends ServiceImpl<CollabCommentMapper, Colla
         if (!comment.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权删除他人评论");
         }
-        removeById(commentId);
+        collabPort.deleteComment(commentId);
     }
 
     private CommentResponse toCommentResponse(CollabComment comment, Map<Long, User> userMap) {

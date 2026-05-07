@@ -12,10 +12,10 @@ import com.yumu.noveltranslator.dto.translation.TranslationResultResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +36,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -53,17 +54,15 @@ import static org.mockito.Mockito.*;
 class TranslationTaskServiceExtendedTest {
 
     @Mock
-    private TranslationTaskMapper translationTaskMapper;
+    private TranslationRepositoryPort translationPort;
     @Mock
-    private TranslationHistoryMapper translationHistoryMapper;
+    private DocumentRepositoryPort documentPort;
     @Mock
-    private DocumentMapper documentMapper;
+    private GlossaryRepositoryPort glossaryPort;
     @Mock
-    private GlossaryMapper glossaryMapper;
+    private UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
     @Mock
-    private UserLevelThrottledTranslationClient translationClient;
-    @Mock
-    private TranslationCacheService cacheService;
+    private TranslationCachePort cachePort;
     @Mock
     private RagTranslationService ragTranslationService;
     @Mock
@@ -78,8 +77,8 @@ class TranslationTaskServiceExtendedTest {
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskService(
-                translationTaskMapper, translationHistoryMapper, documentMapper, glossaryMapper,
-                stateMachine, translationClient, cacheService, ragTranslationService,
+                translationPort, documentPort, glossaryPort,
+                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
     }
@@ -113,7 +112,7 @@ class TranslationTaskServiceExtendedTest {
             task.setSourceLang("en");
             task.setTargetLang("zh");
             task.setType("text");
-            when(translationTaskMapper.findByTaskId("task-proc")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-proc")).thenReturn(Optional.of(task));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-proc");
 
@@ -129,7 +128,7 @@ class TranslationTaskServiceExtendedTest {
             task.setSourceLang("en");
             task.setTargetLang("zh");
             task.setType("text");
-            when(translationTaskMapper.findByTaskId("task-fail")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-fail")).thenReturn(Optional.of(task));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-fail");
 
@@ -145,7 +144,7 @@ class TranslationTaskServiceExtendedTest {
             task.setSourceLang("en");
             task.setTargetLang("zh");
             task.setType("text");
-            when(translationTaskMapper.findByTaskId("task-pend")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-pend")).thenReturn(Optional.of(task));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-pend");
 
@@ -162,8 +161,8 @@ class TranslationTaskServiceExtendedTest {
             task.setDocumentId(999L);
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-docnull")).thenReturn(task);
-            when(documentMapper.findById(999L)).thenReturn(null);
+            when(translationPort.findTaskByTaskId("task-docnull")).thenReturn(Optional.of(task));
+            when(documentPort.findById(999L)).thenReturn(Optional.empty());
 
             TranslationResultResponse result = taskService.getTranslationResult("task-docnull");
 
@@ -181,7 +180,7 @@ class TranslationTaskServiceExtendedTest {
             task.setDocumentId(null);
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-nodocid")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-nodocid")).thenReturn(Optional.of(task));
 
             TranslationResultResponse result = taskService.getTranslationResult("task-nodocid");
 
@@ -198,12 +197,12 @@ class TranslationTaskServiceExtendedTest {
             task.setDocumentId(1L);
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-nofile")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-nofile")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(1L);
             doc.setPath("/nonexistent/path/file.txt");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             // 不应抛出异常
             assertDoesNotThrow(() -> taskService.getTranslationResult("task-nofile"));
@@ -228,12 +227,12 @@ class TranslationTaskServiceExtendedTest {
                 task.setDocumentId(1L);
                 task.setSourceLang("en");
                 task.setTargetLang("zh");
-                when(translationTaskMapper.findByTaskId("task-readtrans")).thenReturn(task);
+                when(translationPort.findTaskByTaskId("task-readtrans")).thenReturn(Optional.of(task));
 
                 Document doc = new Document();
                 doc.setId(1L);
                 doc.setPath(sourceFile.toString());
-                when(documentMapper.findById(1L)).thenReturn(doc);
+                when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
                 TranslationResultResponse result = taskService.getTranslationResult("task-readtrans");
 
@@ -254,8 +253,8 @@ class TranslationTaskServiceExtendedTest {
             task.setType("text");
             task.setSourceLang("en");
             task.setTargetLang("zh");
-            when(translationTaskMapper.findByTaskId("task-text")).thenReturn(task);
-            when(translationHistoryMapper.findByTaskId("task-text")).thenReturn(null);
+            when(translationPort.findTaskByTaskId("task-text")).thenReturn(Optional.of(task));
+            when(translationPort.findHistoryByTaskId("task-text")).thenReturn(Optional.empty());
 
             TranslationResultResponse result = taskService.getTranslationResult("task-text");
 
@@ -279,8 +278,8 @@ class TranslationTaskServiceExtendedTest {
             task.setType("document");
             task.setStatus("completed");
             task.setDocumentId(1L);
-            when(translationTaskMapper.findByTaskId("task-dl")).thenReturn(task);
-            when(documentMapper.findById(1L)).thenReturn(null);
+            when(translationPort.findTaskByTaskId("task-dl")).thenReturn(Optional.of(task));
+            when(documentPort.findById(1L)).thenReturn(Optional.empty());
 
             String result = taskService.getDownloadPath("task-dl", 1L);
             assertNull(result);
@@ -294,12 +293,12 @@ class TranslationTaskServiceExtendedTest {
             task.setType("document");
             task.setStatus("completed");
             task.setDocumentId(1L);
-            when(translationTaskMapper.findByTaskId("task-dl2")).thenReturn(task);
+            when(translationPort.findTaskByTaskId("task-dl2")).thenReturn(Optional.of(task));
 
             Document doc = new Document();
             doc.setId(1L);
             doc.setPath("/nonexistent/file.txt");
-            when(documentMapper.findById(1L)).thenReturn(doc);
+            when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
             String result = taskService.getDownloadPath("task-dl2", 1L);
             assertNull(result);
@@ -315,7 +314,7 @@ class TranslationTaskServiceExtendedTest {
         @Test
         void type为all返回全部() {
             setAuthenticatedUser(1L);
-            when(translationTaskMapper.findByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
                     .thenReturn(new ArrayList<>());
 
             TranslationHistory h1 = new TranslationHistory();
@@ -328,7 +327,7 @@ class TranslationTaskServiceExtendedTest {
             h2.setType("document");
             h2.setCreateTime(LocalDateTime.now().minusHours(2));
 
-            when(translationHistoryMapper.findByUserId(1L, 0, 10))
+            when(translationPort.findHistoryByUserId(1L, 0, 10))
                     .thenReturn(List.of(h1, h2));
 
             List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "all");
@@ -347,7 +346,7 @@ class TranslationTaskServiceExtendedTest {
             inProgress.setTargetLang("zh");
             inProgress.setEngine("google");
             inProgress.setCreateTime(LocalDateTime.now().minusMinutes(5));
-            when(translationTaskMapper.findByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
                     .thenReturn(List.of(inProgress));
 
             // 已完成的记录，taskId 相同
@@ -355,7 +354,7 @@ class TranslationTaskServiceExtendedTest {
             completed.setTaskId("task-dup");
             completed.setType("text");
             completed.setCreateTime(LocalDateTime.now().minusHours(1));
-            when(translationHistoryMapper.findByUserId(1L, 0, 10))
+            when(translationPort.findHistoryByUserId(1L, 0, 10))
                     .thenReturn(List.of(completed));
 
             List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, null);
@@ -366,14 +365,14 @@ class TranslationTaskServiceExtendedTest {
         @Test
         void 无进行中任务仅返回历史记录() {
             setAuthenticatedUser(1L);
-            when(translationTaskMapper.findByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
                     .thenReturn(new ArrayList<>());
 
             TranslationHistory h1 = new TranslationHistory();
             h1.setTaskId("task-only");
             h1.setType("text");
             h1.setCreateTime(LocalDateTime.now());
-            when(translationHistoryMapper.findByUserId(1L, 0, 10))
+            when(translationPort.findHistoryByUserId(1L, 0, 10))
                     .thenReturn(List.of(h1));
 
             List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, null);
@@ -392,9 +391,9 @@ class TranslationTaskServiceExtendedTest {
             task1.setTargetLang("zh");
             task1.setEngine("google");
             task1.setCreateTime(null);
-            when(translationTaskMapper.findByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
                     .thenReturn(List.of(task1));
-            when(translationHistoryMapper.findByUserId(anyLong(), anyInt(), anyInt()))
+            when(translationPort.findHistoryByUserId(anyLong(), anyInt(), anyInt()))
                     .thenReturn(new ArrayList<>());
 
             List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, null);
@@ -414,15 +413,15 @@ class TranslationTaskServiceExtendedTest {
             stuckTask.setTaskId("task-nodoc");
             stuckTask.setDocumentId(null);
             stuckTask.setCreateTime(LocalDateTime.now().minusMinutes(31));
-            when(translationTaskMapper.findByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
+            when(translationPort.findTasksByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
                     .thenReturn(List.of(stuckTask));
 
             taskService.cleanupStuckTasks();
 
             assertEquals("failed", stuckTask.getStatus());
             assertTrue(stuckTask.getErrorMessage().contains("任务超时"));
-            verify(translationTaskMapper).updateById(stuckTask);
-            verify(documentMapper, never()).selectById(anyLong());
+            verify(translationPort).updateTask(stuckTask);
+            verify(documentPort, never()).findById(anyLong());
         }
 
         @Test
@@ -431,15 +430,15 @@ class TranslationTaskServiceExtendedTest {
             stuckTask.setTaskId("task-docnull");
             stuckTask.setDocumentId(999L);
             stuckTask.setCreateTime(LocalDateTime.now().minusMinutes(31));
-            when(translationTaskMapper.findByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
+            when(translationPort.findTasksByStatusAndCreateTimeBefore(anyString(), any(LocalDateTime.class)))
                     .thenReturn(List.of(stuckTask));
-            when(documentMapper.selectById(999L)).thenReturn(null);
+            when(documentPort.findById(999L)).thenReturn(Optional.empty());
 
             taskService.cleanupStuckTasks();
 
             assertEquals("failed", stuckTask.getStatus());
-            verify(translationTaskMapper).updateById(stuckTask);
-            verify(documentMapper, never()).updateById(any());
+            verify(translationPort).updateTask(stuckTask);
+            verify(documentPort, never()).update(any());
         }
     }
 
@@ -451,7 +450,7 @@ class TranslationTaskServiceExtendedTest {
 
         @Test
         void 历史不存在返回false() {
-            when(translationHistoryMapper.findByTaskId("nonexistent")).thenReturn(null);
+            when(translationPort.findTaskByTaskId("nonexistent")).thenReturn(Optional.empty());
             assertFalse(taskService.deleteHistory("nonexistent", 1L));
         }
 
@@ -460,7 +459,7 @@ class TranslationTaskServiceExtendedTest {
             TranslationHistory history = new TranslationHistory();
             history.setId(1L);
             history.setUserId(2L); // Different user
-            when(translationHistoryMapper.findByTaskId("task-other")).thenReturn(history);
+            when(translationPort.findHistoryByTaskId("task-other")).thenReturn(Optional.of(history));
             assertFalse(taskService.deleteHistory("task-other", 1L));
         }
     }
@@ -473,7 +472,7 @@ class TranslationTaskServiceExtendedTest {
 
         @Test
         void 返回正确计数() {
-            when(translationHistoryMapper.countByUserId(1L)).thenReturn(42);
+            when(translationPort.countHistoryByUserId(1L)).thenReturn(42);
             assertEquals(42, taskService.countTranslationHistory(1L));
         }
     }

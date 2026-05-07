@@ -14,7 +14,7 @@ import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.adapter.out.translate.EngineAliasRegistry;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.TextCleaningUtil;
@@ -82,7 +82,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
 
     // 依赖注入
     private final UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
-    private final TranslationCacheService cacheService;
+    private final TranslationCachePort cachePort;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
     private final TranslationPostProcessingService postProcessingService;
@@ -117,7 +117,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
 
         try {
             TranslationPipeline pipeline = new TranslationPipeline(
-                    cacheService, ragTranslationService, entityConsistencyService,
+                    cachePort, ragTranslationService, entityConsistencyService,
                     userLevelThrottledTranslationClient, postProcessingService, userId, null);
             String result = pipeline.executeFast(combined, target, mode);
             if (result == null || result.trim().isEmpty()) {
@@ -151,7 +151,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
         Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(engine);
         TranslationPipeline pipeline = new TranslationPipeline(
-                cacheService, ragTranslationService, entityConsistencyService,
+                cachePort, ragTranslationService, entityConsistencyService,
                 userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
         String result = pipeline.execute(text, target, mode);
@@ -268,7 +268,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
         for (int i = 0; i < segments.size(); i++) {
             String segment = segments.get(i);
             String cacheKey = CacheKeyUtil.buildCacheKey(segment, target);
-            String cached = cacheService.getCacheByMode(cacheKey, mode.getName());
+            String cached = cachePort.getCacheByMode(cacheKey, mode.getName()).orElse(null);
 
             if (cached != null) {
                 results.add(cached);
@@ -283,7 +283,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
         if (!indexesToTranslate.isEmpty()) {
             Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
             TranslationPipeline pipeline = new TranslationPipeline(
-                    cacheService, ragTranslationService, entityConsistencyService,
+                    cachePort, ragTranslationService, entityConsistencyService,
                     userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
             List<Runnable> tasks = new ArrayList<>();
@@ -388,7 +388,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
                 log.info("[SSE流式翻译] 开始处理，文本数量: {}, 引擎: {}, fastMode: {}", totalCount, req.getEngine(), req.getFastMode());
 
                 TranslationPipeline pipeline = new TranslationPipeline(
-                        cacheService, ragTranslationService, entityConsistencyService,
+                        cachePort, ragTranslationService, entityConsistencyService,
                         userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
                 log.info("[SSE流式翻译] Pipeline 初始化完成");
@@ -516,7 +516,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
                 }
 
                 TranslationPipeline pipeline = new TranslationPipeline(
-                        cacheService, ragTranslationService, entityConsistencyService,
+                        cachePort, ragTranslationService, entityConsistencyService,
                         userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
                 // 先用 \n\n+ 将全文拆为逻辑段落
@@ -597,6 +597,6 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
      * 获取缓存统计信息
      */
     public Map<String, Object> getCacheStats() {
-        return cacheService.getCacheStats();
+        return cachePort.getCacheStats();
     }
 }

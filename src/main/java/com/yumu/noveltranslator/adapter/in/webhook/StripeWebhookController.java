@@ -46,9 +46,8 @@ public class StripeWebhookController implements WebhookPort {
 
     /**
      * 处理 Stripe 事件（提取为独立方法以便测试）
-     * 包可见性，仅供同包测试使用
      */
-    String processEvent(Event event) {
+    public String processEvent(Event event) {
         log.info("Received Stripe webhook event: {}", event.getType());
 
         // 1. 获取 userId 并设置租户上下文

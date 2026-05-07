@@ -7,6 +7,7 @@ import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.port.out.VectorStorePort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,14 +18,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -41,13 +41,13 @@ class RagTranslationServiceTest {
     private TranslationMemoryService translationMemoryService;
 
     @Mock
-    private StringRedisTemplate stringRedisTemplate;
+    private VectorStorePort vectorStorePort;
 
     private RagTranslationService service;
 
     @BeforeEach
     void setUp() {
-        service = new RagTranslationService(embeddingService, translationMemoryService, stringRedisTemplate);
+        service = new RagTranslationService(embeddingService, translationMemoryService, vectorStorePort);
         ReflectionTestUtils.setField(service, "directHitThreshold", 0.85);
         ReflectionTestUtils.setField(service, "referenceThreshold", 0.5);
         ReflectionTestUtils.setField(service, "knnTopK", 5);
@@ -73,37 +73,27 @@ class RagTranslationServiceTest {
     }
 
     /**
-     * 构建 Redis FT.SEARCH 返回结果（模拟 Lettuce 返回的原始格式）
+     * 构建 VectorStorePort 返回结果
      */
-    private List<Object> buildRedisResult(long total, String sourceText, String targetText, String score, String id) {
-        List<Object> result = new java.util.ArrayList<>();
-        result.add(total);
+    private List<Map<String, String>> buildVectorSearchResult(long total, String sourceText, String targetText, String score, String id) {
+        List<Map<String, String>> result = new java.util.ArrayList<>();
         if (total > 0) {
-            result.add(("tm:" + id).getBytes(StandardCharsets.UTF_8));
-            List<byte[]> fieldArray = new java.util.ArrayList<>();
-            fieldArray.add("source_text".getBytes(StandardCharsets.UTF_8));
-            fieldArray.add(sourceText.getBytes(StandardCharsets.UTF_8));
-            fieldArray.add("target_text".getBytes(StandardCharsets.UTF_8));
-            fieldArray.add(targetText.getBytes(StandardCharsets.UTF_8));
-            fieldArray.add("score".getBytes(StandardCharsets.UTF_8));
-            fieldArray.add(score.getBytes(StandardCharsets.UTF_8));
-            fieldArray.add("id".getBytes(StandardCharsets.UTF_8));
-            fieldArray.add(id.getBytes(StandardCharsets.UTF_8));
-            result.add(fieldArray);
+            Map<String, String> match = new java.util.LinkedHashMap<>();
+            match.put("source_text", sourceText);
+            match.put("target_text", targetText);
+            match.put("score", score);
+            match.put("id", id);
+            result.add(match);
         }
         return result;
     }
 
     /**
-     * 模拟 stringRedisTemplate.execute 调用
-     * 使用 Answer 拦截 RedisCallback 并直接执行它
+     * 模拟 vectorStorePort.vectorSearch 调用
      */
-    private void mockRedisExecute(List<Object> result) {
-        doAnswer(invocation -> {
-            org.springframework.data.redis.core.RedisCallback<Object> callback = invocation.getArgument(0);
-            // 模拟连接，返回我们构造的结果
-            return result;
-        }).when(stringRedisTemplate).execute(any(org.springframework.data.redis.core.RedisCallback.class));
+    private void mockVectorSearch(List<Map<String, String>> result) {
+        when(vectorStorePort.vectorSearch(any(float[].class), anyLong(), anyString(), anyList(), anyInt()))
+                .thenReturn(result);
     }
 
     @Nested
@@ -166,9 +156,9 @@ class RagTranslationServiceTest {
             when(embeddingService.embed("Hello world")).thenReturn(vec);
 
             // score = 0.1 means similarity = 1 - 0.1 = 0.9 >= 0.85 direct hit
-            List<Object> redisResult = buildRedisResult(1,
+            List<Map<String, String>> searchResult = buildVectorSearchResult(1,
                     "Hello world", "你好世界", "0.1", "1");
-            mockRedisExecute(redisResult);
+            mockVectorSearch(searchResult);
 
             RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
 
@@ -186,9 +176,9 @@ class RagTranslationServiceTest {
             when(embeddingService.embed("Hello world")).thenReturn(vec);
 
             // score = 0.4 means similarity = 1 - 0.4 = 0.6, 0.5 <= 0.6 < 0.85
-            List<Object> redisResult = buildRedisResult(1,
+            List<Map<String, String>> searchResult = buildVectorSearchResult(1,
                     "Hello world", "你好世界", "0.4", "1");
-            mockRedisExecute(redisResult);
+            mockVectorSearch(searchResult);
 
             RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
 
@@ -209,7 +199,7 @@ class RagTranslationServiceTest {
             setAuthenticatedUser(1L);
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
             when(embeddingService.embed("Hello world")).thenReturn(vec);
-            mockRedisExecute(Collections.emptyList());
+            mockVectorSearch(Collections.emptyList());
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 

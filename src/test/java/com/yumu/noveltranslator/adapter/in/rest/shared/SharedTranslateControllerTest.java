@@ -60,7 +60,7 @@ class SharedTranslateControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new SharedTranslateController(translationService, translationTaskService, documentService, ragTranslationService);
+        controller = new SharedTranslateController(translationTaskService, documentService, ragTranslationService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

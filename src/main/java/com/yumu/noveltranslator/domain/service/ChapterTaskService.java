@@ -4,20 +4,16 @@ import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
 import com.yumu.noveltranslator.dto.common.PageResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,12 +35,10 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, CollabChapterTask> {
+public class ChapterTaskService {
 
-    private final CollabChapterTaskMapper chapterTaskMapper;
-    private final CollabProjectMapper collabProjectMapper;
-    private final UserMapper userMapper;
-    private final CollabProjectMemberMapper projectMemberMapper;
+    private final CollaborationRepositoryPort collabPort;
+    private final UserRepositoryPort userPort;
     private final CollabStateMachine collabStateMachine;
     private final CollabEventPublisher collabEventPublisher;
 
@@ -53,7 +47,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
      */
     @Transactional
     public ChapterTaskResponse createChapter(Long projectId, Integer chapterNumber, String title, String sourceText, Long creatorId) {
-        CollabProject project = collabProjectMapper.selectById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "项目不存在: " + projectId);
         }
@@ -68,7 +62,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         if (sourceText != null) {
             task.setSourceWordCount(sourceText.length());
         }
-        save(task);
+        collabPort.saveChapterTask(task);
 
         log.info("创建章节: projectId={}, chapterNumber={}", projectId, chapterNumber);
         return toChapterResponse(task);
@@ -78,12 +72,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
      * 获取项目章节列表（分页）
      */
     public PageResponse<ChapterTaskResponse> listByProjectId(Long projectId, int page, int pageSize) {
-        LambdaQueryWrapper<CollabChapterTask> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(CollabChapterTask::getProjectId, projectId)
-               .eq(CollabChapterTask::getDeleted, 0)
-               .orderByAsc(CollabChapterTask::getChapterNumber);
-        Page<CollabChapterTask> pageParam = new Page<>(page, pageSize);
-        Page<CollabChapterTask> resultPage = chapterTaskMapper.selectPage(pageParam, wrapper);
+        IPage<CollabChapterTask> resultPage = collabPort.findChapterTasksByProjectIdPaged(projectId, page, pageSize);
 
         // 批量加载关联用户，避免 N+1
         Set<Long> userIds = new HashSet<>();
@@ -92,11 +81,8 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
             if (task.getReviewerId() != null) userIds.add(task.getReviewerId());
         }
         Map<Long, User> userMap = new HashMap<>();
-        if (!userIds.isEmpty()) {
-            List<User> users = userMapper.selectBatchIds(userIds);
-            for (User user : users) {
-                userMap.put(user.getId(), user);
-            }
+        for (Long uid : userIds) {
+            userPort.findById(uid).ifPresent(u -> userMap.put(uid, u));
         }
 
         List<ChapterTaskResponse> list = resultPage.getRecords().stream()
@@ -109,11 +95,11 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
      * 获取章节详情（含权限检查）
      */
     public ChapterTaskResponse getChapterById(Long chapterId, Long userId) {
-        CollabChapterTask task = getById(chapterId);
+        CollabChapterTask task = collabPort.findChapterTaskById(chapterId).orElse(null);
         if (task == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterId);
         }
-        CollabProjectMember member = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), userId);
+        var member = collabPort.findMemberByProjectAndUser(task.getProjectId(), userId);
         if (member == null) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该章节");
         }
@@ -125,12 +111,12 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
      */
     @Transactional
     public ChapterTaskResponse assignChapter(Long chapterId, Long assigneeId, Long assignerId) {
-        CollabChapterTask task = getById(chapterId);
+        CollabChapterTask task = collabPort.findChapterTaskById(chapterId).orElse(null);
         if (task == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterId);
         }
         // 权限校验：分配者必须是项目OWNER
-        CollabProjectMember assigner = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), assignerId);
+        var assigner = collabPort.findMemberByProjectAndUser(task.getProjectId(), assignerId);
         if (assigner == null || !ProjectMemberRole.OWNER.getValue().equals(assigner.getRole())) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权分配章节，只有项目所有者可以分配");
         }
@@ -140,7 +126,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         task.setAssigneeId(assigneeId);
         task.setAssignedTime(LocalDateTime.now());
         task.setProgress(0);
-        updateById(task);
+        collabPort.updateChapterTask(task);
 
         final Long finalProjectId = task.getProjectId();
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -161,7 +147,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
      */
     @Transactional
     public ChapterTaskResponse submitChapter(Long chapterId, String translatedText) {
-        CollabChapterTask task = getById(chapterId);
+        CollabChapterTask task = collabPort.findChapterTaskById(chapterId).orElse(null);
         if (task == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterId);
         }
@@ -176,7 +162,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
             if (translatedText != null) {
                 task.setTargetWordCount(translatedText.length());
             }
-            updateById(task);
+            collabPort.updateChapterTask(task);
             return toChapterResponse(task);
         }
 
@@ -188,7 +174,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         if (translatedText != null) {
             task.setTargetWordCount(translatedText.length());
         }
-        updateById(task);
+        collabPort.updateChapterTask(task);
 
         final Long finalProjectId = task.getProjectId();
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -209,12 +195,12 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
      */
     @Transactional
     public ChapterTaskResponse reviewChapter(Long chapterId, Boolean approved, String comment, Long reviewerId) {
-        CollabChapterTask task = getById(chapterId);
+        CollabChapterTask task = collabPort.findChapterTaskById(chapterId).orElse(null);
         if (task == null) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterId);
         }
         // 权限校验：审核者必须是项目REVIEWER或OWNER
-        CollabProjectMember reviewer = projectMemberMapper.selectByProjectAndUser(task.getProjectId(), reviewerId);
+        var reviewer = collabPort.findMemberByProjectAndUser(task.getProjectId(), reviewerId);
         if (reviewer == null) {
             throw new BusinessException(ErrorCodeEnum.FORBIDDEN, "无权访问该项目");
         }
@@ -241,12 +227,12 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
             log.info("审核驳回: chapterId={}, reason={}", chapterId, comment);
         }
 
-        updateById(task);
+        collabPort.updateChapterTask(task);
 
         // 如果 APPROVED，自动转为 COMPLETED
         if (approved) {
             collabStateMachine.transitionChapter(task, ChapterTaskStatus.COMPLETED);
-            updateById(task);
+            collabPort.updateChapterTask(task);
             updateProjectProgress(task.getProjectId());
         }
 
@@ -271,15 +257,10 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
      * 获取用户待处理的章节列表（分页）
      */
     public PageResponse<ChapterTaskResponse> listByAssigneeId(Long assigneeId, int page, int pageSize) {
-        LambdaQueryWrapper<CollabChapterTask> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(CollabChapterTask::getAssigneeId, assigneeId)
-               .eq(CollabChapterTask::getDeleted, 0)
-               .in(CollabChapterTask::getStatus,
-                   ChapterTaskStatus.TRANSLATING.getValue(),
-                   ChapterTaskStatus.SUBMITTED.getValue())
-               .orderByDesc(CollabChapterTask::getUpdateTime);
-        Page<CollabChapterTask> pageParam = new Page<>(page, pageSize);
-        Page<CollabChapterTask> resultPage = chapterTaskMapper.selectPage(pageParam, wrapper);
+        IPage<CollabChapterTask> resultPage = collabPort.findChapterTasksByAssigneeIdPaged(
+                assigneeId,
+                List.of(ChapterTaskStatus.TRANSLATING.getValue(), ChapterTaskStatus.SUBMITTED.getValue()),
+                page, pageSize);
 
         Set<Long> userIds = new HashSet<>();
         for (CollabChapterTask task : resultPage.getRecords()) {
@@ -287,11 +268,8 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
             if (task.getReviewerId() != null) userIds.add(task.getReviewerId());
         }
         Map<Long, User> userMap = new HashMap<>();
-        if (!userIds.isEmpty()) {
-            List<User> users = userMapper.selectBatchIds(userIds);
-            for (User user : users) {
-                userMap.put(user.getId(), user);
-            }
+        for (Long uid : userIds) {
+            userPort.findById(uid).ifPresent(u -> userMap.put(uid, u));
         }
 
         List<ChapterTaskResponse> list = resultPage.getRecords().stream()
@@ -304,7 +282,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
      * 更新项目整体进度
      */
     private void updateProjectProgress(Long projectId) {
-        List<CollabChapterTask> tasks = chapterTaskMapper.selectByProjectId(projectId);
+        List<CollabChapterTask> tasks = collabPort.findChapterTasksByProjectId(projectId);
         if (tasks.isEmpty()) {
             return;
         }
@@ -315,7 +293,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
 
         int progress = (int) Math.round((double) completed / tasks.size() * 100);
 
-        CollabProject project = collabProjectMapper.selectById(projectId);
+        CollabProject project = collabPort.findProjectById(projectId).orElse(null);
         if (project != null) {
             project.setProgress(progress);
             if (progress == 100) {
@@ -325,15 +303,15 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
                     log.debug("项目无法转换为 COMPLETED 状态（当前状态不允许）: projectId={}", projectId);
                 }
             }
-            collabProjectMapper.updateById(project);
+            collabPort.updateProject(project);
         }
     }
 
     private ChapterTaskResponse toChapterResponse(CollabChapterTask task) {
-        return toChapterResponse(task, java.util.Map.of());
+        return toChapterResponse(task, Map.of());
     }
 
-    private ChapterTaskResponse toChapterResponse(CollabChapterTask task, java.util.Map<Long, User> userMap) {
+    private ChapterTaskResponse toChapterResponse(CollabChapterTask task, Map<Long, User> userMap) {
         ChapterTaskResponse resp = new ChapterTaskResponse();
         resp.setId(task.getId());
         resp.setChapterNumber(task.getChapterNumber());
@@ -356,7 +334,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         if (task.getAssigneeId() != null) {
             User assignee = userMap.get(task.getAssigneeId());
             if (assignee == null) {
-                assignee = userMapper.selectById(task.getAssigneeId());
+                assignee = userPort.findById(task.getAssigneeId()).orElse(null);
             }
             if (assignee != null) {
                 resp.setAssigneeName(assignee.getUsername());
@@ -366,7 +344,7 @@ public class ChapterTaskService extends ServiceImpl<CollabChapterTaskMapper, Col
         if (task.getReviewerId() != null) {
             User reviewer = userMap.get(task.getReviewerId());
             if (reviewer == null) {
-                reviewer = userMapper.selectById(task.getReviewerId());
+                reviewer = userPort.findById(task.getReviewerId()).orElse(null);
             }
             if (reviewer != null) {
                 resp.setReviewerName(reviewer.getUsername());

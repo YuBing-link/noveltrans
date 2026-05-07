@@ -1,7 +1,5 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.dto.translation.DocumentTranslationRequest;
-import com.yumu.noveltranslator.dto.translation.DocumentTranslationResponse;
 import com.yumu.noveltranslator.dto.translation.TranslationResultResponse;
 import com.yumu.noveltranslator.dto.entity.TaskStatusResponse;
 import com.yumu.noveltranslator.dto.entity.TranslationHistoryResponse;
@@ -11,12 +9,11 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistor
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.enums.TranslationStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationTaskMapper;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
@@ -50,13 +47,12 @@ import java.util.UUID;
 public class TranslationTaskService {
     private static final Logger log = LoggerFactory.getLogger(TranslationTaskService.class);
 
-    private final TranslationTaskMapper translationTaskMapper;
-    private final TranslationHistoryMapper translationHistoryMapper;
-    private final DocumentMapper documentMapper;
-    private final GlossaryMapper glossaryMapper;
+    private final TranslationRepositoryPort translationPort;
+    private final DocumentRepositoryPort documentPort;
+    private final GlossaryRepositoryPort glossaryPort;
     private final TranslationStateMachine stateMachine;
     private final UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
-    private final TranslationCacheService cacheService;
+    private final TranslationCachePort cachePort;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
     private final TranslationPostProcessingService postProcessingService;
@@ -80,11 +76,11 @@ public class TranslationTaskService {
         task.setProgress(0);
         task.setCreateTime(LocalDateTime.now());
 
-        translationTaskMapper.insert(task);
+        translationPort.saveTask(task);
 
         // 关联文档与任务
         doc.setTaskId(taskId);
-        documentMapper.updateById(doc);
+        documentPort.update(doc);
 
         return task;
     }
@@ -103,7 +99,7 @@ public class TranslationTaskService {
         // 更新文档状态为处理中
         doc.setStatus(TranslationStatus.PROCESSING.getValue());
         doc.setUpdateTime(LocalDateTime.now());
-        documentMapper.updateById(doc);
+        documentPort.update(doc);
 
         updateTaskProgress(task, TranslationStatus.PROCESSING, 10, null);
 
@@ -139,7 +135,7 @@ public class TranslationTaskService {
                 List<Glossary> glossaryTerms = loadGlossaryTermsForUser(userId, content);
 
                 TranslationPipeline pipeline = new TranslationPipeline(
-                    cacheService, ragTranslationService, entityConsistencyService,
+                    cachePort, ragTranslationService, entityConsistencyService,
                     userLevelThrottledTranslationClient, postProcessingService, null, userId, docId, glossaryTerms);
 
                 while (batchStart < total) {
@@ -191,7 +187,7 @@ public class TranslationTaskService {
                 doc.setStatus(TranslationStatus.COMPLETED.getValue());
                 doc.setCompletedTime(LocalDateTime.now());
                 doc.setUpdateTime(LocalDateTime.now());
-                documentMapper.updateById(doc);
+                documentPort.update(doc);
 
                 updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
                 saveTranslationHistory(task, content, translatedContent.toString());
@@ -223,7 +219,7 @@ public class TranslationTaskService {
     @Transactional
     protected void updateTaskProgress(TranslationTask task, TranslationStatus status, int progress, String errorMessage) {
         // 如果任务已被取消，不再更新
-        TranslationTask current = translationTaskMapper.findByTaskId(task.getTaskId());
+        TranslationTask current = translationPort.findTaskByTaskId(task.getTaskId()).orElse(null);
         if (current != null && TranslationStatus.FAILED.getValue().equals(current.getStatus()) && "用户取消任务".equals(current.getErrorMessage())) {
             return;
         }
@@ -235,7 +231,7 @@ public class TranslationTaskService {
         if (errorMessage != null) {
             task.setErrorMessage(errorMessage);
         }
-        translationTaskMapper.updateById(task);
+        translationPort.updateTask(task);
     }
 
     /**
@@ -261,7 +257,7 @@ public class TranslationTaskService {
         history.setEngine(task.getEngine());
         history.setCreateTime(LocalDateTime.now());
 
-        translationHistoryMapper.insert(history);
+        translationPort.saveHistory(history);
     }
 
     /**
@@ -269,11 +265,7 @@ public class TranslationTaskService {
      */
     private List<Glossary> loadGlossaryTermsForUser(Long userId, String sourceText) {
         try {
-            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Glossary> query =
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
-            query.eq(Glossary::getUserId, userId);
-            query.eq(Glossary::getDeleted, 0);
-            List<Glossary> allTerms = glossaryMapper.selectList(query);
+            List<Glossary> allTerms = glossaryPort.findActiveGlossaryByUserId(userId);
 
             // 过滤只保留在原文中出现的术语
             return allTerms.stream()
@@ -289,34 +281,34 @@ public class TranslationTaskService {
      * 根据任务 ID 获取任务
      */
     public TranslationTask getTaskByTaskId(String taskId) {
-        return translationTaskMapper.findByTaskId(taskId);
+        return translationPort.findTaskByTaskId(taskId).orElse(null);
     }
 
     /**
      * 根据文档 ID 获取任务
      */
     public TranslationTask getTaskByDocumentId(Long docId) {
-        return translationTaskMapper.findByDocumentId(docId);
+        return translationPort.findTaskByDocumentId(docId).orElse(null);
     }
 
     /**
      * 取消翻译任务
      */
     public boolean cancelTask(String taskId, Long userId) {
-        TranslationTask task = translationTaskMapper.findByTaskId(taskId);
+        TranslationTask task = translationPort.findTaskByTaskId(taskId).orElse(null);
         if (task != null && task.getUserId().equals(userId)) {
             if (TranslationStatus.PENDING.getValue().equals(task.getStatus()) || TranslationStatus.PROCESSING.getValue().equals(task.getStatus())) {
                 task.setStatus(TranslationStatus.FAILED.getValue());
                 task.setErrorMessage("用户取消任务");
-                translationTaskMapper.updateById(task);
+                translationPort.updateTask(task);
                 // 同步更新 Document 表状态
                 if (task.getDocumentId() != null) {
-                    Document doc = documentMapper.selectById(task.getDocumentId());
+                    Document doc = documentPort.findById(task.getDocumentId()).orElse(null);
                     if (doc != null) {
                         doc.setStatus(TranslationStatus.FAILED.getValue());
                         doc.setErrorMessage("用户取消任务");
                         doc.setUpdateTime(LocalDateTime.now());
-                        documentMapper.updateById(doc);
+                        documentPort.update(doc);
                     }
                 }
                 return true;
@@ -329,9 +321,9 @@ public class TranslationTaskService {
      * 删除翻译历史记录（逻辑删除）
      */
     public boolean deleteHistory(String taskId, Long userId) {
-        TranslationHistory history = translationHistoryMapper.findByTaskId(taskId);
+        TranslationHistory history = translationPort.findHistoryByTaskId(taskId).orElse(null);
         if (history != null && history.getUserId().equals(userId)) {
-            translationHistoryMapper.deleteById(history.getId());
+            translationPort.deleteHistory(history.getId());
             return true;
         }
         return false;
@@ -341,7 +333,7 @@ public class TranslationTaskService {
      * 获取翻译结果
      */
     public TranslationResultResponse getTranslationResult(String taskId) {
-        TranslationTask task = translationTaskMapper.findByTaskId(taskId);
+        TranslationTask task = translationPort.findTaskByTaskId(taskId).orElse(null);
         if (task == null) {
             return null;
         }
@@ -362,7 +354,7 @@ public class TranslationTaskService {
 
             // 如果是文本翻译，从历史中获取结果
             if ("text".equals(task.getType())) {
-                TranslationHistory history = translationHistoryMapper.findByTaskId(task.getTaskId());
+                TranslationHistory history = translationPort.findHistoryByTaskId(task.getTaskId()).orElse(null);
                 if (history != null) {
                     response.setTranslatedText(history.getTargetText());
                     response.setSourceContent(history.getSourceText());
@@ -370,7 +362,7 @@ public class TranslationTaskService {
             } else if ("document".equals(task.getType())) {
                 // 文档翻译，读取文件内容
                 if (task.getDocumentId() != null) {
-                    Document doc = documentMapper.findById(task.getDocumentId());
+                    Document doc = documentPort.findById(task.getDocumentId()).orElse(null);
                     if (doc != null) {
                         response.setTranslatedFilePath(doc.getPath());
                         // 读取原文内容（任何状态都尝试读取）
@@ -408,14 +400,14 @@ public class TranslationTaskService {
      * 下载翻译结果（返回文件路径）
      */
     public String getDownloadPath(String taskId, Long userId) {
-        TranslationTask task = translationTaskMapper.findByTaskId(taskId);
+        TranslationTask task = translationPort.findTaskByTaskId(taskId).orElse(null);
         if (task == null || !task.getUserId().equals(userId)) {
             return null;
         }
 
         if (TranslationStatus.COMPLETED.getValue().equals(task.getStatus()) && "document".equals(task.getType())) {
             if (task.getDocumentId() != null) {
-                Document doc = documentMapper.findById(task.getDocumentId());
+                Document doc = documentPort.findById(task.getDocumentId()).orElse(null);
                 if (doc != null && Files.exists(Paths.get(doc.getPath()))) {
                     return doc.getPath();
                 }
@@ -435,7 +427,7 @@ public class TranslationTaskService {
         List<TranslationHistory> histories = new ArrayList<>();
 
         // 先查询进行中的任务
-        List<TranslationTask> inProgressTasks = translationTaskMapper.findByUserIdAndStatus(userId, offset, pageSize);
+        List<TranslationTask> inProgressTasks = translationPort.findTasksByUserIdAndStatus(userId, offset, pageSize);
         for (TranslationTask task : inProgressTasks) {
             TranslationHistory history = new TranslationHistory();
             history.setUserId(task.getUserId());
@@ -452,7 +444,7 @@ public class TranslationTaskService {
         }
 
         // 再查询已完成的历史记录
-        List<TranslationHistory> completedHistories = translationHistoryMapper.findByUserId(userId, offset, pageSize);
+        List<TranslationHistory> completedHistories = translationPort.findHistoryByUserId(userId, offset, pageSize);
         histories.addAll(completedHistories);
 
         // 去重（按taskId）
@@ -485,7 +477,7 @@ public class TranslationTaskService {
      * 统计翻译历史总数
      */
     public int countTranslationHistory(Long userId) {
-        return translationHistoryMapper.countByUserId(userId);
+        return translationPort.countHistoryByUserId(userId);
     }
 
     /**
@@ -547,7 +539,7 @@ public class TranslationTaskService {
 
         // 查询关联任务状态
         if (history.getTaskId() != null) {
-            TranslationTask task = translationTaskMapper.findByTaskId(history.getTaskId());
+            TranslationTask task = translationPort.findTaskByTaskId(history.getTaskId()).orElse(null);
             response.setStatus(task != null ? task.getStatus() : TranslationStatus.COMPLETED.getValue());
         } else {
             response.setStatus(TranslationStatus.COMPLETED.getValue());
@@ -555,7 +547,7 @@ public class TranslationTaskService {
 
         // 查询关联文档名称
         if (history.getDocumentId() != null) {
-            Document doc = documentMapper.findById(history.getDocumentId());
+            Document doc = documentPort.findById(history.getDocumentId()).orElse(null);
             if (doc != null) {
                 response.setDocumentName(doc.getName());
             }
@@ -563,9 +555,9 @@ public class TranslationTaskService {
 
         // fallback：如果documentName为空，尝试从任务关联的文档获取
         if (response.getDocumentName() == null && history.getTaskId() != null) {
-            TranslationTask task = translationTaskMapper.findByTaskId(history.getTaskId());
+            TranslationTask task = translationPort.findTaskByTaskId(history.getTaskId()).orElse(null);
             if (task != null && task.getDocumentId() != null) {
-                Document doc = documentMapper.findById(task.getDocumentId());
+                Document doc = documentPort.findById(task.getDocumentId()).orElse(null);
                 if (doc != null) {
                     response.setDocumentName(doc.getName());
                 }
@@ -590,7 +582,7 @@ public class TranslationTaskService {
 
         Thread.startVirtualThread(() -> {
             try {
-                Document doc = documentMapper.findById(docId);
+                Document doc = documentPort.findById(docId).orElse(null);
                 if (doc == null) {
                     SseEmitterUtil.sendError(emitter, "文档不存在");
                     SseEmitterUtil.complete(emitter);
@@ -601,7 +593,7 @@ public class TranslationTaskService {
                 TranslationTask task = createDocumentTask(doc.getUserId(), doc);
                 doc.setStatus(TranslationStatus.PROCESSING.getValue());
                 doc.setUpdateTime(LocalDateTime.now());
-                documentMapper.updateById(doc);
+                documentPort.update(doc);
                 updateTaskProgress(task, TranslationStatus.PROCESSING, 10, null);
 
                 // 读取文件内容
@@ -620,7 +612,7 @@ public class TranslationTaskService {
 
                 for (int i = 0; i < total; i++) {
                     // 检查任务是否已被取消
-                    TranslationTask currentTask = translationTaskMapper.findByTaskId(task.getTaskId());
+                    TranslationTask currentTask = translationPort.findTaskByTaskId(task.getTaskId()).orElse(null);
                     if (currentTask != null && TranslationStatus.FAILED.getValue().equals(currentTask.getStatus())) {
                         log.info("翻译任务已被取消，提前退出 [taskId={}]", task.getTaskId());
                         SseEmitterUtil.complete(emitter);
@@ -638,7 +630,7 @@ public class TranslationTaskService {
                         String result;
                         if ("expert".equals(mode)) {
                             TranslationPipeline pipeline = new TranslationPipeline(
-                                    cacheService, ragTranslationService, entityConsistencyService,
+                                    cachePort, ragTranslationService, entityConsistencyService,
                                     userLevelThrottledTranslationClient, postProcessingService, null, null);
                             result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
                         } else {
@@ -693,7 +685,7 @@ public class TranslationTaskService {
                 doc.setStatus(TranslationStatus.COMPLETED.getValue());
                 doc.setCompletedTime(LocalDateTime.now());
                 doc.setUpdateTime(LocalDateTime.now());
-                documentMapper.updateById(doc);
+                documentPort.update(doc);
 
                 updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
                 saveTranslationHistory(task, content, translatedContent.toString());
@@ -746,7 +738,7 @@ public class TranslationTaskService {
                         String result;
                         if ("expert".equals(mode)) {
                             TranslationPipeline pipeline = new TranslationPipeline(
-                                    cacheService, ragTranslationService, entityConsistencyService,
+                                    cachePort, ragTranslationService, entityConsistencyService,
                                     userLevelThrottledTranslationClient, postProcessingService, null, null);
                             result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
                         } else {
@@ -845,21 +837,21 @@ public class TranslationTaskService {
     @Scheduled(fixedRate = 300000)
     public void cleanupStuckTasks() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
-        List<TranslationTask> stuckTasks = translationTaskMapper.findByStatusAndCreateTimeBefore(
+        List<TranslationTask> stuckTasks = translationPort.findTasksByStatusAndCreateTimeBefore(
                 TranslationStatus.PROCESSING.getValue(), cutoff);
         for (TranslationTask task : stuckTasks) {
             log.warn("清理卡死任务: taskId={}, createTime={}", task.getTaskId(), task.getCreateTime());
             task.setStatus(TranslationStatus.FAILED.getValue());
             task.setErrorMessage("任务超时，自动标记为失败");
-            translationTaskMapper.updateById(task);
+            translationPort.updateTask(task);
             // 同步更新文档状态
             if (task.getDocumentId() != null) {
-                Document doc = documentMapper.selectById(task.getDocumentId());
+                Document doc = documentPort.findById(task.getDocumentId()).orElse(null);
                 if (doc != null && TranslationStatus.PROCESSING.getValue().equals(doc.getStatus())) {
                     doc.setStatus(TranslationStatus.FAILED.getValue());
                     doc.setErrorMessage("任务超时，自动标记为失败");
                     doc.setUpdateTime(LocalDateTime.now());
-                    documentMapper.updateById(doc);
+                    documentPort.update(doc);
                 }
             }
         }

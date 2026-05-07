@@ -1,13 +1,12 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.adapter.out.redis.DocumentEntityCache;
+import com.yumu.noveltranslator.port.out.EntityCachePort;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserPreferenceMapper;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -24,6 +23,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,19 +36,19 @@ import static org.mockito.Mockito.*;
 class EntityConsistencyServiceTest {
 
     @Mock
-    private DocumentEntityCache documentEntityCache;
+    private EntityCachePort entityCachePort;
 
     @Mock
-    private GlossaryMapper glossaryMapper;
+    private GlossaryRepositoryPort glossaryPort;
 
     @Mock
-    private UserPreferenceMapper userPreferenceMapper;
+    private UserRepositoryPort userPort;
 
     private EntityConsistencyService service;
 
     @BeforeEach
     void setUp() {
-        service = new EntityConsistencyService(documentEntityCache, glossaryMapper, userPreferenceMapper);
+        service = new EntityConsistencyService(entityCachePort, glossaryPort, userPort);
         // Use unreachable URL so HTTP calls fail fast for fallback tests
         ReflectionTestUtils.setField(service, "pythonTranslateUrl",
                 "http://nonexistent.invalid.host:9999/translate");
@@ -589,9 +589,9 @@ class EntityConsistencyServiceTest {
         @Test
         @DisplayName("无实体且无术语库返回consistencyAppliedFalse")
         void 无实体且无术语库返回consistencyAppliedFalse() {
-            when(documentEntityCache.getEntityMap(anyLong(), anyString()))
+            when(entityCachePort.getEntityMap(anyLong(), anyString()))
                     .thenReturn(Collections.emptyMap());
-            when(userPreferenceMapper.selectOne(any())).thenReturn(null);
+            when(userPort.findPreferenceByUserId(anyLong())).thenReturn(null);
 
             ConsistencyTranslationResult result = service.translateWithConsistency(
                     "a".repeat(500), "zh", "google", 1L, "doc1");
@@ -603,9 +603,9 @@ class EntityConsistencyServiceTest {
         @Test
         @DisplayName("Python服务不可用时降级返回consistencyAppliedFalse")
         void Python服务不可用时降级() {
-            when(documentEntityCache.getEntityMap(anyLong(), anyString()))
+            when(entityCachePort.getEntityMap(anyLong(), anyString()))
                     .thenReturn(Collections.emptyMap());
-            when(userPreferenceMapper.selectOne(any())).thenReturn(null);
+            when(userPort.findPreferenceByUserId(anyLong())).thenReturn(null);
 
             ConsistencyTranslationResult result = service.translateWithConsistency(
                     "a".repeat(600), "zh", "google", 1L, "doc1");
@@ -616,25 +616,25 @@ class EntityConsistencyServiceTest {
         @Test
         @DisplayName("用户未启用术语库不查询术语库")
         void 用户未启用术语库不查询术语库() {
-            when(documentEntityCache.getEntityMap(anyLong(), anyString()))
+            when(entityCachePort.getEntityMap(anyLong(), anyString()))
                     .thenReturn(Collections.emptyMap());
-            when(userPreferenceMapper.selectOne(any())).thenReturn(null);
+            when(userPort.findPreferenceByUserId(anyLong())).thenReturn(null);
 
             service.translateWithConsistency("a".repeat(500), "zh", "google", 1L, "doc1");
 
-            verify(glossaryMapper, never()).selectList(any());
+            verify(glossaryPort, never()).findActiveGlossaryByUserId(anyLong());
         }
 
         @Test
         @DisplayName("用户偏好不存在时不查询术语库")
         void 用户偏好不存在时不查询术语库() {
-            when(documentEntityCache.getEntityMap(anyLong(), anyString()))
+            when(entityCachePort.getEntityMap(anyLong(), anyString()))
                     .thenReturn(Collections.emptyMap());
-            when(userPreferenceMapper.selectOne(any())).thenReturn(null);
+            when(userPort.findPreferenceByUserId(anyLong())).thenReturn(null);
 
             service.translateWithConsistency("a".repeat(500), "zh", "google", 1L, "doc1");
 
-            verify(glossaryMapper, never()).selectList(any());
+            verify(glossaryPort, never()).findActiveGlossaryByUserId(anyLong());
         }
 
         @Test
@@ -642,10 +642,10 @@ class EntityConsistencyServiceTest {
         void 术语库启用但无匹配术语() {
             UserPreference pref = new UserPreference();
             pref.setEnableGlossary(true);
-            when(documentEntityCache.getEntityMap(anyLong(), anyString()))
+            when(entityCachePort.getEntityMap(anyLong(), anyString()))
                     .thenReturn(Collections.emptyMap());
-            when(userPreferenceMapper.selectOne(any())).thenReturn(pref);
-            when(glossaryMapper.selectList(any())).thenReturn(Collections.emptyList());
+            when(userPort.findPreferenceByUserId(anyLong())).thenReturn(Optional.of(pref));
+            when(glossaryPort.findActiveGlossaryByUserId(anyLong())).thenReturn(Collections.emptyList());
 
             ConsistencyTranslationResult result = service.translateWithConsistency(
                     "a".repeat(500), "zh", "google", 1L, "doc1");
@@ -658,10 +658,10 @@ class EntityConsistencyServiceTest {
         void 术语库查询异常不抛出() {
             UserPreference pref = new UserPreference();
             pref.setEnableGlossary(true);
-            when(documentEntityCache.getEntityMap(anyLong(), anyString()))
+            when(entityCachePort.getEntityMap(anyLong(), anyString()))
                     .thenReturn(Collections.emptyMap());
-            when(userPreferenceMapper.selectOne(any())).thenReturn(pref);
-            when(glossaryMapper.selectList(any())).thenThrow(new RuntimeException("DB error"));
+            when(userPort.findPreferenceByUserId(anyLong())).thenReturn(Optional.of(pref));
+            when(glossaryPort.findActiveGlossaryByUserId(anyLong())).thenThrow(new RuntimeException("DB error"));
 
             // Should not throw, should handle gracefully
             ConsistencyTranslationResult result = service.translateWithConsistency(
@@ -673,9 +673,9 @@ class EntityConsistencyServiceTest {
         @Test
         @DisplayName("用户偏好查询异常不抛出")
         void 用户偏好查询异常不抛出() {
-            when(documentEntityCache.getEntityMap(anyLong(), anyString()))
+            when(entityCachePort.getEntityMap(anyLong(), anyString()))
                     .thenReturn(Collections.emptyMap());
-            when(userPreferenceMapper.selectOne(any())).thenThrow(new RuntimeException("DB error"));
+            when(userPort.findPreferenceByUserId(anyLong())).thenThrow(new RuntimeException("DB error"));
 
             ConsistencyTranslationResult result = service.translateWithConsistency(
                     "a".repeat(500), "zh", "google", 1L, "doc1");
@@ -693,10 +693,10 @@ class EntityConsistencyServiceTest {
             glossary.setSourceWord("magic");
             glossary.setTargetWord("魔法");
 
-            when(documentEntityCache.getEntityMap(anyLong(), anyString()))
+            when(entityCachePort.getEntityMap(anyLong(), anyString()))
                     .thenReturn(Collections.emptyMap());
-            when(userPreferenceMapper.selectOne(any())).thenReturn(pref);
-            when(glossaryMapper.selectList(any())).thenReturn(List.of(glossary));
+            when(userPort.findPreferenceByUserId(anyLong())).thenReturn(Optional.of(pref));
+            when(glossaryPort.findActiveGlossaryByUserId(anyLong())).thenReturn(List.of(glossary));
 
             // Python will fail, but glossary terms are loaded
             // extractEntities fails -> returns empty, but glossary has terms

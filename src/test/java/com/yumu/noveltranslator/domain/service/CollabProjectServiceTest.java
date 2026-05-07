@@ -1,8 +1,6 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.domain.service.CollabProjectService;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
 import com.yumu.noveltranslator.dto.common.PageResponse;
 import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
@@ -10,13 +8,9 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -41,25 +36,13 @@ import static org.mockito.Mockito.*;
 class CollabProjectServiceTest {
 
     @Mock
-    private CollabProjectMapper collabProjectMapper;
+    private CollaborationRepositoryPort collabPort;
 
     @Mock
-    private CollabProjectMemberMapper collabProjectMemberMapper;
+    private DocumentRepositoryPort documentPort;
 
     @Mock
-    private CollabChapterTaskMapper chapterTaskMapper;
-
-    @Mock
-    private UserMapper userMapper;
-
-    @Mock
-    private CollabCommentMapper collabCommentMapper;
-
-    @Mock
-    private CollabInviteCodeMapper collabInviteCodeMapper;
-
-    @Mock
-    private DocumentMapper documentMapper;
+    private UserRepositoryPort userPort;
 
     @Mock
     private CollabStateMachine collabStateMachine;
@@ -75,8 +58,7 @@ class CollabProjectServiceTest {
     @BeforeEach
     void setUp() {
         collabProjectService = new CollabProjectService(
-                collabProjectMapper, collabProjectMemberMapper, chapterTaskMapper, collabCommentMapper,
-                collabInviteCodeMapper, documentMapper, userMapper, collabStateMachine, multiAgentTranslationService,
+                collabPort, documentPort, userPort, collabStateMachine, multiAgentTranslationService,
                 eventPublisher);
     }
 
@@ -89,7 +71,7 @@ class CollabProjectServiceTest {
             CollabProject p1 = buildProject(1L, "项目A");
             CollabProject p2 = buildProject(2L, "项目B");
 
-            when(collabProjectMapper.selectByMemberUserId(1L)).thenReturn(List.of(p1, p2));
+            when(collabPort.findProjectsByMemberUserId(1L)).thenReturn(List.of(p1, p2));
 
             PageResponse<CollabProjectResponse> result = collabProjectService.listByUserId(1L, 1, 10);
 
@@ -103,7 +85,7 @@ class CollabProjectServiceTest {
         void 分页超出范围返回空列表() {
             CollabProject p = buildProject(1L, "项目A");
 
-            when(collabProjectMapper.selectByMemberUserId(1L)).thenReturn(List.of(p));
+            when(collabPort.findProjectsByMemberUserId(1L)).thenReturn(List.of(p));
 
             PageResponse<CollabProjectResponse> result = collabProjectService.listByUserId(1L, 3, 10);
 
@@ -113,7 +95,7 @@ class CollabProjectServiceTest {
 
         @Test
         void 没有参与项目返回空列表() {
-            when(collabProjectMapper.selectByMemberUserId(1L)).thenReturn(List.of());
+            when(collabPort.findProjectsByMemberUserId(1L)).thenReturn(List.of());
 
             PageResponse<CollabProjectResponse> result = collabProjectService.listByUserId(1L, 1, 10);
 
@@ -130,7 +112,7 @@ class CollabProjectServiceTest {
                     buildProject(4L, "项目4"),
                     buildProject(5L, "项目5")
             );
-            when(collabProjectMapper.selectByMemberUserId(1L)).thenReturn(allProjects);
+            when(collabPort.findProjectsByMemberUserId(1L)).thenReturn(allProjects);
 
             PageResponse<CollabProjectResponse> result = collabProjectService.listByUserId(1L, 2, 2);
 
@@ -162,7 +144,7 @@ class CollabProjectServiceTest {
             CollabProjectMember m1 = buildMember(1L, 1L, "owner");
             CollabProjectMember m2 = buildMember(2L, 2L, "translator");
 
-            when(collabProjectMemberMapper.selectByProjectId(1L)).thenReturn(List.of(m1, m2));
+            when(collabPort.findMembersByProjectId(1L)).thenReturn(List.of(m1, m2));
 
             User u1 = new User();
             u1.setId(1L);
@@ -170,7 +152,8 @@ class CollabProjectServiceTest {
             User u2 = new User();
             u2.setId(2L);
             u2.setUsername("李四");
-            when(userMapper.selectBatchIds(anyCollection())).thenReturn(List.of(u1, u2));
+            when(userPort.findById(1L)).thenReturn(Optional.of(u1));
+            when(userPort.findById(2L)).thenReturn(Optional.of(u2));
 
             PageResponse<ProjectMemberResponse> result = collabProjectService.getMembers(1L, 1, 10);
 
@@ -182,12 +165,12 @@ class CollabProjectServiceTest {
         @Test
         void 分页超出范围返回空列表() {
             CollabProjectMember m = buildMember(1L, 1L, "owner");
-            when(collabProjectMemberMapper.selectByProjectId(1L)).thenReturn(List.of(m));
+            when(collabPort.findMembersByProjectId(1L)).thenReturn(List.of(m));
 
             User u = new User();
             u.setId(1L);
             u.setUsername("张三");
-            when(userMapper.selectBatchIds(anyCollection())).thenReturn(List.of(u));
+            when(userPort.findById(1L)).thenReturn(Optional.of(u));
 
             PageResponse<ProjectMemberResponse> result = collabProjectService.getMembers(1L, 5, 10);
 
@@ -197,7 +180,7 @@ class CollabProjectServiceTest {
 
         @Test
         void 没有成员返回空列表() {
-            when(collabProjectMemberMapper.selectByProjectId(1L)).thenReturn(List.of());
+            when(collabPort.findMembersByProjectId(1L)).thenReturn(List.of());
 
             PageResponse<ProjectMemberResponse> result = collabProjectService.getMembers(1L, 1, 10);
 
