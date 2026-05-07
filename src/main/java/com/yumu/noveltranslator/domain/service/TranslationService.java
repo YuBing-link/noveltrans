@@ -482,10 +482,15 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
      * 按段落分段，逐段 SSE 输出
      */
     public SseEmitter streamTextTranslate(SelectionTranslationRequest req) {
+        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        log.info("[STREAM-TRACE] Service entry: userId={}, engine={}, target={}, mode={}, textLen={}",
+                userId, req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);
+
         SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L);
 
         String text = req.getText();
         if (text == null || text.trim().isEmpty()) {
+            log.info("[STREAM-TRACE] Text empty, returning error");
             SseEmitterUtil.sendError(emitter, "文本不能为空");
             SseEmitterUtil.complete(emitter);
             return emitter;
@@ -494,9 +499,9 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
         String modeString = req.getMode() != null ? req.getMode() : "fast";
+        log.info("[STREAM-TRACE] Normalized: mode={}, target={}", mode.getName(), target);
 
         // 检查字符配额（从 SecurityContext 获取 userLevel）
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         if (userId != null) {
             String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
@@ -519,9 +524,10 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
                         cachePort, ragTranslationService, entityConsistencyService,
                         userLevelThrottledTranslationClient, postProcessingService, userId, null);
 
-                // 先用 \n\n+ 将全文拆为逻辑段落
+                // 先用 \n\n+ 将全文拆分为逻辑段落
                 String[] logicalParagraphs = text.split("\n\n+");
-                log.info("流式翻译: 全文拆分为 {} 个逻辑段落", logicalParagraphs.length);
+                log.info("[STREAM-TRACE] 全文拆分为 {} 个逻辑段落, 总行数 ~{}", logicalParagraphs.length,
+                        text.split("\n", -1).length);
 
                 StringBuilder fullResult = new StringBuilder();
 
@@ -548,13 +554,18 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
                         }
 
                         String translated;
+                        String pipelineMode = "fast".equals(modeString) ? "executeFast" : "execute";
+                        log.info("[STREAM-TRACE] Pipeline 委托: pipelineMode={}, lineLen={}, para={}, line={}",
+                                pipelineMode, line.length(), i, j);
                         if ("fast".equals(modeString)) {
                             translated = pipeline.executeFast(line, target, mode);
                         } else {
                             translated = pipeline.execute(line, target, mode);
                         }
+                        log.info("[STREAM-TRACE] Pipeline 返回: translatedLen={}", translated != null ? translated.length() : 0);
 
                         if (translated == null || translated.isBlank()) {
+                            log.info("[STREAM-TRACE] Pipeline 返回空，使用原文兜底");
                             translated = line;
                         }
 
@@ -576,6 +587,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
                     SseEmitterUtil.sendData(emitter, chunk);
                 }
 
+                log.info("[STREAM-TRACE] 流式翻译完成, 原文长度={}, 译文长度={}", text.length(), fullResult.length());
                 SseEmitterUtil.sendDone(emitter);
                 SseEmitterUtil.complete(emitter);
 

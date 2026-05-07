@@ -59,6 +59,8 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/text/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamTextTranslate(@RequestBody @Valid SelectionTranslationRequest req) {
+        log.info("[STREAM-TRACE] Controller entry: /v1/translate/text/stream, engine={}, targetLang={}, mode={}, textLen={}",
+                req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);
         return translatePort.streamTextTranslate(req);
     }
 

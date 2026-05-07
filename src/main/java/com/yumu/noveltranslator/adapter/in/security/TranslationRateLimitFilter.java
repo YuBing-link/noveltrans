@@ -53,6 +53,9 @@ public class TranslationRateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                      FilterChain chain) throws ServletException, IOException {
+        String requestURI = request.getRequestURI();
+        log.info("[FILTER-TRACE] TranslationRateLimitFilter entry: uri={}, method={}", requestURI, request.getMethod());
+
         String jwt = parseJwt(request);
         boolean isApiKeyRequest = jwt != null && jwt.startsWith(API_KEY_PREFIX);
 
@@ -65,6 +68,7 @@ public class TranslationRateLimitFilter extends OncePerRequestFilter {
         }
 
         if (!allowed) {
+            log.warn("[FILTER-TRACE] Rate limit EXCEEDED for uri={}", requestURI);
             response.setStatus(429);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding("UTF-8");
@@ -80,6 +84,7 @@ public class TranslationRateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
+        log.info("[FILTER-TRACE] TranslationRateLimitFilter passed: uri={}", requestURI);
         chain.doFilter(request, response);
     }
 
