@@ -18,7 +18,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter;
-import com.yumu.noveltranslator.domain.service.AuthService;
+import com.yumu.noveltranslator.port.in.AuthPort;
 import com.yumu.noveltranslator.domain.service.TranslationTaskService;
 import com.yumu.noveltranslator.domain.service.UserService;
 import com.yumu.noveltranslator.util.SecurityUtil;
@@ -38,7 +38,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class WebUserController {
 
-    private final AuthService authService;
+    private final AuthPort authPort;
     private final UserService userService;
     private final TranslationTaskService translationTaskService;
     private final LoginRateLimiter loginRateLimiter;
@@ -49,7 +49,7 @@ public class WebUserController {
      */
     @PostMapping("/send-code")
     public Result sendVerificationCode(@RequestBody @Valid SendCodeRequest request) {
-        return authService.sendVerificationCode(request.getEmail());
+        return authPort.sendVerificationCode(request.getEmail());
     }
 
     /**
@@ -58,7 +58,7 @@ public class WebUserController {
      */
     @PostMapping("/send-reset-code")
     public Result sendResetCode(@RequestBody @Valid SendCodeRequest request) {
-        return authService.sendResetCode(request.getEmail());
+        return authPort.sendResetCode(request.getEmail());
     }
 
     /**
@@ -71,7 +71,7 @@ public class WebUserController {
         if (!loginRateLimiter.allowLoginAttempt(clientIp)) {
             return Result.error(ErrorCodeEnum.RATE_LIMIT, "登录尝试次数过多，请稍后再试");
         }
-        return authService.login(req);
+        return authPort.login(req);
     }
 
     /**
@@ -80,7 +80,7 @@ public class WebUserController {
      */
     @PostMapping("/register")
     public Result<User> register(@RequestBody @Valid RegisterRequest req) {
-        return authService.register(req);
+        return authPort.register(req);
     }
 
     /**
@@ -139,7 +139,7 @@ public class WebUserController {
     @PostMapping("/change-password")
     public Result changePassword(@RequestBody @Valid ChangePasswordRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        return authService.changePassword(userId, request);
+        return authPort.changePassword(userId, request);
     }
 
     /**
@@ -148,7 +148,7 @@ public class WebUserController {
      */
     @PostMapping("/reset-password")
     public Result resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
-        return authService.resetPassword(request);
+        return authPort.resetPassword(request);
     }
 
     /**
@@ -157,7 +157,7 @@ public class WebUserController {
      */
     @PostMapping("/refresh-token")
     public Result refreshToken(@RequestBody @Valid RefreshTokenRequest request) {
-        return authService.refreshToken(request);
+        return authPort.refreshToken(request);
     }
 
     /**
@@ -173,7 +173,7 @@ public class WebUserController {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             jwt = authHeader.substring(7);
         }
-        return authService.logout(userId, refreshToken, jwt);
+        return authPort.logout(userId, refreshToken, jwt);
     }
 
     /**

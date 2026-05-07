@@ -7,7 +7,7 @@ import com.yumu.noveltranslator.dto.subscription.CheckoutSessionRequest;
 import com.yumu.noveltranslator.dto.subscription.SubscriptionStatusResponse;
 import com.yumu.noveltranslator.dto.subscription.PortalSessionResponse;
 import com.yumu.noveltranslator.util.SecurityUtil;
-import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
+import com.yumu.noveltranslator.port.in.SubscriptionPort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class SubscriptionController {
 
-    private final SubscriptionService subscriptionService;
+    private final SubscriptionPort subscriptionPort;
 
     /**
      * 验证支付结果（前端回调时主动查询 Stripe session 状态）
@@ -28,7 +28,7 @@ public class SubscriptionController {
     @GetMapping("/verify")
     public Result<PaymentVerificationResponse> verify(@RequestParam String session_id) {
         Long userId = SecurityUtil.getRequiredUserId();
-        return Result.ok(subscriptionService.verifyCheckoutSession(session_id, userId));
+        return Result.ok(subscriptionPort.verifyCheckoutSession(session_id, userId));
     }
 
     /**
@@ -37,7 +37,7 @@ public class SubscriptionController {
     @PostMapping("/checkout")
     public Result<CheckoutSessionResponse> checkout(@RequestBody @Valid CheckoutSessionRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        return Result.ok(subscriptionService.createCheckoutSession(userId, request));
+        return Result.ok(subscriptionPort.createCheckoutSession(userId, request));
     }
 
     /**
@@ -46,7 +46,7 @@ public class SubscriptionController {
     @GetMapping("/status")
     public Result<SubscriptionStatusResponse> status() {
         Long userId = SecurityUtil.getRequiredUserId();
-        return Result.ok(subscriptionService.getSubscriptionStatus(userId));
+        return Result.ok(subscriptionPort.getSubscriptionStatus(userId));
     }
 
     /**
@@ -55,7 +55,7 @@ public class SubscriptionController {
     @PostMapping("/cancel")
     public Result<SubscriptionStatusResponse> cancel() {
         Long userId = SecurityUtil.getRequiredUserId();
-        return Result.ok(subscriptionService.cancelSubscription(userId));
+        return Result.ok(subscriptionPort.cancelSubscription(userId));
     }
 
     /**
@@ -64,6 +64,6 @@ public class SubscriptionController {
     @PostMapping("/portal")
     public Result<PortalSessionResponse> portal() {
         Long userId = SecurityUtil.getRequiredUserId();
-        return Result.ok(subscriptionService.createPortalSession(userId));
+        return Result.ok(subscriptionPort.createPortalSession(userId));
     }
 }

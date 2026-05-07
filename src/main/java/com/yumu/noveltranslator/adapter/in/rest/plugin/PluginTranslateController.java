@@ -5,7 +5,7 @@ import com.yumu.noveltranslator.dto.translation.SelectionTranslationRequest;
 import com.yumu.noveltranslator.dto.translation.ReaderTranslateResponse;
 import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.dto.translation.WebpageTranslateRequest;
-import com.yumu.noveltranslator.domain.service.TranslationService;
+import com.yumu.noveltranslator.port.in.TranslatePort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -22,7 +22,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class PluginTranslateController {
 
-    private final TranslationService translationService;
+    private final TranslatePort translatePort;
 
     /**
      * 选中文本翻译 - 允许公共访问，但认证用户享有更高限制
@@ -30,7 +30,7 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/selection")
     public SelectionTranslateResponse translateSelection(@RequestBody @Valid SelectionTranslationRequest req) {
-        return translationService.selectionTranslate(req);
+        return translatePort.selectionTranslate(req);
     }
 
     /**
@@ -39,7 +39,7 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/reader")
     public ReaderTranslateResponse translateReader(@RequestBody @Valid ReaderTranslateRequest req) {
-        return translationService.readerTranslate(req);
+        return translatePort.readerTranslate(req);
     }
 
     /**
@@ -48,7 +48,7 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/webpage", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter translateWebpage(@RequestBody @Valid WebpageTranslateRequest req) {
-        return translationService.webpageTranslateStream(req);
+        return translatePort.webpageTranslateStream(req);
     }
 
     /**
@@ -57,7 +57,7 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/text/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamTextTranslate(@RequestBody @Valid SelectionTranslationRequest req) {
-        return translationService.streamTextTranslate(req);
+        return translatePort.streamTextTranslate(req);
     }
 
     /**
@@ -67,7 +67,7 @@ public class PluginTranslateController {
     @PostMapping(value = "/premium-selection")
     @PreAuthorize("isAuthenticated()")
     public SelectionTranslateResponse premiumTranslateSelection(@RequestBody @Valid SelectionTranslationRequest req) {
-        return translationService.selectionTranslate(req);
+        return translatePort.selectionTranslate(req);
     }
 
     /**
@@ -77,6 +77,6 @@ public class PluginTranslateController {
     @PostMapping(value = "/premium-reader")
     @PreAuthorize("isAuthenticated()")
     public ReaderTranslateResponse premiumTranslateReader(@RequestBody @Valid ReaderTranslateRequest req) {
-        return translationService.readerTranslate(req);
+        return translatePort.readerTranslate(req);
     }
 }

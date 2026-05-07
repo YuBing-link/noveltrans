@@ -10,7 +10,6 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.domain.service.DocumentService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationService;
 import com.yumu.noveltranslator.domain.service.TranslationTaskService;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
@@ -37,7 +36,6 @@ import java.nio.file.Paths;
 @RequiredArgsConstructor
 public class SharedTranslateController {
 
-    private final TranslationService translationService;
     private final TranslationTaskService translationTaskService;
     private final DocumentService documentService;
     private final RagTranslationService ragTranslationService;

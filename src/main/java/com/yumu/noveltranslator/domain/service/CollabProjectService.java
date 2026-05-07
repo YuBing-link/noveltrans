@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CollabProjectService extends ServiceImpl<CollabProjectMapper, CollabProject> {
+public class CollabProjectService extends ServiceImpl<CollabProjectMapper, CollabProject> implements com.yumu.noveltranslator.port.in.CollabPort {
 
     private final CollabProjectMapper collabProjectMapper;
     private final CollabProjectMemberMapper collabProjectMemberMapper;

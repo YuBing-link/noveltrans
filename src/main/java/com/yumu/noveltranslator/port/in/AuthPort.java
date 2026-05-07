@@ -1,0 +1,20 @@
+package com.yumu.noveltranslator.port.in;
+
+import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.dto.auth.LoginRequest;
+import com.yumu.noveltranslator.dto.auth.RegisterRequest;
+import com.yumu.noveltranslator.dto.auth.RefreshTokenRequest;
+import com.yumu.noveltranslator.dto.auth.ChangePasswordRequest;
+import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+
+public interface AuthPort {
+    Result<User> login(LoginRequest req);
+    Result sendVerificationCode(String email);
+    Result sendResetCode(String email);
+    Result<User> register(RegisterRequest req);
+    Result refreshToken(RefreshTokenRequest request);
+    Result changePassword(Long userId, ChangePasswordRequest request);
+    Result resetPassword(ResetPasswordRequest request);
+    Result logout(Long userId, String refreshToken, String jwt);
+}

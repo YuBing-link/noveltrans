@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import com.yumu.noveltranslator.port.in.WebhookPort;
+
 /**
  * Stripe Webhook 接收端点
  * 接收 Stripe 的订阅状态变更通知，异步处理数据库更新。
@@ -20,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/webhook")
 @RequiredArgsConstructor
-public class StripeWebhookController {
+public class StripeWebhookController implements WebhookPort {
 
     private final SubscriptionService subscriptionService;
     private final com.yumu.noveltranslator.properties.StripeProperties stripeProperties;

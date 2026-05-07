@@ -42,7 +42,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TranslationService {
+public class TranslationService implements com.yumu.noveltranslator.port.in.TranslatePort {
 
     private static final String DEFAULT_TARGET_LANG = "zh";
     private static final String DEFAULT_ENGINE = "auto";

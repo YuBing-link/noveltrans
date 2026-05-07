@@ -10,7 +10,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.domain.service.DocumentService;
 import com.yumu.noveltranslator.domain.service.QuotaService;
-import com.yumu.noveltranslator.domain.service.TranslationService;
+import com.yumu.noveltranslator.port.in.TranslatePort;
 import com.yumu.noveltranslator.domain.service.TranslationTaskService;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,7 +42,7 @@ import java.util.Map;
 @Slf4j
 public class ExternalTranslateController {
 
-    private final TranslationService translationService;
+    private final TranslatePort translatePort;
     private final DocumentService documentService;
     private final TranslationTaskService translationTaskService;
     private final QuotaService quotaService;
@@ -78,7 +78,7 @@ public class ExternalTranslateController {
                 request.getMode() != null ? request.getMode() : "fast"
             );
 
-            String result = translationService.selectionTranslate(selectionReq).getTranslation();
+            String result = translatePort.selectionTranslate(selectionReq).getTranslation();
 
             ExternalTranslateResponse response = new ExternalTranslateResponse();
             response.setTranslatedText(result);
@@ -125,7 +125,7 @@ public class ExternalTranslateController {
                     request.getEngine() != null ? request.getEngine() : "google",
                     mode
                 );
-                String translated = translationService.selectionTranslate(selectionReq).getTranslation();
+                String translated = translatePort.selectionTranslate(selectionReq).getTranslation();
                 ExternalTranslateResponse resp = new ExternalTranslateResponse();
                 resp.setTranslatedText(translated);
                 resp.setSourceLang(selectionReq.getSourceLang());

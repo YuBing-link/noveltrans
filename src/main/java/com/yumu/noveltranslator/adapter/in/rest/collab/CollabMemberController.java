@@ -6,7 +6,7 @@ import com.yumu.noveltranslator.dto.common.Result;
 import com.yumu.noveltranslator.dto.common.PageResponse;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.in.security.annotation.RequireProjectAccess;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,21 +24,21 @@ import java.util.List;
 @Slf4j
 public class CollabMemberController {
 
-    private final CollabProjectService collabProjectService;
+    private final CollabPort collabPort;
 
     @PostMapping("/projects/{projectId}/invite")
     @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
     public Result<ProjectMemberResponse> inviteMember(@PathVariable Long projectId,
                                                        @Valid @RequestBody InviteMemberRequest request) {
         Long inviterId = SecurityUtil.getRequiredUserId();
-        ProjectMemberResponse member = collabProjectService.inviteMember(projectId, request, inviterId);
+        ProjectMemberResponse member = collabPort.inviteMember(projectId, request, inviterId);
         return Result.ok(member);
     }
 
     @PostMapping("/join")
     public Result<ProjectMemberResponse> joinByCode(@RequestParam String inviteCode) {
         Long userId = SecurityUtil.getRequiredUserId();
-        ProjectMemberResponse member = collabProjectService.joinByInviteCode(inviteCode, userId);
+        ProjectMemberResponse member = collabPort.joinByInviteCode(inviteCode, userId);
         return Result.ok(member);
     }
 
@@ -48,7 +48,7 @@ public class CollabMemberController {
             @PathVariable Long projectId,
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
-        PageResponse<ProjectMemberResponse> members = collabProjectService.getMembers(projectId, page, pageSize);
+        PageResponse<ProjectMemberResponse> members = collabPort.getMembers(projectId, page, pageSize);
         return Result.ok(members);
     }
 
@@ -56,7 +56,7 @@ public class CollabMemberController {
     @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
     public Result<Void> removeMember(@PathVariable Long projectId, @PathVariable Long memberId) {
         Long operatorId = SecurityUtil.getRequiredUserId();
-        collabProjectService.removeMember(projectId, memberId, operatorId);
+        collabPort.removeMember(projectId, memberId, operatorId);
         return Result.ok(null);
     }
 }

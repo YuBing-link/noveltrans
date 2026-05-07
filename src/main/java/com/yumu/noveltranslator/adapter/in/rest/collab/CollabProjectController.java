@@ -10,7 +10,7 @@ import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.in.security.annotation.RequireProjectAccess;
 import com.yumu.noveltranslator.domain.service.ChapterTaskService;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
@@ -31,7 +31,7 @@ import java.util.List;
 @Slf4j
 public class CollabProjectController {
 
-    private final CollabProjectService collabProjectService;
+    private final CollabPort collabPort;
     private final ChapterTaskService chapterTaskService;
     private final SseEmitterUtil sseEmitterUtil;
 
@@ -40,7 +40,7 @@ public class CollabProjectController {
     @PostMapping("/projects")
     public Result<CollabProjectResponse> createProject(@Valid @RequestBody CreateCollabProjectRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        CollabProjectResponse project = collabProjectService.createProject(request, userId);
+        CollabProjectResponse project = collabPort.createProject(request, userId);
         return Result.ok(project);
     }
 
@@ -49,14 +49,14 @@ public class CollabProjectController {
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
         Long userId = SecurityUtil.getRequiredUserId();
-        PageResponse<CollabProjectResponse> projects = collabProjectService.listByUserId(userId, page, pageSize);
+        PageResponse<CollabProjectResponse> projects = collabPort.listByUserId(userId, page, pageSize);
         return Result.ok(projects);
     }
 
     @GetMapping("/projects/{projectId}")
     @RequireProjectAccess
     public Result<CollabProjectResponse> getProject(@PathVariable Long projectId) {
-        CollabProjectResponse project = collabProjectService.getProjectById(projectId);
+        CollabProjectResponse project = collabPort.getProjectById(projectId);
         return Result.ok(project);
     }
 
@@ -65,7 +65,7 @@ public class CollabProjectController {
     public Result<CollabProjectResponse> updateProject(@PathVariable Long projectId,
                                                         @Valid @RequestBody CreateCollabProjectRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        CollabProjectResponse project = collabProjectService.updateProject(projectId, request, userId);
+        CollabProjectResponse project = collabPort.updateProject(projectId, request, userId);
         return Result.ok(project);
     }
 
@@ -75,7 +75,7 @@ public class CollabProjectController {
                                              @RequestParam String targetStatus) {
         CollabProjectStatus target = CollabProjectStatus.fromValue(targetStatus);
         Long userId = SecurityUtil.getRequiredUserId();
-        collabProjectService.changeProjectStatus(projectId, target, userId);
+        collabPort.changeProjectStatus(projectId, target, userId);
         return Result.ok(null);
     }
 
@@ -83,15 +83,15 @@ public class CollabProjectController {
     @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
     public Result<Void> deleteProject(@PathVariable Long projectId) {
         Long userId = SecurityUtil.getRequiredUserId();
-        collabProjectService.deleteProject(projectId, userId);
+        collabPort.deleteProject(projectId, userId);
         return Result.ok(null);
     }
 
     @PostMapping("/projects/{projectId}/invite-code")
     @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
-    public Result<CollabProjectService.InviteCodeResult> generateInviteCode(@PathVariable Long projectId) {
+    public Result<CollabPort.InviteCodeResult> generateInviteCode(@PathVariable Long projectId) {
         Long userId = SecurityUtil.getRequiredUserId();
-        CollabProjectService.InviteCodeResult result = collabProjectService.generateInviteCode(projectId, userId);
+        CollabProjectService.InviteCodeResult result = collabPort.generateInviteCode(projectId, userId);
         return Result.ok(result);
     }
 

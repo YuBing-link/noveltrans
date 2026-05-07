@@ -9,7 +9,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.enums.TranslationStatus;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.domain.service.DocumentService;
 import com.yumu.noveltranslator.domain.service.TranslationTaskService;
 import com.yumu.noveltranslator.util.SecurityUtil;
@@ -40,7 +40,7 @@ public class WebDocumentController {
 
     private final DocumentService documentService;
     private final TranslationTaskService translationTaskService;
-    private final CollabProjectService collabProjectService;
+    private final CollabPort collabPort;
 
     /**
      * 获取文档列表
@@ -167,9 +167,9 @@ public class WebDocumentController {
 
                 if (projectId != null) {
                     // 关联到已有项目
-                    chapterCount = collabProjectService.addChaptersToProject(userId, projectId, doc);
+                    chapterCount = collabPort.addChaptersToProject(userId, projectId, doc);
                     targetProjectId = projectId;
-                    collabProjectService.startMultiAgentTranslation(targetProjectId);
+                    collabPort.startMultiAgentTranslation(targetProjectId);
 
                     DocumentTranslationResponse response = new DocumentTranslationResponse();
                     response.setTaskId(null);
@@ -181,13 +181,13 @@ public class WebDocumentController {
                     return Result.ok(response);
                 } else {
                     // 自动创建新项目（原有逻辑）
-                    CollabProjectService.TeamProjectCreateResult result =
-                            collabProjectService.createProjectFromDocument(
+                    CollabPort.TeamProjectCreateResult result =
+                            collabPort.createProjectFromDocument(
                                     userId, doc.getId(), doc.getName(), doc.getPath(), doc.getFileType(),
                                     sourceLang, targetLang);
 
                     // 事务已提交，启动多 Agent 翻译
-                    collabProjectService.startMultiAgentTranslation(result.projectId());
+                    collabPort.startMultiAgentTranslation(result.projectId());
 
                     DocumentTranslationResponse response = new DocumentTranslationResponse();
                     response.setTaskId(null);

@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
  */
 @Service
 @RequiredArgsConstructor
-public class AuthService implements UserDetailsService {
+public class AuthService implements UserDetailsService, com.yumu.noveltranslator.port.in.AuthPort {
 
     private final UserMapper userMapper;
     private final TenantMapper tenantMapper;
