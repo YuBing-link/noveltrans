@@ -1,6 +1,9 @@
 # Architecture Decision Records
 
-This document records the architectural decisions made during the refactoring of the novel translator system. Each decision follows the [ADR format](https://cognitect.com/blog/2011/11/08/architecture-decision-records).
+This document records the architectural decisions made during the evolution of the novel translator system. Each decision follows the [ADR format](https://cognitect.com/blog/2011/11/08/architecture-decision-records).
+
+> File paths reflect the **post-refactoring** hexagonal structure (see ADR-012).
+> For pre-refactoring paths, consult `git log --follow`.
 
 ---
 
@@ -8,7 +11,7 @@ This document records the architectural decisions made during the refactoring of
 
 **Status**: Accepted
 **Date**: 2026-05-05
-**Context**: [Issue #1 — P0] Two project creation paths produced different initial statuses.
+**Context**: Two project creation paths produced different initial statuses.
 
 ### Context
 
@@ -30,8 +33,8 @@ Both creation paths now initialize `CollabProject` with status `DRAFT`. The proj
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/service/CollabProjectService.java` (line 139: `ACTIVE` → `DRAFT`)
-- `src/test/java/com/yumu/noveltranslator/service/CollabProjectServiceStatusTest.java` (new)
+- `src/main/java/com/yumu/noveltranslator/domain/service/CollabProjectService.java` (line 139: `ACTIVE` → `DRAFT`)
+- `src/test/java/com/yumu/noveltranslator/domain/service/CollabProjectServiceStatusTest.java` (new)
 
 ---
 
@@ -39,7 +42,7 @@ Both creation paths now initialize `CollabProject` with status `DRAFT`. The proj
 
 **Status**: Accepted
 **Date**: 2026-05-05
-**Context**: [Issue #2 — P0] Adding a single glossary term invalidated ALL translation cache entries.
+**Context**: Adding a single glossary term invalidated ALL translation cache entries.
 
 ### Context
 
@@ -62,10 +65,10 @@ Implemented a term-aware reverse index on Redis:
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/service/TranslationCacheService.java` (reverse index + `invalidateKeysForTerm`)
-- `src/main/java/com/yumu/noveltranslator/service/CacheVersionService.java` (`bumpVersionForGlossaryTerm`, `@Deprecated bumpAllVersions`)
-- `src/main/java/com/yumu/noveltranslator/controller/web/WebGlossaryController.java` (replaced global bump with targeted invalidation)
-- `src/test/java/com/yumu/noveltranslator/service/GlossaryCacheInvalidationTest.java` (new, 11 tests)
+- `src/main/java/com/yumu/noveltranslator/adapter/out/redis/TranslationCacheService.java` (reverse index + `invalidateKeysForTerm`)
+- `src/main/java/com/yumu/noveltranslator/adapter/out/redis/CacheVersionService.java` (`bumpVersionForGlossaryTerm`, `@Deprecated bumpAllVersions`)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/rest/web/WebGlossaryController.java` (replaced global bump with targeted invalidation)
+- `src/test/java/com/yumu/noveltranslator/adapter/out/redis/GlossaryCacheInvalidationTest.java` (new, 11 tests)
 
 ---
 
@@ -73,7 +76,7 @@ Implemented a term-aware reverse index on Redis:
 
 **Status**: Accepted
 **Date**: 2026-05-05
-**Context**: [Issue #3 — P0] `invoice.payment_succeeded` webhook was logged-only; if `checkout.session.completed` never arrived, paid users would never get activated.
+**Context**: `invoice.payment_succeeded` webhook was logged-only; if `checkout.session.completed` never arrived, paid users would never get activated.
 
 ### Context
 
@@ -96,10 +99,10 @@ The existing 5-layer idempotency defense (signature → Redis SETNX → lastWebh
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/controller/StripeWebhookController.java` (dispatch now calls handler)
-- `src/main/java/com/yumu/noveltranslator/service/SubscriptionService.java` (4 new methods)
-- `src/test/java/com/yumu/noveltranslator/service/SubscriptionServiceInvoiceTest.java` (new, 12 tests, 4 disabled for MP lambda cache)
-- `src/test/java/com/yumu/noveltranslator/controller/StripeWebhookControllerTest.java` (updated)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/webhook/StripeWebhookController.java` (dispatch now calls handler)
+- `src/main/java/com/yumu/noveltranslator/adapter/out/stripe/SubscriptionService.java` (4 new methods)
+- `src/test/java/com/yumu/noveltranslator/adapter/out/stripe/SubscriptionServiceInvoiceTest.java` (new, 12 tests, 4 disabled for MP lambda cache)
+- `src/test/java/com/yumu/noveltranslator/adapter/in/webhook/StripeWebhookControllerTest.java` (updated)
 
 ---
 
@@ -107,7 +110,7 @@ The existing 5-layer idempotency defense (signature → Redis SETNX → lastWebh
 
 **Status**: Accepted
 **Date**: 2026-05-05
-**Context**: [Issue #4 — P1] 500-chapter synchronous insert in a single `@Transactional` caused long lock times and risk of `innodb_lock_wait_timeout`.
+**Context**: 500-chapter synchronous insert in a single `@Transactional` caused long lock times and risk of `innodb_lock_wait_timeout`.
 
 ### Context
 
@@ -134,13 +137,13 @@ The `@Async` method catches all exceptions internally to prevent them from bubbl
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/service/CollabProjectService.java` (refactored `doCreateProject`)
-- `src/main/java/com/yumu/noveltranslator/event/ChapterSplitEvent.java` (new)
-- `src/main/java/com/yumu/noveltranslator/service/ChapterSplitAsyncListener.java` (new)
+- `src/main/java/com/yumu/noveltranslator/domain/service/CollabProjectService.java` (refactored `doCreateProject`)
+- `src/main/java/com/yumu/noveltranslator/domain/event/ChapterSplitEvent.java` (new)
+- `src/main/java/com/yumu/noveltranslator/domain/service/ChapterSplitAsyncListener.java` (new)
 - `src/main/java/com/yumu/noveltranslator/config/ChapterSplitExecutorConfig.java` (new)
 - `src/main/java/com/yumu/noveltranslator/task/DraftProjectRecoveryTask.java` (new)
-- `src/main/java/com/yumu/noveltranslator/mapper/CollabChapterTaskMapper.java` (`countByProjectId`)
-- `src/test/java/com/yumu/noveltranslator/service/ChapterSplitAsyncListenerTest.java` (new, 8 tests)
+- `src/main/java/com/yumu/noveltranslator/adapter/out/persistence/mapper/CollabChapterTaskMapper.java` (`countByProjectId`)
+- `src/test/java/com/yumu/noveltranslator/domain/service/ChapterSplitAsyncListenerTest.java` (new, 8 tests)
 - `src/test/java/com/yumu/noveltranslator/task/DraftProjectRecoveryTaskTest.java` (new, 6 tests)
 
 ---
@@ -149,7 +152,7 @@ The `@Async` method catches all exceptions internally to prevent them from bubbl
 
 **Status**: Accepted
 **Date**: 2026-05-05
-**Context**: [Issue #5 — P1] SSE connections are fire-and-forget; a 15-second network drop means losing all collaboration events.
+**Context**: SSE connections are fire-and-forget; a 15-second network drop means losing all collaboration events.
 
 ### Context
 
@@ -177,11 +180,11 @@ Implemented Redis Stream-based message buffering:
 ### Files Changed
 
 - `src/main/java/com/yumu/noveltranslator/util/SseEmitterUtil.java` (converted to `@Component`, added publish/replay methods)
-- `src/main/java/com/yumu/noveltranslator/service/CollabEventPublisher.java` (new)
-- `src/main/java/com/yumu/noveltranslator/service/ChapterTaskService.java` (event publishing in afterCommit hooks)
-- `src/main/java/com/yumu/noveltranslator/controller/collab/CollabProjectController.java` (new SSE endpoint)
+- `src/main/java/com/yumu/noveltranslator/domain/service/CollabEventPublisher.java` (new)
+- `src/main/java/com/yumu/noveltranslator/domain/service/ChapterTaskService.java` (event publishing in afterCommit hooks)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/rest/collab/CollabProjectController.java` (new SSE endpoint)
 - `src/test/java/com/yumu/noveltranslator/util/SseEmitterUtilRedisTest.java` (new, 8 tests)
-- `src/test/java/com/yumu/noveltranslator/service/CollabEventPublisherTest.java` (new, 4 tests)
+- `src/test/java/com/yumu/noveltranslator/domain/service/CollabEventPublisherTest.java` (new, 4 tests)
 
 ---
 
@@ -189,7 +192,7 @@ Implemented Redis Stream-based message buffering:
 
 **Status**: Accepted
 **Date**: 2026-05-05
-**Context**: [Issue #6 — P1] Translation endpoints had no IP-level rate limiting, allowing attackers with stolen tokens to create multiple accounts and bypass per-user limits.
+**Context**: Translation endpoints had no IP-level rate limiting, allowing attackers with stolen tokens to create multiple accounts and bypass per-user limits.
 
 ### Context
 
@@ -199,7 +202,7 @@ The existing `LoginRateLimiter` only protected the login endpoint. Translation e
 
 Added two new security components:
 
-1. **`TranslationIpRateLimiter`** — Redis Sorted Set sliding window:
+1. **`TranslationIpRateLimiter`** (later merged into `RedisSlidingWindowRateLimiter` per ADR-012) — Redis Sorted Set sliding window:
    - Key pattern: `translation:ip_limit:{clientIP}`
    - Algorithm: `ZREMRANGEBYSCORE` (remove entries > 60s old) + `ZADD` (add current timestamp) + `ZCARD` (count)
    - Default: 100 requests per IP per 60-second window (configurable via `translation.ip-rate-limit`)
@@ -223,13 +226,12 @@ Added two new security components:
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/security/TranslationIpRateLimiter.java` (new)
-- `src/main/java/com/yumu/noveltranslator/security/TranslationRateLimitFilter.java` (new)
-- `src/main/java/com/yumu/noveltranslator/security/SecurityConfig.java` (filter chain integration)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/security/RedisSlidingWindowRateLimiter.java` (merged from `TranslationIpRateLimiter` and `TranslationKeyRateLimiter`, ADR-012)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/security/TranslationRateLimitFilter.java` (new)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/security/SecurityConfig.java` (filter chain integration)
 - `src/main/resources/application.yaml` (new `translation.ip-rate-limit` config)
-- `src/test/java/com/yumu/noveltranslator/security/TranslationIpRateLimiterTest.java` (new, 4 tests)
-- `src/test/java/com/yumu/noveltranslator/security/TranslationRateLimitFilterTest.java` (new, 7 tests)
-- `src/test/java/com/yumu/noveltranslator/security/SecurityConfigTest.java` (updated mock)
+- `src/test/java/com/yumu/noveltranslator/adapter/in/security/TranslationIpRateLimiterTest.java` (retained for backward compat; tests `RedisSlidingWindowRateLimiter`)
+- `src/test/java/com/yumu/noveltranslator/adapter/in/security/TranslationRateLimitFilterTest.java` (new, 7 tests)
 
 ---
 
@@ -237,7 +239,7 @@ Added two new security components:
 
 **Status**: Accepted
 **Date**: 2026-05-05
-**Context**: [Issue #7 — P2] The state machine was "validation-only"; developers could bypass it by calling `setStatus()` directly.
+**Context**: The state machine was "validation-only"; developers could bypass it by calling `setStatus()` directly.
 
 ### Context
 
@@ -269,13 +271,13 @@ The existing `validate*` methods are preserved for read-only checks but the Java
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/service/state/CollabStateMachine.java` (4 new transition methods)
-- `src/main/java/com/yumu/noveltranslator/service/CollabProjectService.java` (updated `changeProjectStatus`)
-- `src/main/java/com/yumu/noveltranslator/service/ChapterTaskService.java` (updated all status transitions)
-- `src/main/java/com/yumu/noveltranslator/service/MultiAgentTranslationService.java` (updated 12+ call sites)
-- `src/test/java/com/yumu/noveltranslator/service/state/CollabStateMachineTest.java` (updated with 24 new transition tests)
-- `src/test/java/com/yumu/noveltranslator/service/MultiAgentTranslationServiceTest.java` (updated mock)
-- `src/test/java/com/yumu/noveltranslator/service/MultiAgentTranslationServiceExtendedTest.java` (updated mock)
+- `src/main/java/com/yumu/noveltranslator/domain/service/state/CollabStateMachine.java` (4 new transition methods)
+- `src/main/java/com/yumu/noveltranslator/domain/service/CollabProjectService.java` (updated `changeProjectStatus`)
+- `src/main/java/com/yumu/noveltranslator/domain/service/ChapterTaskService.java` (updated all status transitions)
+- `src/main/java/com/yumu/noveltranslator/domain/service/MultiAgentTranslationService.java` (updated 12+ call sites)
+- `src/test/java/com/yumu/noveltranslator/domain/service/state/CollabStateMachineTest.java` (updated with 24 new transition tests)
+- `src/test/java/com/yumu/noveltranslator/domain/service/MultiAgentTranslationServiceTest.java` (updated mock)
+- `src/test/java/com/yumu/noveltranslator/domain/service/MultiAgentTranslationServiceExtendedTest.java` (updated mock)
 
 ---
 
@@ -386,7 +388,11 @@ Using a dedicated short-lived connection per query was considered but rejected:
 
 ### Files Changed
 
-(to be updated after implementation)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/security/ApiKeyAuthenticationFilter.java` (Redis-backed auth lookup)
+- `src/main/java/com/yumu/noveltranslator/adapter/out/redis/ApiKeyCacheService.java` (Redis `INCR` + async flush)
+- `src/main/java/com/yumu/noveltranslator/domain/service/QuotaService.java` (async `quota_usage` logging)
+- `src/main/resources/application.yaml` (HikariCP pool size 20 → 50)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/security/JwtAuthenticationFilter.java` (updated for Redis auth)
 
 ---
 
@@ -428,7 +434,7 @@ This ensures that:
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/service/TranslationCacheService.java` (line 265-267: strip prefix before re-prefixing)
+- `src/main/java/com/yumu/noveltranslator/adapter/out/redis/TranslationCacheService.java` (lines 265-267: strip prefix before re-prefixing)
 
 ---
 
@@ -440,7 +446,7 @@ This ensures that:
 
 ### Context
 
-`TranslationIpRateLimiter` and `TranslationKeyRateLimiter` each executed 4 separate Redis operations per request:
+The IP rate limiter and per-API-key rate limiter each executed 4 separate Redis operations per request:
 1. `ZREMRANGEBYSCORE` — remove entries outside the sliding window
 2. `ZADD` — add current timestamp
 3. `EXPIRE` — set key TTL
@@ -488,9 +494,8 @@ Pipeline batching was considered but rejected:
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/security/TranslationIpRateLimiter.java` (rewritten with Lua script)
-- `src/main/java/com/yumu/noveltranslator/security/TranslationKeyRateLimiter.java` (new, per-API-key rate limiting with Lua script)
-- `src/main/java/com/yumu/noveltranslator/service/ApiKeyCacheService.java` (removed redundant `EXPIRE` from `incrementUsage`)
+- `src/main/java/com/yumu/noveltranslator/adapter/in/security/RedisSlidingWindowRateLimiter.java` (rewritten with Lua script; merged IP + key rate limiters per ADR-012)
+- `src/main/java/com/yumu/noveltranslator/adapter/out/redis/ApiKeyCacheService.java` (removed redundant `EXPIRE` from `incrementUsage`)
 
 ---
 
@@ -541,7 +546,7 @@ This means production users always get quota-checked, while load-testing and hyp
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/service/QuotaService.java` (added `UNLIMITED_QUOTA_THRESHOLD` constant and early-return bypass in `tryConsumeChars`)
+- `src/main/java/com/yumu/noveltranslator/domain/service/QuotaService.java` (added `UNLIMITED_QUOTA_THRESHOLD` constant and early-return bypass in `tryConsumeChars`)
 
 ---
 
@@ -549,7 +554,7 @@ This means production users always get quota-checked, while load-testing and hyp
 
 **Status**: Accepted
 **Date**: 2026-05-06
-**Context**: [Code Quality — P1] Traditional three-tier package structure (`controller/service/mapper`) fails to communicate architectural intent, mixes adapter logic with domain logic, and enables creeping code duplication.
+**Context**: Traditional three-tier package structure (`controller/service/mapper`) fails to communicate architectural intent, mixes adapter logic with domain logic, and enables creeping code duplication.
 
 ### Context
 
