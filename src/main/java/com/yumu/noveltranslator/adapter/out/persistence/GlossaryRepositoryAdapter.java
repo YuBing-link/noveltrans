@@ -33,7 +33,9 @@ public class GlossaryRepositoryAdapter implements GlossaryRepositoryPort {
 
     @Override
     public void saveGlossary(com.yumu.noveltranslator.domain.model.Glossary glossary) {
-        glossaryMapper.insert(GlossaryConverter.glossaryToEntity(glossary));
+        var entity = GlossaryConverter.glossaryToEntity(glossary);
+        glossaryMapper.insert(entity);
+        glossary.setId(entity.getId()); // 回填自增主键
     }
 
     @Override

@@ -82,7 +82,9 @@ public class UserMapperAdapter implements UserRepositoryPort {
 
     @Override
     public void saveTenant(com.yumu.noveltranslator.domain.model.Tenant tenant) {
-        tenantMapper.insert(UserConverter.toTenantEntity(tenant));
+        var entity = UserConverter.toTenantEntity(tenant);
+        tenantMapper.insert(entity);
+        tenant.setId(entity.getId()); // 回填自增主键
     }
 
     @Override
