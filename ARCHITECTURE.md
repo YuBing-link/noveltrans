@@ -8,7 +8,6 @@ This document describes the system architecture, component responsibilities, dat
 - [SETUP.md](SETUP.md) — Deployment guide
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Contributing guide and code style (Spotless)
 - [test-coverage-report.md](test-coverage-report.md) — Test coverage report
-- [load-test/STRESS_TEST_REPORT.md](load-test/STRESS_TEST_REPORT.md) — Performance stress test results
 
 ## Table of Contents
 
@@ -303,7 +302,7 @@ User Action (Chrome Extension / Web App)
 │    │   Glossary + placeholder protection   │     │
 │    └───────────────────────────────────────┘     │
 │    ┌───────────────────────────────────────┐     │
-│    │ L4: Direct Translation                │     │
+│    │ L4: AI Engine Call                │     │
 │    │   Python / MTranServer round-robin    │     │
 │    │   Quality validation + cache          │     │
 │    └───────────────────────────────────────┘     │
@@ -749,7 +748,7 @@ user (1) ──── (N) translation_memory
 - L1 Caffeine: Local cache, zero network latency, ideal for hot data
 - L2 Redis: Distributed cache, shared across instances, prevents inconsistency
 - L3 MySQL: Persistent storage, fallback, supports long-term caching
-- L4 RAG: Semantic similarity matching — finds translations even when source text isn't identical
+- L2 RAG: Semantic similarity matching — finds translations even when source text isn't identical
 
 ### 5. Why Unified Translation Pipeline?
 

@@ -6,7 +6,6 @@
 
 - [README.md](README.md) — Project overview and quick start
 - [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture and data flow
-- [load-test/STRESS_TEST_REPORT.md](load-test/STRESS_TEST_REPORT.md) — API performance benchmarks
 
 ---
 

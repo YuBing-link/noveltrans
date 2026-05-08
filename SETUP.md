@@ -144,7 +144,7 @@ docker compose up -d mysql redis
 ### 2. Initialize the Database
 
 ```bash
-mysql -h 127.0.0.1 -P 3307 -u root -p < src/main/resources/schema.sql
+mysql -h 127.0.0.1 -P 3307 -u root -p < src/main/resources/sql/schema.sql
 ```
 
 ### 3. Build and Start the Backend
