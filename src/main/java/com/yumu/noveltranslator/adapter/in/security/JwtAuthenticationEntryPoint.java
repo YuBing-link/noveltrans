@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.Result;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;

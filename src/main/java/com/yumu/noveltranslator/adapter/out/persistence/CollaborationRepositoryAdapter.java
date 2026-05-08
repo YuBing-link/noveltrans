@@ -13,7 +13,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapp
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
-import com.yumu.noveltranslator.dto.common.PageResult;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

@@ -1,11 +1,11 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.auth.LoginRequest;
-import com.yumu.noveltranslator.dto.auth.RegisterRequest;
-import com.yumu.noveltranslator.dto.auth.RefreshTokenRequest;
-import com.yumu.noveltranslator.dto.auth.ChangePasswordRequest;
-import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.auth.LoginRequest;
+import com.yumu.noveltranslator.port.dto.auth.RegisterRequest;
+import com.yumu.noveltranslator.port.dto.auth.RefreshTokenRequest;
+import com.yumu.noveltranslator.port.dto.auth.ChangePasswordRequest;
+import com.yumu.noveltranslator.port.dto.auth.ResetPasswordRequest;
 import com.yumu.noveltranslator.domain.model.Tenant;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;

@@ -1,17 +1,17 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
 
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.common.PageResponse;
-import com.yumu.noveltranslator.dto.entity.DocumentInfoResponse;
-import com.yumu.noveltranslator.dto.translation.DocumentTranslationRequest;
-import com.yumu.noveltranslator.dto.translation.DocumentTranslationResponse;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.entity.DocumentInfoResponse;
+import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationResponse;
 import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.port.in.CollabPort;
-import com.yumu.noveltranslator.domain.service.DocumentService;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
+import com.yumu.noveltranslator.port.in.DocumentPort;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -38,8 +38,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WebDocumentController {
 
-    private final DocumentService documentService;
-    private final TranslationTaskService translationTaskService;
+    private final DocumentPort documentPort;
+    private final TranslationTaskPort translationTaskPort;
     private final CollabPort collabPort;
 
     /**
@@ -54,9 +54,9 @@ public class WebDocumentController {
 
         Long userId = SecurityUtil.getRequiredUserId();
 
-        List<Document> documents = documentService.getUserDocuments(userId, status);
+        List<Document> documents = documentPort.getUserDocuments(userId, status);
         List<DocumentInfoResponse> responseList = documents.stream()
-                .map(documentService::toDocumentInfoResponse)
+                .map(documentPort::toDocumentInfoResponse)
                 .toList();
 
         int total = responseList.size();
@@ -78,12 +78,12 @@ public class WebDocumentController {
     public Result<DocumentInfoResponse> getDocument(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        Document doc = documentService.getDocumentById(docId, userId);
+        Document doc = documentPort.getDocumentById(docId, userId);
         if (doc == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "文档不存在");
         }
 
-        return Result.ok(documentService.toDocumentInfoResponse(doc));
+        return Result.ok(documentPort.toDocumentInfoResponse(doc));
     }
 
     /**
@@ -94,7 +94,7 @@ public class WebDocumentController {
     public Result<Void> deleteDocument(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        if (documentService.deleteDocument(docId, userId)) {
+        if (documentPort.deleteDocument(docId, userId)) {
             return Result.ok(null);
         } else {
             return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "删除失败");
@@ -109,14 +109,14 @@ public class WebDocumentController {
     public Result<Void> cancelTranslation(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        TranslationTask task = translationTaskService.getTaskByDocumentId(docId);
+        TranslationTask task = translationTaskPort.getTaskByDocumentId(docId);
         if (task == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "翻译任务不存在");
         }
         if (!task.getUserId().equals(userId)) {
             return Result.error(ErrorCodeEnum.FORBIDDEN, "无权操作");
         }
-        if (translationTaskService.cancelTask(task.getTaskId(), userId)) {
+        if (translationTaskPort.cancelTask(task.getTaskId(), userId)) {
             return Result.ok(null);
         } else {
             return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，任务可能已完成或正在处理");
@@ -131,7 +131,7 @@ public class WebDocumentController {
     public Result<Void> retryDocument(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        if (documentService.retryTranslation(docId, userId)) {
+        if (documentPort.retryTranslation(docId, userId)) {
             return Result.ok(null);
         } else {
             return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "重试失败，文档不存在");
@@ -158,7 +158,7 @@ public class WebDocumentController {
             request.setTargetLang(targetLang);
             request.setMode(mode);
 
-            Document doc = documentService.uploadDocument(userId, file, request);
+            Document doc = documentPort.uploadDocument(userId, file, request);
 
             // 团队模式：指定已有项目 or 自动创建新项目
             if ("team".equals(mode)) {
@@ -201,8 +201,8 @@ public class WebDocumentController {
             }
 
             // fast/expert 模式：创建任务后直接异步启动翻译
-            TranslationTask task = translationTaskService.createDocumentTask(userId, doc);
-            translationTaskService.startDocumentTranslation(task, doc);
+            TranslationTask task = translationTaskPort.createDocumentTask(userId, doc);
+            translationTaskPort.startDocumentTranslation(task, doc);
 
             DocumentTranslationResponse response = new DocumentTranslationResponse();
             response.setTaskId(task.getTaskId());
@@ -227,7 +227,7 @@ public class WebDocumentController {
     public ResponseEntity<byte[]> downloadDocument(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        Document doc = documentService.getDocumentById(docId, userId);
+        Document doc = documentPort.getDocumentById(docId, userId);
         if (doc == null) {
             return ResponseEntity.notFound().build();
         }

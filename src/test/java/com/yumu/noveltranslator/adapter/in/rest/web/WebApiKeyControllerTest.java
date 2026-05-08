@@ -2,7 +2,7 @@ package com.yumu.noveltranslator.adapter.in.rest.web;
 import com.yumu.noveltranslator.domain.model.User;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.ApiKey;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.ApiKeyMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;

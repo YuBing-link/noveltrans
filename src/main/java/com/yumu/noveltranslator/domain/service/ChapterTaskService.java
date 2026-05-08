@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.ChapterTaskResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.domain.model.CollabChapterTask;
 import com.yumu.noveltranslator.domain.model.CollabProject;
 import com.yumu.noveltranslator.domain.model.User;
@@ -12,7 +12,7 @@ import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
-import com.yumu.noveltranslator.dto.common.PageResult;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ChapterTaskService {
+public class ChapterTaskService implements com.yumu.noveltranslator.port.in.ChapterTaskPort {
 
     private final CollaborationRepositoryPort collabPort;
     private final UserRepositoryPort userPort;

@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.port.in;
 
 import com.yumu.noveltranslator.domain.model.ApiKey;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 
 import java.util.List;
 

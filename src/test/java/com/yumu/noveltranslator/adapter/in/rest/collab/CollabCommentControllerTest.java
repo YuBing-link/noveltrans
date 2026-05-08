@@ -2,9 +2,9 @@ package com.yumu.noveltranslator.adapter.in.rest.collab;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yumu.noveltranslator.dto.collab.CommentResponse;
-import com.yumu.noveltranslator.dto.collab.CreateCommentRequest;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.CommentResponse;
+import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.CollabCommentService;

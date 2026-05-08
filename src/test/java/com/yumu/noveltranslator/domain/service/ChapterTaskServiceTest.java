@@ -5,8 +5,8 @@ import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.ChapterTaskResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;

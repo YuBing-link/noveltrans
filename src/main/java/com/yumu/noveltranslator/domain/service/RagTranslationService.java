@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.domain.model.TranslationMemory;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
@@ -20,7 +20,7 @@ import java.util.*;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class RagTranslationService {
+public class RagTranslationService implements com.yumu.noveltranslator.port.in.RagTranslationPort {
 
     private final EmbeddingService embeddingService;
     private final TranslationMemoryService translationMemoryService;

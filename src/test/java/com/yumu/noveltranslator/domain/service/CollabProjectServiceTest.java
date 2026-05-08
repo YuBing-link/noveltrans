@@ -1,9 +1,9 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.domain.service.CollabProjectService;
 
-import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
-import com.yumu.noveltranslator.dto.common.PageResponse;
-import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
+import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;

@@ -1,14 +1,14 @@
 package com.yumu.noveltranslator.adapter.in.rest.collab;
 
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.common.PageResponse;
-import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
-import com.yumu.noveltranslator.dto.collab.AssignChapterRequest;
-import com.yumu.noveltranslator.dto.collab.SubmitChapterRequest;
-import com.yumu.noveltranslator.dto.collab.ReviewChapterRequest;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.ChapterTaskResponse;
+import com.yumu.noveltranslator.port.dto.collab.AssignChapterRequest;
+import com.yumu.noveltranslator.port.dto.collab.SubmitChapterRequest;
+import com.yumu.noveltranslator.port.dto.collab.ReviewChapterRequest;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.in.security.annotation.RequireProjectAccess;
-import com.yumu.noveltranslator.domain.service.ChapterTaskService;
+import com.yumu.noveltranslator.port.in.ChapterTaskPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,20 +27,20 @@ import java.util.List;
 @Slf4j
 public class ChapterTaskController {
 
-    private final ChapterTaskService chapterTaskService;
+    private final ChapterTaskPort chapterTaskPort;
 
     @PutMapping("/chapters/{chapterId}/assign")
     public Result<ChapterTaskResponse> assignChapter(@PathVariable Long chapterId,
                                                        @Valid @RequestBody AssignChapterRequest request) {
         Long assignerId = SecurityUtil.getRequiredUserId();
-        ChapterTaskResponse chapter = chapterTaskService.assignChapter(chapterId, request.getAssigneeId(), assignerId);
+        ChapterTaskResponse chapter = chapterTaskPort.assignChapter(chapterId, request.getAssigneeId(), assignerId);
         return Result.ok(chapter);
     }
 
     @PutMapping("/chapters/{chapterId}/submit")
     public Result<ChapterTaskResponse> submitChapter(@PathVariable Long chapterId,
                                                        @Valid @RequestBody SubmitChapterRequest request) {
-        ChapterTaskResponse chapter = chapterTaskService.submitChapter(chapterId, request.getTranslatedText());
+        ChapterTaskResponse chapter = chapterTaskPort.submitChapter(chapterId, request.getTranslatedText());
         return Result.ok(chapter);
     }
 
@@ -48,14 +48,14 @@ public class ChapterTaskController {
     public Result<ChapterTaskResponse> reviewChapter(@PathVariable Long chapterId,
                                                        @Valid @RequestBody ReviewChapterRequest request) {
         Long reviewerId = SecurityUtil.getRequiredUserId();
-        ChapterTaskResponse chapter = chapterTaskService.reviewChapter(chapterId, request.getApproved(), request.getComment(), reviewerId);
+        ChapterTaskResponse chapter = chapterTaskPort.reviewChapter(chapterId, request.getApproved(), request.getComment(), reviewerId);
         return Result.ok(chapter);
     }
 
     @GetMapping("/chapters/{chapterId}")
     public Result<ChapterTaskResponse> getChapter(@PathVariable Long chapterId) {
         Long userId = SecurityUtil.getRequiredUserId();
-        ChapterTaskResponse chapter = chapterTaskService.getChapterById(chapterId, userId);
+        ChapterTaskResponse chapter = chapterTaskPort.getChapterById(chapterId, userId);
         return Result.ok(chapter);
     }
 
@@ -64,7 +64,7 @@ public class ChapterTaskController {
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
         Long userId = SecurityUtil.getRequiredUserId();
-        PageResponse<ChapterTaskResponse> chapters = chapterTaskService.listByAssigneeId(userId, page, pageSize);
+        PageResponse<ChapterTaskResponse> chapters = chapterTaskPort.listByAssigneeId(userId, page, pageSize);
         return Result.ok(chapters);
     }
 }

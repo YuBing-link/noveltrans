@@ -5,7 +5,7 @@ import com.yumu.noveltranslator.domain.model.CollabComment;
 import com.yumu.noveltranslator.domain.model.CollabInviteCode;
 import com.yumu.noveltranslator.domain.model.CollabProject;
 import com.yumu.noveltranslator.domain.model.CollabProjectMember;
-import com.yumu.noveltranslator.dto.common.PageResult;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 
 import java.time.LocalDateTime;
 import java.util.List;

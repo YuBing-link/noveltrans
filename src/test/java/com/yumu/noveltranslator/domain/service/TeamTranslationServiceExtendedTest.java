@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 
-import com.yumu.noveltranslator.dto.translation.TeamTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.TeamTranslateResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

@@ -1,16 +1,16 @@
 package com.yumu.noveltranslator.adapter.in.rest.shared;
 
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.entity.TaskStatusResponse;
-import com.yumu.noveltranslator.dto.translation.TranslationResultResponse;
-import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
-import com.yumu.noveltranslator.dto.translation.RagTranslationRequest;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
+import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationRequest;
 import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.domain.service.DocumentService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
+import com.yumu.noveltranslator.port.in.DocumentPort;
+import com.yumu.noveltranslator.port.in.RagTranslationPort;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,9 +36,9 @@ import java.nio.file.Paths;
 @RequiredArgsConstructor
 public class SharedTranslateController {
 
-    private final TranslationTaskService translationTaskService;
-    private final DocumentService documentService;
-    private final RagTranslationService ragTranslationService;
+    private final TranslationTaskPort translationTaskPort;
+    private final DocumentPort documentPort;
+    private final RagTranslationPort ragTranslationPort;
 
     /**
      * 查询翻译任务状态
@@ -46,12 +46,12 @@ public class SharedTranslateController {
      */
     @GetMapping("/task/{taskId}")
     public Result<TaskStatusResponse> getTaskStatus(@PathVariable String taskId) {
-        TranslationTask task = translationTaskService.getTaskByTaskId(taskId);
+        TranslationTask task = translationTaskPort.getTaskByTaskId(taskId);
         if (task == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "任务不存在");
         }
 
-        return Result.ok(translationTaskService.toTaskStatusResponse(task));
+        return Result.ok(translationTaskPort.toTaskStatusResponse(task));
     }
 
     /**
@@ -63,7 +63,7 @@ public class SharedTranslateController {
     public Result cancelTask(@PathVariable String taskId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        if (translationTaskService.cancelTask(taskId, userId)) {
+        if (translationTaskPort.cancelTask(taskId, userId)) {
             return Result.ok(null);
         } else {
             return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，任务可能已完成或正在处理");
@@ -79,7 +79,7 @@ public class SharedTranslateController {
     public Result deleteHistory(@PathVariable String taskId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        if (translationTaskService.deleteHistory(taskId, userId)) {
+        if (translationTaskPort.deleteHistory(taskId, userId)) {
             return Result.ok(null);
         } else {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "记录不存在");
@@ -92,7 +92,7 @@ public class SharedTranslateController {
      */
     @GetMapping("/task/{taskId}/result")
     public Result<TranslationResultResponse> getTranslationResult(@PathVariable String taskId) {
-        TranslationResultResponse result = translationTaskService.getTranslationResult(taskId);
+        TranslationResultResponse result = translationTaskPort.getTranslationResult(taskId);
         if (result == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "任务不存在或结果不可用");
         }
@@ -109,7 +109,7 @@ public class SharedTranslateController {
     public ResponseEntity<byte[]> downloadTranslation(@PathVariable String taskId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        String filePath = translationTaskService.getDownloadPath(taskId, userId);
+        String filePath = translationTaskPort.getDownloadPath(taskId, userId);
         if (filePath == null) {
             return ResponseEntity.notFound().build();
         }
@@ -138,7 +138,7 @@ public class SharedTranslateController {
             @RequestParam(value = "sourceLang", defaultValue = "auto") String sourceLang,
             @RequestParam(value = "targetLang", defaultValue = "zh") String targetLang,
             @RequestParam(value = "mode", defaultValue = "fast") String mode) {
-        return translationTaskService.streamTranslateDocument(file, sourceLang, targetLang, mode);
+        return translationTaskPort.streamTranslateDocument(file, sourceLang, targetLang, mode);
     }
 
     /**
@@ -150,7 +150,7 @@ public class SharedTranslateController {
             @PathVariable Long docId,
             @RequestParam(value = "targetLang", defaultValue = "zh") String targetLang,
             @RequestParam(value = "mode", defaultValue = "fast") String mode) {
-        return translationTaskService.streamTranslateDocumentById(docId, targetLang, mode);
+        return translationTaskPort.streamTranslateDocumentById(docId, targetLang, mode);
     }
 
     /**
@@ -159,7 +159,7 @@ public class SharedTranslateController {
      */
     @PostMapping("/rag")
     public Result<RagTranslationResponse> queryRag(@RequestBody @Valid RagTranslationRequest request) {
-        RagTranslationResponse response = ragTranslationService.searchSimilar(
+        RagTranslationResponse response = ragTranslationPort.searchSimilar(
                 request.getText(), request.getTargetLang(), request.getEngine());
         return Result.ok(response);
     }

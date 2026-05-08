@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.rest.plugin;
 
 import com.yumu.noveltranslator.domain.model.User;
-import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.port.in.AuthPort;
 import com.yumu.noveltranslator.port.in.DeviceTokenPort;

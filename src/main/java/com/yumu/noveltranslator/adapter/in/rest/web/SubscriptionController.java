@@ -1,11 +1,11 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
 
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.subscription.PaymentVerificationResponse;
-import com.yumu.noveltranslator.dto.subscription.CheckoutSessionResponse;
-import com.yumu.noveltranslator.dto.subscription.CheckoutSessionRequest;
-import com.yumu.noveltranslator.dto.subscription.SubscriptionStatusResponse;
-import com.yumu.noveltranslator.dto.subscription.PortalSessionResponse;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.subscription.PaymentVerificationResponse;
+import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionResponse;
+import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionRequest;
+import com.yumu.noveltranslator.port.dto.subscription.SubscriptionStatusResponse;
+import com.yumu.noveltranslator.port.dto.subscription.PortalSessionResponse;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import com.yumu.noveltranslator.port.in.SubscriptionPort;
 import jakarta.validation.Valid;

@@ -8,9 +8,9 @@ import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
-import com.yumu.noveltranslator.dto.entity.TaskStatusResponse;
-import com.yumu.noveltranslator.dto.entity.TranslationHistoryResponse;
-import com.yumu.noveltranslator.dto.translation.TranslationResultResponse;
+import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
+import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;

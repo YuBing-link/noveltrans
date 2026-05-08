@@ -1,9 +1,9 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.dto.translation.SelectionTranslationRequest;
-import com.yumu.noveltranslator.dto.translation.ReaderTranslateResponse;
-import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
-import com.yumu.noveltranslator.dto.translation.SelectionTranslateResponse;
-import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
+import com.yumu.noveltranslator.port.dto.translation.SelectionTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;

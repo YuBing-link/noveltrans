@@ -1,8 +1,8 @@
 package com.yumu.noveltranslator.port.in;
 
-import com.yumu.noveltranslator.dto.common.PageResponse;
-import com.yumu.noveltranslator.dto.translation.GlossaryItemRequest;
-import com.yumu.noveltranslator.dto.translation.GlossaryResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryItemRequest;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryResponse;
 
 import java.util.List;
 

@@ -3,14 +3,14 @@ package com.yumu.noveltranslator.domain.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.dto.entity.UserStatisticsResponse;
-import com.yumu.noveltranslator.dto.entity.UserQuotaResponse;
-import com.yumu.noveltranslator.dto.entity.UserPreferencesResponse;
-import com.yumu.noveltranslator.dto.entity.UserPreferencesRequest;
-import com.yumu.noveltranslator.dto.entity.PlatformStatsResponse;
-import com.yumu.noveltranslator.dto.translation.GlossaryResponse;
-import com.yumu.noveltranslator.dto.translation.GlossaryItemRequest;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserStatisticsResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserQuotaResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserPreferencesRequest;
+import com.yumu.noveltranslator.port.dto.entity.PlatformStatsResponse;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryResponse;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryItemRequest;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.domain.model.UserPreference;
@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
-public class UserService {
+public class UserService implements com.yumu.noveltranslator.port.in.UserPort {
 
     private final UserRepositoryPort userPort;
     private final TranslationRepositoryPort translationPort;

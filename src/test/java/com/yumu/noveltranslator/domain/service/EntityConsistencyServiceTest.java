@@ -2,7 +2,7 @@ package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.port.out.EntityCachePort;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
-import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;

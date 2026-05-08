@@ -1,9 +1,9 @@
 package com.yumu.noveltranslator.adapter.in.rest.collab;
 
-import com.yumu.noveltranslator.dto.collab.InviteMemberRequest;
-import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.InviteMemberRequest;
+import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.in.security.annotation.RequireProjectAccess;
 import com.yumu.noveltranslator.port.in.CollabPort;

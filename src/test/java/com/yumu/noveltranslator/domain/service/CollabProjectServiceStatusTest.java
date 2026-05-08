@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.domain.service.CollabProjectService;
 
-import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
+import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;

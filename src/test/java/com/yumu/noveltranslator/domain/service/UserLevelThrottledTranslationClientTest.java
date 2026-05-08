@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.adapter.out.translate.ExternalTranslationService;
-import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.adapter.out.translate.TokenAwareRateLimiter;
 
 import com.alibaba.fastjson2.JSONObject;

@@ -4,7 +4,7 @@ import com.yumu.noveltranslator.domain.model.AiGlossary;
 import com.yumu.noveltranslator.domain.model.ChapterEntityMap;
 import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.domain.model.TranslationMemory;
-import com.yumu.noveltranslator.dto.common.PageResult;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 
 import java.util.List;
 import java.util.Optional;

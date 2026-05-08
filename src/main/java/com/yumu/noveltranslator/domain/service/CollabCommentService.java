@@ -1,14 +1,14 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.dto.collab.CommentResponse;
-import com.yumu.noveltranslator.dto.collab.CreateCommentRequest;
+import com.yumu.noveltranslator.port.dto.collab.CommentResponse;
+import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
 import com.yumu.noveltranslator.domain.model.CollabComment;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
-import com.yumu.noveltranslator.dto.common.PageResult;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CollabCommentService {
+public class CollabCommentService implements com.yumu.noveltranslator.port.in.CollabCommentPort {
 
     private final CollaborationRepositoryPort collabPort;
     private final UserRepositoryPort userPort;

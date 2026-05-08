@@ -1,26 +1,26 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
 
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.common.PageResponse;
-import com.yumu.noveltranslator.dto.auth.SendCodeRequest;
-import com.yumu.noveltranslator.dto.auth.LoginRequest;
-import com.yumu.noveltranslator.dto.auth.RegisterRequest;
-import com.yumu.noveltranslator.dto.auth.ChangePasswordRequest;
-import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
-import com.yumu.noveltranslator.dto.auth.RefreshTokenRequest;
-import com.yumu.noveltranslator.dto.entity.UserStatisticsResponse;
-import com.yumu.noveltranslator.dto.entity.UserQuotaResponse;
-import com.yumu.noveltranslator.dto.entity.TranslationHistoryResponse;
-import com.yumu.noveltranslator.dto.entity.UpdateUserProfileRequest;
-import com.yumu.noveltranslator.dto.entity.UserPreferencesResponse;
-import com.yumu.noveltranslator.dto.entity.UserPreferencesRequest;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.auth.SendCodeRequest;
+import com.yumu.noveltranslator.port.dto.auth.LoginRequest;
+import com.yumu.noveltranslator.port.dto.auth.RegisterRequest;
+import com.yumu.noveltranslator.port.dto.auth.ChangePasswordRequest;
+import com.yumu.noveltranslator.port.dto.auth.ResetPasswordRequest;
+import com.yumu.noveltranslator.port.dto.auth.RefreshTokenRequest;
+import com.yumu.noveltranslator.port.dto.entity.UserStatisticsResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserQuotaResponse;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
+import com.yumu.noveltranslator.port.dto.entity.UpdateUserProfileRequest;
+import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserPreferencesRequest;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter;
 import com.yumu.noveltranslator.port.in.AuthPort;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
-import com.yumu.noveltranslator.domain.service.UserService;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
+import com.yumu.noveltranslator.port.in.UserPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -39,8 +39,8 @@ import java.util.Map;
 public class WebUserController {
 
     private final AuthPort authPort;
-    private final UserService userService;
-    private final TranslationTaskService translationTaskService;
+    private final UserPort userPort;
+    private final TranslationTaskPort translationTaskPort;
     private final LoginRateLimiter loginRateLimiter;
 
     /**
@@ -119,7 +119,7 @@ public class WebUserController {
             user.setAvatar(request.getAvatar());
         }
 
-        userService.updateUser(user);
+        userPort.updateUser(user);
 
         User updatedUser = new User();
         updatedUser.setId(user.getId());
@@ -183,7 +183,7 @@ public class WebUserController {
     @GetMapping("/statistics")
     public Result<UserStatisticsResponse> getStatistics() {
         Long userId = SecurityUtil.getRequiredUserId();
-        UserStatisticsResponse statistics = userService.getUserStatistics(userId);
+        UserStatisticsResponse statistics = userPort.getUserStatistics(userId);
         return Result.ok(statistics);
     }
 
@@ -194,7 +194,7 @@ public class WebUserController {
     @GetMapping("/quota")
     public Result<UserQuotaResponse> getQuota() {
         User user = SecurityUtil.getRequiredUserDetails().getUser();
-        UserQuotaResponse quota = userService.getUserQuota(user);
+        UserQuotaResponse quota = userPort.getUserQuota(user);
         return Result.ok(quota);
     }
 
@@ -209,11 +209,11 @@ public class WebUserController {
             @RequestParam(required = false, defaultValue = "all") String type) {
 
         Long userId = SecurityUtil.getRequiredUserId();
-        var histories = translationTaskService.getTranslationHistory(userId, page, pageSize, type);
-        int total = translationTaskService.countTranslationHistory(userId);
+        var histories = translationTaskPort.getTranslationHistory(userId, page, pageSize, type);
+        int total = translationTaskPort.countTranslationHistory(userId);
 
         var responseList = histories.stream()
-                .map(translationTaskService::toHistoryResponse)
+                .map(translationTaskPort::toHistoryResponse)
                 .toList();
 
         PageResponse<TranslationHistoryResponse> response = PageResponse.of(page, pageSize, (long) total, responseList);
@@ -227,7 +227,7 @@ public class WebUserController {
     @GetMapping("/preferences")
     public Result<UserPreferencesResponse> getPreferences() {
         Long userId = SecurityUtil.getRequiredUserId();
-        UserPreferencesResponse preferences = userService.getUserPreferences(userId);
+        UserPreferencesResponse preferences = userPort.getUserPreferences(userId);
         return Result.ok(preferences);
     }
 
@@ -238,7 +238,7 @@ public class WebUserController {
     @PutMapping("/preferences")
     public Result<UserPreferencesResponse> updatePreferences(@Valid @RequestBody UserPreferencesRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        UserPreferencesResponse preferences = userService.updateUserPreferences(userId, request);
+        UserPreferencesResponse preferences = userPort.updateUserPreferences(userId, request);
         return Result.ok(preferences);
     }
 

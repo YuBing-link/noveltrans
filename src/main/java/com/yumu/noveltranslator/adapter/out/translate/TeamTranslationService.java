@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.adapter.out.translate;
 
-import com.yumu.noveltranslator.dto.translation.TeamTranslateRequest;
-import com.yumu.noveltranslator.dto.translation.TeamTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.TeamTranslateRequest;
+import com.yumu.noveltranslator.port.dto.translation.TeamTranslateResponse;
 import com.yumu.noveltranslator.domain.model.Glossary;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;

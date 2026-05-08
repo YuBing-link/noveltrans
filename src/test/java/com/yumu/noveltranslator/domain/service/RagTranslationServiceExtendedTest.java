@@ -4,7 +4,7 @@ import com.yumu.noveltranslator.domain.service.EmbeddingService;
 import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
 
-import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.out.VectorStorePort;

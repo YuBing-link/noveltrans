@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.service;
 
 import com.yumu.noveltranslator.domain.model.ApiKey;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.port.in.ApiKeyPort;
 import com.yumu.noveltranslator.port.out.ApiKeyCachePort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;

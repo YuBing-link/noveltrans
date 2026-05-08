@@ -1,8 +1,8 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.dto.translation.TranslationResultResponse;
-import com.yumu.noveltranslator.dto.entity.TaskStatusResponse;
-import com.yumu.noveltranslator.dto.entity.TranslationHistoryResponse;
+import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
+import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.domain.model.TranslationHistory;
@@ -44,7 +44,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public class TranslationTaskService {
+public class TranslationTaskService implements com.yumu.noveltranslator.port.in.TranslationTaskPort {
     private static final Logger log = LoggerFactory.getLogger(TranslationTaskService.class);
 
     private final TranslationRepositoryPort translationPort;

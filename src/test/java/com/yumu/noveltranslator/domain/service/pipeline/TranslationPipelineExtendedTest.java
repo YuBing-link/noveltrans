@@ -1,9 +1,9 @@
 package com.yumu.noveltranslator.domain.service.pipeline;
 import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 
-import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
-import com.yumu.noveltranslator.dto.translation.EntityMapping;
-import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.port.dto.translation.EntityMapping;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
@@ -572,7 +572,7 @@ class TranslationPipelineExtendedTest {
             stubTranslateEntities(Map.of("World", "世界"));
 
             // Build a real EntityMappingContext
-            com.yumu.noveltranslator.dto.translation.EntityMapping mapping = com.yumu.noveltranslator.dto.translation.EntityMapping.builder()
+            com.yumu.noveltranslator.port.dto.translation.EntityMapping mapping = com.yumu.noveltranslator.port.dto.translation.EntityMapping.builder()
                     .sourceText("World").translatedText("世界").placeholder("__ENTITY_0__").index(0).build();
             var context = new EntityConsistencyService.EntityMappingContext(
                     List.of(mapping),

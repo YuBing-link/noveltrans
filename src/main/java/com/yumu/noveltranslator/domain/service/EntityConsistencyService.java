@@ -2,10 +2,10 @@ package com.yumu.noveltranslator.domain.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.yumu.noveltranslator.dto.translation.EntityExtractionResponse;
-import com.yumu.noveltranslator.dto.translation.EntityTranslationResponse;
-import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
-import com.yumu.noveltranslator.dto.translation.EntityMapping;
+import com.yumu.noveltranslator.port.dto.translation.EntityExtractionResponse;
+import com.yumu.noveltranslator.port.dto.translation.EntityTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.port.dto.translation.EntityMapping;
 import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.domain.model.UserPreference;
 import com.yumu.noveltranslator.port.out.EntityCachePort;

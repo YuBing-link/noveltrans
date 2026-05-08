@@ -3,7 +3,7 @@ import com.yumu.noveltranslator.adapter.in.webhook.StripeWebhookController;
 
 import com.stripe.model.Event;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.properties.StripeProperties;

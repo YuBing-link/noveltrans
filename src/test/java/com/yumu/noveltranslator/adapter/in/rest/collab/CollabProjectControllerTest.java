@@ -1,15 +1,15 @@
 package com.yumu.noveltranslator.adapter.in.rest.collab;
-import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
-import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
+import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yumu.noveltranslator.dto.common.*;
-import com.yumu.noveltranslator.dto.collab.*;
-import com.yumu.noveltranslator.dto.entity.*;
-import com.yumu.noveltranslator.dto.translation.*;
-import com.yumu.noveltranslator.dto.subscription.*;
-import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.port.dto.common.*;
+import com.yumu.noveltranslator.port.dto.collab.*;
+import com.yumu.noveltranslator.port.dto.entity.*;
+import com.yumu.noveltranslator.port.dto.translation.*;
+import com.yumu.noveltranslator.port.dto.subscription.*;
+import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.CollabProjectService;

@@ -3,8 +3,8 @@ import com.yumu.noveltranslator.port.out.EntityCachePort;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
 import com.alibaba.fastjson2.JSON;
-import com.yumu.noveltranslator.dto.translation.ConsistencyTranslationResult;
-import com.yumu.noveltranslator.dto.translation.EntityMapping;
+import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.port.dto.translation.EntityMapping;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;

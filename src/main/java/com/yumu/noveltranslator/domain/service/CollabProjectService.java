@@ -1,11 +1,11 @@
 package com.yumu.noveltranslator.domain.service;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
-import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
-import com.yumu.noveltranslator.dto.collab.InviteMemberRequest;
-import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
+import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
+import com.yumu.noveltranslator.port.dto.collab.InviteMemberRequest;
+import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.domain.model.CollabChapterTask;
 import com.yumu.noveltranslator.domain.model.CollabInviteCode;

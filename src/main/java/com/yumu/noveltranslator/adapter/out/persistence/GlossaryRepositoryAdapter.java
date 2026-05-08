@@ -13,7 +13,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.mapper.AiGlossaryMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.ChapterEntityMapMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationMemoryMapper;
-import com.yumu.noveltranslator.dto.common.PageResult;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

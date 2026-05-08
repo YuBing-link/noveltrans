@@ -1,15 +1,14 @@
 package com.yumu.noveltranslator.adapter.in.rest.external;
 
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.translation.ExternalTranslateResponse;
-import com.yumu.noveltranslator.dto.translation.ExternalTranslateRequest;
-import com.yumu.noveltranslator.dto.translation.SelectionTranslationRequest;
-import com.yumu.noveltranslator.dto.translation.ExternalBatchTranslateRequest;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.translation.ExternalTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.ExternalTranslateRequest;
+import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.ExternalBatchTranslateRequest;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.domain.service.DocumentService;
-import com.yumu.noveltranslator.domain.service.QuotaService;
+import com.yumu.noveltranslator.port.in.DocumentPort;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.port.in.TranslatePort;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -41,9 +40,8 @@ import java.util.Map;
 public class ExternalTranslateController {
 
     private final TranslatePort translatePort;
-    private final DocumentService documentService;
-    private final TranslationTaskService translationTaskService;
-    private final QuotaService quotaService;
+    private final DocumentPort documentPort;
+    private final TranslationTaskPort translationTaskPort;
 
     @Value("${translation.external.max-chars:5000}")
     private int maxCharsPerRequest;
@@ -170,7 +168,7 @@ public class ExternalTranslateController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String filePath = translationTaskService.getDownloadPath(taskId, userId);
+        String filePath = translationTaskPort.getDownloadPath(taskId, userId);
         if (filePath == null) {
             return ResponseEntity.notFound().build();
         }

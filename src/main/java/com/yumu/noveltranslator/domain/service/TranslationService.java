@@ -1,11 +1,11 @@
 package com.yumu.noveltranslator.domain.service;
 
 import com.alibaba.fastjson2.JSON;
-import com.yumu.noveltranslator.dto.translation.SelectionTranslateResponse;
-import com.yumu.noveltranslator.dto.translation.ReaderTranslateResponse;
-import com.yumu.noveltranslator.dto.translation.SelectionTranslationRequest;
-import com.yumu.noveltranslator.dto.translation.ReaderTranslateRequest;
-import com.yumu.noveltranslator.dto.translation.WebpageTranslateRequest;
+import com.yumu.noveltranslator.port.dto.translation.SelectionTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
+import com.yumu.noveltranslator.port.dto.translation.WebpageTranslateRequest;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.TranslationPipeline;

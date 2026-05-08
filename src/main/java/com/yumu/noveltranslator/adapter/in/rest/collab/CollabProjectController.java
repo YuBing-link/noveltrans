@@ -1,15 +1,15 @@
 package com.yumu.noveltranslator.adapter.in.rest.collab;
 
-import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
-import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
-import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
-import com.yumu.noveltranslator.dto.collab.AssignChapterRequest;
-import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
+import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
+import com.yumu.noveltranslator.port.dto.collab.ChapterTaskResponse;
+import com.yumu.noveltranslator.port.dto.collab.AssignChapterRequest;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.in.security.annotation.RequireProjectAccess;
-import com.yumu.noveltranslator.domain.service.ChapterTaskService;
+import com.yumu.noveltranslator.port.in.ChapterTaskPort;
 import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.SecurityUtil;
@@ -32,7 +32,7 @@ import java.util.List;
 public class CollabProjectController {
 
     private final CollabPort collabPort;
-    private final ChapterTaskService chapterTaskService;
+    private final ChapterTaskPort chapterTaskPort;
     private final SseEmitterUtil sseEmitterUtil;
 
     // ==================== 项目管理 ====================
@@ -104,7 +104,7 @@ public class CollabProjectController {
                                                       @RequestParam(required = false) String title,
                                                       @RequestParam(required = false) String sourceText) {
         Long userId = SecurityUtil.getRequiredUserId();
-        ChapterTaskResponse chapter = chapterTaskService.createChapter(projectId, chapterNumber, title, sourceText, userId);
+        ChapterTaskResponse chapter = chapterTaskPort.createChapter(projectId, chapterNumber, title, sourceText, userId);
         return Result.ok(chapter);
     }
 
@@ -114,7 +114,7 @@ public class CollabProjectController {
             @PathVariable Long projectId,
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
-        PageResponse<ChapterTaskResponse> chapters = chapterTaskService.listByProjectId(projectId, page, pageSize);
+        PageResponse<ChapterTaskResponse> chapters = chapterTaskPort.listByProjectId(projectId, page, pageSize);
         return Result.ok(chapters);
     }
 

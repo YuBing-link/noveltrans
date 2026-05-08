@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
-import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
 
 import com.github.benmanes.caffeine.cache.Cache;

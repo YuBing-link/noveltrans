@@ -1,15 +1,15 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
-import com.yumu.noveltranslator.dto.translation.GlossaryItemRequest;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryItemRequest;
 import com.yumu.noveltranslator.domain.model.User;
-import com.yumu.noveltranslator.dto.translation.GlossaryResponse;
-import com.yumu.noveltranslator.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
 
-import com.yumu.noveltranslator.dto.common.*;
-import com.yumu.noveltranslator.dto.collab.*;
-import com.yumu.noveltranslator.dto.entity.*;
-import com.yumu.noveltranslator.dto.translation.*;
-import com.yumu.noveltranslator.dto.subscription.*;
-import com.yumu.noveltranslator.dto.auth.*;
+import com.yumu.noveltranslator.port.dto.common.*;
+import com.yumu.noveltranslator.port.dto.collab.*;
+import com.yumu.noveltranslator.port.dto.entity.*;
+import com.yumu.noveltranslator.port.dto.translation.*;
+import com.yumu.noveltranslator.port.dto.subscription.*;
+import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
