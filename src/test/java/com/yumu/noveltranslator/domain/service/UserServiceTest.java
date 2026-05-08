@@ -6,7 +6,7 @@ import com.yumu.noveltranslator.port.dto.translation.GlossaryResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesRequest;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
-import com.yumu.noveltranslator.domain.service.UserService;
+import com.yumu.noveltranslator.application.service.UserApplicationService;
 
 import com.yumu.noveltranslator.port.dto.common.*;
 import com.yumu.noveltranslator.port.dto.collab.*;
@@ -50,8 +50,8 @@ class UserServiceTest {
     @Mock private TranslationLimitProperties limitProperties;
     @Mock private QuotaService quotaService;
 
-    private UserService createUserService() {
-        return new UserService(userPort, translationPort, glossaryPort, limitProperties, quotaService);
+    private UserApplicationService createUserService() {
+        return new UserApplicationService(userPort, translationPort, glossaryPort, limitProperties, quotaService);
     }
 
     @Nested

@@ -1,6 +1,6 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 import com.yumu.noveltranslator.exception.BusinessException;
-import com.yumu.noveltranslator.domain.service.ChapterTaskService;
+import com.yumu.noveltranslator.application.service.ChapterTaskApplicationService;
 import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -49,11 +49,11 @@ class ChapterTaskServiceTest {
     @Mock
     private CollabEventPublisher collabEventPublisher;
 
-    private ChapterTaskService chapterTaskService;
+    private ChapterTaskApplicationService chapterTaskService;
 
     @BeforeEach
     void setUp() {
-        chapterTaskService = new ChapterTaskService(
+        chapterTaskService = new ChapterTaskApplicationService(
                 collabPort, userPort, collabStateMachine, collabEventPublisher);
     }
 

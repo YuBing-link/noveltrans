@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
 import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
@@ -14,6 +14,11 @@ import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.port.out.TranslationClientPort;
+import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
+import com.yumu.noveltranslator.domain.service.TranslationPipeline;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
+import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
@@ -44,8 +49,8 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public class TranslationTaskService implements com.yumu.noveltranslator.port.in.TranslationTaskPort {
-    private static final Logger log = LoggerFactory.getLogger(TranslationTaskService.class);
+public class TranslationTaskApplicationService implements com.yumu.noveltranslator.port.in.TranslationTaskPort {
+    private static final Logger log = LoggerFactory.getLogger(TranslationTaskApplicationService.class);
 
     private final TranslationRepositoryPort translationPort;
     private final DocumentRepositoryPort documentPort;
@@ -53,7 +58,7 @@ public class TranslationTaskService implements com.yumu.noveltranslator.port.in.
     private final TranslationStateMachine stateMachine;
     private final TranslationClientPort translationClientPort;
     private final TranslationCachePort cachePort;
-    private final RagTranslationService ragTranslationService;
+    private final RagTranslationApplicationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
     private final TranslationPostProcessingService postProcessingService;
 
@@ -870,8 +875,8 @@ public class TranslationTaskService implements com.yumu.noveltranslator.port.in.
      */
     @PreDestroy
     public void shutdown() {
-        log.info("TranslationTaskService 关闭中，等待异步翻译任务完成...");
+        log.info("TranslationTaskApplicationService 关闭中，等待异步翻译任务完成...");
         // 虚拟线程由 JVM 自动管理，无需显式关闭
-        log.info("TranslationTaskService 已关闭");
+        log.info("TranslationTaskApplicationService 已关闭");
     }
 }

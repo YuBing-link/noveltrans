@@ -7,7 +7,7 @@ import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.CollabCommentService;
+import com.yumu.noveltranslator.application.service.CollabCommentApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +38,7 @@ class CollabCommentControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @org.mockito.Mock
-    private CollabCommentService collabCommentService;
+    private CollabCommentApplicationService collabCommentService;
 
     private CollabCommentController controller;
 

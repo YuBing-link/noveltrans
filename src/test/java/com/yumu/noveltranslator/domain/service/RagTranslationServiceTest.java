@@ -1,9 +1,9 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.domain.service.EmbeddingService;
 import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.model.User;
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.*;
 class RagTranslationServiceTest {
 
     @Mock
-    private EmbeddingService embeddingService;
+    private EmbeddingPort embeddingPort;
 
     @Mock
     private TranslationMemoryService translationMemoryService;
@@ -43,11 +43,11 @@ class RagTranslationServiceTest {
     @Mock
     private VectorStorePort vectorStorePort;
 
-    private RagTranslationService service;
+    private RagTranslationApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new RagTranslationService(embeddingService, translationMemoryService, vectorStorePort);
+        service = new RagTranslationApplicationService(embeddingPort, translationMemoryService, vectorStorePort);
         ReflectionTestUtils.setField(service, "directHitThreshold", 0.85);
         ReflectionTestUtils.setField(service, "referenceThreshold", 0.5);
         ReflectionTestUtils.setField(service, "knnTopK", 5);
@@ -127,7 +127,7 @@ class RagTranslationServiceTest {
         @Test
         void 向量为空返回空响应() {
             setAuthenticatedUser(1L);
-            when(embeddingService.embed(anyString())).thenReturn(new float[0]);
+            when(embeddingPort.embed(anyString())).thenReturn(new float[0]);
 
             RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
             assertFalse(response.isDirectHit());
@@ -137,7 +137,7 @@ class RagTranslationServiceTest {
         @Test
         void 异常处理返回空响应() {
             setAuthenticatedUser(1L);
-            when(embeddingService.embed(anyString())).thenThrow(new RuntimeException("embedding failed"));
+            when(embeddingPort.embed(anyString())).thenThrow(new RuntimeException("embedding failed"));
 
             RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
             assertFalse(response.isDirectHit());
@@ -153,7 +153,7 @@ class RagTranslationServiceTest {
         void 直接命中相似度超过阈值() {
             setAuthenticatedUser(1L);
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
-            when(embeddingService.embed("Hello world")).thenReturn(vec);
+            when(embeddingPort.embed("Hello world")).thenReturn(vec);
 
             // score = 0.1 means similarity = 1 - 0.1 = 0.9 >= 0.85 direct hit
             List<Map<String, String>> searchResult = buildVectorSearchResult(1,
@@ -173,7 +173,7 @@ class RagTranslationServiceTest {
         void 参考匹配相似度在参考阈值以上但未达直接命中() {
             setAuthenticatedUser(1L);
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
-            when(embeddingService.embed("Hello world")).thenReturn(vec);
+            when(embeddingPort.embed("Hello world")).thenReturn(vec);
 
             // score = 0.4 means similarity = 1 - 0.4 = 0.6, 0.5 <= 0.6 < 0.85
             List<Map<String, String>> searchResult = buildVectorSearchResult(1,
@@ -198,7 +198,7 @@ class RagTranslationServiceTest {
         void Redis和MySQL均无匹配返回空响应() {
             setAuthenticatedUser(1L);
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
-            when(embeddingService.embed("Hello world")).thenReturn(vec);
+            when(embeddingPort.embed("Hello world")).thenReturn(vec);
             mockVectorSearch(Collections.emptyList());
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
@@ -261,7 +261,7 @@ class RagTranslationServiceTest {
         @Test
         void 质量通过则存储() {
             setAuthenticatedUser(1L);
-            when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
+            when(embeddingPort.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 

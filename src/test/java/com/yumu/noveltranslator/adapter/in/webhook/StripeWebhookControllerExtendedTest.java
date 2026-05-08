@@ -3,10 +3,10 @@ import com.yumu.noveltranslator.adapter.in.webhook.StripeWebhookController;
 
 import com.stripe.model.Event;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.StripeProperties;
-import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
+import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,16 +34,16 @@ import static org.mockito.Mockito.*;
 class StripeWebhookControllerExtendedTest {
 
     private StripeWebhookController controller;
-    private SubscriptionService subscriptionService;
+    private SubscriptionApplicationService subscriptionService;
     private StripeProperties stripeProperties;
-    private UserMapper userMapper;
+    private UserRepositoryPort userRepositoryPort;
 
     @BeforeEach
     void setUp() {
         subscriptionService = mock(SubscriptionService.class);
         stripeProperties = mock(StripeProperties.class);
-        userMapper = mock(UserMapper.class);
-        controller = new StripeWebhookController(subscriptionService, stripeProperties, userMapper);
+        userRepositoryPort = mock(UserRepositoryPort.class);
+        controller = new StripeWebhookController(subscriptionService, stripeProperties, userRepositoryPort);
     }
 
     @AfterEach
@@ -70,7 +70,7 @@ class StripeWebhookControllerExtendedTest {
 
             String result = controller.processEvent(event);
 
-            verify(userMapper).selectById(42L);
+            verify(userRepositoryPort).findById(42L);
         }
 
         @Test
@@ -86,7 +86,7 @@ class StripeWebhookControllerExtendedTest {
 
             controller.processEvent(event);
 
-            verify(userMapper).selectById(99L);
+            verify(userRepositoryPort).findById(99L);
         }
 
         @Test
@@ -102,7 +102,7 @@ class StripeWebhookControllerExtendedTest {
 
             controller.processEvent(event);
 
-            verify(userMapper, never()).selectById(any());
+            verify(userRepositoryPort, never()).findById(any());
         }
 
         @Test
@@ -195,11 +195,11 @@ class StripeWebhookControllerExtendedTest {
             User userWithoutTenant = new User();
             userWithoutTenant.setId(42L);
             userWithoutTenant.setTenantId(null);
-            when(userMapper.selectById(42L)).thenReturn(userWithoutTenant);
+            when(userRepositoryPort.findById(42L)).thenReturn(java.util.Optional.of(userWithoutTenant));
 
             controller.processEvent(event);
 
-            verify(userMapper).selectById(42L);
+            verify(userRepositoryPort).findById(42L);
             // TenantContext should remain unset or cleared
             assert TenantContext.getTenantId() == null;
         }
@@ -215,11 +215,11 @@ class StripeWebhookControllerExtendedTest {
             when(mockDataDeserializer.getObject()).thenReturn(java.util.Optional.of(mockSession));
             when(event.getDataObjectDeserializer()).thenReturn(mockDataDeserializer);
 
-            when(userMapper.selectById(42L)).thenReturn(null);
+            when(userRepositoryPort.findById(42L)).thenReturn(java.util.Optional.empty());
 
             controller.processEvent(event);
 
-            verify(userMapper).selectById(42L);
+            verify(userRepositoryPort).findById(42L);
             assert TenantContext.getTenantId() == null;
         }
     }

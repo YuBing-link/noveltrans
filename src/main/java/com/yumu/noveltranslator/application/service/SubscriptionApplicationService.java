@@ -1,12 +1,6 @@
-package com.yumu.noveltranslator.adapter.out.stripe;
+package com.yumu.noveltranslator.application.service;
 
-import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
-import com.stripe.model.Subscription;
-import com.stripe.model.checkout.Session;
-import com.stripe.param.checkout.SessionCreateParams;
-import com.stripe.param.CustomerCreateParams;
-import com.stripe.param.SubscriptionUpdateParams;
 import com.yumu.noveltranslator.domain.model.StripeCustomer;
 import com.yumu.noveltranslator.domain.model.StripeSubscription;
 import com.yumu.noveltranslator.domain.model.User;
@@ -20,10 +14,13 @@ import com.yumu.noveltranslator.port.dto.subscription.PortalSessionResponse;
 import com.yumu.noveltranslator.port.dto.subscription.SubscriptionStatusResponse;
 import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
 import com.yumu.noveltranslator.port.out.PaymentPort;
+import com.yumu.noveltranslator.port.out.TokenRevocationPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.out.payment.CustomerInfo;
+import com.yumu.noveltranslator.port.out.payment.PaymentSessionInfo;
+import com.yumu.noveltranslator.port.out.payment.SubscriptionInfo;
+import com.yumu.noveltranslator.port.out.payment.SubscriptionUpdateRequest;
 import com.yumu.noveltranslator.properties.StripeProperties;
-import com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService;
-import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -41,41 +38,36 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Stripe 订阅支付核心业务逻辑
+ * 订阅应用服务
  *
- * <p>事务边界原则：Stripe HTTP 调用在事务外执行，DB 操作通过 TransactionTemplate 编程式事务执行。
- * 使用编程式事务而非 @Transactional 是因为同类方法调用不会经过 Spring AOP 代理，
- * 注解式事务在 self-invocation 下会完全失效。
+ * <p>事务边界原则：Stripe HTTP 调用在事务外执行（通过 PaymentPort），DB 操作通过 TransactionTemplate 编程式事务执行。
  */
 @Slf4j
 @Service
-public class SubscriptionService implements com.yumu.noveltranslator.port.in.SubscriptionPort {
+public class SubscriptionApplicationService implements com.yumu.noveltranslator.port.in.SubscriptionPort {
 
     private final StripeProperties stripeProperties;
     private final BillingRepositoryPort billingPort;
     private final UserRepositoryPort userRepositoryPort;
     private final StringRedisTemplate stringRedisTemplate;
-    private final TokenBlacklistService tokenBlacklistService;
-    private final JwtAuthCacheService jwtAuthCacheService;
+    private final TokenRevocationPort tokenRevocationPort;
     private final PaymentPort paymentPort;
     private final PlatformTransactionManager transactionManager;
 
     private final TransactionTemplate tx;
 
-    public SubscriptionService(StripeProperties stripeProperties,
+    public SubscriptionApplicationService(StripeProperties stripeProperties,
                                BillingRepositoryPort billingPort,
                                UserRepositoryPort userRepositoryPort,
                                StringRedisTemplate stringRedisTemplate,
-                               TokenBlacklistService tokenBlacklistService,
-                               JwtAuthCacheService jwtAuthCacheService,
+                               TokenRevocationPort tokenRevocationPort,
                                PaymentPort paymentPort,
                                PlatformTransactionManager transactionManager) {
         this.stripeProperties = stripeProperties;
         this.billingPort = billingPort;
         this.userRepositoryPort = userRepositoryPort;
         this.stringRedisTemplate = stringRedisTemplate;
-        this.tokenBlacklistService = tokenBlacklistService;
-        this.jwtAuthCacheService = jwtAuthCacheService;
+        this.tokenRevocationPort = tokenRevocationPort;
         this.paymentPort = paymentPort;
         this.transactionManager = transactionManager;
 
@@ -100,22 +92,22 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         try {
-            Session session = Session.retrieve(sessionId);
+            PaymentSessionInfo session = paymentPort.retrieveCheckoutSession(sessionId);
 
-            String metadataUserId = Optional.ofNullable(session.getMetadata())
+            String metadataUserId = Optional.ofNullable(session.metadata())
                 .map(m -> m.get("userId"))
                 .orElse(null);
             if (metadataUserId == null || !metadataUserId.equals(String.valueOf(userId))) {
                 return new PaymentVerificationResponse(false, sessionId, null, null, "支付会话不属于当前用户");
             }
 
-            String paymentStatus = session.getPaymentStatus();
-            String plan = Optional.ofNullable(session.getMetadata())
+            String paymentStatus = session.paymentStatus();
+            String plan = Optional.ofNullable(session.metadata())
                 .map(m -> m.get("plan"))
                 .orElse(null);
 
             if ("paid".equals(paymentStatus)) {
-                StripeSubscription sub = Optional.ofNullable(session.getSubscription())
+                StripeSubscription sub = Optional.ofNullable(session.subscriptionId())
                     .map(billingPort::findSubscriptionByStripeId)
                     .orElse(null);
 
@@ -130,7 +122,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             }
 
             return new PaymentVerificationResponse(false, sessionId, plan, paymentStatus, "支付状态: " + paymentStatus);
-        } catch (StripeException e) {
+        } catch (Exception e) {
             log.error("Failed to verify checkout session {}: {}", sessionId, e.getMessage(), e);
             return new PaymentVerificationResponse(false, sessionId, null, null, "无法验证支付状态");
         }
@@ -155,25 +147,11 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         // 3. 无活跃订阅 → 创建新 Checkout Session
         try {
-            SessionCreateParams params = SessionCreateParams.builder()
-                .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
-                .setCustomer(customer.getStripeCustomerId())
-                .addLineItem(
-                    SessionCreateParams.LineItem.builder()
-                        .setPrice(priceId)
-                        .setQuantity(1L)
-                        .build()
-                )
-                .putMetadata("userId", String.valueOf(userId))
-                .putMetadata("plan", plan.getValue())
-                .putMetadata("billingCycle", billingCycle.getValue())
-                .setSuccessUrl(stripeProperties.getSuccessUrl())
-                .setCancelUrl(stripeProperties.getCancelUrl())
-                .build();
-
-            Session session = Session.create(params);
-            return new CheckoutSessionResponse(session.getUrl());
-        } catch (StripeException e) {
+            String url = paymentPort.createCheckoutSession(
+                customer.getStripeCustomerId(), priceId,
+                stripeProperties.getSuccessUrl(), stripeProperties.getCancelUrl());
+            return new CheckoutSessionResponse(url);
+        } catch (Exception e) {
             log.error("Failed to create Stripe Checkout Session for user {}: {}", userId, e.getMessage(), e);
             throw new RuntimeException("创建支付会话失败", e);
         }
@@ -188,34 +166,21 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
                                                          SubscriptionPlan newPlan,
                                                          BillingCycle billingCycle) {
         // Stripe HTTP 调用在事务外
-        Subscription updated;
+        SubscriptionUpdateRequest request = new SubscriptionUpdateRequest(
+            existingSub.getStripeSubscriptionId(), newPriceId, null);
+
+        SubscriptionInfo updated;
         try {
-            Subscription stripeSub = Subscription.retrieve(existingSub.getStripeSubscriptionId());
+            // Retrieve to get the item ID
+            SubscriptionInfo subInfo = paymentPort.retrieveSubscription(existingSub.getStripeSubscriptionId());
+            String oldItemId = subInfo.firstItemId();
+            if (oldItemId == null) {
+                throw new IllegalStateException("Subscription " + existingSub.getStripeSubscriptionId() + " has no items");
+            }
 
-            String oldItemId = Optional.ofNullable(stripeSub.getItems())
-                .map(items -> items.getData())
-                .filter(list -> !list.isEmpty())
-                .map(list -> list.get(0).getId())
-                .orElseThrow(() -> new IllegalStateException("Subscription " + stripeSub.getId() + " has no items"));
-
-            SubscriptionUpdateParams.Item removeItem = SubscriptionUpdateParams.Item.builder()
-                .setId(oldItemId)
-                .setDeleted(true)
-                .build();
-
-            SubscriptionUpdateParams.Item newItem = SubscriptionUpdateParams.Item.builder()
-                .setPrice(newPriceId)
-                .setQuantity(1L)
-                .build();
-
-            SubscriptionUpdateParams updateParams = SubscriptionUpdateParams.builder()
-                .addItem(removeItem)
-                .addItem(newItem)
-                .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE)
-                .build();
-
-            updated = stripeSub.update(updateParams);
-        } catch (StripeException e) {
+            updated = paymentPort.updateSubscription(existingSub.getStripeSubscriptionId(),
+                new SubscriptionUpdateRequest(oldItemId, newPriceId, null));
+        } catch (Exception e) {
             log.error("Failed to upgrade subscription for user {}: {}", userId, e.getMessage(), e);
             throw new RuntimeException("升级订阅失败", e);
         }
@@ -260,12 +225,9 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         // Stripe HTTP 调用在事务外
         try {
-            Subscription stripeSub = Subscription.retrieve(sub.getStripeSubscriptionId());
-            SubscriptionUpdateParams updateParams = SubscriptionUpdateParams.builder()
-                .setCancelAtPeriodEnd(true)
-                .build();
-            stripeSub.update(updateParams);
-        } catch (StripeException e) {
+            paymentPort.updateSubscription(sub.getStripeSubscriptionId(),
+                new SubscriptionUpdateRequest(null, null, true));
+        } catch (Exception e) {
             log.error("Failed to cancel Stripe subscription {}: {}", sub.getStripeSubscriptionId(), e.getMessage(), e);
             throw new RuntimeException("取消订阅失败", e);
         }
@@ -290,42 +252,39 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
     // ==================== Webhook 事件处理 ====================
 
-    /**
-     * 处理 checkout.session.completed 事件
-     */
     public void handleCheckoutSessionCompleted(Event event) {
-        Session session = deserializeSession(event, "checkout.session.completed");
+        SessionInfo session = deserializeSessionInfo(event, "checkout.session.completed");
         if (session == null) {
             throw new IllegalStateException("Failed to deserialize checkout.session.completed event: " + event.getId());
         }
 
-        Map<String, String> metadata = session.getMetadata();
+        Map<String, String> metadata = session.metadata();
         String userIdStr = metadata != null ? metadata.get("userId") : null;
         String planStr = metadata != null ? metadata.get("plan") : null;
         String billingCycleStr = metadata != null ? metadata.get("billingCycle") : null;
 
         if (userIdStr == null || planStr == null) {
-            throw new IllegalStateException("Missing required metadata in session " + session.getId() + ": userId=" + userIdStr + ", plan=" + planStr);
+            throw new IllegalStateException("Missing required metadata in session " + session.id() + ": userId=" + userIdStr + ", plan=" + planStr);
         }
 
         Long userId = Long.parseLong(userIdStr);
         SubscriptionPlan plan = validatePlan(planStr);
         BillingCycle billingCycle = BillingCycle.fromValue(billingCycleStr != null ? billingCycleStr : "monthly");
 
-        String subscriptionId = session.getSubscription();
+        String subscriptionId = session.subscriptionId();
         if (subscriptionId == null) {
-            throw new IllegalStateException("No subscription in session " + session.getId());
+            throw new IllegalStateException("No subscription in session " + session.id());
         }
 
         // Stripe HTTP 调用在事务外
-        Subscription stripeSub;
+        SubscriptionInfo stripeSub;
         StripeCustomer customer;
         try {
-            stripeSub = Subscription.retrieve(subscriptionId);
+            stripeSub = paymentPort.retrieveSubscription(subscriptionId);
             customer = getOrCreateCustomer(userId);
-        } catch (StripeException e) {
-            log.error("checkout.session.completed: Stripe API error for session {}: {}", session.getId(), e.getMessage(), e);
-            throw new RuntimeException("Stripe API call failed for session " + session.getId(), e);
+        } catch (Exception e) {
+            log.error("checkout.session.completed: Stripe API error for session {}: {}", session.id(), e.getMessage(), e);
+            throw new RuntimeException("Stripe API call failed for session " + session.id(), e);
         }
 
         // DB 操作在编程式事务内
@@ -335,17 +294,13 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         });
     }
 
-    /**
-     * 处理 customer.subscription.updated 事件
-     * 多 DB 操作在编程式事务内保证原子性
-     */
     public void handleSubscriptionUpdated(Event event) {
-        Subscription stripeSub = deserializeStripeObject(event, Subscription.class, "subscription.updated");
+        SubscriptionInfo stripeSub = deserializeSubscriptionInfo(event, "subscription.updated");
         if (stripeSub == null) {
             throw new IllegalStateException("Failed to deserialize subscription.updated event: " + event.getId());
         }
 
-        String subscriptionId = stripeSub.getId();
+        String subscriptionId = stripeSub.id();
         StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         if (subRecord == null) {
@@ -355,7 +310,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         tx.execute(status -> {
             long eventCreated = event.getCreated();
-            int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), stripeSub.getStatus(), eventCreated);
+            int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), stripeSub.status(), eventCreated);
 
             if (rows == 0) {
                 log.info("subscription.updated: already processed event {}, skipping", event.getId());
@@ -363,29 +318,26 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             }
 
             // 更新时间字段
-            LocalDateTime newPeriodStart = toLocalDateTime(stripeSub.getCurrentPeriodStart());
-            LocalDateTime newPeriodEnd = toLocalDateTime(stripeSub.getCurrentPeriodEnd());
-            LocalDateTime newCanceledAt = toLocalDateTime(stripeSub.getCanceledAt());
+            LocalDateTime newPeriodStart = toLocalDateTime(stripeSub.currentPeriodStart());
+            LocalDateTime newPeriodEnd = toLocalDateTime(stripeSub.currentPeriodEnd());
+            LocalDateTime newCanceledAt = toLocalDateTime(stripeSub.canceledAt());
             if (newPeriodStart != null || newPeriodEnd != null || newCanceledAt != null) {
                 billingPort.updateSubscriptionFields(subRecord.getId(), newPeriodStart, newPeriodEnd, newCanceledAt);
             }
 
             // 同步 userLevel（通过 afterCommit 保证 Redis 在 DB 提交后写入）
-            scheduleAfterCommit(() -> syncUserLevelAfterStatusChange(subRecord, stripeSub.getStatus(), event));
+            scheduleAfterCommit(() -> syncUserLevelAfterStatusChange(subRecord, stripeSub.status(), event));
             return null;
         });
     }
 
-    /**
-     * 处理 customer.subscription.deleted 事件
-     */
     public void handleSubscriptionDeleted(Event event) {
-        Subscription stripeSub = deserializeStripeObject(event, Subscription.class, "subscription.deleted");
+        SubscriptionInfo stripeSub = deserializeSubscriptionInfo(event, "subscription.deleted");
         if (stripeSub == null) {
             throw new IllegalStateException("Failed to deserialize subscription.deleted event: " + event.getId());
         }
 
-        String subscriptionId = stripeSub.getId();
+        String subscriptionId = stripeSub.id();
         StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         if (subRecord == null) {
@@ -406,16 +358,13 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         });
     }
 
-    /**
-     * 处理 customer.subscription.resumed 事件
-     */
     public void handleSubscriptionResumed(Event event) {
-        Subscription stripeSub = deserializeStripeObject(event, Subscription.class, "subscription.resumed");
+        SubscriptionInfo stripeSub = deserializeSubscriptionInfo(event, "subscription.resumed");
         if (stripeSub == null) {
             throw new IllegalStateException("Failed to deserialize subscription.resumed event: " + event.getId());
         }
 
-        String subscriptionId = stripeSub.getId();
+        String subscriptionId = stripeSub.id();
         StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         if (subRecord == null) {
@@ -424,7 +373,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         tx.execute(status -> {
             long eventCreated = event.getCreated();
-            int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), stripeSub.getStatus(), eventCreated);
+            int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), stripeSub.status(), eventCreated);
 
             if (rows == 0) {
                 log.info("subscription.resumed: already processed event {}, skipping", event.getId());
@@ -433,9 +382,6 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         });
     }
 
-    /**
-     * 处理 invoice.payment_failed 事件
-     */
     public void handleInvoicePaymentFailed(Event event) {
         com.stripe.model.Invoice invoice = deserializeStripeObject(event, com.stripe.model.Invoice.class, "invoice.payment_failed");
         if (invoice == null) {
@@ -467,9 +413,6 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
     }
 
-    /**
-     * 处理 invoice.payment_succeeded 事件（作为 checkout.session.completed 的 fallback）
-     */
     public void handleInvoicePaymentSucceeded(Event event) {
         com.stripe.model.Invoice invoice = deserializeStripeObject(event, com.stripe.model.Invoice.class, "invoice.payment_succeeded");
         if (invoice == null) {
@@ -520,11 +463,11 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         Long userId = Long.parseLong(userIdStr);
 
         StripeCustomer customer;
-        Subscription stripeSub;
+        SubscriptionInfo stripeSub;
         try {
             customer = getOrCreateCustomer(userId);
-            stripeSub = Subscription.retrieve(subscriptionId);
-        } catch (StripeException e) {
+            stripeSub = paymentPort.retrieveSubscription(subscriptionId);
+        } catch (Exception e) {
             log.error("invoice.payment_succeeded: Stripe API error for orphaned invoice {}: {}",
                 event.getId(), e.getMessage(), e);
             throw new RuntimeException("Stripe API call failed for orphaned invoice " + event.getId(), e);
@@ -540,7 +483,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
     void doHandleCheckoutSessionCompleted(Event event, Long userId, SubscriptionPlan plan,
                                            BillingCycle billingCycle, String subscriptionId,
-                                           Subscription stripeSub, StripeCustomer customer) {
+                                           SubscriptionInfo stripeSub, StripeCustomer customer) {
         StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);
 
         if (subRecord != null && event.getId().equals(subRecord.getLastWebhookEventId())) {
@@ -556,11 +499,11 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
             subRecord.setPlan(plan.getValue());
             subRecord.setBillingCycle(billingCycle.getValue());
 
-            subRecord.setStripePriceId(extractPriceId(stripeSub));
-            subRecord.setStatus(stripeSub.getStatus());
-            subRecord.setCancelAtPeriodEnd(stripeSub.getCancelAtPeriodEnd());
-            subRecord.setCurrentPeriodStart(toLocalDateTime(stripeSub.getCurrentPeriodStart()));
-            subRecord.setCurrentPeriodEnd(toLocalDateTime(stripeSub.getCurrentPeriodEnd()));
+            subRecord.setStripePriceId(stripeSub.priceId());
+            subRecord.setStatus(stripeSub.status());
+            subRecord.setCancelAtPeriodEnd(stripeSub.cancelAtPeriodEnd());
+            subRecord.setCurrentPeriodStart(toLocalDateTime(stripeSub.currentPeriodStart()));
+            subRecord.setCurrentPeriodEnd(toLocalDateTime(stripeSub.currentPeriodEnd()));
             subRecord.setLastWebhookEventId(event.getId());
             subRecord.setLastEventCreated(event.getCreated());
 
@@ -597,18 +540,18 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     }
 
     void doUpgradeSubscription(StripeSubscription existingSub,
-                                Subscription updated,
+                                SubscriptionInfo updated,
                                 String newPriceId,
                                 SubscriptionPlan newPlan,
                                 BillingCycle billingCycle) {
         String oldPlan = existingSub.getPlan();
         existingSub.setPlan(newPlan.getValue());
         existingSub.setBillingCycle(billingCycle.getValue());
-        existingSub.setStripePriceId(extractPriceId(updated));
-        existingSub.setStatus(updated.getStatus());
-        existingSub.setCancelAtPeriodEnd(updated.getCancelAtPeriodEnd());
-        existingSub.setCurrentPeriodStart(toLocalDateTime(updated.getCurrentPeriodStart()));
-        existingSub.setCurrentPeriodEnd(toLocalDateTime(updated.getCurrentPeriodEnd()));
+        existingSub.setStripePriceId(updated.priceId());
+        existingSub.setStatus(updated.status());
+        existingSub.setCancelAtPeriodEnd(updated.cancelAtPeriodEnd());
+        existingSub.setCurrentPeriodStart(toLocalDateTime(updated.currentPeriodStart()));
+        existingSub.setCurrentPeriodEnd(toLocalDateTime(updated.currentPeriodEnd()));
         existingSub.setLastOperationSource("upgrade_" + System.currentTimeMillis());
         billingPort.updateSubscription(existingSub);
 
@@ -653,7 +596,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
     void doCreateSubscriptionFromOrphanedInvoice(Event event, Long userId,
                                                   String subscriptionId,
-                                                  Subscription stripeSub,
+                                                  SubscriptionInfo stripeSub,
                                                   StripeCustomer customer,
                                                   com.stripe.model.Invoice invoice) {
         // 双重检查：并发情况下可能已被 checkout.session.completed 创建
@@ -672,27 +615,43 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         subRecord.setLastWebhookEventId(event.getId());
         subRecord.setLastEventCreated(event.getCreated());
 
-        subRecord.setStripePriceId(extractPriceId(stripeSub));
-        subRecord.setStatus(stripeSub.getStatus());
-        subRecord.setCancelAtPeriodEnd(stripeSub.getCancelAtPeriodEnd());
-        subRecord.setCurrentPeriodStart(toLocalDateTime(stripeSub.getCurrentPeriodStart()));
-        subRecord.setCurrentPeriodEnd(toLocalDateTime(stripeSub.getCurrentPeriodEnd()));
+        subRecord.setStripePriceId(stripeSub.priceId());
+        subRecord.setStatus(stripeSub.status());
+        subRecord.setCancelAtPeriodEnd(stripeSub.cancelAtPeriodEnd());
+        subRecord.setCurrentPeriodStart(toLocalDateTime(stripeSub.currentPeriodStart()));
+        subRecord.setCurrentPeriodEnd(toLocalDateTime(stripeSub.currentPeriodEnd()));
 
         // 从 Stripe Subscription metadata 或 invoice metadata 推断 plan
-        String planStr = Optional.ofNullable(stripeSub.getMetadata())
-            .map(m -> m.get("plan"))
-            .or(() -> Optional.ofNullable(invoice.getMetadata()).map(m -> m.get("plan")))
-            .orElse(null);
+        String planStr = null;
+        // Try to get metadata from the original event object
+        try {
+            var deserializer = event.getDataObjectDeserializer();
+            var obj = deserializer.getObject().orElse(null);
+            if (obj instanceof com.stripe.model.Subscription s && s.getMetadata() != null) {
+                planStr = s.getMetadata().get("plan");
+            }
+        } catch (Exception ignored) {}
+
+        if (planStr == null && invoice.getMetadata() != null) {
+            planStr = invoice.getMetadata().get("plan");
+        }
         if (planStr == null) {
             planStr = "PRO";
             log.warn("invoice.payment_succeeded: orphaned invoice {} has no plan metadata, defaulting to PRO", event.getId());
         }
         subRecord.setPlan(planStr);
 
-        String billingCycleStr = Optional.ofNullable(stripeSub.getMetadata())
-            .map(m -> m.get("billingCycle"))
-            .or(() -> Optional.ofNullable(invoice.getMetadata()).map(m -> m.get("billingCycle")))
-            .orElse("monthly");
+        String billingCycleStr = "monthly";
+        try {
+            var deserializer = event.getDataObjectDeserializer();
+            var obj = deserializer.getObject().orElse(null);
+            if (obj instanceof com.stripe.model.Subscription s && s.getMetadata() != null) {
+                billingCycleStr = s.getMetadata().getOrDefault("billingCycle", "monthly");
+            }
+        } catch (Exception ignored) {}
+        if (invoice.getMetadata() != null && invoice.getMetadata().containsKey("billingCycle")) {
+            billingCycleStr = invoice.getMetadata().get("billingCycle");
+        }
         subRecord.setBillingCycle(billingCycleStr);
 
         boolean insertSucceeded = false;
@@ -724,20 +683,6 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     // ==================== 内部工具方法 ====================
 
     /**
-     * 安全提取 Stripe Subscription 的 priceId
-     */
-    private String extractPriceId(Subscription stripeSub) {
-        return Optional.ofNullable(stripeSub.getItems())
-            .map(items -> items.getData())
-            .filter(list -> !list.isEmpty())
-            .map(list -> list.get(0))
-            .map(item -> item.getPrice())
-            .filter(price -> price != null)
-            .map(price -> price.getId())
-            .orElse(null);
-    }
-
-    /**
      * 泛型反序列化：提取 Stripe 对象，减少重复代码
      */
     private <T> T deserializeStripeObject(Event event, Class<T> clazz, String eventType) {
@@ -759,8 +704,61 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
     }
 
-    private Session deserializeSession(Event event, String eventType) {
-        return deserializeStripeObject(event, Session.class, eventType);
+    /**
+     * 内部 record：从事件反序列化的 session 信息
+     */
+    record SessionInfo(String id, String subscriptionId, Map<String, String> metadata) {}
+
+    private SessionInfo deserializeSessionInfo(Event event, String eventType) {
+        try {
+            var deserializer = event.getDataObjectDeserializer();
+            var obj = deserializer.getObject().orElse(null);
+            if (obj == null) {
+                obj = deserializer.deserializeUnsafe();
+            }
+            if (obj instanceof com.stripe.model.checkout.Session session) {
+                return new SessionInfo(session.getId(), session.getSubscription(), session.getMetadata());
+            }
+            log.warn("{}: failed to deserialize event object", eventType);
+            return null;
+        } catch (Exception e) {
+            log.error("{}: deserialization error", eventType, e);
+            return null;
+        }
+    }
+
+    private SubscriptionInfo deserializeSubscriptionInfo(Event event, String eventType) {
+        try {
+            var deserializer = event.getDataObjectDeserializer();
+            var obj = deserializer.getObject().orElse(null);
+            if (obj == null) {
+                obj = deserializer.deserializeUnsafe();
+            }
+            if (obj instanceof com.stripe.model.Subscription sub) {
+                String firstItemId = Optional.ofNullable(sub.getItems())
+                    .map(items -> items.getData())
+                    .filter(list -> !list.isEmpty())
+                    .map(list -> list.get(0).getId())
+                    .orElse(null);
+                String priceId = Optional.ofNullable(sub.getItems())
+                    .map(items -> items.getData())
+                    .filter(list -> !list.isEmpty())
+                    .map(list -> list.get(0))
+                    .map(item -> item.getPrice())
+                    .filter(price -> price != null)
+                    .map(price -> price.getId())
+                    .orElse(null);
+                return new SubscriptionInfo(
+                    sub.getId(), sub.getStatus(),
+                    sub.getCurrentPeriodStart(), sub.getCurrentPeriodEnd(),
+                    sub.getCancelAtPeriodEnd(), firstItemId, priceId, sub.getCanceledAt());
+            }
+            log.warn("{}: failed to deserialize event object", eventType);
+            return null;
+        } catch (Exception e) {
+            log.error("{}: deserialization error", eventType, e);
+            return null;
+        }
     }
 
     private StripeCustomer getOrCreateCustomer(Long userId) {
@@ -776,20 +774,15 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         try {
-            CustomerCreateParams params = CustomerCreateParams.builder()
-                .setEmail(user.getEmail())
-                .build();
-
-            com.stripe.model.Customer customer = com.stripe.model.Customer.create(params);
-
+            CustomerInfo customer = paymentPort.createCustomer(user.getEmail());
             StripeCustomer newCustomer = new StripeCustomer();
             newCustomer.setUserId(userId);
-            newCustomer.setStripeCustomerId(customer.getId());
+            newCustomer.setStripeCustomerId(customer.id());
             billingPort.saveCustomer(newCustomer);
 
-            log.info("Created Stripe Customer for user {}: {}", userId, customer.getId());
+            log.info("Created Stripe Customer for user {}: {}", userId, customer.id());
             return newCustomer;
-        } catch (StripeException e) {
+        } catch (Exception e) {
             log.error("Failed to create Stripe Customer for user {}: {}", userId, e.getMessage(), e);
             throw new RuntimeException("创建 Stripe 客户失败", e);
         }
@@ -848,7 +841,6 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
     /**
      * 注册在事务提交后执行的回调，用于 Redis 幂等标记等非事务操作。
-     * 确保 DB 提交成功后才写 Redis，避免事务回滚导致永久不一致。
      */
     private void scheduleAfterCommit(Runnable action) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -859,14 +851,12 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
                 }
             });
         } else {
-            // 可能已在 afterCommit 回调中（嵌套调用），或不在事务上下文中，直接执行即可
             action.run();
         }
     }
 
     /**
      * 基于 Redis SETNX 的事件级幂等检查
-     * @return true = 首次处理，false = 已处理过
      */
     private boolean markEventProcessed(String eventId) {
         String key = "webhook:event_processed:" + eventId;
@@ -931,41 +921,9 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         log.info("User {} level changed: {} -> {} (reason: {})", userId, oldLevel, newLevel, reason);
 
-        // 降级到 FREE 时：先写黑名单，再清认证缓存，确保旧 JWT 立即失效
+        // 降级到 FREE 时：通过端口吊销令牌
         if ("FREE".equals(newLevel) && !"FREE".equals(oldLevel)) {
-            revokeAllUserTokens(userId, user.getEmail(), "subscription_downgrade: " + reason);
-        }
-    }
-
-    /**
-     * 吊销用户所有 JWT 令牌。
-     * <p>
-     * 顺序至关重要：先写黑名单（MySQL + Redis），再清 JWT 认证缓存（L1 + L2 + pub/sub）。
-     * 如果只清缓存不清黑名单，用户下次请求会重新查 DB 并写回缓存（仍是旧等级）。
-     * 如果只写黑名单不清缓存，JwtAuthenticationFilter 会直接从 L1 缓存返回 PRO 等级，
-     * 根本走不到黑名单检查。
-     */
-    private void revokeAllUserTokens(Long userId, String email, String reason) {
-        LocalDateTime expiresAt = LocalDateTime.now(ZoneId.of("UTC")).plusDays(7);
-
-        // Step 1: 写黑名单（MySQL + Redis Set）
-        try {
-            tokenBlacklistService.blacklistAllUserTokens(email, reason, expiresAt);
-            log.info("已吊销用户 {} 的 JWT 令牌 — 黑名单写入成功（原因：{}）", email, reason);
-        } catch (Exception e) {
-            // 黑名单写入失败意味着旧 JWT 在 Redis 黑名单恢复前仍然可用
-            // 必须仍然清缓存，至少保证下次请求走 MySQL 兜底路径
-            log.error("吊销用户 JWT 黑名单写入失败 — userId={}, email={}, reason={}. "
-                    + "旧 JWT 在缓存过期前仍可使用。请手动处理。", userId, email, reason, e);
-        }
-
-        // Step 2: 清除 JWT 认证缓存（L1 Caffeine + L2 Redis + pub/sub）
-        // 无论黑名单是否写入成功，都必须执行
-        try {
-            jwtAuthCacheService.invalidate(userId);
-            log.info("已清除用户 {} 的 JWT 认证缓存", userId);
-        } catch (Exception e) {
-            log.error("清除用户 {} JWT 认证缓存失败 — 缓存中可能仍保留旧等级信息", userId, e);
+            tokenRevocationPort.revokeAllTokens(userId, user.getEmail(), "subscription_downgrade: " + reason);
         }
     }
 }

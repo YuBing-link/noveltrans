@@ -1,9 +1,9 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionRequest;
 import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionResponse;
-import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
-import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
+import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
+import com.yumu.noveltranslator.port.out.TokenRevocationPort;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -76,9 +76,7 @@ class SubscriptionServiceExtendedTest {
     @Mock
     private StringRedisTemplate stringRedisTemplate;
     @Mock
-    private TokenBlacklistService tokenBlacklistService;
-    @Mock
-    private com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService jwtAuthCacheService;
+    private TokenRevocationPort tokenRevocationPort;
 
     @Mock
     private com.yumu.noveltranslator.port.out.PaymentPort paymentPort;
@@ -86,7 +84,7 @@ class SubscriptionServiceExtendedTest {
     @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
-    private SubscriptionService subscriptionService;
+    private SubscriptionApplicationService subscriptionService;
 
     @org.junit.jupiter.api.BeforeAll
     static void initMybatisPlusCache() {
@@ -102,9 +100,9 @@ class SubscriptionServiceExtendedTest {
         lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
         lenient().when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
 
-        subscriptionService = new SubscriptionService(
+        subscriptionService = new SubscriptionApplicationService(
                 stripeProperties, billingPort, userRepositoryPort, stringRedisTemplate,
-                tokenBlacklistService, jwtAuthCacheService, paymentPort, transactionManager);
+                tokenRevocationPort, paymentPort, transactionManager);
     }
 
     // ============ cancelSubscription 补充分支 ============

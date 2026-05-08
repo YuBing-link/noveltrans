@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.domain.service;
 
+import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.domain.model.TranslationMemory;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,7 @@ import java.util.*;
 public class TranslationMemoryService {
 
     private final GlossaryRepositoryPort glossaryPort;
-    private final EmbeddingService embeddingService;
+    private final EmbeddingPort embeddingPort;
 
     /**
      * 存储翻译记忆（写入 MySQL），返回自增 ID
@@ -41,7 +42,7 @@ public class TranslationMemoryService {
         memory.setUsageCount(0);
 
         // 生成向量
-        float[] embedding = embeddingService.embed(sourceText);
+        float[] embedding = embeddingPort.embed(sourceText);
         if (embedding.length > 0) {
             memory.setEmbedding(toFloatList(embedding));
         }

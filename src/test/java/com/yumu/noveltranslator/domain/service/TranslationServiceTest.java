@@ -42,7 +42,7 @@ class TranslationServiceTest {
     private TranslationCachePort cachePort;
 
     @Mock
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
 
     @Mock
     private EntityConsistencyService entityConsistencyService;
@@ -59,11 +59,11 @@ class TranslationServiceTest {
     @Mock
     private UserMapper userMapper;
 
-    private TranslationService translationService;
+    private TranslationApplicationService translationService;
 
     @BeforeEach
     void setUp() {
-        translationService = new TranslationService(
+        translationService = new TranslationApplicationService(
                 translationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         // Pipeline 内部调用 fixUntranslatedChinese，mock 返回原文

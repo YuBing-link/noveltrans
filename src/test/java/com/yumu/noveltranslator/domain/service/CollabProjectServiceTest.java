@@ -1,5 +1,5 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
 
 import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
@@ -53,11 +53,11 @@ class CollabProjectServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
-    private CollabProjectService collabProjectService;
+    private CollabProjectApplicationService collabProjectService;
 
     @BeforeEach
     void setUp() {
-        collabProjectService = new CollabProjectService(
+        collabProjectService = new CollabProjectApplicationService(
                 collabPort, documentPort, userPort, collabStateMachine, multiAgentTranslationService,
                 eventPublisher);
     }

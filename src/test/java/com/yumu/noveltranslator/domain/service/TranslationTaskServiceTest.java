@@ -1,9 +1,9 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
+import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
 import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
@@ -64,7 +64,7 @@ class TranslationTaskServiceTest {
     private TranslationCachePort cachePort;
 
     @Mock
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
 
     @Mock
     private EntityConsistencyService entityConsistencyService;
@@ -72,11 +72,11 @@ class TranslationTaskServiceTest {
     @Mock
     private TranslationPostProcessingService postProcessingService;
 
-    private TranslationTaskService taskService;
+    private TranslationTaskApplicationService taskService;
 
     @BeforeEach
     void setUp() {
-        taskService = new TranslationTaskService(
+        taskService = new TranslationTaskApplicationService(
                 translationPort, documentPort, glossaryPort,
                 stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);

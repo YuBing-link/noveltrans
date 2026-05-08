@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.port.dto.collab.ChapterTaskResponse;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
@@ -13,6 +13,8 @@ import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.port.dto.common.PageResult;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,12 +31,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 章节任务管理服务
+ * 章节任务管理应用服务
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ChapterTaskService implements com.yumu.noveltranslator.port.in.ChapterTaskPort {
+public class ChapterTaskApplicationService implements com.yumu.noveltranslator.port.in.ChapterTaskPort {
 
     private final CollaborationRepositoryPort collabPort;
     private final UserRepositoryPort userPort;

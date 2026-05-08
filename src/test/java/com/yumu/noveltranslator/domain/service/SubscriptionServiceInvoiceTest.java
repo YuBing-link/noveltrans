@@ -1,7 +1,7 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 import com.yumu.noveltranslator.util.JwtUtils;
-import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
-import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
+import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
+import com.yumu.noveltranslator.port.out.TokenRevocationPort;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -60,10 +60,7 @@ class SubscriptionServiceInvoiceTest {
     private StringRedisTemplate stringRedisTemplate;
 
     @Mock
-    private TokenBlacklistService tokenBlacklistService;
-
-    @Mock
-    private com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService jwtAuthCacheService;
+    private TokenRevocationPort tokenRevocationPort;
 
     @Mock
     private com.yumu.noveltranslator.port.out.PaymentPort paymentPort;
@@ -71,13 +68,13 @@ class SubscriptionServiceInvoiceTest {
     @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
-    private SubscriptionService subscriptionService;
+    private SubscriptionApplicationService subscriptionService;
 
     @BeforeEach
     void setUp() {
-        subscriptionService = new SubscriptionService(
+        subscriptionService = new SubscriptionApplicationService(
                 stripeProperties, billingPort, userRepositoryPort, stringRedisTemplate,
-                tokenBlacklistService, jwtAuthCacheService, paymentPort, transactionManager);
+                tokenRevocationPort, paymentPort, transactionManager);
     }
 
     // ==================== Fallback activation: existing record, non-active status ====================

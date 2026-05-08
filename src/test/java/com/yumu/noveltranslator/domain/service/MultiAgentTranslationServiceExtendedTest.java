@@ -5,7 +5,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.AiGlossaryService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
@@ -58,7 +58,7 @@ class MultiAgentTranslationServiceExtendedTest {
     @Mock
     private GlossaryRepositoryPort glossaryPort;
     @Mock
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
     @Mock
     private AiGlossaryService aiGlossaryService;
     @Mock

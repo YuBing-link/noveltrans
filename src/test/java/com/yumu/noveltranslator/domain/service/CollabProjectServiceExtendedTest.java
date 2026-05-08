@@ -7,7 +7,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabInviteCode;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
 import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
@@ -56,11 +56,11 @@ class CollabProjectServiceExtendedTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
-    private CollabProjectService service;
+    private CollabProjectApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new CollabProjectService(
+        service = new CollabProjectApplicationService(
                 collabPort, documentPort, userPort,
                 collabStateMachine, multiAgentTranslationService, eventPublisher);
     }

@@ -8,7 +8,7 @@ import com.yumu.noveltranslator.port.dto.entity.*;
 import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
-import com.yumu.noveltranslator.domain.service.TranslationService;
+import com.yumu.noveltranslator.application.service.TranslationApplicationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -31,7 +31,7 @@ class PluginTranslateControllerTest {
     private MockMvc mockMvc;
 
     @Mock
-    private TranslationService translationService;
+    private TranslationApplicationService translationService;
 
     private PluginTranslateController controller;
 

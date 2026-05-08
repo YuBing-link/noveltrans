@@ -12,8 +12,8 @@ import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
-import com.yumu.noveltranslator.domain.service.ChapterTaskService;
+import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
+import com.yumu.noveltranslator.application.service.ChapterTaskApplicationService;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,10 +46,10 @@ class CollabProjectControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
-    private CollabProjectService collabProjectService;
+    private CollabProjectApplicationService collabProjectService;
 
     @Mock
-    private ChapterTaskService chapterTaskService;
+    private ChapterTaskApplicationService chapterTaskService;
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;

@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.rest.admin;
 
 import com.yumu.noveltranslator.port.dto.common.Result;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,7 +29,7 @@ class CacheAdminControllerTest {
     private TranslationCacheService cacheService;
 
     @org.mockito.Mock
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
 
     private CacheAdminController controller;
 

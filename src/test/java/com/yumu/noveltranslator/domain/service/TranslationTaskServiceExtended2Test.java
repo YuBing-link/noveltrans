@@ -3,10 +3,10 @@ import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
+import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
 import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
@@ -78,7 +78,7 @@ class TranslationTaskServiceExtended2Test {
     @Mock
     private TranslationCachePort cachePort;
     @Mock
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
     @Mock
     private EntityConsistencyService entityConsistencyService;
     @Mock
@@ -86,14 +86,14 @@ class TranslationTaskServiceExtended2Test {
     @Mock
     private TranslationStateMachine stateMachine;
 
-    private TranslationTaskService taskService;
+    private TranslationTaskApplicationService taskService;
 
     @TempDir
     Path tempDir;
 
     @BeforeEach
     void setUp() {
-        taskService = new TranslationTaskService(
+        taskService = new TranslationTaskApplicationService(
                 translationPort, documentPort, glossaryPort,
                 stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);

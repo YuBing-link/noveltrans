@@ -8,7 +8,7 @@ import com.yumu.noveltranslator.port.dto.collab.ReviewChapterRequest;
 import com.yumu.noveltranslator.port.dto.collab.SubmitChapterRequest;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.ChapterTaskService;
+import com.yumu.noveltranslator.application.service.ChapterTaskApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +38,7 @@ class ChapterTaskControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @org.mockito.Mock
-    private ChapterTaskService chapterTaskService;
+    private ChapterTaskApplicationService chapterTaskService;
 
     private ChapterTaskController controller;
 

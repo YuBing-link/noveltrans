@@ -4,7 +4,7 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
 import com.stripe.net.Webhook;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
+import com.yumu.noveltranslator.port.in.SubscriptionPort;
 import com.yumu.noveltranslator.port.in.WebhookPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class StripeWebhookController implements WebhookPort {
 
-    private final SubscriptionService subscriptionService;
+    private final SubscriptionPort subscriptionPort;
     private final com.yumu.noveltranslator.properties.StripeProperties stripeProperties;
     private final UserRepositoryPort userRepositoryPort;
 
@@ -73,7 +73,7 @@ public class StripeWebhookController implements WebhookPort {
     void dispatchEvent(Event event) {
         switch (event.getType()) {
             case "checkout.session.completed" ->
-                subscriptionService.handleCheckoutSessionCompleted(event);
+                subscriptionPort.handleCheckoutSessionCompleted(event);
 
             case "customer.subscription.created" -> {
                 // 忽略，避免与 checkout.session.completed 重复处理
@@ -81,19 +81,19 @@ public class StripeWebhookController implements WebhookPort {
             }
 
             case "customer.subscription.updated" ->
-                subscriptionService.handleSubscriptionUpdated(event);
+                subscriptionPort.handleSubscriptionUpdated(event);
 
             case "customer.subscription.deleted" ->
-                subscriptionService.handleSubscriptionDeleted(event);
+                subscriptionPort.handleSubscriptionDeleted(event);
 
             case "customer.subscription.resumed" ->
-                subscriptionService.handleSubscriptionResumed(event);
+                subscriptionPort.handleSubscriptionResumed(event);
 
             case "invoice.payment_succeeded" ->
-                subscriptionService.handleInvoicePaymentSucceeded(event);
+                subscriptionPort.handleInvoicePaymentSucceeded(event);
 
             case "invoice.payment_failed" ->
-                subscriptionService.handleInvoicePaymentFailed(event);
+                subscriptionPort.handleInvoicePaymentFailed(event);
 
             default ->
                 log.info("Unhandled Stripe event type: {}", event.getType());

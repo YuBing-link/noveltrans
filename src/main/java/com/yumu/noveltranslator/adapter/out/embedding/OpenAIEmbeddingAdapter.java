@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * EmbeddingPort adapter supporting OpenAI and Ollama providers.
@@ -43,23 +44,23 @@ public class OpenAIEmbeddingAdapter implements EmbeddingPort {
     }
 
     @Override
-    public List<Double> embed(String text) {
+    public float[] embed(String text) {
         if (text == null || text.isBlank()) {
-            return Collections.emptyList();
+            return new float[0];
         }
-        float[] result = "ollama".equalsIgnoreCase(provider)
-                ? embedWithOllama(text)
-                : embedWithOpenAI(text);
-        return toDoubleList(result);
+        try {
+            return "ollama".equalsIgnoreCase(provider)
+                    ? embedWithOllama(text)
+                    : embedWithOpenAI(text);
+        } catch (Exception e) {
+            log.error("Embedding 生成失败: {}", e.getMessage(), e);
+            return new float[0];
+        }
     }
 
     @Override
-    public List<List<Double>> embedBatch(List<String> texts) {
-        List<List<Double>> results = new ArrayList<>(texts.size());
-        for (String text : texts) {
-            results.add(embed(text));
-        }
-        return results;
+    public int getDimension() {
+        return "ollama".equalsIgnoreCase(provider) ? 1024 : 1536;
     }
 
     @CircuitBreaker(name = "embedding", fallbackMethod = "embeddingFallback")
@@ -83,9 +84,9 @@ public class OpenAIEmbeddingAdapter implements EmbeddingPort {
                 .block(Duration.ofSeconds(10));
 
         if (response != null && response.containsKey("data")) {
-            List<Map<String, Object>> dataList = (List<Map<String, Object>>) response.get("data");
+            var dataList = (java.util.List<Map<String, Object>>) response.get("data");
             if (!dataList.isEmpty()) {
-                return toFloatArray((List<Double>) dataList.get(0).get("embedding"));
+                return toFloatArray((java.util.List<Double>) dataList.get(0).get("embedding"));
             }
         }
         return new float[0];
@@ -106,23 +107,15 @@ public class OpenAIEmbeddingAdapter implements EmbeddingPort {
                 .block(Duration.ofSeconds(10));
 
         if (response != null && response.containsKey("embedding")) {
-            return toFloatArray((List<Double>) response.get("embedding"));
+            return toFloatArray((java.util.List<Double>) response.get("embedding"));
         }
         return new float[0];
     }
 
-    private float[] toFloatArray(List<Double> list) {
+    private float[] toFloatArray(java.util.List<Double> list) {
         float[] result = new float[list.size()];
         for (int i = 0; i < list.size(); i++) {
             result[i] = list.get(i).floatValue();
-        }
-        return result;
-    }
-
-    private List<Double> toDoubleList(float[] array) {
-        List<Double> result = new ArrayList<>(array.length);
-        for (float v : array) {
-            result.add((double) v);
         }
         return result;
     }

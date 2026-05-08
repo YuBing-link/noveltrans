@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.yumu.noveltranslator.port.dto.translation.SelectionTranslateResponse;
@@ -9,8 +9,10 @@ import com.yumu.noveltranslator.port.dto.translation.WebpageTranslateRequest;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.TranslationPipeline;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
+import com.yumu.noveltranslator.domain.service.QuotaService;
 import com.yumu.noveltranslator.domain.util.EngineAliasRegistry;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.port.out.TranslationClientPort;
@@ -42,7 +44,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TranslationService implements com.yumu.noveltranslator.port.in.TranslatePort {
+public class TranslationApplicationService implements com.yumu.noveltranslator.port.in.TranslatePort {
 
     private static final String DEFAULT_TARGET_LANG = "zh";
     private static final String DEFAULT_ENGINE = "auto";
@@ -83,11 +85,11 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
     // 依赖注入
     private final TranslationClientPort translationClientPort;
     private final TranslationCachePort cachePort;
-    private final RagTranslationService ragTranslationService;
-    private final EntityConsistencyService entityConsistencyService;
+    private final RagTranslationApplicationService ragTranslationService;
+    private final com.yumu.noveltranslator.domain.service.EntityConsistencyService entityConsistencyService;
     private final TranslationPostProcessingService postProcessingService;
     private final TeamTranslationPort teamTranslationPort;
-    private final QuotaService quotaService;
+    private final com.yumu.noveltranslator.domain.service.QuotaService quotaService;
 
     /**
      * 选中文本翻译

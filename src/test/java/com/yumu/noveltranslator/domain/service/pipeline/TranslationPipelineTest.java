@@ -4,7 +4,7 @@ import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
 class TranslationPipelineTest {
 
     private TranslationCachePort cacheService;
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
     private EntityConsistencyService entityConsistencyService;
     private UserLevelThrottledTranslationClient translationClient;
     private TranslationPostProcessingService postProcessingService;

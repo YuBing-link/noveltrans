@@ -4,10 +4,10 @@ import com.yumu.noveltranslator.adapter.in.webhook.StripeWebhookController;
 import com.stripe.model.Event;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.port.dto.common.Result;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.StripeProperties;
-import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
+import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,13 +45,13 @@ class StripeWebhookControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private SubscriptionService subscriptionService;
+    private SubscriptionApplicationService subscriptionService;
 
     @org.mockito.Mock
     private StripeProperties stripeProperties;
 
     @org.mockito.Mock
-    private UserMapper userMapper;
+    private UserRepositoryPort userRepositoryPort;
 
     private StripeWebhookController controller;
 
@@ -69,7 +69,7 @@ class StripeWebhookControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new StripeWebhookController(subscriptionService, stripeProperties, userMapper);
+        controller = new StripeWebhookController(subscriptionService, stripeProperties, userRepositoryPort);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new TestExceptionHandler())
             .build();
@@ -223,11 +223,11 @@ class StripeWebhookControllerTest {
             User mockUser = new User();
             mockUser.setId(42L);
             mockUser.setTenantId(1L);
-            when(userMapper.selectById(42L)).thenReturn(mockUser);
+            when(userRepositoryPort.findById(42L)).thenReturn(java.util.Optional.of(mockUser));
 
             controller.processEvent(mockEvent);
 
-            verify(userMapper).selectById(42L);
+            verify(userRepositoryPort).findById(42L);
             verify(subscriptionService).handleCheckoutSessionCompleted(mockEvent);
         }
 
@@ -244,7 +244,7 @@ class StripeWebhookControllerTest {
 
             controller.processEvent(mockEvent);
 
-            verify(userMapper, never()).selectById(any());
+            verify(userRepositoryPort, never()).findById(any());
         }
 
         @Test

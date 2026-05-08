@@ -11,10 +11,10 @@ import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.DocumentService;
+import com.yumu.noveltranslator.application.service.DocumentApplicationService;
 import com.yumu.noveltranslator.domain.service.QuotaService;
-import com.yumu.noveltranslator.domain.service.TranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
+import com.yumu.noveltranslator.application.service.TranslationApplicationService;
+import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,13 +49,13 @@ class ExternalTranslateControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private TranslationService translationService;
+    private TranslationApplicationService translationService;
 
     @org.mockito.Mock
-    private DocumentService documentService;
+    private DocumentApplicationService documentService;
 
     @org.mockito.Mock
-    private TranslationTaskService translationTaskService;
+    private TranslationTaskApplicationService translationTaskService;
 
     @org.mockito.Mock
     private QuotaService quotaService;

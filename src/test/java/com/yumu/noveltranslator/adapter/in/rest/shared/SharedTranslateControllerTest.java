@@ -13,10 +13,10 @@ import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.DocumentService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
+import com.yumu.noveltranslator.application.service.DocumentApplicationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.application.service.TranslationApplicationService;
+import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,16 +45,16 @@ class SharedTranslateControllerTest {
     private MockMvc mockMvc;
 
     @Mock
-    private TranslationService translationService;
+    private TranslationApplicationService translationService;
 
     @Mock
-    private TranslationTaskService translationTaskService;
+    private TranslationTaskApplicationService translationTaskService;
 
     @Mock
-    private DocumentService documentService;
+    private DocumentApplicationService documentService;
 
     @Mock
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
 
     private SharedTranslateController controller;
 

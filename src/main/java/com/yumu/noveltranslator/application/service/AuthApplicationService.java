@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.port.dto.auth.LoginRequest;
@@ -14,6 +14,7 @@ import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserDetailsFactoryPort;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.yumu.noveltranslator.util.PasswordUtil;
+import com.yumu.noveltranslator.domain.service.VerificationCodeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -28,11 +29,11 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
- * 用户认证服务：登录、注册、验证码、密码管理
+ * 用户认证应用服务：登录、注册、验证码、密码管理
  */
 @Service
 @RequiredArgsConstructor
-public class AuthService implements UserDetailsService, com.yumu.noveltranslator.port.in.AuthPort {
+public class AuthApplicationService implements UserDetailsService, com.yumu.noveltranslator.port.in.AuthPort {
 
     private final UserRepositoryPort userRepositoryPort;
     private final JwtUtils jwtUtils;

@@ -22,9 +22,9 @@ import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.AuthService;
-import com.yumu.noveltranslator.domain.service.TranslationTaskService;
-import com.yumu.noveltranslator.domain.service.UserService;
+import com.yumu.noveltranslator.application.service.AuthApplicationService;
+import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
+import com.yumu.noveltranslator.application.service.UserApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,13 +54,13 @@ class WebUserControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @org.mockito.Mock
-    private AuthService authService;
+    private AuthApplicationService authService;
 
     @org.mockito.Mock
-    private UserService userService;
+    private UserApplicationService userService;
 
     @org.mockito.Mock
-    private TranslationTaskService translationTaskService;
+    private TranslationTaskApplicationService translationTaskService;
 
     @org.mockito.Mock
     private com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter loginRateLimiter;

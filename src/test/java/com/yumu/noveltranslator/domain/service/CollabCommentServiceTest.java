@@ -1,6 +1,6 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 import com.yumu.noveltranslator.exception.BusinessException;
-import com.yumu.noveltranslator.domain.service.CollabCommentService;
+import com.yumu.noveltranslator.application.service.CollabCommentApplicationService;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -40,11 +40,11 @@ class CollabCommentServiceTest {
     @Mock
     private UserRepositoryPort userPort;
 
-    private CollabCommentService service;
+    private CollabCommentApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new CollabCommentService(collabPort, userPort);
+        service = new CollabCommentApplicationService(collabPort, userPort);
     }
 
     @Nested

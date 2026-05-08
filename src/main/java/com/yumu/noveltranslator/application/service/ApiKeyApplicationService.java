@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.adapter.in.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.domain.model.ApiKey;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
@@ -14,7 +14,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class ApiKeyPortAdapter implements ApiKeyPort {
+public class ApiKeyApplicationService implements ApiKeyPort {
 
     private final UserRepositoryPort userRepositoryPort;
     private final ApiKeyCachePort apiKeyCachePort;

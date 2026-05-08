@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.adapter.in.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.port.in.CacheAdminPort;
 import com.yumu.noveltranslator.port.out.TranslationCacheAdminPort;
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class CacheAdminPortAdapter implements CacheAdminPort {
+public class CacheAdminApplicationService implements CacheAdminPort {
 
     private final TranslationCacheAdminPort cacheAdminPort;
     private final RagTranslationPort ragTranslationPort;

@@ -2,7 +2,7 @@ package com.yumu.noveltranslator.adapter.in.rest.web;
 
 import com.yumu.noveltranslator.port.dto.entity.PlatformStatsResponse;
 import com.yumu.noveltranslator.port.dto.common.Result;
-import com.yumu.noveltranslator.domain.service.UserService;
+import com.yumu.noveltranslator.application.service.UserApplicationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,7 +22,7 @@ class WebPlatformControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private UserService userService;
+    private UserApplicationService userService;
 
     private WebPlatformController controller;
 

@@ -1,5 +1,5 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
 
 import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
@@ -44,7 +44,7 @@ class CollabProjectServiceStatusTest {
     private CollabStateMachine collabStateMachine;
     private MultiAgentTranslationService multiAgentTranslationService;
 
-    private CollabProjectService service;
+    private CollabProjectApplicationService service;
 
     @TempDir
     Path tempDir;
@@ -58,7 +58,7 @@ class CollabProjectServiceStatusTest {
         multiAgentTranslationService = mock(MultiAgentTranslationService.class);
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
-        service = new CollabProjectService(
+        service = new CollabProjectApplicationService(
                 collabPort, documentPort, userPort,
                 collabStateMachine, multiAgentTranslationService, eventPublisher);
     }

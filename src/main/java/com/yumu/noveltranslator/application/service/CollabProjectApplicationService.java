@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CollabProjectService implements com.yumu.noveltranslator.port.in.CollabPort {
+public class CollabProjectApplicationService implements com.yumu.noveltranslator.port.in.CollabPort {
 
     private final CollaborationRepositoryPort collabPort;
     private final DocumentRepositoryPort documentPort;

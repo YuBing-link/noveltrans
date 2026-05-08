@@ -4,7 +4,7 @@ import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.AiGlossaryService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 
@@ -70,7 +70,7 @@ class MultiAgentTranslationServiceTest {
     private GlossaryRepositoryPort glossaryPort;
 
     @Mock
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
 
     @Mock
     private AiGlossaryService aiGlossaryService;

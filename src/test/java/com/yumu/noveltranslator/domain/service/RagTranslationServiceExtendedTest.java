@@ -1,10 +1,10 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.EmbeddingService;
 import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
@@ -40,17 +40,17 @@ import static org.mockito.Mockito.*;
 class RagTranslationServiceExtendedTest {
 
     @Mock
-    private EmbeddingService embeddingService;
+    private EmbeddingPort embeddingPort;
     @Mock
     private TranslationMemoryService translationMemoryService;
     @Mock
     private VectorStorePort vectorStorePort;
 
-    private RagTranslationService service;
+    private RagTranslationApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new RagTranslationService(embeddingService, translationMemoryService, vectorStorePort);
+        service = new RagTranslationApplicationService(embeddingPort, translationMemoryService, vectorStorePort);
         ReflectionTestUtils.setField(service, "directHitThreshold", 0.85);
         ReflectionTestUtils.setField(service, "referenceThreshold", 0.5);
         ReflectionTestUtils.setField(service, "knnTopK", 5);
@@ -105,7 +105,7 @@ class RagTranslationServiceExtendedTest {
 
         @Test
         void 向量为空返回空响应() throws Exception {
-            when(embeddingService.embed("Hello")).thenReturn(new float[0]);
+            when(embeddingPort.embed("Hello")).thenReturn(new float[0]);
             RagTranslationResponse response = invokeSearchSimilarWithUser(
                     "Hello", "zh", "ai-team", 1L);
             assertFalse(response.isDirectHit());
@@ -115,7 +115,7 @@ class RagTranslationServiceExtendedTest {
         @Test
         void Redis命中直接返回() throws Exception {
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
-            when(embeddingService.embed("Hello")).thenReturn(vec);
+            when(embeddingPort.embed("Hello")).thenReturn(vec);
 
             List<Map<String, String>> redisResult = buildVectorSearchResult(1,
                     "Hello", "你好", "0.05", "42");
@@ -132,7 +132,7 @@ class RagTranslationServiceExtendedTest {
         @Test
         void Redis无结果走MySQL降级() throws Exception {
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
-            when(embeddingService.embed("Hello")).thenReturn(vec);
+            when(embeddingPort.embed("Hello")).thenReturn(vec);
             mockVectorSearch(Collections.emptyList());
 
             TranslationMemory mem = new TranslationMemory();
@@ -152,7 +152,7 @@ class RagTranslationServiceExtendedTest {
 
         @Test
         void 异常返回空响应() throws Exception {
-            when(embeddingService.embed("Hello")).thenThrow(new RuntimeException("vector error"));
+            when(embeddingPort.embed("Hello")).thenThrow(new RuntimeException("vector error"));
             RagTranslationResponse response = invokeSearchSimilarWithUser(
                     "Hello", "zh", "ai-team", 1L);
             assertFalse(response.isDirectHit());
@@ -194,7 +194,7 @@ class RagTranslationServiceExtendedTest {
 
         @Test
         void 质量通过则存储() throws Exception {
-            when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
+            when(embeddingPort.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 
@@ -480,7 +480,7 @@ class RagTranslationServiceExtendedTest {
 
         @Test
         void embedding为空不存储() throws Exception {
-            when(embeddingService.embed(anyString())).thenReturn(new float[0]);
+            when(embeddingPort.embed(anyString())).thenReturn(new float[0]);
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 
@@ -490,7 +490,7 @@ class RagTranslationServiceExtendedTest {
 
         @Test
         void 找到匹配记忆使用其ID() throws Exception {
-            when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
+            when(embeddingPort.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
 
             TranslationMemory mem = new TranslationMemory();
             mem.setId(99L);
@@ -508,7 +508,7 @@ class RagTranslationServiceExtendedTest {
 
         @Test
         void 无匹配记忆使用UUID() throws Exception {
-            when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
+            when(embeddingPort.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
 
             TranslationMemory mem = new TranslationMemory();
             mem.setId(99L);
@@ -526,7 +526,7 @@ class RagTranslationServiceExtendedTest {
 
         @Test
         void 异常被捕获不抛出() throws Exception {
-            when(embeddingService.embed(anyString())).thenThrow(new RuntimeException("embed failed"));
+            when(embeddingPort.embed(anyString())).thenThrow(new RuntimeException("embed failed"));
 
             assertDoesNotThrow(() -> invokeStoreToRedisVector("Hello", "你好", "zh", 1L, "google"));
         }

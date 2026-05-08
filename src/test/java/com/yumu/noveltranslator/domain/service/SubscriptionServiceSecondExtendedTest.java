@@ -1,7 +1,7 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 import com.yumu.noveltranslator.util.JwtUtils;
-import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
-import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
+import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
+import com.yumu.noveltranslator.port.out.TokenRevocationPort;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stripe.exception.StripeException;
@@ -63,9 +63,7 @@ class SubscriptionServiceSecondExtendedTest {
     @Mock
     private StringRedisTemplate stringRedisTemplate;
     @Mock
-    private TokenBlacklistService tokenBlacklistService;
-    @Mock
-    private com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService jwtAuthCacheService;
+    private TokenRevocationPort tokenRevocationPort;
 
     @Mock
     private com.yumu.noveltranslator.port.out.PaymentPort paymentPort;
@@ -73,7 +71,7 @@ class SubscriptionServiceSecondExtendedTest {
     @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
-    private SubscriptionService service;
+    private SubscriptionApplicationService service;
 
     @BeforeEach
     void setUp() {
@@ -81,9 +79,9 @@ class SubscriptionServiceSecondExtendedTest {
         lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
         lenient().when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
 
-        service = new SubscriptionService(
+        service = new SubscriptionApplicationService(
                 stripeProperties, billingPort, userRepositoryPort, stringRedisTemplate,
-                tokenBlacklistService, jwtAuthCacheService, paymentPort, transactionManager);
+                tokenRevocationPort, paymentPort, transactionManager);
     }
 
     // ============ verifyCheckoutSession ============

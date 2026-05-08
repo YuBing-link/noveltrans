@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.port.dto.collab.CommentResponse;
 import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
@@ -22,12 +22,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 协作评论服务
+ * 协作评论应用服务
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CollabCommentService implements com.yumu.noveltranslator.port.in.CollabCommentPort {
+public class CollabCommentApplicationService implements com.yumu.noveltranslator.port.in.CollabCommentPort {
 
     private final CollaborationRepositoryPort collabPort;
     private final UserRepositoryPort userPort;

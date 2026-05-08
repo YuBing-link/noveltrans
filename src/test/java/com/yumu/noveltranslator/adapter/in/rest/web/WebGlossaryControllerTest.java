@@ -15,7 +15,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
 import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
-import com.yumu.noveltranslator.domain.service.UserService;
+import com.yumu.noveltranslator.application.service.UserApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,7 +45,7 @@ class WebGlossaryControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private UserService userService;
+    private UserApplicationService userService;
 
     @org.mockito.Mock
     private GlossaryMapper glossaryMapper;

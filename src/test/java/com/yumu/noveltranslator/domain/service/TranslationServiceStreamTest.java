@@ -7,8 +7,8 @@ import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.port.dto.translation.WebpageTranslateRequest;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.domain.service.TranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.application.service.TranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 
@@ -54,7 +54,7 @@ class TranslationServiceStreamTest {
     @Mock
     private TranslationCachePort cachePort;
     @Mock
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
     @Mock
     private EntityConsistencyService entityConsistencyService;
     @Mock
@@ -66,11 +66,11 @@ class TranslationServiceStreamTest {
     @Mock
     private UserMapper userMapper;
 
-    private TranslationService service;
+    private TranslationApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new TranslationService(
+        service = new TranslationApplicationService(
                 translationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))

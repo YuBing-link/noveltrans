@@ -1,5 +1,5 @@
-package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.domain.service.DocumentService;
+package com.yumu.noveltranslator.application.service;
+import com.yumu.noveltranslator.application.service.DocumentApplicationService;
 
 import com.yumu.noveltranslator.port.dto.entity.DocumentInfoResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
@@ -41,11 +41,11 @@ class DocumentServiceTest {
     @Mock
     private TranslationStateMachine stateMachine;
 
-    private DocumentService documentService;
+    private DocumentApplicationService documentService;
 
     @BeforeEach
     void setUp() {
-        documentService = new DocumentService(documentPort, translationPort, stateMachine);
+        documentService = new DocumentApplicationService(documentPort, translationPort, stateMachine);
         try {
             java.lang.reflect.Field field = DocumentService.class.getDeclaredField("uploadDir");
             field.setAccessible(true);

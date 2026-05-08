@@ -1,9 +1,9 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 import com.yumu.noveltranslator.port.dto.auth.ChangePasswordRequest;
 import com.yumu.noveltranslator.port.dto.auth.ResetPasswordRequest;
 import com.yumu.noveltranslator.port.dto.auth.RegisterRequest;
 import com.yumu.noveltranslator.port.dto.auth.LoginRequest;
-import com.yumu.noveltranslator.domain.service.AuthService;
+import com.yumu.noveltranslator.application.service.AuthApplicationService;
 import com.yumu.noveltranslator.port.dto.auth.RefreshTokenRequest;
 import com.yumu.noveltranslator.port.dto.common.Result;
 
@@ -15,6 +15,7 @@ import com.yumu.noveltranslator.port.out.EmailPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.yumu.noveltranslator.util.PasswordUtil;
+import com.yumu.noveltranslator.domain.service.VerificationCodeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -50,11 +51,11 @@ class AuthServiceTest {
     @Mock
     private VerificationCodeService verificationCodeService;
 
-    private AuthService authService;
+    private AuthApplicationService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepositoryPort, jwtUtils, emailPort, verificationCodeService);
+        authService = new AuthApplicationService(userRepositoryPort, jwtUtils, emailPort, verificationCodeService);
     }
 
     @Nested

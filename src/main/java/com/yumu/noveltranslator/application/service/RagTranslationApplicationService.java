@@ -1,6 +1,8 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
+import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
 
 import com.yumu.noveltranslator.domain.model.TranslationMemory;
+import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.port.out.VectorSearchResult;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
@@ -25,12 +27,12 @@ import java.util.regex.Pattern;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class RagTranslationService implements com.yumu.noveltranslator.port.in.RagTranslationPort {
+public class RagTranslationApplicationService implements com.yumu.noveltranslator.port.in.RagTranslationPort {
 
     private static final String SOURCE_LANG_AUTO = "auto";
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
-    private final EmbeddingService embeddingService;
+    private final EmbeddingPort embeddingPort;
     private final TranslationMemoryService translationMemoryService;
     private final VectorStorePort vectorStorePort;
 
@@ -126,7 +128,7 @@ public class RagTranslationService implements com.yumu.noveltranslator.port.in.R
         }
 
         try {
-            float[] queryVector = embeddingService.embed(sourceText);
+            float[] queryVector = embeddingPort.embed(sourceText);
             if (queryVector.length == 0) {
                 return buildEmptyResponse();
             }
@@ -185,7 +187,7 @@ public class RagTranslationService implements com.yumu.noveltranslator.port.in.R
                 return;
             }
 
-            float[] embedding = embeddingService.embed(sourceText);
+            float[] embedding = embeddingPort.embed(sourceText);
             if (embedding.length > 0) {
                 vectorStorePort.storeVector(
                         memoryId, sourceText, targetText, SOURCE_LANG_AUTO, targetLang,

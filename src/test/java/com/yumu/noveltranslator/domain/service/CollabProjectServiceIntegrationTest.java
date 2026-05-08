@@ -4,7 +4,7 @@ import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
 import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CollabProjectServiceIntegrationTest {
 
     @Autowired
-    private CollabProjectService collabProjectService;
+    private CollabProjectApplicationService collabProjectService;
 
     @Autowired
     private CollabProjectMapper collabProjectMapper;

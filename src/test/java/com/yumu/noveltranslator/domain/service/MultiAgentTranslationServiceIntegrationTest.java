@@ -3,7 +3,7 @@ import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.domain.service.AiGlossaryService;
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 
@@ -78,7 +78,7 @@ class MultiAgentTranslationServiceIntegrationTest {
     private TranslationCacheService cacheService;
 
     @MockBean
-    private RagTranslationService ragTranslationService;
+    private RagTranslationApplicationService ragTranslationService;
 
     @MockBean
     private AiGlossaryService aiGlossaryService;

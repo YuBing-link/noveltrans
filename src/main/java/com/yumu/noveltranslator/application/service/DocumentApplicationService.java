@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.port.dto.entity.DocumentInfoResponse;
 import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationRequest;
@@ -24,11 +24,11 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * 文档管理服务
+ * 文档管理应用服务
  */
 @Service
 @RequiredArgsConstructor
-public class DocumentService implements com.yumu.noveltranslator.port.in.DocumentPort {
+public class DocumentApplicationService implements com.yumu.noveltranslator.port.in.DocumentPort {
 
     @Value("${translation.upload-dir:#{systemProperties['user.home']}/novel-translator/uploads}")
     private String uploadDir;

@@ -13,7 +13,7 @@ import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.domain.service.CollabProjectService;
+import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,7 +42,7 @@ class CollabMemberControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @org.mockito.Mock
-    private CollabProjectService collabProjectService;
+    private CollabProjectApplicationService collabProjectService;
 
     private CollabMemberController controller;
 

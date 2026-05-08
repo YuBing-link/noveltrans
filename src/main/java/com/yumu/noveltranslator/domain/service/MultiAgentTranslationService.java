@@ -1,4 +1,5 @@
 package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 
 import com.yumu.noveltranslator.domain.model.AiGlossary;
 import com.yumu.noveltranslator.domain.model.CollabChapterTask;
@@ -81,7 +82,7 @@ public class MultiAgentTranslationService {
     private final TranslationCachePort cachePort;
     private final EntityConsistencyService entityConsistencyService;
     private final GlossaryRepositoryPort glossaryPort;
-    private final RagTranslationService ragTranslationService;
+    private final RagTranslationApplicationService ragTranslationService;
     private final AiGlossaryService aiGlossaryService;
     private final TranslationPostProcessingService postProcessingService;
     private final CollabStateMachine collabStateMachine;

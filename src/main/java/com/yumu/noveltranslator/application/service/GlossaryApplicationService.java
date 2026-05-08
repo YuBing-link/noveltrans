@@ -1,4 +1,4 @@
-package com.yumu.noveltranslator.adapter.in.service;
+package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.port.dto.translation.GlossaryItemRequest;
@@ -14,7 +14,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class GlossaryPortAdapter implements GlossaryPort {
+public class GlossaryApplicationService implements GlossaryPort {
 
     private final UserPort userPort;
     private final TranslationCacheAdminPort translationCacheAdminPort;

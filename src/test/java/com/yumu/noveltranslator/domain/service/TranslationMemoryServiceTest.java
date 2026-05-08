@@ -1,8 +1,8 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.domain.service.EmbeddingService;
 import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
 
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
+import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,14 +22,14 @@ class TranslationMemoryServiceTest {
 
     private TranslationMemoryService service;
     private GlossaryRepositoryPort glossaryPort;
-    private EmbeddingService embeddingService;
+    private EmbeddingPort embeddingPort;
 
     @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
         glossaryPort = mock(GlossaryRepositoryPort.class);
-        embeddingService = mock(EmbeddingService.class);
-        service = new TranslationMemoryService(glossaryPort, embeddingService);
+        embeddingPort = mock(EmbeddingPort.class);
+        service = new TranslationMemoryService(glossaryPort, embeddingPort);
     }
 
     @Nested
@@ -39,39 +39,39 @@ class TranslationMemoryServiceTest {
         @Test
         void 源文本为空跳过存储() {
             service.storeTranslation(null, "hello", "en", "zh", 1L, null, "google", "fast");
-            verifyNoInteractions(embeddingService);
+            verifyNoInteractions(embeddingPort);
             verify(glossaryPort, never()).saveTranslationMemory(any());
         }
 
         @Test
         void 源文本为空白跳过存储() {
             service.storeTranslation("   ", "hello", "en", "zh", 1L, null, "google", "fast");
-            verifyNoInteractions(embeddingService);
+            verifyNoInteractions(embeddingPort);
             verify(glossaryPort, never()).saveTranslationMemory(any());
         }
 
         @Test
         void 目标文本为空跳过存储() {
             service.storeTranslation("hello", null, "en", "zh", 1L, null, "google", "fast");
-            verifyNoInteractions(embeddingService);
+            verifyNoInteractions(embeddingPort);
             verify(glossaryPort, never()).saveTranslationMemory(any());
         }
 
         @Test
         void 目标文本为空白跳过存储() {
             service.storeTranslation("hello", "  ", "en", "zh", 1L, null, "google", "fast");
-            verifyNoInteractions(embeddingService);
+            verifyNoInteractions(embeddingPort);
             verify(glossaryPort, never()).saveTranslationMemory(any());
         }
 
         @Test
         void 存储成功带向量() {
             float[] embedding = new float[]{0.1f, 0.2f, 0.3f};
-            when(embeddingService.embed("hello world")).thenReturn(embedding);
+            when(embeddingPort.embed("hello world")).thenReturn(embedding);
 
             service.storeTranslation("hello world", "你好世界", "en", "zh", 1L, 100L, "google", "expert");
 
-            verify(embeddingService).embed("hello world");
+            verify(embeddingPort).embed("hello world");
             verify(glossaryPort).saveTranslationMemory(argThat(m ->
                 m.getUserId().equals(1L) &&
                 m.getProjectId().equals(100L) &&
@@ -87,7 +87,7 @@ class TranslationMemoryServiceTest {
 
         @Test
         void 向量为空时不设置向量字段() {
-            when(embeddingService.embed("hello")).thenReturn(new float[0]);
+            when(embeddingPort.embed("hello")).thenReturn(new float[0]);
 
             service.storeTranslation("hello", "你好", "en", "zh", 1L, null, "deepl", "fast");
 
