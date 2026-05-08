@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @Slf4j
-public class TeamTranslationService {
+public class TeamTranslationService implements com.yumu.noveltranslator.port.out.TeamTranslationPort {
 
     private final WebClient webClient;
 

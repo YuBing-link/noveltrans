@@ -6,10 +6,9 @@ import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
-import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
+import com.yumu.noveltranslator.port.out.TeamTranslationPort;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -46,9 +45,9 @@ public class TranslationPipeline {
     private final TranslationCachePort cacheService;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
-    private final UserLevelThrottledTranslationClient translationClient;
+    private final TranslationClientPort translationClient;
     private final TranslationPostProcessingService postProcessingService;
-    private final TeamTranslationService teamTranslationService;
+    private final TeamTranslationPort teamTranslationService;
     private final Long userId;
     private final String userLevel;
     private final String docId;
@@ -61,7 +60,7 @@ public class TranslationPipeline {
             TranslationCachePort cacheService,
             RagTranslationService ragTranslationService,
             EntityConsistencyService entityConsistencyService,
-            UserLevelThrottledTranslationClient translationClient,
+            TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
             Long userId,
             String docId) {
@@ -70,7 +69,7 @@ public class TranslationPipeline {
     }
 
     /**
-     * 创建翻译管线实例（支持团队模式，L4 可走 TeamTranslationService）
+     * 创建翻译管线实例（支持团队模式，L4 可走 TeamTranslationPort）
      *
      * @param teamTranslationService 团队翻译服务（可为 null，null 时 executeTeam 降级为标准直译）
      */
@@ -78,9 +77,9 @@ public class TranslationPipeline {
             TranslationCachePort cacheService,
             RagTranslationService ragTranslationService,
             EntityConsistencyService entityConsistencyService,
-            UserLevelThrottledTranslationClient translationClient,
+            TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
-            TeamTranslationService teamTranslationService,
+            TeamTranslationPort teamTranslationService,
             Long userId,
             String docId) {
         this(cacheService, ragTranslationService, entityConsistencyService, translationClient,
@@ -94,9 +93,9 @@ public class TranslationPipeline {
             TranslationCachePort cacheService,
             RagTranslationService ragTranslationService,
             EntityConsistencyService entityConsistencyService,
-            UserLevelThrottledTranslationClient translationClient,
+            TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
-            TeamTranslationService teamTranslationService,
+            TeamTranslationPort teamTranslationService,
             Long userId,
             String docId,
             List<Glossary> glossaryTerms) {
@@ -111,9 +110,9 @@ public class TranslationPipeline {
             TranslationCachePort cacheService,
             RagTranslationService ragTranslationService,
             EntityConsistencyService entityConsistencyService,
-            UserLevelThrottledTranslationClient translationClient,
+            TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
-            TeamTranslationService teamTranslationService,
+            TeamTranslationPort teamTranslationService,
             Long userId,
             String userLevel,
             String docId,

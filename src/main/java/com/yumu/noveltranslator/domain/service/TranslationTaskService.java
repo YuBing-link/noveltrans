@@ -13,7 +13,7 @@ import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
-import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
@@ -51,7 +51,7 @@ public class TranslationTaskService {
     private final DocumentRepositoryPort documentPort;
     private final GlossaryRepositoryPort glossaryPort;
     private final TranslationStateMachine stateMachine;
-    private final UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
+    private final TranslationClientPort translationClientPort;
     private final TranslationCachePort cachePort;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
@@ -136,7 +136,7 @@ public class TranslationTaskService {
 
                 TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
-                    userLevelThrottledTranslationClient, postProcessingService, null, userId, docId, glossaryTerms);
+                    translationClientPort, postProcessingService, null, userId, docId, glossaryTerms);
 
                 while (batchStart < total) {
                     StringBuilder batch = new StringBuilder();
@@ -631,11 +631,11 @@ public class TranslationTaskService {
                         if ("expert".equals(mode)) {
                             TranslationPipeline pipeline = new TranslationPipeline(
                                     cachePort, ragTranslationService, entityConsistencyService,
-                                    userLevelThrottledTranslationClient, postProcessingService, null, null);
+                                    translationClientPort, postProcessingService, null, null);
                             result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
                         } else {
-                            result = userLevelThrottledTranslationClient.translate(
-                                    paragraph, targetLang, "google", false, true);
+                            result = translationClientPort.translate(
+                                    paragraph, targetLang, "google", false, true, List.of(), null, null);
                         }
                         String translation = ExternalResponseUtil.extractDataField(result);
                         if (translation == null || translation.isEmpty()) {
@@ -739,11 +739,11 @@ public class TranslationTaskService {
                         if ("expert".equals(mode)) {
                             TranslationPipeline pipeline = new TranslationPipeline(
                                     cachePort, ragTranslationService, entityConsistencyService,
-                                    userLevelThrottledTranslationClient, postProcessingService, null, null);
+                                    translationClientPort, postProcessingService, null, null);
                             result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
                         } else {
-                            result = userLevelThrottledTranslationClient.translate(
-                                    paragraph, targetLang, "google", false, true);
+                            result = translationClientPort.translate(
+                                    paragraph, targetLang, "google", false, true, List.of(), null, null);
                         }
 
                         // 提取实际翻译内容

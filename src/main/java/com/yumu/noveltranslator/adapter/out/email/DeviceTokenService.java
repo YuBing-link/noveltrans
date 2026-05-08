@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import java.util.concurrent.TimeUnit;
 
 @Service
-public class DeviceTokenService {
+public class DeviceTokenService implements com.yumu.noveltranslator.port.out.DeviceTokenRegistrationPort {
 
     // 使用 Caffeine 缓存，设置30天过期
     private final Cache<String, String> deviceTokenCache = Caffeine.newBuilder()

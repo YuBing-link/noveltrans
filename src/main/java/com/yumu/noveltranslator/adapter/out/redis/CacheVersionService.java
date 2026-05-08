@@ -2,6 +2,7 @@ package com.yumu.noveltranslator.adapter.out.redis;
 
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationCache;
 import com.yumu.noveltranslator.domain.event.CacheInvalidationEvent;
+import com.yumu.noveltranslator.port.out.CacheVersionPort;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationCacheMapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class CacheVersionService {
+public class CacheVersionService implements CacheVersionPort {
 
     private static final String VERSION_KEY_PREFIX = "translator:cache_version:";
     private static final String INVALIDATION_CHANNEL = "translator:cache:invalidation";

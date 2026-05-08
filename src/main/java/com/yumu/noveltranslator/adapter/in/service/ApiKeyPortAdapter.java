@@ -1,9 +1,9 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.adapter.in.service;
 
-import com.yumu.noveltranslator.adapter.out.redis.ApiKeyCacheService;
 import com.yumu.noveltranslator.domain.model.ApiKey;
 import com.yumu.noveltranslator.dto.common.PageResponse;
 import com.yumu.noveltranslator.port.in.ApiKeyPort;
+import com.yumu.noveltranslator.port.out.ApiKeyCachePort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -11,14 +11,13 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ApiKeyPortAdapter implements ApiKeyPort {
 
     private final UserRepositoryPort userRepositoryPort;
-    private final ApiKeyCacheService apiKeyCacheService;
+    private final ApiKeyCachePort apiKeyCachePort;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String API_KEY_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -51,7 +50,7 @@ public class ApiKeyPortAdapter implements ApiKeyPort {
         return userRepositoryPort.findApiKeyById(id)
                 .filter(key -> key.getUserId().equals(userId))
                 .map(key -> {
-                    apiKeyCacheService.invalidate(key.getApiKey());
+                    apiKeyCachePort.invalidate(key.getApiKey());
                     userRepositoryPort.deleteApiKey(id);
                     return true;
                 }).orElse(false);
@@ -62,7 +61,7 @@ public class ApiKeyPortAdapter implements ApiKeyPort {
         return userRepositoryPort.findApiKeyById(id)
                 .filter(key -> key.getUserId().equals(userId))
                 .map(key -> {
-                    apiKeyCacheService.invalidate(key.getApiKey());
+                    apiKeyCachePort.invalidate(key.getApiKey());
                     key.setApiKey(generateApiKey());
                     key.setTotalUsage(0L);
                     userRepositoryPort.updateApiKey(key);

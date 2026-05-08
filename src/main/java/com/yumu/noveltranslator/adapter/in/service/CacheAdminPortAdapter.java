@@ -1,7 +1,8 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.adapter.in.service;
 
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.port.in.CacheAdminPort;
+import com.yumu.noveltranslator.port.out.TranslationCacheAdminPort;
+import com.yumu.noveltranslator.domain.service.RagTranslationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,13 +12,13 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class CacheAdminPortAdapter implements CacheAdminPort {
 
-    private final TranslationCacheService cacheService;
+    private final TranslationCacheAdminPort cacheAdminPort;
     private final RagTranslationService ragTranslationService;
 
     @Override
     public void clearAllTranslationCache() {
         log.info("请求清空所有翻译缓存");
-        cacheService.clearAllCache();
+        cacheAdminPort.clearAllCache();
         ragTranslationService.clearAllTranslationMemory();
     }
 }

@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class ApiKeyCacheService {
+public class ApiKeyCacheService implements com.yumu.noveltranslator.port.out.ApiKeyCachePort {
 
     /** Redis key 前缀: apikey:{token} */
     private static final String REDIS_KEY_PREFIX = "apikey:";

@@ -4,6 +4,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationCache;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationCacheMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.yumu.noveltranslator.port.out.TranslationCacheAdminPort;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -44,7 +45,7 @@ import java.util.regex.Pattern;
  */
 @Service
 @Slf4j
-public class TranslationCacheService {
+public class TranslationCacheService implements TranslationCacheAdminPort {
 
     private final TranslationCacheMapper translationCacheMapper;
     private final StringRedisTemplate stringRedisTemplate;

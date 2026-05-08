@@ -10,8 +10,7 @@ import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.enums.TranslationStatus;
-import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
-import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
+import com.yumu.noveltranslator.port.out.TeamTranslationPort;
 import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 import com.yumu.noveltranslator.domain.service.CollabStateMachine;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
@@ -69,7 +68,7 @@ public class MultiAgentTranslationService {
     private final CollaborationRepositoryPort collabPort;
     private final DocumentRepositoryPort documentPort;
     private final TranslationRepositoryPort translationPort;
-    private final TeamTranslationService teamTranslationService;
+    private final TeamTranslationPort teamTranslationPort;
     private final TranslationCachePort cachePort;
     private final EntityConsistencyService entityConsistencyService;
     private final GlossaryRepositoryPort glossaryPort;
@@ -247,7 +246,7 @@ public class MultiAgentTranslationService {
             // 构建 Pipeline 并执行完整管线（L1→L2→L3→L4=Team）
             TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
-                    null, postProcessingService, teamTranslationService, userId, chapter.getProjectId().toString(), glossaryTerms);
+                    null, postProcessingService, teamTranslationPort, userId, chapter.getProjectId().toString(), glossaryTerms);
 
             String translated = pipeline.executeTeam(
                     sourceText, sourceLang, targetLang, TranslationMode.TEAM, novelType, glossaryTerms);

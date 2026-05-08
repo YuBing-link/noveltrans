@@ -46,7 +46,7 @@ import jakarta.annotation.PreDestroy;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class UserLevelThrottledTranslationClient {
+public class UserLevelThrottledTranslationClient implements com.yumu.noveltranslator.port.out.TranslationClientPort {
 
     // 超时配置（毫秒）
     private static final int CONNECT_TIMEOUT_MS = 5000;    // 连接超时 5 秒

@@ -1,7 +1,7 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.adapter.in.service;
 
-import com.yumu.noveltranslator.adapter.out.email.DeviceTokenService;
 import com.yumu.noveltranslator.port.in.DeviceTokenPort;
+import com.yumu.noveltranslator.port.out.DeviceTokenRegistrationPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -9,20 +9,20 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DeviceTokenPortAdapter implements DeviceTokenPort {
 
-    private final DeviceTokenService deviceTokenService;
+    private final DeviceTokenRegistrationPort deviceTokenRegistrationPort;
 
     @Override
     public void registerToken(String deviceId, String token) {
-        deviceTokenService.registerToken(deviceId, token);
+        deviceTokenRegistrationPort.registerToken(deviceId, token);
     }
 
     @Override
     public String getToken(String deviceId) {
-        return deviceTokenService.getToken(deviceId);
+        return deviceTokenRegistrationPort.getToken(deviceId);
     }
 
     @Override
     public void removeToken(String deviceId) {
-        deviceTokenService.removeToken(deviceId);
+        deviceTokenRegistrationPort.removeToken(deviceId);
     }
 }

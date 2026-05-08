@@ -1,11 +1,12 @@
-package com.yumu.noveltranslator.domain.service;
+package com.yumu.noveltranslator.adapter.in.service;
 
-import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.dto.common.PageResponse;
 import com.yumu.noveltranslator.dto.translation.GlossaryItemRequest;
 import com.yumu.noveltranslator.dto.translation.GlossaryResponse;
 import com.yumu.noveltranslator.port.in.GlossaryPort;
+import com.yumu.noveltranslator.port.out.CacheVersionPort;
+import com.yumu.noveltranslator.port.out.TranslationCacheAdminPort;
+import com.yumu.noveltranslator.domain.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,13 +17,13 @@ import java.util.List;
 public class GlossaryPortAdapter implements GlossaryPort {
 
     private final UserService userService;
-    private final TranslationCacheService translationCacheService;
-    private final CacheVersionService cacheVersionService;
+    private final TranslationCacheAdminPort translationCacheAdminPort;
+    private final CacheVersionPort cacheVersionPort;
 
     @Override
     public GlossaryResponse createGlossaryItem(Long userId, GlossaryItemRequest request) {
         GlossaryResponse response = userService.createGlossaryItem(userId, request);
-        translationCacheService.invalidateKeysForTerm(request.getSourceWord());
+        translationCacheAdminPort.invalidateKeysForTerm(request.getSourceWord());
         return response;
     }
 
@@ -30,7 +31,7 @@ public class GlossaryPortAdapter implements GlossaryPort {
     public GlossaryResponse updateGlossaryItem(Long userId, Long glossaryId, GlossaryItemRequest request) {
         GlossaryResponse response = userService.updateGlossaryItem(userId, glossaryId, request);
         if (response != null) {
-            translationCacheService.invalidateKeysForTerm(request.getSourceWord());
+            translationCacheAdminPort.invalidateKeysForTerm(request.getSourceWord());
         }
         return response;
     }
@@ -39,7 +40,7 @@ public class GlossaryPortAdapter implements GlossaryPort {
     public boolean deleteGlossaryItem(Long userId, Long glossaryId) {
         boolean success = userService.deleteGlossaryItem(userId, glossaryId);
         if (success) {
-            cacheVersionService.bumpAllVersions();
+            cacheVersionPort.bumpAllVersions();
         }
         return success;
     }
@@ -64,7 +65,7 @@ public class GlossaryPortAdapter implements GlossaryPort {
         int imported = userService.batchImportGlossaryItems(userId, items);
         for (GlossaryItemRequest item : items) {
             if (item.getSourceWord() != null && !item.getSourceWord().isEmpty()) {
-                translationCacheService.invalidateKeysForTerm(item.getSourceWord());
+                translationCacheAdminPort.invalidateKeysForTerm(item.getSourceWord());
             }
         }
         return imported;

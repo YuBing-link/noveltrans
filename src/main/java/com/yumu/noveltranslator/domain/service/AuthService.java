@@ -9,9 +9,9 @@ import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
 import com.yumu.noveltranslator.domain.model.Tenant;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.port.out.EmailPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserDetailsFactoryPort;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.yumu.noveltranslator.util.PasswordUtil;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +37,7 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
     private final UserRepositoryPort userRepositoryPort;
     private final JwtUtils jwtUtils;
     private final EmailPort emailPort;
+    private final UserDetailsFactoryPort userDetailsFactoryPort;
     private final VerificationCodeService verificationCodeService;
 
     @Override
@@ -45,7 +46,7 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
         if (user == null) {
             throw new UsernameNotFoundException("用户不存在：" + email);
         }
-        return new CustomUserDetails(user);
+        return userDetailsFactoryPort.createUserDetails(user);
     }
 
     public Result<User> login(LoginRequest req) {

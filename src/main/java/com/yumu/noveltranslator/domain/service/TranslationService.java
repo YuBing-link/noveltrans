@@ -11,10 +11,10 @@ import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 import com.yumu.noveltranslator.domain.service.RagTranslationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
-import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
-import com.yumu.noveltranslator.adapter.out.translate.EngineAliasRegistry;
+import com.yumu.noveltranslator.domain.util.EngineAliasRegistry;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
+import com.yumu.noveltranslator.port.out.TeamTranslationPort;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
 import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.TextCleaningUtil;
@@ -81,12 +81,12 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
     }
 
     // 依赖注入
-    private final UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
+    private final TranslationClientPort translationClientPort;
     private final TranslationCachePort cachePort;
     private final RagTranslationService ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
     private final TranslationPostProcessingService postProcessingService;
-    private final TeamTranslationService teamTranslationService;
+    private final TeamTranslationPort teamTranslationPort;
     private final QuotaService quotaService;
 
     /**
@@ -118,7 +118,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
         try {
             TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
-                    userLevelThrottledTranslationClient, postProcessingService, userId, null);
+                    translationClientPort, postProcessingService, userId, null);
             String result = pipeline.executeFast(combined, target, mode);
             if (result == null || result.trim().isEmpty()) {
                 if (userId != null) {
@@ -152,7 +152,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(engine);
         TranslationPipeline pipeline = new TranslationPipeline(
                 cachePort, ragTranslationService, entityConsistencyService,
-                userLevelThrottledTranslationClient, postProcessingService, userId, null);
+                translationClientPort, postProcessingService, userId, null);
 
         String result = pipeline.execute(text, target, mode);
 
@@ -284,7 +284,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
             Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
             TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
-                    userLevelThrottledTranslationClient, postProcessingService, userId, null);
+                    translationClientPort, postProcessingService, userId, null);
 
             List<Runnable> tasks = new ArrayList<>();
             List<String> tempResults = new ArrayList<>(indexesToTranslate.size());
@@ -389,7 +389,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
 
                 TranslationPipeline pipeline = new TranslationPipeline(
                         cachePort, ragTranslationService, entityConsistencyService,
-                        userLevelThrottledTranslationClient, postProcessingService, userId, null);
+                        translationClientPort, postProcessingService, userId, null);
 
                 log.info("[SSE流式翻译] Pipeline 初始化完成");
 
@@ -522,7 +522,7 @@ public class TranslationService implements com.yumu.noveltranslator.port.in.Tran
 
                 TranslationPipeline pipeline = new TranslationPipeline(
                         cachePort, ragTranslationService, entityConsistencyService,
-                        userLevelThrottledTranslationClient, postProcessingService, userId, null);
+                        translationClientPort, postProcessingService, userId, null);
 
                 // 先用 \n\n+ 将全文拆分为逻辑段落
                 String[] logicalParagraphs = text.split("\n\n+");
