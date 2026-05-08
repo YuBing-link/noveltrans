@@ -280,6 +280,7 @@
       "free": {
         "name": "Free",
         "price": "¥0",
+        "yearlyTotal": "¥0/year",
         "features": [
           "100,000 characters per month",
           "500 translations per day",
