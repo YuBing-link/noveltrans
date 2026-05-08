@@ -54,7 +54,9 @@ public class TranslationRepositoryAdapter implements TranslationRepositoryPort {
 
     @Override
     public void saveTask(com.yumu.noveltranslator.domain.model.TranslationTask task) {
-        taskMapper.insert(TranslationConverter.toEntityTask(task));
+        var entity = TranslationConverter.toEntityTask(task);
+        taskMapper.insert(entity);
+        task.setId(entity.getId()); // 回填自增主键
     }
 
     @Override
@@ -121,7 +123,9 @@ public class TranslationRepositoryAdapter implements TranslationRepositoryPort {
 
     @Override
     public void saveHistory(com.yumu.noveltranslator.domain.model.TranslationHistory history) {
-        historyMapper.insert(TranslationConverter.toEntityHistory(history));
+        var entity = TranslationConverter.toEntityHistory(history);
+        historyMapper.insert(entity);
+        history.setId(entity.getId()); // 回填自增主键
     }
 
     @Override

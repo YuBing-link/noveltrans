@@ -14,5 +14,6 @@ public interface DocumentPort {
     Document getDocumentById(Long docId, Long userId);
     boolean deleteDocument(Long docId, Long userId);
     boolean retryTranslation(Long docId, Long userId);
+    void updateDocument(Document doc, Long userId);
     DocumentInfoResponse toDocumentInfoResponse(Document doc);
 }

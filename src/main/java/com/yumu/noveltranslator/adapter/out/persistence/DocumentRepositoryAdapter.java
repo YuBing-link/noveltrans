@@ -33,7 +33,9 @@ public class DocumentRepositoryAdapter implements DocumentRepositoryPort {
 
     @Override
     public void save(com.yumu.noveltranslator.domain.model.Document document) {
-        documentMapper.insert(TranslationConverter.toEntityDocument(document));
+        var entity = TranslationConverter.toEntityDocument(document);
+        documentMapper.insert(entity);
+        document.setId(entity.getId()); // 回填自增主键
     }
 
     @Override

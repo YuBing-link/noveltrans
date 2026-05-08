@@ -110,17 +110,31 @@ public class WebDocumentController {
         Long userId = SecurityUtil.getRequiredUserId();
 
         TranslationTask task = translationTaskPort.getTaskByDocumentId(docId);
-        if (task == null) {
-            return Result.error(ErrorCodeEnum.NOT_FOUND, "翻译任务不存在");
+        if (task != null) {
+            if (!task.getUserId().equals(userId)) {
+                return Result.error(ErrorCodeEnum.FORBIDDEN, "无权操作");
+            }
+            if (translationTaskPort.cancelTask(task.getTaskId(), userId)) {
+                return Result.ok(null);
+            } else {
+                return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，任务可能已完成或正在处理");
+            }
         }
-        if (!task.getUserId().equals(userId)) {
-            return Result.error(ErrorCodeEnum.FORBIDDEN, "无权操作");
+
+        // 翻译任务不存在，但文档状态允许取消时，直接更新文档状态
+        Document doc = documentPort.getDocumentById(docId, userId);
+        if (doc == null) {
+            return Result.error(ErrorCodeEnum.NOT_FOUND, "文档不存在");
         }
-        if (translationTaskPort.cancelTask(task.getTaskId(), userId)) {
-            return Result.ok(null);
-        } else {
-            return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，任务可能已完成或正在处理");
+        if (!TranslationStatus.PENDING.getValue().equals(doc.getStatus())
+                && !TranslationStatus.PROCESSING.getValue().equals(doc.getStatus())) {
+            return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，文档可能已完成或正在处理");
         }
+        doc.setStatus(TranslationStatus.FAILED.getValue());
+        doc.setErrorMessage("用户取消翻译");
+        doc.setUpdateTime(java.time.LocalDateTime.now());
+        documentPort.updateDocument(doc, userId);
+        return Result.ok(null);
     }
 
     /**
