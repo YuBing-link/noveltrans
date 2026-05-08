@@ -8,8 +8,6 @@ import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 
-import java.util.List;
-
 public interface CollabPort {
     CollabProjectResponse createProject(CreateCollabProjectRequest request, Long userId);
     TeamProjectCreateResult createProjectFromDocument(Long userId, Long documentId, String documentName,
@@ -18,7 +16,6 @@ public interface CollabPort {
     int addChaptersToProject(Long userId, Long projectId, Document document);
     void startMultiAgentTranslation(Long projectId);
     CollabProjectResponse getProjectById(Long projectId);
-    List<CollabProjectResponse> listOwnedByUserId(Long userId);
     PageResponse<CollabProjectResponse> listByUserId(Long userId, int page, int pageSize);
     CollabProjectResponse updateProject(Long projectId, CreateCollabProjectRequest request, Long userId);
     void changeProjectStatus(Long projectId, CollabProjectStatus targetStatus, Long userId);
@@ -28,7 +25,6 @@ public interface CollabPort {
     PageResponse<ProjectMemberResponse> getMembers(Long projectId, int page, int pageSize);
     void removeMember(Long projectId, Long memberId, Long operatorId);
     void deleteProject(Long projectId, Long userId);
-    int getProjectProgress(Long projectId);
 
     record TeamProjectCreateResult(Long projectId, String documentName, int chapterCount) {}
     record InviteCodeResult(String code, java.time.LocalDateTime expiresAt) {}

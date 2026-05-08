@@ -321,17 +321,6 @@ public class CollabProjectApplicationService implements com.yumu.noveltranslator
     }
 
     /**
-     * 获取用户创建的项目列表
-     */
-    public List<CollabProjectResponse> listOwnedByUserId(Long userId) {
-        List<CollabProject> projects = collabPort.findProjectsByOwnerId(userId);
-        Map<Long, User> userMap = batchLoadOwnerUsers(projects);
-        return projects.stream()
-                .map(p -> toProjectResponse(p, userMap))
-                .collect(Collectors.toList());
-    }
-
-    /**
      * 获取用户参与的项目列表
      */
     public PageResponse<CollabProjectResponse> listByUserId(Long userId, int page, int pageSize) {
@@ -589,13 +578,6 @@ public class CollabProjectApplicationService implements com.yumu.noveltranslator
         collabPort.deleteProject(projectId);
 
         log.info("删除协作项目: projectId={}, name={}, ownerId={}", projectId, project.getName(), userId);
-    }
-
-    /**
-     * 计算项目进度
-     */
-    public int getProjectProgress(Long projectId) {
-        return 0;
     }
 
     private CollabProjectResponse toProjectResponse(CollabProject project) {

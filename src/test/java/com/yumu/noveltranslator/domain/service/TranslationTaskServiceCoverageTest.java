@@ -11,9 +11,9 @@ import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
 import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.TranslationHistory;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
@@ -99,7 +99,7 @@ class TranslationTaskServiceCoverageTest {
     }
 
     private void setAuthenticatedUser(Long userId) {
-        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
+        User user = new User();
         user.setId(userId);
         user.setUserLevel("free");
         com.yumu.noveltranslator.adapter.out.security.CustomUserDetails userDetails =

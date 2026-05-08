@@ -16,21 +16,6 @@ public class DeviceTokenApplicationService implements DeviceTokenPort {
     private final JwtUtils jwtUtils;
 
     @Override
-    public void registerToken(String deviceId, String token) {
-        deviceTokenRegistrationPort.registerToken(deviceId, token);
-    }
-
-    @Override
-    public String getToken(String deviceId) {
-        return deviceTokenRegistrationPort.getToken(deviceId);
-    }
-
-    @Override
-    public void removeToken(String deviceId) {
-        deviceTokenRegistrationPort.removeToken(deviceId);
-    }
-
-    @Override
     public String generateAndRegisterToken(String deviceId, Long userId, String email, Long tenantId) {
         String token = jwtUtils.createToken(userId, email, tenantId);
         deviceTokenRegistrationPort.registerToken(deviceId, token);

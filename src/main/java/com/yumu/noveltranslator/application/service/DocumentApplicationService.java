@@ -116,18 +116,6 @@ public class DocumentApplicationService implements com.yumu.noveltranslator.port
     }
 
     /**
-     * 更新文档（含权限校验）
-     */
-    public void updateDocument(Document doc, Long userId) {
-        Document existing = documentPort.findByIdAndUserId(doc.getId(), userId).orElse(null);
-        if (existing == null) {
-            throw new RuntimeException("文档不存在或无权操作");
-        }
-        doc.setUserId(userId); // 确保不被篡改
-        documentPort.update(doc);
-    }
-
-    /**
      * 重新翻译文档（仅重置状态，实际翻译由前端 SSE 触发）
      */
     public boolean retryTranslation(Long docId, Long userId) {

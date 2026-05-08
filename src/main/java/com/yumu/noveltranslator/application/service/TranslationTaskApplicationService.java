@@ -479,12 +479,8 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
     }
 
     /**
-     * 统计翻译历史总数
+     * 统计翻译历史总数（按类型过滤）
      */
-    public int countTranslationHistory(Long userId) {
-        return translationPort.countHistoryByUserId(userId);
-    }
-
     @Override
     public int countTranslationHistory(Long userId, String type) {
         if ("all".equals(type)) {
