@@ -90,15 +90,14 @@ public class WebUserController {
     @GetMapping("/profile")
     public Result<User> getCurrentUserProfile() {
         CustomUserDetails userDetails = SecurityUtil.getRequiredUserDetails();
-        User user = userDetails.getUser();
 
         User userInfo = new User();
-        userInfo.setId(user.getId());
-        userInfo.setEmail(user.getEmail());
-        userInfo.setUsername(user.getUsername());
-        userInfo.setAvatar(user.getAvatar());
-        userInfo.setUserLevel(user.getUserLevel());
-        userInfo.setCreateTime(user.getCreateTime());
+        userInfo.setId(userDetails.getId());
+        userInfo.setEmail(userDetails.getEmail());
+        userInfo.setUsername(userDetails.getUsername());
+        userInfo.setAvatar(userDetails.getUser() != null ? userDetails.getUser().getAvatar() : null);
+        userInfo.setUserLevel(userDetails.getUserLevel());
+        userInfo.setCreateTime(userDetails.getUser() != null ? userDetails.getUser().getCreateTime() : null);
 
         return Result.ok(userInfo);
     }
@@ -111,6 +110,12 @@ public class WebUserController {
     public Result<User> updateUserProfile(@RequestBody @Valid UpdateUserProfileRequest request) {
         CustomUserDetails userDetails = SecurityUtil.getRequiredUserDetails();
         User user = userDetails.getUser();
+        if (user == null) {
+            user = new User();
+            user.setId(userDetails.getId());
+            user.setEmail(userDetails.getEmail());
+            user.setUserLevel(userDetails.getUserLevel());
+        }
 
         if (request.getUsername() != null && !request.getUsername().trim().isEmpty()) {
             user.setUsername(request.getUsername());
@@ -193,7 +198,13 @@ public class WebUserController {
      */
     @GetMapping("/quota")
     public Result<UserQuotaResponse> getQuota() {
-        User user = SecurityUtil.getRequiredUserDetails().getUser();
+        CustomUserDetails userDetails = SecurityUtil.getRequiredUserDetails();
+        User user = userDetails.getUser();
+        if (user == null) {
+            user = new User();
+            user.setId(userDetails.getId());
+            user.setUserLevel(userDetails.getUserLevel());
+        }
         UserQuotaResponse quota = userPort.getUserQuota(user);
         return Result.ok(quota);
     }
