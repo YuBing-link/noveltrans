@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.adapter.out.redis;
 
+import com.yumu.noveltranslator.port.out.VectorSearchResult;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,10 +15,12 @@ import java.util.*;
 @Slf4j
 public class VectorStorePortAdapter implements VectorStorePort {
 
+    private static final String KEY_PREFIX = "tm:";
+
     private final StringRedisTemplate stringRedisTemplate;
 
     @Override
-    public List<Map<String, String>> vectorSearch(float[] queryVector, Long userId, String targetLang, List<String> allowedModes, int topK) {
+    public List<VectorSearchResult> vectorSearch(float[] queryVector, Long userId, String targetLang, List<String> allowedModes, int topK) {
         try {
             String vectorStr = formatVectorForRedis(queryVector);
             String modeFilter = buildModeFilter(allowedModes);
@@ -46,8 +49,20 @@ public class VectorStorePortAdapter implements VectorStorePort {
     }
 
     @Override
-    public void storeVector(String key, Map<String, String> fields) {
+    public void storeVector(Long memoryId, String sourceText, String targetText, String sourceLang, String targetLang, Long userId, String translationMode, float[] embedding) {
         try {
+            String key = KEY_PREFIX + memoryId;
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("id", memoryId.toString());
+            fields.put("source_text", sourceText);
+            fields.put("target_text", targetText);
+            fields.put("source_lang", sourceLang);
+            fields.put("target_lang", targetLang);
+            fields.put("user_id", userId.toString());
+            fields.put("embedding", formatVectorForRedis(embedding));
+            if (translationMode != null) {
+                fields.put("translation_mode", translationMode);
+            }
             for (Map.Entry<String, String> entry : fields.entrySet()) {
                 stringRedisTemplate.opsForHash().put(key, entry.getKey(), entry.getValue());
             }
@@ -59,7 +74,7 @@ public class VectorStorePortAdapter implements VectorStorePort {
     @Override
     public void clearAllVectors() {
         try {
-            stringRedisTemplate.delete(stringRedisTemplate.keys("tm:*"));
+            stringRedisTemplate.delete(stringRedisTemplate.keys(KEY_PREFIX + "*"));
         } catch (Exception e) {
             log.warn("Redis vector clear failed: {}", e.getMessage());
         }
@@ -69,7 +84,11 @@ public class VectorStorePortAdapter implements VectorStorePort {
         StringBuilder sb = new StringBuilder();
         sb.append(vector.length).append(",");
         for (int i = 0; i < vector.length; i++) {
-            sb.append(String.format("%.6f", vector[i]));
+            // 手动截断 6 位小数，避免 String.format 开销
+            long rounded = Math.round(vector[i] * 1_000_000L);
+            sb.append(rounded / 1_000_000L).append('.');
+            long frac = Math.abs(rounded % 1_000_000L);
+            sb.append(String.format("%06d", frac));
             if (i < vector.length - 1) sb.append(",");
         }
         return sb.toString();
@@ -84,10 +103,10 @@ public class VectorStorePortAdapter implements VectorStorePort {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, String>> parseSearchResult(Object result) {
-        List<Map<String, String>> matches = new ArrayList<>();
+    private List<VectorSearchResult> parseSearchResult(Object result) {
+        List<VectorSearchResult> results = new ArrayList<>();
         if (result == null || !(result instanceof List<?> resultList)) {
-            return matches;
+            return results;
         }
 
         for (int i = 1; i < resultList.size(); i += 2) {
@@ -97,17 +116,38 @@ public class VectorStorePortAdapter implements VectorStorePort {
             Map<String, byte[]> fieldMap = parseFieldArray(fieldsObj);
             if (fieldMap.isEmpty()) continue;
 
-            Map<String, String> match = new LinkedHashMap<>();
-            match.put("source_text", new String(fieldMap.getOrDefault("source_text", new byte[0]), StandardCharsets.UTF_8));
-            match.put("target_text", new String(fieldMap.getOrDefault("target_text", new byte[0]), StandardCharsets.UTF_8));
-            match.put("id", new String(fieldMap.getOrDefault("id", new byte[0]), StandardCharsets.UTF_8));
-            byte[] scoreBytes = fieldMap.get("score");
-            if (scoreBytes != null) {
-                match.put("score", new String(scoreBytes, StandardCharsets.UTF_8));
-            }
-            matches.add(match);
+            Long memoryId = parseMemoryId(fieldMap);
+            if (memoryId == null) continue;
+
+            String sourceText = new String(fieldMap.getOrDefault("source_text", new byte[0]), StandardCharsets.UTF_8);
+            String targetText = new String(fieldMap.getOrDefault("target_text", new byte[0]), StandardCharsets.UTF_8);
+            double similarity = parseSimilarity(fieldMap);
+
+            results.add(new VectorSearchResult(memoryId, sourceText, targetText, similarity));
         }
-        return matches;
+        return results;
+    }
+
+    private Long parseMemoryId(Map<String, byte[]> fieldMap) {
+        byte[] idBytes = fieldMap.get("id");
+        if (idBytes == null) return null;
+        try {
+            return Long.parseLong(new String(idBytes, StandardCharsets.UTF_8));
+        } catch (NumberFormatException e) {
+            log.warn("向量搜索结果 id 解析失败: {}", new String(idBytes, StandardCharsets.UTF_8));
+            return null;
+        }
+    }
+
+    private double parseSimilarity(Map<String, byte[]> fieldMap) {
+        byte[] scoreBytes = fieldMap.get("score");
+        if (scoreBytes == null) return 0.0;
+        try {
+            double distance = Double.parseDouble(new String(scoreBytes, StandardCharsets.UTF_8));
+            return 1.0 - distance;
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
     }
 
     @SuppressWarnings("unchecked")

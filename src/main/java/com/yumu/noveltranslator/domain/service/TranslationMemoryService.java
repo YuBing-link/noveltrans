@@ -21,12 +21,12 @@ public class TranslationMemoryService {
     private final EmbeddingService embeddingService;
 
     /**
-     * 存储翻译记忆（写入 MySQL）
+     * 存储翻译记忆（写入 MySQL），返回自增 ID
      */
-    public void storeTranslation(String sourceText, String targetText, String sourceLang, String targetLang,
+    public Long storeTranslation(String sourceText, String targetText, String sourceLang, String targetLang,
                                   Long userId, Long projectId, String engine, String translationMode) {
         if (sourceText == null || sourceText.isBlank() || targetText == null || targetText.isBlank()) {
-            return;
+            return null;
         }
 
         TranslationMemory memory = new TranslationMemory();
@@ -48,6 +48,7 @@ public class TranslationMemoryService {
 
         glossaryPort.saveTranslationMemory(memory);
         log.debug("存储翻译记忆: id={}, sourceLen={}", memory.getId(), sourceText.length());
+        return memory.getId();
     }
 
     /**

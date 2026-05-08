@@ -205,7 +205,9 @@ public class GlossaryRepositoryAdapter implements GlossaryRepositoryPort {
 
     @Override
     public void saveTranslationMemory(com.yumu.noveltranslator.domain.model.TranslationMemory memory) {
-        translationMemoryMapper.insert(GlossaryConverter.translationMemoryToEntity(memory));
+        var entity = GlossaryConverter.translationMemoryToEntity(memory);
+        translationMemoryMapper.insert(entity);
+        memory.setId(entity.getId());
     }
 
     @Override
