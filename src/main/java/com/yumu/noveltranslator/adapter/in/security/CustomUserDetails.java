@@ -15,23 +15,33 @@ public class CustomUserDetails implements UserDetails {
 
     private User user;
     private final Long userId;
+    private final String email;
     private final String userLevel;
     private final Long tenantId;
 
     public CustomUserDetails(User user) {
         this.user = user;
         this.userId = user.getId();
+        this.email = user.getEmail();
         this.userLevel = user.getUserLevel();
         this.tenantId = user.getTenantId();
     }
 
     /**
-     * 轻量构造器（API Key 缓存命中时使用，无需加载完整 User 实体）
+     * 轻量构造器（JWT 缓存命中时使用，无需加载完整 User 实体）
      */
-    public CustomUserDetails(Long userId, String userLevel, Long tenantId) {
+    public CustomUserDetails(Long userId, String email, String userLevel, Long tenantId) {
         this.userId = userId;
+        this.email = email;
         this.userLevel = userLevel;
         this.tenantId = tenantId;
+    }
+
+    /**
+     * 轻量构造器（无 email 场景，如 API Key 认证）
+     */
+    public CustomUserDetails(Long userId, String userLevel, Long tenantId) {
+        this(userId, null, userLevel, tenantId);
     }
 
     @Override
@@ -49,7 +59,7 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public String getUsername() {
-        return user != null ? user.getEmail() : "apikey-" + userId;
+        return email != null ? email : (user != null ? user.getEmail() : "user-" + userId);
     }
 
     @Override
@@ -82,7 +92,7 @@ public class CustomUserDetails implements UserDetails {
     }
 
     public String getEmail() {
-        return user != null ? user.getEmail() : null;
+        return email != null ? email : (user != null ? user.getEmail() : null);
     }
 
     public String getUserLevel() {

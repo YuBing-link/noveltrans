@@ -173,7 +173,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         TenantContext.setTenantIdOrDefault(info.getTenantId());
 
         // 构造最小化 CustomUserDetails（从缓存信息构建，无需查 DB）
-        CustomUserDetails userDetails = new CustomUserDetails(info.getUserId(), info.getUserLevel(), info.getTenantId());
+        CustomUserDetails userDetails = new CustomUserDetails(info.getUserId(), email, info.getUserLevel(), info.getTenantId());
         UsernamePasswordAuthenticationToken authToken =
             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
