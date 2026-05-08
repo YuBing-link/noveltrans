@@ -35,6 +35,13 @@ public interface BillingRepositoryPort {
     int atomicUpdateSubscription(Long id, String eventId, String status, Long eventCreated);
 
     /**
+     * 原子性地声明事件处理权：仅当 lastWebhookEventId 为 NULL 时才设置。
+     * 用于并发场景下 claim 事件处理权，避免重复处理。
+     * 返回受影响的行数（0 表示已被其他线程 claim）。
+     */
+    int claimWebhookEvent(Long id, String eventId);
+
+    /**
      * 更新订阅时间字段（period start/end, canceledAt）。在 atomicUpdateSubscription 成功后调用。
      */
     void updateSubscriptionFields(Long id, LocalDateTime periodStart, LocalDateTime periodEnd, LocalDateTime canceledAt);

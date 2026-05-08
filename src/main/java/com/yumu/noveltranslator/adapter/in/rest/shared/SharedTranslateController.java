@@ -13,6 +13,7 @@ import com.yumu.noveltranslator.port.in.RagTranslationPort;
 import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -159,8 +160,9 @@ public class SharedTranslateController {
      */
     @PostMapping("/rag")
     public Result<RagTranslationResponse> queryRag(@RequestBody @Valid RagTranslationRequest request) {
-        RagTranslationResponse response = ragTranslationPort.searchSimilar(
-                request.getText(), request.getTargetLang(), request.getEngine());
+        RagTranslationResponse response = ragTranslationPort.searchSimilarWithModes(
+                request.getText(), request.getTargetLang(),
+                request.getEngine() != null ? List.of(request.getEngine()) : List.of());
         return Result.ok(response);
     }
 }

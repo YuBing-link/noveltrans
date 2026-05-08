@@ -205,7 +205,7 @@ public class TranslationPipeline {
 
         // L2: RAG 语义匹配（带模式层级过滤）
         RagTranslationResponse ragResult = ragTranslationService.searchSimilarWithModes(text, targetLang, mode.getAllowedModes());
-        if (ragResult.isDirectHit()) {
+        if (ragResult != null && ragResult.isDirectHit()) {
             log.info("Pipeline 团队模式 RAG 直接命中，相似度: {}", ragResult.getSimilarity());
             String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, mode.getName());
             cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), "team");
@@ -252,7 +252,11 @@ public class TranslationPipeline {
 
             // 还原占位符
             if (mappingContext != null) {
-                translated = entityConsistencyService.restorePlaceholders(translated, mappingContext);
+                try {
+                    translated = entityConsistencyService.restorePlaceholders(translated, mappingContext);
+                } catch (Exception e) {
+                    log.warn("团队模式占位符还原失败: {}", e.getMessage());
+                }
             }
 
             // 后处理 + 缓存
@@ -284,7 +288,7 @@ public class TranslationPipeline {
 
         // L2: RAG 语义匹配（带模式层级过滤）
         RagTranslationResponse ragResult = ragTranslationService.searchSimilarWithModes(text, targetLang, mode.getAllowedModes());
-        if (ragResult.isDirectHit()) {
+        if (ragResult != null && ragResult.isDirectHit()) {
             log.info("Pipeline RAG 直接命中，相似度: {}", ragResult.getSimilarity());
             String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, mode.getName());
             cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), mode.getName());
@@ -357,7 +361,7 @@ public class TranslationPipeline {
     public String executeFast(String text, String targetLang, TranslationMode mode, boolean html) {
         log.info("[PIPELINE-ENTRY] executeFast START: textLen={}, target={}, mode={}, html={}",
                 text.length(), targetLang, mode.getName(), html);
-        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);
+        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang) + (html ? ":html" : ":text");
         log.info("[PIPELINE-L1] Cache key: {}", cacheKey.substring(0, Math.min(32, cacheKey.length())));
 
         // L1: 分层缓存查询

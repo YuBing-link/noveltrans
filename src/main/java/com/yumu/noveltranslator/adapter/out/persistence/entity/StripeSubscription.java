@@ -42,6 +42,9 @@ public class StripeSubscription {
     /** Stripe 事件时间戳（秒级 epoch），用于防止 out-of-order 事件覆写 */
     private Long lastEventCreated;
 
+    /** 非 Webhook 操作来源（upgrade/cancel 等），避免污染 lastWebhookEventId */
+    private String lastOperationSource;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 

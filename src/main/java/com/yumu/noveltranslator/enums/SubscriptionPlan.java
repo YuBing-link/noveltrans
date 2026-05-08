@@ -7,6 +7,8 @@ public enum SubscriptionPlan {
     PRO("PRO"),
     MAX("MAX");
 
+    public static final String[] VALUES = {"PRO", "MAX"};
+
     private final String value;
 
     SubscriptionPlan(String value) {

@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.port.in;
 
+import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.domain.model.TranslationHistory;
 import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;

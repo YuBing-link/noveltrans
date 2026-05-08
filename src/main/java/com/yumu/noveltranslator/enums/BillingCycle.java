@@ -7,6 +7,8 @@ public enum BillingCycle {
     MONTHLY("monthly"),
     YEARLY("yearly");
 
+    public static final String[] VALUES = {"monthly", "yearly"};
+
     private final String value;
 
     BillingCycle(String value) {

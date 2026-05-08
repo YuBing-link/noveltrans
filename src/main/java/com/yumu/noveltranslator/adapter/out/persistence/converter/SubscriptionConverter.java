@@ -35,6 +35,7 @@ public final class SubscriptionConverter {
         m.setCurrentPeriodStart(e.getCurrentPeriodStart()); m.setCurrentPeriodEnd(e.getCurrentPeriodEnd());
         m.setCancelAtPeriodEnd(e.getCancelAtPeriodEnd()); m.setCanceledAt(e.getCanceledAt());
         m.setLastWebhookEventId(e.getLastWebhookEventId()); m.setLastEventCreated(e.getLastEventCreated());
+        m.setLastOperationSource(e.getLastOperationSource());
         m.setCreateTime(e.getCreateTime()); m.setUpdateTime(e.getUpdateTime());
         m.setDeleted(e.getDeleted()); return m;
     }
@@ -48,6 +49,7 @@ public final class SubscriptionConverter {
         e.setCurrentPeriodStart(m.getCurrentPeriodStart()); e.setCurrentPeriodEnd(m.getCurrentPeriodEnd());
         e.setCancelAtPeriodEnd(m.getCancelAtPeriodEnd()); e.setCanceledAt(m.getCanceledAt());
         e.setLastWebhookEventId(m.getLastWebhookEventId()); e.setLastEventCreated(m.getLastEventCreated());
+        e.setLastOperationSource(m.getLastOperationSource());
         e.setCreateTime(m.getCreateTime()); e.setUpdateTime(m.getUpdateTime());
         e.setDeleted(m.getDeleted()); return e;
     }

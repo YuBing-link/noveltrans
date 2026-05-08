@@ -99,6 +99,15 @@ public class BillingRepositoryAdapter implements BillingRepositoryPort {
     }
 
     @Override
+    public int claimWebhookEvent(Long id, String eventId) {
+        LambdaUpdateWrapper<StripeSubscription> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(StripeSubscription::getId, id)
+               .isNull(StripeSubscription::getLastWebhookEventId)
+               .set(StripeSubscription::getLastWebhookEventId, eventId);
+        return stripeSubscriptionMapper.update(null, wrapper);
+    }
+
+    @Override
     public int atomicUpdateSubscription(Long id, String eventId, String status, Long eventCreated) {
         LambdaUpdateWrapper<StripeSubscription> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(StripeSubscription::getId, id)

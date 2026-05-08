@@ -19,6 +19,11 @@ public class StripeSubscription {
     private LocalDateTime canceledAt;
     private String lastWebhookEventId;
     private Long lastEventCreated;
+    /**
+     * 记录非 Webhook 来源的操作（如手动升级、取消），避免污染 lastWebhookEventId。
+     * 格式："upgrade_{timestamp}" / "manual_cancel_{timestamp}"
+     */
+    private String lastOperationSource;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
     private Integer deleted;
