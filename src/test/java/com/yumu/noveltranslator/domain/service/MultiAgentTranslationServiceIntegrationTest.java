@@ -128,7 +128,7 @@ class MultiAgentTranslationServiceIntegrationTest {
         // 默认 Mock 行为
         when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
         when(aiGlossaryService.getProjectGlossary(anyLong())).thenReturn(List.of());
-        when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList()))
+        when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList()))
                 .thenReturn(new RagTranslationResponse()); // directHit=false by default
         when(teamTranslationService.translateChapter(anyString(), anyString(), anyString(), anyString(), anyList()))
                 .thenReturn("翻译结果：这是AI翻译的章节内容。");
@@ -138,8 +138,7 @@ class MultiAgentTranslationServiceIntegrationTest {
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(1));
         // RAG storeTranslationMemory stub
-        doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
-        doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
+        doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
     }
 
     @AfterEach

@@ -10,7 +10,7 @@ import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.application.service.DocumentApplicationService;
 import com.yumu.noveltranslator.domain.service.QuotaService;
 import com.yumu.noveltranslator.application.service.TranslationApplicationService;
@@ -124,7 +124,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("translate successfully with minimal fields")
         void translateSuccessMinimal() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "google", "Hello translated"));
 
             mockMvc.perform(post("/v1/external/translate")
@@ -139,7 +139,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("translate successfully with all fields")
         void translateSuccessAllFields() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "deepl", "Uebersetzt"));
 
             mockMvc.perform(post("/v1/external/translate")
@@ -210,7 +210,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("translation service exception returns error")
         void translateServiceException() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                 .thenThrow(new RuntimeException("Engine connection failed"));
 
             mockMvc.perform(post("/v1/external/translate")
@@ -234,7 +234,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("batch translate successfully with multiple texts")
         void batchTranslateSuccess() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "google", "translated"));
 
             mockMvc.perform(post("/v1/external/batch")
@@ -251,7 +251,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("batch translate single item")
         void batchTranslateSingleItem() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "google", "result"));
 
             mockMvc.perform(post("/v1/external/batch")
@@ -311,7 +311,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("exactly 50 items is allowed")
         void batchTranslateExactly50() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "google", "ok"));
 
             String[] texts = new String[50];
@@ -332,7 +332,7 @@ class ExternalTranslateControllerTest {
         void batchTranslatePartialFailure() throws Exception {
             setupSecurityContext();
             // All calls throw - each item gets an error field
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                 .thenThrow(new RuntimeException("Engine timeout"));
 
             mockMvc.perform(post("/v1/external/batch")
@@ -348,7 +348,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("batch translate with expert mode")
         void batchTranslateWithMode() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "openai", "AI result"));
 
             mockMvc.perform(post("/v1/external/batch")

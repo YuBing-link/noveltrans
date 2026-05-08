@@ -10,7 +10,7 @@ import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
 import com.yumu.noveltranslator.application.service.DocumentApplicationService;
 import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;

@@ -14,7 +14,7 @@ import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

@@ -2,7 +2,7 @@ package com.yumu.noveltranslator.util;
 import com.yumu.noveltranslator.exception.BusinessException;
 
 import com.yumu.noveltranslator.domain.model.User;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -47,7 +47,7 @@ class PluginTranslateControllerTest {
 
         @Test
         void 选中文本翻译成功() throws Exception {
-            when(translationService.selectionTranslate(any()))
+            when(translationService.selectionTranslate(anyLong(), any()))
                     .thenReturn(new SelectionTranslateResponse(true, "google", "翻译结果"));
 
             mockMvc.perform(post("/v1/translate/selection")

@@ -10,7 +10,7 @@ import com.yumu.noveltranslator.port.dto.common.Result;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.port.out.EmailPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.util.JwtUtils;

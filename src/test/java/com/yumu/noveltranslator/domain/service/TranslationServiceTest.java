@@ -3,6 +3,8 @@ import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest
 import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateResponse;
 import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.port.dto.translation.SelectionTranslateResponse;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.application.service.TranslationApplicationService;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
@@ -10,7 +12,7 @@ import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

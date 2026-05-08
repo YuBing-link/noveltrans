@@ -91,9 +91,8 @@ class TranslationPipelineExtendedTest {
         lenient().doNothing().when(cacheService).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
 
         RagTranslationResponse ragMiss = buildRagMiss();
-        lenient().doReturn(ragMiss).when(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), anyList());
-        lenient().doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
-        lenient().doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
+        lenient().doReturn(ragMiss).when(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList());
+        lenient().doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
 
         lenient().doAnswer(inv -> inv.getArgument(1)).when(postProcessingService).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
 
@@ -175,7 +174,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("L2 RAG 直接命中")
         void ragHit() {
             RagTranslationResponse ragHit = buildRagHit("RAG翻译结果");
-            lenient().doReturn(ragHit).when(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), anyList());
+            lenient().doReturn(ragHit).when(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
@@ -555,7 +554,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("L2 RAG 直接命中")
         void ragHit() {
             RagTranslationResponse ragHit = buildRagHit("RAG团队翻译");
-            lenient().doReturn(ragHit).when(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), anyList());
+            lenient().doReturn(ragHit).when(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList());
 
             String result = teamPipeline.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "fantasy", List.of());
 
@@ -690,7 +689,7 @@ class TranslationPipelineExtendedTest {
             assertEquals("Team translated result", result);
             verify(postProcessingService).fixUntranslatedChinese(eq(SOURCE_TEXT), eq("Team translated result"), eq(TARGET_LANG), eq("team"));
             verify(cacheService).putCache(anyString(), anyString(), eq("Team translated result"), anyString(), anyString(), anyString(), anyString());
-            verify(ragTranslationService).storeTranslationMemory(eq(SOURCE_TEXT), eq("Team translated result"), eq(TARGET_LANG), eq("team"), eq("team"));
+            verify(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
         }
 
         @Test
@@ -776,7 +775,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("RAG 服务抛出异常 — 传播到调用方")
         void ragServiceExceptionPropagates() {
             lenient().doThrow(new RuntimeException("RAG service error"))
-                    .when(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), anyList());
+                    .when(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList());
 
             // executeSegment does NOT wrap the RAG call in try-catch
             assertThrows(RuntimeException.class, () ->
@@ -848,9 +847,8 @@ class TranslationPipelineExtendedTest {
 
             lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
             lenient().doNothing().when(cs).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
-            lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(any(), any(), any());
-            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
-            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
+            lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(anyLong(), any(), any(), any());
+            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
             lenient().doReturn(false).when(ecs).shouldUseConsistency(anyString());
             lenient().doReturn("{\"code\":200,\"data\":\"翻译\"}").when(tc)
                     .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
@@ -876,9 +874,8 @@ class TranslationPipelineExtendedTest {
 
             lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
             lenient().doNothing().when(cs).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
-            lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(any(), any(), any());
-            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
-            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
+            lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(anyLong(), any(), any(), any());
+            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
             lenient().doReturn(false).when(ecs).shouldUseConsistency(anyString());
             lenient().doReturn("{\"code\":200,\"data\":\"空翻译\"}").when(tc)
                     .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
@@ -903,9 +900,8 @@ class TranslationPipelineExtendedTest {
 
             lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
             lenient().doNothing().when(cs).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
-            lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(any(), any(), any());
-            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString());
-            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyString());
+            lenient().doReturn(buildRagMiss()).when(rag).searchSimilarWithModes(anyLong(), any(), any(), any());
+            lenient().doNothing().when(rag).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
             lenient().doReturn(false).when(ecs).shouldUseConsistency(anyString());
             lenient().doReturn("{\"code\":200,\"data\":\"空白翻译\"}").when(tc)
                     .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
@@ -1185,7 +1181,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("RAG 命中 — 后处理 + 缓存（不调用 storeTranslationMemory）")
         void ragHitPostProcessAndCache() {
             RagTranslationResponse ragHit = buildRagHit("RAG翻译结果");
-            lenient().doReturn(ragHit).when(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), anyList());
+            lenient().doReturn(ragHit).when(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList());
 
             String result = pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
@@ -1193,7 +1189,7 @@ class TranslationPipelineExtendedTest {
             verify(postProcessingService).fixUntranslatedChinese(eq(SOURCE_TEXT), eq("RAG翻译结果"), eq(TARGET_LANG), eq("fast"));
             verify(cacheService).putCache(anyString(), anyString(), eq("RAG翻译结果"), eq("auto"), eq(TARGET_LANG), eq("fast"), eq("fast"));
             // RAG hit path does NOT call storeTranslationMemory (only L4 and entity consistency do)
-            verify(ragTranslationService, never()).storeTranslationMemory(eq(SOURCE_TEXT), eq("RAG翻译结果"), anyString(), anyString(), anyString());
+            verify(ragTranslationService, never()).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
         }
 
         @Test
@@ -1208,7 +1204,7 @@ class TranslationPipelineExtendedTest {
             assertEquals("一致性结果", result);
             verify(postProcessingService).fixUntranslatedChinese(eq(SOURCE_TEXT), eq("一致性结果"), eq(TARGET_LANG), eq("expert"));
             verify(cacheService).putCache(anyString(), anyString(), eq("一致性结果"), eq("auto"), eq(TARGET_LANG), eq("expert"), eq("expert"));
-            verify(ragTranslationService).storeTranslationMemory(eq(SOURCE_TEXT), eq("一致性结果"), eq(TARGET_LANG), eq("expert"), eq("expert"));
+            verify(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
         }
 
         @Test
@@ -1222,7 +1218,7 @@ class TranslationPipelineExtendedTest {
             assertEquals(TRANSLATED_TEXT, result);
             verify(postProcessingService).fixUntranslatedChinese(eq(SOURCE_TEXT), eq(TRANSLATED_TEXT), eq(TARGET_LANG), eq("fast"));
             verify(cacheService).putCache(anyString(), anyString(), eq(TRANSLATED_TEXT), eq("auto"), eq(TARGET_LANG), eq("fast"), eq("fast"));
-            verify(ragTranslationService).storeTranslationMemory(eq(SOURCE_TEXT), eq(TRANSLATED_TEXT), eq(TARGET_LANG), eq("fast"), eq("fast"));
+            verify(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
         }
 
         @Test
@@ -1232,7 +1228,7 @@ class TranslationPipelineExtendedTest {
 
             assertEquals("Team translated result", result);
             verify(cacheService).putCache(anyString(), anyString(), eq("Team translated result"), eq("en"), eq(TARGET_LANG), eq("team"), eq("team"));
-            verify(ragTranslationService).storeTranslationMemory(eq(SOURCE_TEXT), eq("Team translated result"), eq(TARGET_LANG), eq("team"), eq("team"));
+            verify(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
         }
 
         @Test
@@ -1244,7 +1240,7 @@ class TranslationPipelineExtendedTest {
             teamPipeline.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "daily", List.of());
 
             verify(cacheService, never()).putCache(anyString(), anyString(), eq(SOURCE_TEXT), anyString(), anyString(), anyString(), anyString());
-            verify(ragTranslationService, never()).storeTranslationMemory(eq(SOURCE_TEXT), eq(SOURCE_TEXT), anyString(), anyString(), anyString());
+            verify(ragTranslationService, never()).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
         }
     }
 

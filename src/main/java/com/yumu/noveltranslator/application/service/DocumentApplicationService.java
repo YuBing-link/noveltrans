@@ -2,9 +2,11 @@ package com.yumu.noveltranslator.application.service;
 
 import com.yumu.noveltranslator.port.dto.entity.DocumentInfoResponse;
 import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationResponse;
 import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
+import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
 import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
@@ -36,6 +38,8 @@ public class DocumentApplicationService implements com.yumu.noveltranslator.port
     private final DocumentRepositoryPort documentPort;
     private final TranslationRepositoryPort translationPort;
     private final TranslationStateMachine stateMachine;
+    private final CollabPort collabPort;
+    private final com.yumu.noveltranslator.port.in.TranslationTaskPort translationTaskPort;
 
     /**
      * 上传文档
@@ -170,6 +174,65 @@ public class DocumentApplicationService implements com.yumu.noveltranslator.port
                 : null);
         response.setErrorMessage(doc.getErrorMessage());
         return response;
+    }
+
+    /**
+     * 上传文档并根据翻译模式自动启动翻译
+     * 团队模式：添加章节到协作项目或创建新项目；fast/expert 模式：创建翻译任务
+     */
+    public DocumentTranslationResponse uploadAndStartTranslation(
+            Long userId, MultipartFile file, DocumentTranslationRequest request) throws IOException {
+
+        Document doc = uploadDocument(userId, file, request);
+
+        if ("team".equals(request.getMode())) {
+            // 团队模式：文档已通过 documentId 关联（uploadDocument 创建了 doc，但没传 projectId）
+            // 实际上团队模式需要 projectId，所以这个方法由调用方决定走哪条路
+            // 为保持接口简洁，团队模式不使用此方法，调用方直接用 uploadDocument + collabPort
+            throw new UnsupportedOperationException("团队模式请使用 uploadDocument 后手动调用 CollabPort");
+        }
+
+        // fast/expert 模式：创建任务后直接异步启动翻译
+        TranslationTask task = translationTaskPort.createDocumentTask(userId, doc);
+        translationTaskPort.startDocumentTranslation(task, doc);
+
+        DocumentTranslationResponse response = new DocumentTranslationResponse();
+        response.setTaskId(task.getTaskId());
+        response.setDocumentId(doc.getId());
+        response.setDocumentName(doc.getName());
+        response.setStatus(task.getStatus());
+        response.setProjectId(null);
+        response.setMessage("文档上传成功");
+
+        return response;
+    }
+
+    /**
+     * 取消翻译：先尝试取消翻译任务，无任务时直接更新文档状态
+     */
+    public boolean cancelTranslation(Long docId, Long userId) {
+        TranslationTask task = translationTaskPort.getTaskByDocumentId(docId);
+        if (task != null) {
+            if (!task.getUserId().equals(userId)) {
+                return false;
+            }
+            return translationTaskPort.cancelTask(task.getTaskId(), userId);
+        }
+
+        // 翻译任务不存在，直接更新文档状态
+        Document doc = documentPort.findByIdAndUserId(docId, userId).orElse(null);
+        if (doc == null) {
+            return false;
+        }
+        if (!TranslationStatus.PENDING.getValue().equals(doc.getStatus())
+                && !TranslationStatus.PROCESSING.getValue().equals(doc.getStatus())) {
+            return false;
+        }
+        doc.setStatus(TranslationStatus.FAILED.getValue());
+        doc.setErrorMessage("用户取消翻译");
+        doc.setUpdateTime(java.time.LocalDateTime.now());
+        documentPort.update(doc);
+        return true;
     }
 
     /**

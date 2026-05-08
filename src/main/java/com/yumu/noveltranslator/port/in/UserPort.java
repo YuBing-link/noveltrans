@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.port.in;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.port.dto.entity.PlatformStatsResponse;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesRequest;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserQuotaResponse;
@@ -26,4 +27,5 @@ public interface UserPort {
     UserPreferencesResponse getUserPreferences(Long userId);
     UserPreferencesResponse updateUserPreferences(Long userId, UserPreferencesRequest request);
     PlatformStatsResponse getPlatformStats();
+    PageResponse<TranslationHistoryResponse> getTranslationHistory(Long userId, int page, int pageSize, String type);
 }

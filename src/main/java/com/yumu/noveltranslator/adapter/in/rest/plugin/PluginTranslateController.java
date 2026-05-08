@@ -6,6 +6,7 @@ import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateResponse;
 import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.port.dto.translation.WebpageTranslateRequest;
 import com.yumu.noveltranslator.port.in.TranslatePort;
+import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,8 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/selection")
     public SelectionTranslateResponse translateSelection(@RequestBody @Valid SelectionTranslationRequest req) {
-        return translatePort.selectionTranslate(req);
+        Long userId = SecurityUtil.getCurrentUserId().orElse(null);
+        return translatePort.selectionTranslate(userId, req);
     }
 
     /**
@@ -41,7 +43,8 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/reader")
     public ReaderTranslateResponse translateReader(@RequestBody @Valid ReaderTranslateRequest req) {
-        return translatePort.readerTranslate(req);
+        Long userId = SecurityUtil.getCurrentUserId().orElse(null);
+        return translatePort.readerTranslate(userId, req);
     }
 
     /**
@@ -50,7 +53,8 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/webpage", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter translateWebpage(@RequestBody @Valid WebpageTranslateRequest req) {
-        return translatePort.webpageTranslateStream(req);
+        Long userId = SecurityUtil.getCurrentUserId().orElse(null);
+        return translatePort.webpageTranslateStream(userId, req);
     }
 
     /**
@@ -59,9 +63,10 @@ public class PluginTranslateController {
      */
     @PostMapping(value = "/text/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamTextTranslate(@RequestBody @Valid SelectionTranslationRequest req) {
-        log.info("[STREAM-TRACE] Controller entry: /v1/translate/text/stream, engine={}, targetLang={}, mode={}, textLen={}",
-                req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);
-        return translatePort.streamTextTranslate(req);
+        Long userId = SecurityUtil.getCurrentUserId().orElse(null);
+        log.info("[STREAM-TRACE] Controller entry: /v1/translate/text/stream, userId={}, engine={}, targetLang={}, mode={}, textLen={}",
+                userId, req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);
+        return translatePort.streamTextTranslate(userId, req);
     }
 
     /**
@@ -71,7 +76,8 @@ public class PluginTranslateController {
     @PostMapping(value = "/premium-selection")
     @PreAuthorize("isAuthenticated()")
     public SelectionTranslateResponse premiumTranslateSelection(@RequestBody @Valid SelectionTranslationRequest req) {
-        return translatePort.selectionTranslate(req);
+        Long userId = SecurityUtil.getRequiredUserId();
+        return translatePort.selectionTranslate(userId, req);
     }
 
     /**
@@ -81,6 +87,7 @@ public class PluginTranslateController {
     @PostMapping(value = "/premium-reader")
     @PreAuthorize("isAuthenticated()")
     public ReaderTranslateResponse premiumTranslateReader(@RequestBody @Valid ReaderTranslateRequest req) {
-        return translatePort.readerTranslate(req);
+        Long userId = SecurityUtil.getRequiredUserId();
+        return translatePort.readerTranslate(userId, req);
     }
 }

@@ -3,6 +3,7 @@ package com.yumu.noveltranslator.application.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserStatisticsResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserQuotaResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
@@ -41,6 +42,7 @@ public class UserApplicationService implements com.yumu.noveltranslator.port.in.
     private final GlossaryRepositoryPort glossaryPort;
     private final TranslationLimitProperties limitProperties;
     private final QuotaService quotaService;
+    private final com.yumu.noveltranslator.port.in.TranslationTaskPort translationTaskPort;
 
     /**
      * 更新用户信息
@@ -281,6 +283,20 @@ public class UserApplicationService implements com.yumu.noveltranslator.port.in.
         }
 
         return response;
+    }
+
+    /**
+     * 获取用户翻译历史
+     */
+    public PageResponse<TranslationHistoryResponse> getTranslationHistory(Long userId, int page, int pageSize, String type) {
+        var histories = translationTaskPort.getTranslationHistory(userId, page, pageSize, type);
+        int total = translationTaskPort.countTranslationHistory(userId, type);
+
+        var responseList = histories.stream()
+                .map(translationTaskPort::toHistoryResponse)
+                .toList();
+
+        return PageResponse.of(page, pageSize, (long) total, responseList);
     }
 
     private UserPreferencesResponse buildDefaultPreferences() {

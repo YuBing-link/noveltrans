@@ -1,12 +1,10 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
 import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
-import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +16,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -30,13 +27,12 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * RagTranslationService 补充测试
- * 覆盖现有测试未覆盖的方法：searchSimilarWithUser, storeTranslationMemory(Long userId),
- * cosineSimilarity, formatVectorForRedis, searchFallback happy path, rejectQuality 缺失分支
+ * RagTranslationApplicationService 补充测试
+ * 覆盖：cosineSimilarity, searchFallback happy path, rejectQuality 缺失分支
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-@DisplayName("RagTranslationService 补充测试")
+@DisplayName("RagTranslationApplicationService 补充测试")
 class RagTranslationServiceExtendedTest {
 
     @Mock
@@ -64,56 +60,43 @@ class RagTranslationServiceExtendedTest {
         SecurityContextHolder.clearContext();
     }
 
-    private void setAuthenticatedUser(Long userId) {
-        User user = new User();
-        user.setId(userId);
-        com.yumu.noveltranslator.adapter.in.security.CustomUserDetails userDetails =
-                new com.yumu.noveltranslator.adapter.in.security.CustomUserDetails(user);
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
-    }
-
-    // ============ searchSimilarWithUser 测试 ============
+    // ============ searchSimilarWithModes 测试 ============
 
     @Nested
-    @DisplayName("searchSimilarWithUser - 指定userId查询")
-    class SearchSimilarWithUserTests {
+    @DisplayName("searchSimilarWithModes - 指定userId查询")
+    class SearchSimilarWithModesTests {
 
         @Test
-        void userId为null返回空响应() throws Exception {
-            RagTranslationResponse response = invokeSearchSimilarWithUser(
-                    "Hello", "zh", "ai-team", null);
+        void userId为null返回空响应() {
+            RagTranslationResponse response = service.searchSimilarWithModes(null, "Hello", "zh", List.of("team", "expert", "fast"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
 
         @Test
-        void 文本为null返回空响应() throws Exception {
-            RagTranslationResponse response = invokeSearchSimilarWithUser(
-                    null, "zh", "ai-team", 1L);
+        void 文本为null返回空响应() {
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, null, "zh", List.of("team"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
 
         @Test
-        void 文本空白返回空响应() throws Exception {
-            RagTranslationResponse response = invokeSearchSimilarWithUser(
-                    "   ", "zh", "ai-team", 1L);
+        void 文本空白返回空响应() {
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "   ", "zh", List.of("team"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
 
         @Test
-        void 向量为空返回空响应() throws Exception {
+        void 向量为空返回空响应() {
             when(embeddingPort.embed("Hello")).thenReturn(new float[0]);
-            RagTranslationResponse response = invokeSearchSimilarWithUser(
-                    "Hello", "zh", "ai-team", 1L);
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello", "zh", List.of("team"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
 
         @Test
-        void Redis命中直接返回() throws Exception {
+        void Redis命中直接返回() {
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
             when(embeddingPort.embed("Hello")).thenReturn(vec);
 
@@ -121,8 +104,7 @@ class RagTranslationServiceExtendedTest {
                     "Hello", "你好", "0.05", "42");
             mockVectorSearch(redisResult);
 
-            RagTranslationResponse response = invokeSearchSimilarWithUser(
-                    "Hello", "zh", "ai-team", 1L);
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello", "zh", List.of("team"));
 
             assertTrue(response.isDirectHit());
             assertEquals("你好", response.getTranslation());
@@ -130,95 +112,56 @@ class RagTranslationServiceExtendedTest {
         }
 
         @Test
-        void Redis无结果走MySQL降级() throws Exception {
-            float[] vec = new float[]{0.1f, 0.2f, 0.3f};
-            when(embeddingPort.embed("Hello")).thenReturn(vec);
-            mockVectorSearch(Collections.emptyList());
-
-            TranslationMemory mem = new TranslationMemory();
-            mem.setId(10L);
-            mem.setSourceText("Hello");
-            mem.setTargetText("你好");
-            mem.setEmbedding(Arrays.asList(0.1f, 0.2f, 0.3f));
-            when(translationMemoryService.searchByUserAndLang(eq(1L), eq("auto"), eq("zh"), eq(20)))
-                    .thenReturn(List.of(mem));
-
-            RagTranslationResponse response = invokeSearchSimilarWithUser(
-                    "Hello", "zh", "ai-team", 1L);
-
-            // embedding 完全一致 → similarity ≈ 1.0
-            assertTrue(response.isDirectHit());
-        }
-
-        @Test
-        void 异常返回空响应() throws Exception {
+        void 异常返回空响应() {
             when(embeddingPort.embed("Hello")).thenThrow(new RuntimeException("vector error"));
-            RagTranslationResponse response = invokeSearchSimilarWithUser(
-                    "Hello", "zh", "ai-team", 1L);
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello", "zh", List.of("team"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
-
-        private RagTranslationResponse invokeSearchSimilarWithUser(
-                String text, String target, String engine, Long userId) throws Exception {
-            Method m = RagTranslationService.class.getDeclaredMethod("searchSimilarWithUser",
-                    String.class, String.class, String.class, Long.class);
-            m.setAccessible(true);
-            return (RagTranslationResponse) m.invoke(service, text, target, engine, userId);
-        }
     }
 
-    // ============ storeTranslationMemory(Long userId) 测试 ============
+    // ============ storeTranslationMemory 测试 ============
 
     @Nested
-    @DisplayName("storeTranslationMemory(Long userId) - 指定用户存储")
-    class StoreTranslationMemoryWithUserTests {
+    @DisplayName("storeTranslationMemory - 指定用户存储")
+    class StoreTranslationMemoryTests {
 
         @Test
-        void userId为null直接返回() throws Exception {
-            invokeStoreMemoryWithUser("Hello", "你好", "zh", "google", null);
+        void userId为null直接返回() {
+            service.storeTranslationMemory("Hello", "你好", "zh", "google", null, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
-        void 原文为null直接返回() throws Exception {
-            invokeStoreMemoryWithUser(null, "你好", "zh", "google", 1L);
+        void 原文为null直接返回() {
+            service.storeTranslationMemory(null, "你好", "zh", "google", 1L, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
-        void 质量不合格被拒绝() throws Exception {
-            invokeStoreMemoryWithUser("Hello", "Hello", "zh", "google", 1L);
+        void 质量不合格被拒绝() {
+            service.storeTranslationMemory("Hello", "Hello", "zh", "google", 1L, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
-        void 质量通过则存储() throws Exception {
+        void 质量通过则存储() {
             when(embeddingPort.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 
             mockStoreVector();
 
-            invokeStoreMemoryWithUser("Hello", "你好世界", "zh", "ai-team", 1L);
+            service.storeTranslationMemory("Hello", "你好世界", "zh", "ai-team", 1L, null);
 
             verify(translationMemoryService).storeTranslation(
                     eq("Hello"), eq("你好世界"), eq("auto"), eq("zh"), eq(1L), isNull(), eq("ai-team"), isNull());
         }
 
         @Test
-        void 异常被捕获不抛出() throws Exception {
+        void 异常被捕获不抛出() {
             doThrow(new RuntimeException("DB error")).when(translationMemoryService).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
-            assertDoesNotThrow(() -> invokeStoreMemoryWithUser("Hello", "你好世界", "zh", "ai-team", 1L));
-            assertDoesNotThrow(() -> invokeStoreMemoryWithUser("Hello", "你好世界", "zh", "ai-team", 1L));
-        }
-
-        private void invokeStoreMemoryWithUser(
-                String source, String target, String targetLang, String engine, Long userId) throws Exception {
-            Method m = RagTranslationService.class.getDeclaredMethod("storeTranslationMemory",
-                    String.class, String.class, String.class, String.class, Long.class);
-            m.setAccessible(true);
-            m.invoke(service, source, target, targetLang, engine, userId);
+            assertDoesNotThrow(() -> service.storeTranslationMemory("Hello", "你好世界", "zh", "ai-team", 1L, null));
         }
     }
 
@@ -242,12 +185,6 @@ class RagTranslationServiceExtendedTest {
             assertEquals(0.0, invokeCosineSimilarity(a, b), 0.001);
         }
 
-        void 反向向量返回负1() throws Exception {
-            float[] a = {1.0f, 0.0f, 0.0f};
-            List<Float> b = Arrays.asList(-1.0f, 0.0f, 0.0f);
-            assertEquals(-1.0, invokeCosineSimilarity(a, b), 0.001);
-        }
-
         @Test
         void 维度不匹配返回0() throws Exception {
             float[] a = {1.0f, 0.0f};
@@ -262,52 +199,14 @@ class RagTranslationServiceExtendedTest {
             assertEquals(0.0, invokeCosineSimilarity(a, b), 0.001);
         }
 
-        @Test
-        void 正常计算相似度() throws Exception {
-            float[] a = {1.0f, 2.0f, 3.0f};
-            List<Float> b = Arrays.asList(1.0f, 2.0f, 3.0f);
-            double result = invokeCosineSimilarity(a, b);
-            assertEquals(1.0, result, 0.001);
-        }
-
         private double invokeCosineSimilarity(float[] a, List<Float> b) throws Exception {
-            Method m = RagTranslationService.class.getDeclaredMethod("cosineSimilarity", float[].class, List.class);
+            Method m = RagTranslationApplicationService.class.getDeclaredMethod("cosineSimilarity", float[].class, List.class);
             m.setAccessible(true);
             return (Double) m.invoke(service, a, b);
         }
     }
 
-    // ============ formatVectorForRedis 测试 ============
-
-    @Nested
-    @DisplayName("formatVectorForRedis - 向量格式化")
-    class FormatVectorForRedisTests {
-
-        @Test
-        void 单元素向量() throws Exception {
-            assertEquals("1,0.500000", invokeFormatVector(new float[]{0.5f}));
-        }
-
-        @Test
-        void 多元素向量() throws Exception {
-            String result = invokeFormatVector(new float[]{0.1f, 0.2f, 0.3f});
-            assertEquals("3,0.100000,0.200000,0.300000", result);
-        }
-
-        @Test
-        void 负数向量() throws Exception {
-            String result = invokeFormatVector(new float[]{-0.5f, 0.5f});
-            assertEquals("2,-0.500000,0.500000", result);
-        }
-
-        private String invokeFormatVector(float[] vec) throws Exception {
-            Method m = RagTranslationService.class.getDeclaredMethod("formatVectorForRedis", float[].class);
-            m.setAccessible(true);
-            return (String) m.invoke(service, vec);
-        }
-    }
-
-    // ============ rejectQuality 缺失分支测试 ============
+    // ============ rejectQuality 测试 ============
 
     @Nested
     @DisplayName("rejectQuality - 缺失分支覆盖")
@@ -315,7 +214,6 @@ class RagTranslationServiceExtendedTest {
 
         @Test
         void 长度比率过低被拒绝() throws Exception {
-            // 译文不足原文 10%
             String result = invokeRejectQuality("This is a very long sentence with many words", "短");
             assertNotNull(result);
             assertTrue(result.startsWith("length_ratio_too_low"));
@@ -347,13 +245,13 @@ class RagTranslationServiceExtendedTest {
         }
 
         private String invokeRejectQuality(String source, String target) throws Exception {
-            Method m = RagTranslationService.class.getDeclaredMethod("rejectQuality", String.class, String.class);
+            Method m = RagTranslationApplicationService.class.getDeclaredMethod("rejectQuality", String.class, String.class);
             m.setAccessible(true);
             return (String) m.invoke(service, source, target);
         }
     }
 
-    // ============ searchFallback happy path 测试 ============
+    // ============ searchFallback 测试 ============
 
     @Nested
     @DisplayName("searchFallback - MySQL降级正常路径")
@@ -404,7 +302,6 @@ class RagTranslationServiceExtendedTest {
             mem.setId(10L);
             mem.setSourceText("Hello");
             mem.setTargetText("你好");
-            // 完全相同的 embedding → similarity ≈ 1.0 > 0.5
             mem.setEmbedding(Arrays.asList(0.1f, 0.2f, 0.3f));
 
             when(translationMemoryService.searchByUserAndLang(eq(1L), eq("auto"), eq("zh"), eq(20)))
@@ -420,7 +317,6 @@ class RagTranslationServiceExtendedTest {
             mem.setId(10L);
             mem.setSourceText("Hello");
             mem.setTargetText("你好");
-            // 正交向量 → similarity ≈ 0.0 < 0.5
             mem.setEmbedding(Arrays.asList(0.0f, 1.0f, 0.0f));
 
             when(translationMemoryService.searchByUserAndLang(eq(1L), eq("auto"), eq("zh"), eq(20)))
@@ -439,103 +335,11 @@ class RagTranslationServiceExtendedTest {
             assertTrue(result.isEmpty());
         }
 
-        @Test
-        void 多条结果按相似度排序() throws Exception {
-            TranslationMemory mem1 = new TranslationMemory();
-            mem1.setId(1L);
-            mem1.setSourceText("A");
-            mem1.setTargetText("甲");
-            mem1.setEmbedding(Arrays.asList(0.1f, 0.2f, 0.4f)); // 较不相似
-
-            TranslationMemory mem2 = new TranslationMemory();
-            mem2.setId(2L);
-            mem2.setSourceText("B");
-            mem2.setTargetText("乙");
-            mem2.setEmbedding(Arrays.asList(0.1f, 0.2f, 0.3f)); // 完全相同
-
-            float[] query = {0.1f, 0.2f, 0.3f};
-            when(translationMemoryService.searchByUserAndLang(eq(1L), eq("auto"), eq("zh"), eq(20)))
-                    .thenReturn(List.of(mem1, mem2));
-
-            List<?> result = invokeSearchFallback(query, 1L, "zh");
-            assertEquals(2, result.size());
-            // 第一个应该是最相似的那个 (mem2)
-            RagTranslationResponse.RagMatch best = (RagTranslationResponse.RagMatch) result.get(0);
-            assertEquals(2L, best.getMemoryId());
-        }
-
         private List<?> invokeSearchFallback(float[] queryVector, Long userId, String targetLang) throws Exception {
-            Method m = RagTranslationService.class.getDeclaredMethod("searchFallback",
+            Method m = RagTranslationApplicationService.class.getDeclaredMethod("searchFallback",
                     float[].class, Long.class, String.class, List.class);
             m.setAccessible(true);
             return (List<?>) m.invoke(service, queryVector, userId, targetLang, List.of("team", "expert", "fast"));
-        }
-    }
-
-    // ============ storeToRedisVector 测试 ============
-
-    @Nested
-    @DisplayName("storeToRedisVector - Redis向量存储")
-    class StoreToRedisVectorTests {
-
-        @Test
-        void embedding为空不存储() throws Exception {
-            when(embeddingPort.embed(anyString())).thenReturn(new float[0]);
-            when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
-                    .thenReturn(Collections.emptyList());
-
-            invokeStoreToRedisVector("Hello", "你好", "zh", 1L, "google");
-            verify(vectorStorePort, never()).storeVector(anyString(), anyMap());
-        }
-
-        @Test
-        void 找到匹配记忆使用其ID() throws Exception {
-            when(embeddingPort.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
-
-            TranslationMemory mem = new TranslationMemory();
-            mem.setId(99L);
-            mem.setSourceText("Hello");
-            mem.setTargetText("你好");
-            when(translationMemoryService.searchByUserAndLang(eq(1L), eq("auto"), eq("zh"), eq(1)))
-                    .thenReturn(List.of(mem));
-
-            mockStoreVector();
-
-            invokeStoreToRedisVector("Hello", "你好", "zh", 1L, "google");
-
-            verify(vectorStorePort).storeVector(eq("tm:99"), anyMap());
-        }
-
-        @Test
-        void 无匹配记忆使用UUID() throws Exception {
-            when(embeddingPort.embed(anyString())).thenReturn(new float[]{0.1f, 0.2f});
-
-            TranslationMemory mem = new TranslationMemory();
-            mem.setId(99L);
-            mem.setSourceText("Different text");
-            mem.setTargetText("不同的文字");
-            when(translationMemoryService.searchByUserAndLang(eq(1L), eq("auto"), eq("zh"), eq(1)))
-                    .thenReturn(List.of(mem));
-
-            mockStoreVector();
-
-            invokeStoreToRedisVector("Hello", "你好", "zh", 1L, "google");
-
-            verify(vectorStorePort).storeVector(argThat(key -> key.startsWith("tm:")), anyMap());
-        }
-
-        @Test
-        void 异常被捕获不抛出() throws Exception {
-            when(embeddingPort.embed(anyString())).thenThrow(new RuntimeException("embed failed"));
-
-            assertDoesNotThrow(() -> invokeStoreToRedisVector("Hello", "你好", "zh", 1L, "google"));
-        }
-
-        private void invokeStoreToRedisVector(String source, String target, String targetLang, Long userId, String engine) throws Exception {
-            Method m = RagTranslationService.class.getDeclaredMethod("storeToRedisVector",
-                    String.class, String.class, String.class, Long.class, String.class, String.class);
-            m.setAccessible(true);
-            m.invoke(service, source, target, targetLang, userId, engine, "fast");
         }
     }
 

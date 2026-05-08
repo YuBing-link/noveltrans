@@ -12,7 +12,7 @@ import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
 import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.application.service.UserApplicationService;

@@ -5,7 +5,7 @@ import com.yumu.noveltranslator.application.service.RagTranslationApplicationSer
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
 import org.junit.jupiter.api.AfterEach;
@@ -103,7 +103,7 @@ class RagTranslationServiceTest {
         @Test
         void 空文本返回空响应() {
             setAuthenticatedUser(1L);
-            RagTranslationResponse response = service.searchSimilar(null, "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, null, "zh", "google");
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -111,7 +111,7 @@ class RagTranslationServiceTest {
         @Test
         void 空白文本返回空响应() {
             setAuthenticatedUser(1L);
-            RagTranslationResponse response = service.searchSimilar("   ", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "   ", "zh", "google");
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -119,7 +119,7 @@ class RagTranslationServiceTest {
         @Test
         void 未认证用户返回空响应() {
             SecurityContextHolder.clearContext();
-            RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(null, "Hello world", "zh", "google");
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -129,7 +129,7 @@ class RagTranslationServiceTest {
             setAuthenticatedUser(1L);
             when(embeddingPort.embed(anyString())).thenReturn(new float[0]);
 
-            RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -139,7 +139,7 @@ class RagTranslationServiceTest {
             setAuthenticatedUser(1L);
             when(embeddingPort.embed(anyString())).thenThrow(new RuntimeException("embedding failed"));
 
-            RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -160,7 +160,7 @@ class RagTranslationServiceTest {
                     "Hello world", "你好世界", "0.1", "1");
             mockVectorSearch(searchResult);
 
-            RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
 
             assertTrue(response.isDirectHit());
             assertEquals("你好世界", response.getTranslation());
@@ -180,7 +180,7 @@ class RagTranslationServiceTest {
                     "Hello world", "你好世界", "0.4", "1");
             mockVectorSearch(searchResult);
 
-            RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
 
             assertFalse(response.isDirectHit());
             assertNull(response.getTranslation());
@@ -203,7 +203,7 @@ class RagTranslationServiceTest {
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 
-            RagTranslationResponse response = service.searchSimilar("Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
 
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
@@ -217,21 +217,21 @@ class RagTranslationServiceTest {
         @Test
         void 未认证用户不存储() {
             SecurityContextHolder.clearContext();
-            service.storeTranslationMemory("Hello", "你好", "zh", "google");
+            service.storeTranslationMemory("Hello", "你好", "zh", "google", null, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
         void 译文为空被拒绝() {
             setAuthenticatedUser(1L);
-            service.storeTranslationMemory("Hello", "", "zh", "google");
+            service.storeTranslationMemory("Hello", "", "zh", "google", 1L, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
         void 译文与原文相同被拒绝() {
             setAuthenticatedUser(1L);
-            service.storeTranslationMemory("Hello world", "Hello world", "zh", "google");
+            service.storeTranslationMemory("Hello world", "Hello world", "zh", "google", 1L, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
@@ -239,14 +239,14 @@ class RagTranslationServiceTest {
         void 长度比率过高被拒绝() {
             setAuthenticatedUser(1L);
             String longTarget = "这是一个非常非常非常非常非常非常非常非常非常长的翻译结果";
-            service.storeTranslationMemory("Hi", longTarget, "zh", "google");
+            service.storeTranslationMemory("Hi", longTarget, "zh", "google", 1L, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
         @Test
         void 包含广告关键词被拒绝() {
             setAuthenticatedUser(1L);
-            service.storeTranslationMemory("Hello", "Powered by ChatGPT", "zh", "google");
+            service.storeTranslationMemory("Hello", "Powered by ChatGPT", "zh", "google", 1L, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
@@ -254,7 +254,7 @@ class RagTranslationServiceTest {
         void 特殊字符比例过高被拒绝() {
             setAuthenticatedUser(1L);
             String specialText = "!@#$%^&*()_+!@#$%^&*()_+abc";
-            service.storeTranslationMemory("Hello world test text here", specialText, "zh", "google");
+            service.storeTranslationMemory("Hello world test text here", specialText, "zh", "google", 1L, null);
             verify(translationMemoryService, never()).storeTranslation(anyString(), anyString(), anyString(), anyString(), anyLong(), anyLong(), anyString(), anyString());
         }
 
@@ -265,7 +265,7 @@ class RagTranslationServiceTest {
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 
-            service.storeTranslationMemory("Hello world", "你好世界", "zh", "google");
+            service.storeTranslationMemory("Hello world", "你好世界", "zh", "google", 1L, null);
 
             verify(translationMemoryService).storeTranslation(eq("Hello world"), eq("你好世界"),
                     eq("auto"), eq("zh"), eq(1L), isNull(), eq("google"), isNull());

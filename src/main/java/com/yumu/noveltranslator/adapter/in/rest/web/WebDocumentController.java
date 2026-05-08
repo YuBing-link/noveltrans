@@ -6,19 +6,16 @@ import com.yumu.noveltranslator.port.dto.entity.DocumentInfoResponse;
 import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationRequest;
 import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationResponse;
 import com.yumu.noveltranslator.domain.model.Document;
-import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.port.in.DocumentPort;
-import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,7 +24,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Web 文档管理接口
@@ -39,7 +35,6 @@ import java.util.stream.Collectors;
 public class WebDocumentController {
 
     private final DocumentPort documentPort;
-    private final TranslationTaskPort translationTaskPort;
     private final CollabPort collabPort;
 
     /**
@@ -109,32 +104,11 @@ public class WebDocumentController {
     public Result<Void> cancelTranslation(@PathVariable Long docId) {
         Long userId = SecurityUtil.getRequiredUserId();
 
-        TranslationTask task = translationTaskPort.getTaskByDocumentId(docId);
-        if (task != null) {
-            if (!task.getUserId().equals(userId)) {
-                return Result.error(ErrorCodeEnum.FORBIDDEN, "无权操作");
-            }
-            if (translationTaskPort.cancelTask(task.getTaskId(), userId)) {
-                return Result.ok(null);
-            } else {
-                return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，任务可能已完成或正在处理");
-            }
+        if (documentPort.cancelTranslation(docId, userId)) {
+            return Result.ok(null);
+        } else {
+            return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "取消失败");
         }
-
-        // 翻译任务不存在，但文档状态允许取消时，直接更新文档状态
-        Document doc = documentPort.getDocumentById(docId, userId);
-        if (doc == null) {
-            return Result.error(ErrorCodeEnum.NOT_FOUND, "文档不存在");
-        }
-        if (!TranslationStatus.PENDING.getValue().equals(doc.getStatus())
-                && !TranslationStatus.PROCESSING.getValue().equals(doc.getStatus())) {
-            return Result.error(ErrorCodeEnum.INVALID_STATE, "取消失败，文档可能已完成或正在处理");
-        }
-        doc.setStatus(TranslationStatus.FAILED.getValue());
-        doc.setErrorMessage("用户取消翻译");
-        doc.setUpdateTime(java.time.LocalDateTime.now());
-        documentPort.updateDocument(doc, userId);
-        return Result.ok(null);
     }
 
     /**
@@ -172,35 +146,28 @@ public class WebDocumentController {
             request.setTargetLang(targetLang);
             request.setMode(mode);
 
-            Document doc = documentPort.uploadDocument(userId, file, request);
-
             // 团队模式：指定已有项目 or 自动创建新项目
             if ("team".equals(mode)) {
-                Long targetProjectId;
-                int chapterCount;
+                Document doc = documentPort.uploadDocument(userId, file, request);
 
                 if (projectId != null) {
-                    // 关联到已有项目
-                    chapterCount = collabPort.addChaptersToProject(userId, projectId, doc);
-                    targetProjectId = projectId;
-                    collabPort.startMultiAgentTranslation(targetProjectId);
+                    int chapterCount = collabPort.addChaptersToProject(userId, projectId, doc);
+                    collabPort.startMultiAgentTranslation(projectId);
 
                     DocumentTranslationResponse response = new DocumentTranslationResponse();
                     response.setTaskId(null);
                     response.setDocumentId(doc.getId());
                     response.setDocumentName(doc.getName());
                     response.setStatus(TranslationStatus.PENDING.getValue());
-                    response.setProjectId(targetProjectId);
+                    response.setProjectId(projectId);
                     response.setMessage("已添加 " + chapterCount + " 个章节到协作项目");
                     return Result.ok(response);
                 } else {
-                    // 自动创建新项目（原有逻辑）
                     CollabPort.TeamProjectCreateResult result =
                             collabPort.createProjectFromDocument(
                                     userId, doc.getId(), doc.getName(), doc.getPath(), doc.getFileType(),
                                     sourceLang, targetLang);
 
-                    // 事务已提交，启动多 Agent 翻译
                     collabPort.startMultiAgentTranslation(result.projectId());
 
                     DocumentTranslationResponse response = new DocumentTranslationResponse();
@@ -214,18 +181,8 @@ public class WebDocumentController {
                 }
             }
 
-            // fast/expert 模式：创建任务后直接异步启动翻译
-            TranslationTask task = translationTaskPort.createDocumentTask(userId, doc);
-            translationTaskPort.startDocumentTranslation(task, doc);
-
-            DocumentTranslationResponse response = new DocumentTranslationResponse();
-            response.setTaskId(task.getTaskId());
-            response.setDocumentId(doc.getId());
-            response.setDocumentName(doc.getName());
-            response.setStatus(task.getStatus());
-            response.setProjectId(null);
-            response.setMessage("文档上传成功");
-
+            // fast/expert 模式：上传文档并自动启动翻译
+            DocumentTranslationResponse response = documentPort.uploadAndStartTranslation(userId, file, request);
             return Result.ok(response);
 
         } catch (IOException e) {

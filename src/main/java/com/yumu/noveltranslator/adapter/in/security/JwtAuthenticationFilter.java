@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.adapter.in.security;
 
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.adapter.out.persistence.converter.UserConverter;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;

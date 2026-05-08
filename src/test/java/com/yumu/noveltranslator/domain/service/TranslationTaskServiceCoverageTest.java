@@ -1,5 +1,5 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
@@ -102,8 +102,8 @@ class TranslationTaskServiceCoverageTest {
         com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
         user.setId(userId);
         user.setUserLevel("free");
-        com.yumu.noveltranslator.adapter.in.security.CustomUserDetails userDetails =
-                new com.yumu.noveltranslator.adapter.in.security.CustomUserDetails(user);
+        com.yumu.noveltranslator.adapter.out.security.CustomUserDetails userDetails =
+                new com.yumu.noveltranslator.adapter.out.security.CustomUserDetails(user);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
     }

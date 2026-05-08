@@ -11,7 +11,7 @@ import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
 import com.yumu.noveltranslator.application.service.ChapterTaskApplicationService;
 import com.yumu.noveltranslator.util.SseEmitterUtil;

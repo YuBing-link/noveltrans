@@ -128,7 +128,7 @@ class TranslationPipelineTest {
             ragResp.setDirectHit(true);
             ragResp.setTranslation("RAG翻译结果");
             ragResp.setSimilarity(0.95);
-            when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString())).thenReturn("RAG翻译结果");
 
             String result = pipeline.execute("Hello", "zh", TranslationMode.FAST);
@@ -142,7 +142,7 @@ class TranslationPipelineTest {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
-            when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(true);
             ConsistencyTranslationResult consistencyResult = new ConsistencyTranslationResult();
             consistencyResult.setConsistencyApplied(true);
@@ -161,7 +161,7 @@ class TranslationPipelineTest {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
-            when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(true);
             ConsistencyTranslationResult consistencyResult = new ConsistencyTranslationResult();
             consistencyResult.setConsistencyApplied(false);
@@ -179,7 +179,7 @@ class TranslationPipelineTest {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
-            when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"你好\"}");
             when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString())).thenReturn("你好");
@@ -195,7 +195,7 @@ class TranslationPipelineTest {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
-            when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"code\":500,\"error\":\"服务不可用\"}");
 
@@ -209,7 +209,7 @@ class TranslationPipelineTest {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
-            when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"Google AI 人工智能助手\"}");
 
@@ -299,7 +299,7 @@ class TranslationPipelineTest {
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();
             ragResp.setDirectHit(false);
-            when(ragTranslationService.searchSimilarWithModes(anyString(), anyString(), anyList())).thenReturn(ragResp);
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList())).thenReturn(ragResp);
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any())).thenReturn("{\"data\":\"L4结果\"}");
             when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString())).thenReturn("L4结果");
 

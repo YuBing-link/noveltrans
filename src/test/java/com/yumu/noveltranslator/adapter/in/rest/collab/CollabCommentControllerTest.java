@@ -6,7 +6,7 @@ import com.yumu.noveltranslator.port.dto.collab.CommentResponse;
 import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.domain.model.User;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.application.service.CollabCommentApplicationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

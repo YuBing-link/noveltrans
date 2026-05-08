@@ -10,9 +10,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.Map;
 
 public interface TranslatePort {
-    SelectionTranslateResponse selectionTranslate(SelectionTranslationRequest req);
-    ReaderTranslateResponse readerTranslate(ReaderTranslateRequest req);
-    SseEmitter webpageTranslateStream(WebpageTranslateRequest req);
-    SseEmitter streamTextTranslate(SelectionTranslationRequest req);
+    SelectionTranslateResponse selectionTranslate(Long userId, SelectionTranslationRequest req);
+    ReaderTranslateResponse readerTranslate(Long userId, ReaderTranslateRequest req);
+    SseEmitter webpageTranslateStream(Long userId, WebpageTranslateRequest req);
+    SseEmitter streamTextTranslate(Long userId, SelectionTranslationRequest req);
     Map<String, Object> getCacheStats();
 }

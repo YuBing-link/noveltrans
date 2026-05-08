@@ -2,6 +2,7 @@ package com.yumu.noveltranslator.adapter.in.rest.web;
 
 import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.port.dto.auth.SendCodeRequest;
 import com.yumu.noveltranslator.port.dto.auth.LoginRequest;
 import com.yumu.noveltranslator.port.dto.auth.RegisterRequest;
@@ -10,16 +11,14 @@ import com.yumu.noveltranslator.port.dto.auth.ResetPasswordRequest;
 import com.yumu.noveltranslator.port.dto.auth.RefreshTokenRequest;
 import com.yumu.noveltranslator.port.dto.entity.UserStatisticsResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserQuotaResponse;
-import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.port.dto.entity.UpdateUserProfileRequest;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesRequest;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter;
 import com.yumu.noveltranslator.port.in.AuthPort;
-import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.port.in.UserPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,7 +39,6 @@ public class WebUserController {
 
     private final AuthPort authPort;
     private final UserPort userPort;
-    private final TranslationTaskPort translationTaskPort;
     private final LoginRateLimiter loginRateLimiter;
 
     /**
@@ -220,14 +218,7 @@ public class WebUserController {
             @RequestParam(required = false, defaultValue = "all") String type) {
 
         Long userId = SecurityUtil.getRequiredUserId();
-        var histories = translationTaskPort.getTranslationHistory(userId, page, pageSize, type);
-        int total = translationTaskPort.countTranslationHistory(userId, type);
-
-        var responseList = histories.stream()
-                .map(translationTaskPort::toHistoryResponse)
-                .toList();
-
-        PageResponse<TranslationHistoryResponse> response = PageResponse.of(page, pageSize, (long) total, responseList);
+        var response = userPort.getTranslationHistory(userId, page, pageSize, type);
         return Result.ok(response);
     }
 

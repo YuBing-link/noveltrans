@@ -6,9 +6,8 @@ import com.yumu.noveltranslator.port.dto.translation.ExternalTranslateRequest;
 import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest;
 import com.yumu.noveltranslator.port.dto.translation.ExternalBatchTranslateRequest;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.port.in.DocumentPort;
-import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.port.in.TranslatePort;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -40,7 +39,6 @@ import java.util.Map;
 public class ExternalTranslateController {
 
     private final TranslatePort translatePort;
-    private final DocumentPort documentPort;
     private final TranslationTaskPort translationTaskPort;
 
     @Value("${translation.external.max-chars:5000}")
@@ -74,7 +72,7 @@ public class ExternalTranslateController {
                 request.getMode() != null ? request.getMode() : "fast"
             );
 
-            String result = translatePort.selectionTranslate(selectionReq).getTranslation();
+            String result = translatePort.selectionTranslate(userId, selectionReq).getTranslation();
 
             ExternalTranslateResponse response = new ExternalTranslateResponse();
             response.setTranslatedText(result);
@@ -121,7 +119,7 @@ public class ExternalTranslateController {
                     request.getEngine() != null ? request.getEngine() : "google",
                     mode
                 );
-                String translated = translatePort.selectionTranslate(selectionReq).getTranslation();
+                String translated = translatePort.selectionTranslate(userId, selectionReq).getTranslation();
                 ExternalTranslateResponse resp = new ExternalTranslateResponse();
                 resp.setTranslatedText(translated);
                 resp.setSourceLang(selectionReq.getSourceLang());

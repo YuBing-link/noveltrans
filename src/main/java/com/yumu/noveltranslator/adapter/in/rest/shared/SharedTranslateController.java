@@ -8,7 +8,6 @@ import com.yumu.noveltranslator.port.dto.translation.RagTranslationRequest;
 import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.port.in.DocumentPort;
 import com.yumu.noveltranslator.port.in.RagTranslationPort;
 import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
@@ -38,7 +37,6 @@ import java.nio.file.Paths;
 public class SharedTranslateController {
 
     private final TranslationTaskPort translationTaskPort;
-    private final DocumentPort documentPort;
     private final RagTranslationPort ragTranslationPort;
 
     /**
@@ -160,8 +158,9 @@ public class SharedTranslateController {
      */
     @PostMapping("/rag")
     public Result<RagTranslationResponse> queryRag(@RequestBody @Valid RagTranslationRequest request) {
+        Long userId = SecurityUtil.getCurrentUserId().orElse(null);
         RagTranslationResponse response = ragTranslationPort.searchSimilarWithModes(
-                request.getText(), request.getTargetLang(),
+                userId, request.getText(), request.getTargetLang(),
                 request.getEngine() != null ? List.of(request.getEngine()) : List.of());
         return Result.ok(response);
     }

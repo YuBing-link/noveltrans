@@ -204,7 +204,7 @@ public class TranslationPipeline {
         }
 
         // L2: RAG 语义匹配（带模式层级过滤）
-        RagTranslationResponse ragResult = ragTranslationService.searchSimilarWithModes(text, targetLang, mode.getAllowedModes());
+        RagTranslationResponse ragResult = ragTranslationService.searchSimilarWithModes(userId, text, targetLang, mode.getAllowedModes());
         if (ragResult != null && ragResult.isDirectHit()) {
             log.info("Pipeline 团队模式 RAG 直接命中，相似度: {}", ragResult.getSimilarity());
             String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, mode.getName());
@@ -263,7 +263,7 @@ public class TranslationPipeline {
             translated = postProcessingService.fixUntranslatedChinese(text, translated, targetLang, mode.getName());
             if (shouldCache(text, translated)) {
                 cacheService.putCache(cacheKey, text, translated, sourceLang, targetLang, mode.getName(), "team");
-                ragTranslationService.storeTranslationMemory(text, translated, targetLang, mode.getName(), mode.getName());
+                ragTranslationService.storeTranslationMemory(text, translated, targetLang, mode.getName(), userId, mode.getName());
             }
 
             return translated;
@@ -287,7 +287,7 @@ public class TranslationPipeline {
         }
 
         // L2: RAG 语义匹配（带模式层级过滤）
-        RagTranslationResponse ragResult = ragTranslationService.searchSimilarWithModes(text, targetLang, mode.getAllowedModes());
+        RagTranslationResponse ragResult = ragTranslationService.searchSimilarWithModes(userId, text, targetLang, mode.getAllowedModes());
         if (ragResult != null && ragResult.isDirectHit()) {
             log.info("Pipeline RAG 直接命中，相似度: {}", ragResult.getSimilarity());
             String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, mode.getName());
@@ -305,7 +305,7 @@ public class TranslationPipeline {
                 if (shouldCache(text, result)) {
                     cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), mode.getName());
                 }
-                ragTranslationService.storeTranslationMemory(text, result, targetLang, mode.getName(), mode.getName());
+                ragTranslationService.storeTranslationMemory(text, result, targetLang, mode.getName(), userId, mode.getName());
                 return result;
             }
         }
@@ -328,7 +328,7 @@ public class TranslationPipeline {
         result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, mode.getName());
         if (shouldCache(text, result)) {
             cacheService.putCache(cacheKey, text, result, "auto", targetLang, mode.getName(), mode.getName());
-            ragTranslationService.storeTranslationMemory(text, result, targetLang, mode.getName(), mode.getName());
+            ragTranslationService.storeTranslationMemory(text, result, targetLang, mode.getName(), userId, mode.getName());
         } else {
             log.debug("Pipeline 译文与原文一致，跳过缓存");
         }

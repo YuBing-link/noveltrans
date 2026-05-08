@@ -51,72 +51,20 @@ public class RagTranslationApplicationService implements com.yumu.noveltranslato
     @Value("${embedding.rag.fallback-mysql-limit:20}")
     private int fallbackMysqlLimit;
 
-    // ==================== 查询入口 ====================
-
     /**
-     * 查询相似翻译记忆（从当前 HTTP 上下文获取 userId，带模式层级过滤）
+     * 查询相似翻译记忆（指定 userId，带模式层级过滤）
      */
-    public RagTranslationResponse searchSimilarWithModes(String sourceText, String targetLang, List<String> allowedModes) {
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+    public RagTranslationResponse searchSimilarWithModes(
+            Long userId, String sourceText, String targetLang, List<String> allowedModes) {
         if (userId == null) {
             return buildEmptyResponse();
         }
         return doSearch(sourceText, targetLang, userId, allowedModes);
-    }
-
-    /**
-     * 查询相似翻译记忆（指定 userId，用于后台任务等非 HTTP 上下文场景）
-     */
-    public RagTranslationResponse searchSimilarWithUserAndModes(
-            String sourceText, String targetLang, Long userId, List<String> allowedModes) {
-        if (userId == null) {
-            return buildEmptyResponse();
-        }
-        return doSearch(sourceText, targetLang, userId, allowedModes);
-    }
-
-    /**
-     * @deprecated 使用 {@link #searchSimilarWithModes} 代替
-     */
-    @Deprecated
-    public RagTranslationResponse searchSimilar(String sourceText, String targetLang, String engine) {
-        return searchSimilarWithModes(sourceText, targetLang, List.of("team", "expert", "fast"));
-    }
-
-    /**
-     * @deprecated 使用 {@link #searchSimilarWithUserAndModes} 代替
-     */
-    @Deprecated
-    public RagTranslationResponse searchSimilarWithUser(
-            String sourceText, String targetLang, String engine, Long userId) {
-        return searchSimilarWithUserAndModes(sourceText, targetLang, userId, List.of("team", "expert", "fast"));
     }
 
     // ==================== 存储入口 ====================
 
     public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine, Long userId, String translationMode) {
-        doStore(sourceText, targetText, targetLang, engine, userId, translationMode);
-    }
-
-    public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine, Long userId) {
-        doStore(sourceText, targetText, targetLang, engine, userId, null);
-    }
-
-    /**
-     * @deprecated 从 SecurityUtil 隐式获取 userId，优先使用显式传入 userId 的重载
-     */
-    @Deprecated
-    public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine) {
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
-        doStore(sourceText, targetText, targetLang, engine, userId, null);
-    }
-
-    /**
-     * @deprecated 从 SecurityUtil 隐式获取 userId，优先使用显式传入 userId 的重载
-     */
-    @Deprecated
-    public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine, String translationMode) {
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
         doStore(sourceText, targetText, targetLang, engine, userId, translationMode);
     }
 

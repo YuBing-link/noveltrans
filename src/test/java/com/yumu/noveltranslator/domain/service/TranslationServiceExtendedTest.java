@@ -21,7 +21,7 @@ import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
+import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -119,7 +119,7 @@ class TranslationServiceExtendedTest {
             req.setText("Hello");
             req.setSourceLang("en");
             req.setTargetLang("zh");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(1L, req);
 
             // executeFast 返回原文 "Hello"（非空），所以 success=true
             assertTrue(resp.getSuccess());
@@ -136,7 +136,7 @@ class TranslationServiceExtendedTest {
             req.setText("Hello");
             req.setSourceLang("en");
             req.setTargetLang("zh");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(1L, req);
 
             // executeFast 返回原文 "Hello"
             assertTrue(resp.getSuccess());
@@ -151,7 +151,7 @@ class TranslationServiceExtendedTest {
             req.setText("test-text");
             req.setSourceLang("en");
             req.setTargetLang("zh");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(1L, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("context-cached", resp.getTranslation());
@@ -182,7 +182,7 @@ class TranslationServiceExtendedTest {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("Hello world.");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(1L, req);
 
             // readerTranslate 不应抛出异常，即使翻译失败也应返回原文
             assertNotNull(resp);
@@ -207,7 +207,7 @@ class TranslationServiceExtendedTest {
             req.setContent("Hello.");
             req.setTargetLang("ja");
             req.setEngine("deepl");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(1L, req);
 
             assertNotNull(resp);
             assertEquals("expert", resp.getEngine());
@@ -232,7 +232,7 @@ class TranslationServiceExtendedTest {
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of());
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(1L, req);
 
             assertNotNull(emitter);
             // SSE 异步发送，无法直接断言内容，但不应抛出异常
@@ -246,7 +246,7 @@ class TranslationServiceExtendedTest {
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of());
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(1L, req);
 
             assertNotNull(emitter);
         }
@@ -256,7 +256,7 @@ class TranslationServiceExtendedTest {
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(new ArrayList<>());
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(1L, req);
 
             assertNotNull(emitter);
         }
@@ -273,7 +273,7 @@ class TranslationServiceExtendedTest {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("");
 
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(1L, req);
 
             assertNotNull(emitter);
         }
@@ -283,7 +283,7 @@ class TranslationServiceExtendedTest {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText(null);
 
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(1L, req);
 
             assertNotNull(emitter);
         }
@@ -300,7 +300,7 @@ class TranslationServiceExtendedTest {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello World");
 
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(1L, req);
 
             assertNotNull(emitter);
         }
@@ -318,7 +318,7 @@ class TranslationServiceExtendedTest {
             req.setText("Hello");
             req.setMode("expert");
 
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(1L, req);
 
             assertNotNull(emitter);
         }

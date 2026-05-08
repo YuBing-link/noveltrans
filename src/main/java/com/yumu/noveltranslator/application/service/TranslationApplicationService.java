@@ -96,7 +96,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
      * @param req 翻译请求
      * @return 翻译响应
      */
-    public SelectionTranslateResponse selectionTranslate(SelectionTranslationRequest req) {
+    public SelectionTranslateResponse selectionTranslate(Long userId, SelectionTranslationRequest req) {
         String combined = req.getText();
         if (combined == null || combined.trim().isEmpty()) {
             return new SelectionTranslateResponse(false, req.getEngine(), "内容为空");
@@ -105,8 +105,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
 
-        // 检查字符配额（从 SecurityContext 获取 userLevel，避免 MySQL 查询）
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        // 检查字符配额
         if (userId != null) {
             String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
@@ -143,53 +142,12 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
     }
 
     /**
-     * 带缓存的翻译方法（四级管线）
-     * 支持引擎降级：远程引擎失败时自动降级到本地引擎
-     *
-     * 缓存策略：
-     * - 仅当翻译成功完成且译文与原文不一致时才加入缓存
-     */
-    private String translateWithCache(String text, String target, String engine) {
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
-        TranslationMode mode = EngineAliasRegistry.normalizeToMode(engine);
-        TranslationPipeline pipeline = new TranslationPipeline(
-                cachePort, ragTranslationService, entityConsistencyService,
-                translationClientPort, postProcessingService, userId, null);
-
-        String result = pipeline.execute(text, target, mode);
-
-        if (result == null || result.trim().isEmpty()) {
-            throw new RuntimeException("翻译服务返回错误或结果为空");
-        }
-
-        return result;
-    }
-
-    /**
-     * 判断是否应该缓存翻译结果
-     * @deprecated 使用 {@link TranslationPipeline#shouldCache(String, String)}
-     */
-    @Deprecated
-    private boolean shouldCache(String original, String translated) {
-        return TranslationPipeline.shouldCache(original, translated);
-    }
-
-    /**
-     * 校验翻译结果是否有效
-     * @deprecated 使用 {@link TranslationPipeline#isValidTranslation(String, String)}
-     */
-    @Deprecated
-    private boolean isValidTranslation(String text, String result) {
-        return TranslationPipeline.isValidTranslation(text, result);
-    }
-
-    /**
      * 阅读器翻译 - 支持并行翻译长文本
      * 默认使用 MTranServer 进行翻译，html 模式启用
      * @param req 翻译请求
      * @return 翻译响应
      */
-    public ReaderTranslateResponse readerTranslate(ReaderTranslateRequest req) {
+    public ReaderTranslateResponse readerTranslate(Long userId, ReaderTranslateRequest req) {
         String content = req.getContent();
         if (content == null || content.trim().isEmpty()) {
             return new ReaderTranslateResponse(false, req.getEngine(), "没有收到内容");
@@ -198,8 +156,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
 
-        // 检查字符配额（从 SecurityContext 获取 userLevel）
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        // 检查字符配额
         if (userId != null) {
             String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
@@ -233,7 +190,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         // 并行翻译所有段落（复用全局线程池）
         // 阅读器模式默认使用 MTranServer，html=true
         try {
-            List<String> translatedSegments = translateSegmentsInParallel(segments, target, mode, true);
+            List<String> translatedSegments = translateSegmentsInParallel(segments, target, mode, true, userId);
             String rawResult = String.join("", translatedSegments);
             String combinedResult = TextCleaningUtil.sanitizeHtml(rawResult);
             log.info("阅读器翻译完成，原文长度：{}，译文长度：{}", content.length(), combinedResult.length());
@@ -262,7 +219,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
      * @param html 是否启用 HTML 翻译模式（仅对 MTranServer 有效）
      */
     private List<String> translateSegmentsInParallel(List<String> segments, String target, TranslationMode mode,
-                                                      boolean html) {
+                                                      boolean html, Long userId) {
         List<String> results = new ArrayList<>(segments.size());
         List<int[]> indexesToTranslate = new ArrayList<>();
 
@@ -283,7 +240,6 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
 
         // 2. 使用 Pipeline 快速模式并发翻译缓存未命中的段落
         if (!indexesToTranslate.isEmpty()) {
-            Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
             TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
                     translationClientPort, postProcessingService, userId, null);
@@ -357,7 +313,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
     /**
      * 网页翻译流式版本 - 并发翻译（虚拟线程 + 信号量限流）
      */
-    public SseEmitter webpageTranslateStream(WebpageTranslateRequest req) {
+    public SseEmitter webpageTranslateStream(Long userId, WebpageTranslateRequest req) {
         SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L); // 5 分钟超时
 
         // 计算总字符数
@@ -366,8 +322,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
                 .mapToInt(item -> item.getOriginal() != null ? item.getOriginal().length() : 0)
                 .sum();
 
-        // 检查字符配额（从 SecurityContext 获取 userLevel）
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+        // 检查字符配额
         String quotaMode = (req.getFastMode() != null && !req.getFastMode()) ? "expert" : "fast";
 
         if (userId != null) {
@@ -483,8 +438,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
      * 文本流式翻译（SSE）— 适用于长文本的单段流式输出
      * 按段落分段，逐段 SSE 输出
      */
-    public SseEmitter streamTextTranslate(SelectionTranslationRequest req) {
-        Long userId = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserId().orElse(null);
+    public SseEmitter streamTextTranslate(Long userId, SelectionTranslationRequest req) {
         log.info("[STREAM-TRACE] Service entry: userId={}, engine={}, target={}, mode={}, textLen={}",
                 userId, req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);
 
