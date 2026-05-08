@@ -6,7 +6,7 @@ import com.yumu.noveltranslator.domain.service.RagTranslationService;
 
 import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

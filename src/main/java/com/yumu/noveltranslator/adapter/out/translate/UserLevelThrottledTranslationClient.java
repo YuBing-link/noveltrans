@@ -2,7 +2,7 @@ package com.yumu.noveltranslator.adapter.out.translate;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
+import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;

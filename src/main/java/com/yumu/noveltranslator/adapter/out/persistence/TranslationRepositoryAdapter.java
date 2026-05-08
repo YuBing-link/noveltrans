@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.adapter.out.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.yumu.noveltranslator.adapter.out.persistence.converter.TranslationConverter;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationHistoryMapper;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -21,50 +23,55 @@ public class TranslationRepositoryAdapter implements TranslationRepositoryPort {
     private final TranslationHistoryMapper historyMapper;
 
     @Override
-    public Optional<TranslationTask> findTaskByTaskId(String taskId) {
-        return Optional.ofNullable(taskMapper.findByTaskId(taskId));
+    public Optional<com.yumu.noveltranslator.domain.model.TranslationTask> findTaskByTaskId(String taskId) {
+        return Optional.ofNullable(TranslationConverter.toModelTask(taskMapper.findByTaskId(taskId)));
     }
 
     @Override
-    public Optional<TranslationTask> findTaskByDocumentId(Long docId) {
-        return Optional.ofNullable(taskMapper.findByDocumentId(docId));
+    public Optional<com.yumu.noveltranslator.domain.model.TranslationTask> findTaskByDocumentId(Long docId) {
+        return Optional.ofNullable(TranslationConverter.toModelTask(taskMapper.findByDocumentId(docId)));
     }
 
     @Override
-    public List<TranslationTask> findTasksByDocumentId(Long docId) {
-        LambdaQueryWrapper<TranslationTask> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TranslationTask::getDocumentId, docId);
-        return taskMapper.selectList(wrapper);
+    public List<com.yumu.noveltranslator.domain.model.TranslationTask> findTasksByDocumentId(Long docId) {
+        return TranslationConverter.toModelListTasks(
+                taskMapper.selectList(new LambdaQueryWrapper<TranslationTask>().eq(TranslationTask::getDocumentId, docId)));
     }
 
     @Override
-    public List<TranslationTask> findTasksByUserIdAndStatus(Long userId, int offset, int limit) {
-        return taskMapper.findByUserIdAndStatus(userId, offset, limit);
+    public List<com.yumu.noveltranslator.domain.model.TranslationTask> findTasksByUserIdAndStatus(Long userId, int offset, int limit) {
+        return taskMapper.findByUserIdAndStatus(userId, offset, limit).stream()
+                .map(TranslationConverter::toModelTask)
+                .collect(Collectors.toList());
     }
 
     @Override
-    public List<TranslationTask> findTasksByStatusAndCreateTimeBefore(String status, LocalDateTime cutoff) {
-        return taskMapper.findByStatusAndCreateTimeBefore(status, cutoff);
+    public List<com.yumu.noveltranslator.domain.model.TranslationTask> findTasksByStatusAndCreateTimeBefore(String status, LocalDateTime cutoff) {
+        return taskMapper.findByStatusAndCreateTimeBefore(status, cutoff).stream()
+                .map(TranslationConverter::toModelTask)
+                .collect(Collectors.toList());
     }
 
     @Override
-    public void saveTask(TranslationTask task) {
-        taskMapper.insert(task);
+    public void saveTask(com.yumu.noveltranslator.domain.model.TranslationTask task) {
+        taskMapper.insert(TranslationConverter.toEntityTask(task));
     }
 
     @Override
-    public void updateTask(TranslationTask task) {
-        taskMapper.updateById(task);
+    public void updateTask(com.yumu.noveltranslator.domain.model.TranslationTask task) {
+        taskMapper.updateById(TranslationConverter.toEntityTask(task));
     }
 
     @Override
-    public Optional<TranslationHistory> findHistoryByTaskId(String taskId) {
-        return Optional.ofNullable(historyMapper.findByTaskId(taskId));
+    public Optional<com.yumu.noveltranslator.domain.model.TranslationHistory> findHistoryByTaskId(String taskId) {
+        return Optional.ofNullable(TranslationConverter.toModelHistory(historyMapper.findByTaskId(taskId)));
     }
 
     @Override
-    public List<TranslationHistory> findHistoryByUserId(Long userId, int offset, int pageSize) {
-        return historyMapper.findByUserId(userId, offset, pageSize);
+    public List<com.yumu.noveltranslator.domain.model.TranslationHistory> findHistoryByUserId(Long userId, int offset, int pageSize) {
+        return historyMapper.findByUserId(userId, offset, pageSize).stream()
+                .map(TranslationConverter::toModelHistory)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -113,18 +120,18 @@ public class TranslationRepositoryAdapter implements TranslationRepositoryPort {
     }
 
     @Override
-    public void saveHistory(TranslationHistory history) {
-        historyMapper.insert(history);
+    public void saveHistory(com.yumu.noveltranslator.domain.model.TranslationHistory history) {
+        historyMapper.insert(TranslationConverter.toEntityHistory(history));
     }
 
     @Override
-    public void updateHistory(TranslationHistory history) {
-        historyMapper.updateById(history);
+    public void updateHistory(com.yumu.noveltranslator.domain.model.TranslationHistory history) {
+        historyMapper.updateById(TranslationConverter.toEntityHistory(history));
     }
 
     @Override
-    public Optional<TranslationHistory> findHistoryById(Long id) {
-        return Optional.ofNullable(historyMapper.selectById(id));
+    public Optional<com.yumu.noveltranslator.domain.model.TranslationHistory> findHistoryById(Long id) {
+        return Optional.ofNullable(TranslationConverter.toModelHistory(historyMapper.selectById(id)));
     }
 
     @Override

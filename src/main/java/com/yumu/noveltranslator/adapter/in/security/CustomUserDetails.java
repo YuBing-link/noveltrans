@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.adapter.in.security;
 
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -28,10 +28,10 @@ public class CustomUserDetails implements UserDetails {
     /**
      * 轻量构造器（API Key 缓存命中时使用，无需加载完整 User 实体）
      */
-    public CustomUserDetails(Long userId, String userLevel) {
+    public CustomUserDetails(Long userId, String userLevel, Long tenantId) {
         this.userId = userId;
         this.userLevel = userLevel;
-        this.tenantId = null;
+        this.tenantId = tenantId;
     }
 
     @Override
@@ -72,7 +72,7 @@ public class CustomUserDetails implements UserDetails {
         return true; // 账户已启用
     }
 
-    // 提供对原始用户对象的访问
+    // 提供对领域模型用户的访问
     public User getUser() {
         return user;
     }

@@ -1,8 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.rest.admin;
 
-import com.yumu.noveltranslator.domain.service.RagTranslationService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.dto.common.Result;
+import com.yumu.noveltranslator.port.in.CacheAdminPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -16,17 +15,14 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 public class CacheAdminController {
 
-    private final TranslationCacheService cacheService;
-    private final RagTranslationService ragTranslationService;
+    private final CacheAdminPort cacheAdminPort;
 
     /**
      * 清空所有翻译缓存（L1 + L2 + L3）
      */
     @PostMapping("/clear")
     public Result<String> clearAllCache() {
-        log.info("请求清空所有翻译缓存");
-        cacheService.clearAllCache();
-        ragTranslationService.clearAllTranslationMemory();
+        cacheAdminPort.clearAllTranslationCache();
         return Result.ok("缓存已清空");
     }
 }

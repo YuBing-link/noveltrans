@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.port.out;
 
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.TranslationHistory;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 
 import java.time.LocalDateTime;
 import java.util.List;

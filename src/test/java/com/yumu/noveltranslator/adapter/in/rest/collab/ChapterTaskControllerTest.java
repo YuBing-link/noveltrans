@@ -6,7 +6,7 @@ import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
 import com.yumu.noveltranslator.dto.common.PageResponse;
 import com.yumu.noveltranslator.dto.collab.ReviewChapterRequest;
 import com.yumu.noveltranslator.dto.collab.SubmitChapterRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.service.ChapterTaskService;
 import org.junit.jupiter.api.AfterEach;

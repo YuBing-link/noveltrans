@@ -14,7 +14,7 @@ import com.yumu.noveltranslator.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.dto.entity.UpdateUserProfileRequest;
 import com.yumu.noveltranslator.dto.entity.UserPreferencesResponse;
 import com.yumu.noveltranslator.dto.entity.UserPreferencesRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter;

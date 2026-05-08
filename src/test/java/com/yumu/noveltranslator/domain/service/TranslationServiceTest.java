@@ -8,7 +8,7 @@ import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;

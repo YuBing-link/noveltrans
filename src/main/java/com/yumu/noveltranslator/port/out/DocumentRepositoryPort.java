@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.port.out;
 
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import com.yumu.noveltranslator.domain.model.Document;
 
 import java.util.List;
 import java.util.Optional;

@@ -1,11 +1,11 @@
 package com.yumu.noveltranslator.port.out;
 
-import com.yumu.noveltranslator.adapter.out.persistence.entity.ApiKey;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Tenant;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TokenBlacklist;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
+import com.yumu.noveltranslator.domain.model.ApiKey;
+import com.yumu.noveltranslator.domain.model.Tenant;
+import com.yumu.noveltranslator.domain.model.TokenBlacklist;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.domain.model.UserPlanHistory;
+import com.yumu.noveltranslator.domain.model.UserPreference;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,7 +35,11 @@ public interface UserRepositoryPort {
 
     // === ApiKey ===
     Optional<ApiKey> findApiKeyByKey(String apiKey);
+    Optional<ApiKey> findApiKeyById(Long id);
     List<ApiKey> findApiKeysByUserId(Long userId);
+    void saveApiKey(ApiKey apiKey);
+    void updateApiKey(ApiKey apiKey);
+    void deleteApiKey(Long id);
     void incrementApiKeyUsage(Long id, long usage);
 
     // === TokenBlacklist ===

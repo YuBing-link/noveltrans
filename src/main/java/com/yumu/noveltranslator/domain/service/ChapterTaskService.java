@@ -2,9 +2,9 @@ package com.yumu.noveltranslator.domain.service;
 
 import com.yumu.noveltranslator.dto.collab.ChapterTaskResponse;
 import com.yumu.noveltranslator.dto.common.PageResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
@@ -12,8 +12,7 @@ import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yumu.noveltranslator.dto.common.PageResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -72,7 +71,7 @@ public class ChapterTaskService {
      * 获取项目章节列表（分页）
      */
     public PageResponse<ChapterTaskResponse> listByProjectId(Long projectId, int page, int pageSize) {
-        IPage<CollabChapterTask> resultPage = collabPort.findChapterTasksByProjectIdPaged(projectId, page, pageSize);
+        PageResult<CollabChapterTask> resultPage = collabPort.findChapterTasksByProjectIdPaged(projectId, page, pageSize);
 
         // 批量加载关联用户，避免 N+1
         Set<Long> userIds = new HashSet<>();
@@ -257,7 +256,7 @@ public class ChapterTaskService {
      * 获取用户待处理的章节列表（分页）
      */
     public PageResponse<ChapterTaskResponse> listByAssigneeId(Long assigneeId, int page, int pageSize) {
-        IPage<CollabChapterTask> resultPage = collabPort.findChapterTasksByAssigneeIdPaged(
+        PageResult<CollabChapterTask> resultPage = collabPort.findChapterTasksByAssigneeIdPaged(
                 assigneeId,
                 List.of(ChapterTaskStatus.TRANSLATING.getValue(), ChapterTaskStatus.SUBMITTED.getValue()),
                 page, pageSize);

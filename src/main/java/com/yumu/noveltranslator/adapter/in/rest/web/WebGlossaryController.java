@@ -4,12 +4,8 @@ import com.yumu.noveltranslator.dto.common.Result;
 import com.yumu.noveltranslator.dto.common.PageResponse;
 import com.yumu.noveltranslator.dto.translation.GlossaryResponse;
 import com.yumu.noveltranslator.dto.translation.GlossaryItemRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
-import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
-import com.yumu.noveltranslator.domain.service.UserService;
+import com.yumu.noveltranslator.port.in.GlossaryPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,8 +19,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Web 术语库管理接口
@@ -35,10 +31,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WebGlossaryController {
 
-    private final UserService userService;
-    private final GlossaryMapper glossaryMapper;
-    private final CacheVersionService cacheVersionService;
-    private final TranslationCacheService translationCacheService;
+    private final GlossaryPort glossaryPort;
 
     /**
      * 获取术语库列表
@@ -50,7 +43,7 @@ public class WebGlossaryController {
             @RequestParam(required = false, defaultValue = "20") Integer pageSize,
             @RequestParam(required = false) String search) {
         Long userId = SecurityUtil.getRequiredUserId();
-        PageResponse<GlossaryResponse> result = userService.getGlossaryList(userId, page, pageSize, search);
+        PageResponse<GlossaryResponse> result = glossaryPort.listGlossaries(userId, page, pageSize, search);
         return Result.ok(result);
     }
 
@@ -61,7 +54,7 @@ public class WebGlossaryController {
     @GetMapping("/{id}")
     public Result<GlossaryResponse> getGlossaryDetail(@PathVariable Long id) {
         Long userId = SecurityUtil.getRequiredUserId();
-        GlossaryResponse glossary = userService.getGlossaryDetail(userId, id);
+        GlossaryResponse glossary = glossaryPort.getGlossaryDetail(userId, id);
         if (glossary == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "术语库不存在");
         }
@@ -75,8 +68,7 @@ public class WebGlossaryController {
     @PostMapping
     public Result<GlossaryResponse> createGlossaryItem(@RequestBody @Valid GlossaryItemRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        GlossaryResponse glossary = userService.createGlossaryItem(userId, request);
-        translationCacheService.invalidateKeysForTerm(request.getSourceWord());
+        GlossaryResponse glossary = glossaryPort.createGlossaryItem(userId, request);
         return Result.ok(glossary);
     }
 
@@ -87,11 +79,10 @@ public class WebGlossaryController {
     @PutMapping("/{id}")
     public Result<GlossaryResponse> updateGlossaryItem(@PathVariable Long id, @RequestBody @Valid GlossaryItemRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        GlossaryResponse glossary = userService.updateGlossaryItem(userId, id, request);
+        GlossaryResponse glossary = glossaryPort.updateGlossaryItem(userId, id, request);
         if (glossary == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "术语项不存在");
         }
-        translationCacheService.invalidateKeysForTerm(request.getSourceWord());
         return Result.ok(glossary);
     }
 
@@ -102,13 +93,10 @@ public class WebGlossaryController {
     @DeleteMapping("/{id}")
     public Result deleteGlossaryItem(@PathVariable Long id) {
         Long userId = SecurityUtil.getRequiredUserId();
-        boolean success = userService.deleteGlossaryItem(userId, id);
+        boolean success = glossaryPort.deleteGlossaryItem(userId, id);
         if (!success) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "术语项不存在");
         }
-        // 删除时也需要失效，但此时术语项已被删除，无法获取 sourceWord
-        // 回退到全局版本 bump（这是合理的，因为删除操作相对较少）
-        cacheVersionService.bumpAllVersions();
         return Result.ok(null);
     }
 
@@ -119,11 +107,11 @@ public class WebGlossaryController {
     @GetMapping("/{id}/terms")
     public Result<List<GlossaryResponse>> getGlossaryTerms(@PathVariable Long id) {
         Long userId = SecurityUtil.getRequiredUserId();
-        GlossaryResponse glossary = userService.getGlossaryDetail(userId, id);
+        GlossaryResponse glossary = glossaryPort.getGlossaryDetail(userId, id);
         if (glossary == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "术语库不存在");
         }
-        List<GlossaryResponse> terms = userService.getGlossaryTerms(userId);
+        List<GlossaryResponse> terms = glossaryPort.getAllGlossaryTerms(userId);
         return Result.ok(terms);
     }
 
@@ -134,7 +122,7 @@ public class WebGlossaryController {
     @GetMapping("/export")
     public ResponseEntity<byte[]> exportGlossary() {
         Long userId = SecurityUtil.getRequiredUserId();
-        List<GlossaryResponse> glossaries = userService.getGlossaryTerms(userId);
+        List<GlossaryResponse> glossaries = glossaryPort.getAllGlossaryTerms(userId);
 
         StringBuilder csv = new StringBuilder();
         csv.append("﻿"); // BOM for Excel UTF-8
@@ -186,9 +174,7 @@ public class WebGlossaryController {
                 return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "文件格式错误");
             }
 
-            int imported = 0;
-            int skipped = 0;
-            java.util.Set<String> importedWords = new java.util.HashSet<>();
+            List<GlossaryItemRequest> items = new ArrayList<>();
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
@@ -203,37 +189,19 @@ public class WebGlossaryController {
 
                 if (sourceWord.isEmpty() || targetWord.isEmpty()) continue;
 
-                Glossary glossary = new Glossary();
-                glossary.setUserId(userId);
-                glossary.setSourceWord(sourceWord);
-                glossary.setTargetWord(targetWord);
-                glossary.setRemark(remark.isEmpty() ? null : remark);
-
-                try {
-                    glossaryMapper.insert(glossary);
-                    imported++;
-                    if (!sourceWord.isEmpty()) {
-                        importedWords.add(sourceWord);
-                    }
-                } catch (org.springframework.dao.DuplicateKeyException e) {
-                    skipped++;
-                } catch (Exception e) {
-                    if (e.getMessage() != null && e.getMessage().contains("Duplicate entry")) {
-                        skipped++;
-                    } else {
-                        throw e;
-                    }
-                }
+                GlossaryItemRequest item = new GlossaryItemRequest();
+                item.setSourceWord(sourceWord);
+                item.setTargetWord(targetWord);
+                item.setRemark(remark.isEmpty() ? null : remark);
+                items.add(item);
             }
 
-            int result = imported > 0 ? imported : 0;
-            if (imported > 0) {
-                // 细粒度失效每个导入的术语
-                for (String word : importedWords) {
-                    translationCacheService.invalidateKeysForTerm(word);
-                }
+            if (items.isEmpty()) {
+                return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "CSV 文件中没有有效数据");
             }
-            return Result.ok(result);
+
+            int imported = glossaryPort.importGlossaryCsv(userId, items);
+            return Result.ok(imported > 0 ? imported : 0);
         } catch (IOException e) {
             return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "文件解析失败: " + e.getMessage());
         }
@@ -248,7 +216,7 @@ public class WebGlossaryController {
     }
 
     private static String[] parseCsvLine(String line) {
-        List<String> result = new java.util.ArrayList<>();
+        List<String> result = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         boolean inQuotes = false;
 

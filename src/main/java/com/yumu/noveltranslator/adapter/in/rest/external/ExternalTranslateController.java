@@ -5,8 +5,6 @@ import com.yumu.noveltranslator.dto.translation.ExternalTranslateResponse;
 import com.yumu.noveltranslator.dto.translation.ExternalTranslateRequest;
 import com.yumu.noveltranslator.dto.translation.SelectionTranslationRequest;
 import com.yumu.noveltranslator.dto.translation.ExternalBatchTranslateRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.domain.service.DocumentService;
 import com.yumu.noveltranslator.domain.service.QuotaService;

@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.adapter.out.persistence;
 
+import com.yumu.noveltranslator.adapter.out.persistence.converter.TranslationConverter;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.DocumentMapper;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
@@ -16,28 +17,28 @@ public class DocumentRepositoryAdapter implements DocumentRepositoryPort {
     private final DocumentMapper documentMapper;
 
     @Override
-    public Optional<Document> findById(Long id) {
-        return Optional.ofNullable(documentMapper.findById(id));
+    public Optional<com.yumu.noveltranslator.domain.model.Document> findById(Long id) {
+        return Optional.ofNullable(TranslationConverter.toModelDocument(documentMapper.findById(id)));
     }
 
     @Override
-    public Optional<Document> findByIdAndUserId(Long id, Long userId) {
-        return Optional.ofNullable(documentMapper.findByIdAndUserId(id, userId));
+    public Optional<com.yumu.noveltranslator.domain.model.Document> findByIdAndUserId(Long id, Long userId) {
+        return Optional.ofNullable(TranslationConverter.toModelDocument(documentMapper.findByIdAndUserId(id, userId)));
     }
 
     @Override
-    public List<Document> findByUserId(Long userId) {
-        return documentMapper.findByUserId(userId);
+    public List<com.yumu.noveltranslator.domain.model.Document> findByUserId(Long userId) {
+        return TranslationConverter.toModelDocuments(documentMapper.findByUserId(userId));
     }
 
     @Override
-    public void save(Document document) {
-        documentMapper.insert(document);
+    public void save(com.yumu.noveltranslator.domain.model.Document document) {
+        documentMapper.insert(TranslationConverter.toEntityDocument(document));
     }
 
     @Override
-    public void update(Document document) {
-        documentMapper.updateById(document);
+    public void update(com.yumu.noveltranslator.domain.model.Document document) {
+        documentMapper.updateById(TranslationConverter.toEntityDocument(document));
     }
 
     @Override

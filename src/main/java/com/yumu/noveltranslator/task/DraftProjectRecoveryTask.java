@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.task;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.yumu.noveltranslator.adapter.out.persistence.converter.CollabConverter;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
@@ -52,35 +53,36 @@ public class DraftProjectRecoveryTask {
 
         log.info("发现 {} 个停滞的 DRAFT 项目，开始恢复", staleDrafts.size());
 
-        for (CollabProject project : staleDrafts) {
+        for (CollabProject entity : staleDrafts) {
             try {
-                recoverSingleProject(project);
+                recoverSingleProject(entity);
             } catch (Exception e) {
-                log.error("恢复项目失败: projectId={}, error={}", project.getId(), e.getMessage(), e);
+                log.error("恢复项目失败: projectId={}, error={}", entity.getId(), e.getMessage(), e);
             }
         }
     }
 
-    private void recoverSingleProject(CollabProject project) {
-        Long projectId = project.getId();
+    private void recoverSingleProject(CollabProject entity) {
+        Long projectId = entity.getId();
 
         // 检查该项目是否已有章节
         int chapterCount = collabChapterTaskMapper.countByProjectId(projectId);
 
         if (chapterCount > 0) {
             // 有章节存在：异步任务可能已完成但激活失败
-            transitionToActive(project);
+            transitionToActive(entity);
         } else {
             // 无章节：异步任务未执行或完全失败
-            logStaleProject(project);
+            logStaleProject(entity);
         }
     }
 
-    private void transitionToActive(CollabProject project) {
-        Long projectId = project.getId();
+    private void transitionToActive(CollabProject entity) {
+        Long projectId = entity.getId();
         try {
-            collabStateMachine.transitionProject(project, CollabProjectStatus.ACTIVE);
-            collabProjectMapper.updateById(project);
+            com.yumu.noveltranslator.domain.model.CollabProject model = CollabConverter.toProjectModel(entity);
+            collabStateMachine.transitionProject(model, CollabProjectStatus.ACTIVE);
+            collabProjectMapper.updateById(entity);
             log.info("恢复停滞项目（有章节）: projectId={}, chapters exist, transitioned to ACTIVE", projectId);
         } catch (IllegalStateException e) {
             // 状态转移不合法（如已是 ACTIVE），跳过
@@ -88,11 +90,11 @@ public class DraftProjectRecoveryTask {
         }
     }
 
-    private void logStaleProject(CollabProject project) {
-        Long projectId = project.getId();
+    private void logStaleProject(CollabProject entity) {
+        Long projectId = entity.getId();
         log.warn("发现陈旧 DRAFT 项目（无章节插入）: projectId={}, name={}, ownerId={}, createTime={}. "
                 + "可能原因：异步章节拆分任务未执行或事件发布失败。"
                 + "保持 DRAFT 状态，等待人工介入。",
-                projectId, project.getName(), project.getOwnerId(), project.getCreateTime());
+                projectId, entity.getName(), entity.getOwnerId(), entity.getCreateTime());
     }
 }

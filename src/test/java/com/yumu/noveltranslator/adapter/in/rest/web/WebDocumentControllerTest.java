@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
 import com.yumu.noveltranslator.dto.entity.DocumentInfoResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 
 import com.yumu.noveltranslator.dto.common.*;
 import com.yumu.noveltranslator.dto.collab.*;

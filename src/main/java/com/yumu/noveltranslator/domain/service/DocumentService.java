@@ -2,8 +2,8 @@ package com.yumu.noveltranslator.domain.service;
 
 import com.yumu.noveltranslator.dto.entity.DocumentInfoResponse;
 import com.yumu.noveltranslator.dto.translation.DocumentTranslationRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;

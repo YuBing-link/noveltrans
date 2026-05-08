@@ -4,15 +4,13 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
 import com.stripe.net.Webhook;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.out.stripe.SubscriptionService;
+import com.yumu.noveltranslator.port.in.WebhookPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
-
-import com.yumu.noveltranslator.port.in.WebhookPort;
 
 /**
  * Stripe Webhook 接收端点
@@ -26,7 +24,7 @@ public class StripeWebhookController implements WebhookPort {
 
     private final SubscriptionService subscriptionService;
     private final com.yumu.noveltranslator.properties.StripeProperties stripeProperties;
-    private final UserMapper userMapper;
+    private final UserRepositoryPort userRepositoryPort;
 
     @PostMapping("/stripe")
     public String handleStripeWebhook(HttpServletRequest request, @RequestBody String payload) {
@@ -53,7 +51,7 @@ public class StripeWebhookController implements WebhookPort {
         // 1. 获取 userId 并设置租户上下文
         Long userId = extractUserId(event);
         if (userId != null) {
-            User user = userMapper.selectById(userId);
+            var user = userRepositoryPort.findById(userId).orElse(null);
             if (user != null) {
                 TenantContext.setTenantIdOrDefault(user.getTenantId());
             }

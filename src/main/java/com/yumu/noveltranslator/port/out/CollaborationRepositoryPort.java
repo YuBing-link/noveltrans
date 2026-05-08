@@ -1,12 +1,11 @@
 package com.yumu.noveltranslator.port.out;
 
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabComment;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabInviteCode;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabComment;
+import com.yumu.noveltranslator.domain.model.CollabInviteCode;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.CollabProjectMember;
+import com.yumu.noveltranslator.dto.common.PageResult;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,8 +35,8 @@ public interface CollaborationRepositoryPort {
     // === CollabChapterTask ===
     List<CollabChapterTask> findChapterTasksByProjectId(Long projectId);
     List<CollabChapterTask> findChapterTasksByProjectIdAndStatus(Long projectId, String status);
-    IPage<CollabChapterTask> findChapterTasksByProjectIdPaged(Long projectId, int page, int pageSize);
-    IPage<CollabChapterTask> findChapterTasksByAssigneeIdPaged(Long assigneeId, List<String> statuses, int page, int pageSize);
+    PageResult<CollabChapterTask> findChapterTasksByProjectIdPaged(Long projectId, int page, int pageSize);
+    PageResult<CollabChapterTask> findChapterTasksByAssigneeIdPaged(Long assigneeId, List<String> statuses, int page, int pageSize);
     int countChapterTasksByProjectId(Long projectId);
     int countChapterTasksByProjectIdAndStatus(Long projectId, String status);
     List<CollabChapterTask> findChapterTasksByAssigneeId(Long assigneeId);
@@ -51,7 +50,7 @@ public interface CollaborationRepositoryPort {
 
     // === CollabComment ===
     List<CollabComment> findCommentsByChapterTaskId(Long chapterTaskId);
-    IPage<CollabComment> findCommentsByChapterTaskIdPage(Page<CollabComment> page, Long chapterTaskId);
+    PageResult<CollabComment> findCommentsByChapterTaskIdPaged(Long chapterTaskId, int page, int pageSize);
     List<CollabComment> findRepliesByParentId(Long parentId);
     void saveComment(CollabComment comment);
     void updateComment(CollabComment comment);

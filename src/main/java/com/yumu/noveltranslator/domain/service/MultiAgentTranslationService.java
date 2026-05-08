@@ -1,12 +1,11 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.dto.translation.RagTranslationResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.AiGlossary;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.AiGlossary;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.enums.TranslationMode;

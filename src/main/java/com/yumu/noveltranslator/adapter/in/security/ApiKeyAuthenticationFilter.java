@@ -1,6 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.security;
 
 import com.yumu.noveltranslator.config.tenant.TenantContext;
+import com.yumu.noveltranslator.adapter.out.persistence.converter.UserConverter;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.ApiKey;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.ApiKeyMapper;
@@ -137,7 +138,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         TenantContext.setTenantId(info.getTenantId());
 
         // 构造最小化 CustomUserDetails（从缓存信息构建，无需查 DB）
-        CustomUserDetails userDetails = new CustomUserDetails(info.getUserId(), info.getUserLevel());
+        CustomUserDetails userDetails = new CustomUserDetails(info.getUserId(), info.getUserLevel(), info.getTenantId());
         UsernamePasswordAuthenticationToken authToken =
             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authToken);
@@ -157,7 +158,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
         TenantContext.setTenantIdOrDefault(user.getTenantId());
 
-        CustomUserDetails userDetails = new CustomUserDetails(user);
+        // Convert entity to domain model before creating CustomUserDetails
+        com.yumu.noveltranslator.domain.model.User domainUser = UserConverter.toUserModel(user);
+        CustomUserDetails userDetails = new CustomUserDetails(domainUser);
         UsernamePasswordAuthenticationToken authToken =
             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authToken);

@@ -16,10 +16,10 @@ import com.yumu.noveltranslator.dto.subscription.CheckoutSessionResponse;
 import com.yumu.noveltranslator.dto.subscription.PaymentVerificationResponse;
 import com.yumu.noveltranslator.dto.subscription.PortalSessionResponse;
 import com.yumu.noveltranslator.dto.subscription.SubscriptionStatusResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeCustomer;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
+import com.yumu.noveltranslator.domain.model.StripeCustomer;
+import com.yumu.noveltranslator.domain.model.StripeSubscription;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.domain.model.UserPlanHistory;
 import com.yumu.noveltranslator.enums.BillingCycle;
 import com.yumu.noveltranslator.enums.SubscriptionPlan;
 import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
@@ -436,54 +436,33 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         // 原子幂等检查 + 更新：lastWebhookEventId 为 NULL 或与当前 event 不同且时间戳更新时才更新
         long eventCreated = event.getCreated();
-        int rows = billingPort.updateSubscriptionByWrapper(
-            new LambdaUpdateWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getId, subRecord.getId())
-                .and(w -> w
-                    .isNull(StripeSubscription::getLastWebhookEventId)
-                    .or()
-                    .ne(StripeSubscription::getLastWebhookEventId, event.getId())
-                )
-                .and(w -> w
-                    .isNull(StripeSubscription::getLastEventCreated)
-                    .or()
-                    .lt(StripeSubscription::getLastEventCreated, eventCreated)
-                )
-                .set(StripeSubscription::getStatus, stripeSub.getStatus())
-                .set(StripeSubscription::getCancelAtPeriodEnd, stripeSub.getCancelAtPeriodEnd())
-                .set(StripeSubscription::getStripePriceId, stripeSub.getItems().getData().get(0).getPrice().getId())
-                .set(StripeSubscription::getLastWebhookEventId, event.getId())
-                .set(StripeSubscription::getLastEventCreated, eventCreated)
-        );
+        int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), stripeSub.getStatus(), eventCreated);
 
         if (rows == 0) {
             log.info("subscription.updated: already processed event {}, skipping", event.getId());
             return;
         }
 
-        // 更新 period 等时间字段（仅更新未被原子更新覆盖的字段）
-        LambdaUpdateWrapper<StripeSubscription> timeUpdate = new LambdaUpdateWrapper<StripeSubscription>()
-            .eq(StripeSubscription::getId, subRecord.getId());
-
+        // 更新 period 等时间字段
         boolean hasTimeUpdate = false;
+        LocalDateTime newPeriodStart = null;
+        LocalDateTime newPeriodEnd = null;
+        LocalDateTime newCanceledAt = null;
         if (stripeSub.getCurrentPeriodStart() != null) {
-            timeUpdate.set(StripeSubscription::getCurrentPeriodStart,
-                LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodStart()), ZoneId.systemDefault()));
+            newPeriodStart = LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodStart()), ZoneId.systemDefault());
             hasTimeUpdate = true;
         }
         if (stripeSub.getCurrentPeriodEnd() != null) {
-            timeUpdate.set(StripeSubscription::getCurrentPeriodEnd,
-                LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodEnd()), ZoneId.systemDefault()));
+            newPeriodEnd = LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCurrentPeriodEnd()), ZoneId.systemDefault());
             hasTimeUpdate = true;
         }
         if (stripeSub.getCanceledAt() != null) {
-            timeUpdate.set(StripeSubscription::getCanceledAt,
-                LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCanceledAt()), ZoneId.systemDefault()));
+            newCanceledAt = LocalDateTime.ofInstant(Instant.ofEpochSecond(stripeSub.getCanceledAt()), ZoneId.systemDefault());
             hasTimeUpdate = true;
         }
 
         if (hasTimeUpdate) {
-            billingPort.updateSubscriptionByWrapper(timeUpdate);
+            billingPort.updateSubscriptionFields(subRecord.getId(), newPeriodStart, newPeriodEnd, newCanceledAt);
         }
 
         // 同步 userLevel
@@ -532,23 +511,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         // 原子幂等检查 + 更新 + 事件时间戳排序校验
         long eventCreated = event.getCreated();
-        int rows = billingPort.updateSubscriptionByWrapper(
-            new LambdaUpdateWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getId, subRecord.getId())
-                .and(w -> w
-                    .isNull(StripeSubscription::getLastWebhookEventId)
-                    .or()
-                    .ne(StripeSubscription::getLastWebhookEventId, event.getId())
-                )
-                .and(w -> w
-                    .isNull(StripeSubscription::getLastEventCreated)
-                    .or()
-                    .lt(StripeSubscription::getLastEventCreated, eventCreated)
-                )
-                .set(StripeSubscription::getStatus, "canceled")
-                .set(StripeSubscription::getLastWebhookEventId, event.getId())
-                .set(StripeSubscription::getLastEventCreated, eventCreated)
-        );
+        int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), "canceled", eventCreated);
 
         if (rows == 0) {
             log.info("subscription.deleted: already processed event {}, skipping", event.getId());
@@ -590,23 +553,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         }
 
         long eventCreated = event.getCreated();
-        int rows = billingPort.updateSubscriptionByWrapper(
-            new LambdaUpdateWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getId, subRecord.getId())
-                .and(w -> w
-                    .isNull(StripeSubscription::getLastWebhookEventId)
-                    .or()
-                    .ne(StripeSubscription::getLastWebhookEventId, event.getId())
-                )
-                .and(w -> w
-                    .isNull(StripeSubscription::getLastEventCreated)
-                    .or()
-                    .lt(StripeSubscription::getLastEventCreated, eventCreated)
-                )
-                .set(StripeSubscription::getStatus, stripeSub.getStatus())
-                .set(StripeSubscription::getLastWebhookEventId, event.getId())
-                .set(StripeSubscription::getLastEventCreated, eventCreated)
-        );
+        int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), stripeSub.getStatus(), eventCreated);
 
         if (rows == 0) {
             log.info("subscription.resumed: already processed event {}, skipping", event.getId());
@@ -646,23 +593,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         if (subRecord != null) {
             long eventCreated = event.getCreated();
-            int rows = billingPort.updateSubscriptionByWrapper(
-                new LambdaUpdateWrapper<StripeSubscription>()
-                    .eq(StripeSubscription::getId, subRecord.getId())
-                    .and(w -> w
-                        .isNull(StripeSubscription::getLastWebhookEventId)
-                        .or()
-                        .ne(StripeSubscription::getLastWebhookEventId, event.getId())
-                    )
-                    .and(w -> w
-                        .isNull(StripeSubscription::getLastEventCreated)
-                        .or()
-                        .lt(StripeSubscription::getLastEventCreated, eventCreated)
-                    )
-                    .set(StripeSubscription::getStatus, "past_due")
-                    .set(StripeSubscription::getLastWebhookEventId, event.getId())
-                    .set(StripeSubscription::getLastEventCreated, eventCreated)
-            );
+            int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), "past_due", eventCreated);
 
             if (rows == 0) {
                 log.info("invoice.payment_failed: already processed event {}, skipping", event.getId());
@@ -734,23 +665,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
      */
     private void doActivateSubscriptionFromInvoice(Event event, StripeSubscription subRecord) {
         long eventCreated = event.getCreated();
-        int rows = billingPort.updateSubscriptionByWrapper(
-            new LambdaUpdateWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getId, subRecord.getId())
-                .and(w -> w
-                    .isNull(StripeSubscription::getLastWebhookEventId)
-                    .or()
-                    .ne(StripeSubscription::getLastWebhookEventId, event.getId())
-                )
-                .and(w -> w
-                    .isNull(StripeSubscription::getLastEventCreated)
-                    .or()
-                    .lt(StripeSubscription::getLastEventCreated, eventCreated)
-                )
-                .set(StripeSubscription::getStatus, "active")
-                .set(StripeSubscription::getLastWebhookEventId, event.getId())
-                .set(StripeSubscription::getLastEventCreated, eventCreated)
-        );
+        int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), "active", eventCreated);
 
         if (rows == 0) {
             log.info("invoice.payment_succeeded: already processed event {}, skipping", event.getId());
@@ -981,12 +896,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
      * 原子性地设置 lastWebhookEventId：只有当前值为 NULL 时才设置（用于 claim 事件处理权）
      */
     private int atomicClaimEventId(Long subscriptionRecordId, String eventId) {
-        return billingPort.updateSubscriptionByWrapper(
-            new LambdaUpdateWrapper<StripeSubscription>()
-                .eq(StripeSubscription::getId, subscriptionRecordId)
-                .isNull(StripeSubscription::getLastWebhookEventId)
-                .set(StripeSubscription::getLastWebhookEventId, eventId)
-        );
+        return billingPort.atomicUpdateSubscription(subscriptionRecordId, eventId, null, null);
     }
 
     /**

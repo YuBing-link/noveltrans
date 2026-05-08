@@ -1,10 +1,10 @@
 package com.yumu.noveltranslator.adapter.in.rest.plugin;
 
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
-import com.yumu.noveltranslator.adapter.out.email.DeviceTokenService;
+import com.yumu.noveltranslator.port.in.AuthPort;
+import com.yumu.noveltranslator.port.in.DeviceTokenPort;
 import com.yumu.noveltranslator.util.JwtUtils;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PluginAuthController {
 
-    private final DeviceTokenService deviceTokenService;
+    private final AuthPort authPort;
+    private final DeviceTokenPort deviceTokenPort;
     private final JwtUtils jwtUtils;
 
     /**
@@ -36,11 +37,14 @@ public class PluginAuthController {
             return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "设备 ID 不能为空");
         }
 
-        CustomUserDetails userDetails = SecurityUtil.getRequiredUserDetails();
-        User user = userDetails.getUser();
+        Long userId = SecurityUtil.getRequiredUserId();
+        User user = authPort.getUserById(userId).orElse(null);
+        if (user == null) {
+            return Result.error(ErrorCodeEnum.USER_NOT_FOUND, "用户不存在");
+        }
 
-        String token = jwtUtils.createToken((long) user.getId(), user.getEmail());
-        deviceTokenService.registerToken(deviceId, token);
+        String token = jwtUtils.createToken(user.getId(), user.getEmail(), user.getTenantId());
+        deviceTokenPort.registerToken(deviceId, token);
 
         return Result.ok("设备注册成功", "200");
     }
@@ -55,7 +59,7 @@ public class PluginAuthController {
             return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "设备 ID 不能为空");
         }
 
-        String token = deviceTokenService.getToken(deviceId);
+        String token = deviceTokenPort.getToken(deviceId);
 
         if (token == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "未找到登录信息，请先在网站登录");
@@ -67,7 +71,7 @@ public class PluginAuthController {
             result.put("token", token);
             return Result.ok(result, "200");
         } catch (Exception e) {
-            deviceTokenService.removeToken(deviceId);
+            deviceTokenPort.removeToken(deviceId);
             return Result.error(ErrorCodeEnum.TOKEN_EXPIRED, "登录已过期，请重新登录");
         }
     }

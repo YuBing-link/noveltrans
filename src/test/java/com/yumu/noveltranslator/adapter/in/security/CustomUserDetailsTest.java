@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.security;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.GrantedAuthority;
 

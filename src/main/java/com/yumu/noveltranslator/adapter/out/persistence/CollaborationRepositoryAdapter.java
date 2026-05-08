@@ -1,9 +1,8 @@
 package com.yumu.noveltranslator.adapter.out.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yumu.noveltranslator.adapter.out.persistence.converter.CollabConverter;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabComment;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabInviteCode;
@@ -14,6 +13,7 @@ import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabCommentMapp
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabInviteCodeMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
+import com.yumu.noveltranslator.dto.common.PageResult;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -33,23 +33,23 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
     private final CollabInviteCodeMapper inviteCodeMapper;
 
     @Override
-    public List<CollabProject> findProjectsByOwnerId(Long ownerId) {
-        return projectMapper.selectByOwnerId(ownerId);
+    public List<com.yumu.noveltranslator.domain.model.CollabProject> findProjectsByOwnerId(Long ownerId) {
+        return CollabConverter.toProjectModelList(projectMapper.selectByOwnerId(ownerId));
     }
 
     @Override
-    public List<CollabProject> findProjectsByMemberUserId(Long userId) {
-        return projectMapper.selectByMemberUserId(userId);
+    public List<com.yumu.noveltranslator.domain.model.CollabProject> findProjectsByMemberUserId(Long userId) {
+        return CollabConverter.toProjectModelList(projectMapper.selectByMemberUserId(userId));
     }
 
     @Override
-    public void saveProject(CollabProject project) {
-        projectMapper.insert(project);
+    public void saveProject(com.yumu.noveltranslator.domain.model.CollabProject project) {
+        projectMapper.insert(CollabConverter.toProjectEntity(project));
     }
 
     @Override
-    public void updateProject(CollabProject project) {
-        projectMapper.updateById(project);
+    public void updateProject(com.yumu.noveltranslator.domain.model.CollabProject project) {
+        projectMapper.updateById(CollabConverter.toProjectEntity(project));
     }
 
     @Override
@@ -58,18 +58,18 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
     }
 
     @Override
-    public Optional<CollabProject> findProjectById(Long id) {
-        return Optional.ofNullable(projectMapper.selectById(id));
+    public Optional<com.yumu.noveltranslator.domain.model.CollabProject> findProjectById(Long id) {
+        return Optional.ofNullable(CollabConverter.toProjectModel(projectMapper.selectById(id)));
     }
 
     @Override
-    public List<CollabProjectMember> findMembersByProjectId(Long projectId) {
-        return memberMapper.selectByProjectId(projectId);
+    public List<com.yumu.noveltranslator.domain.model.CollabProjectMember> findMembersByProjectId(Long projectId) {
+        return CollabConverter.toMemberModelList(memberMapper.selectByProjectId(projectId));
     }
 
     @Override
-    public CollabProjectMember findMemberByInviteCode(String inviteCode) {
-        return memberMapper.selectByInviteCode(inviteCode);
+    public com.yumu.noveltranslator.domain.model.CollabProjectMember findMemberByInviteCode(String inviteCode) {
+        return CollabConverter.toMemberModel(memberMapper.selectByInviteCode(inviteCode));
     }
 
     @Override
@@ -78,8 +78,8 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
     }
 
     @Override
-    public CollabProjectMember findMemberByProjectAndUser(Long projectId, Long userId) {
-        return memberMapper.selectByProjectAndUser(projectId, userId);
+    public com.yumu.noveltranslator.domain.model.CollabProjectMember findMemberByProjectAndUser(Long projectId, Long userId) {
+        return CollabConverter.toMemberModel(memberMapper.selectByProjectAndUser(projectId, userId));
     }
 
     @Override
@@ -88,52 +88,64 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
     }
 
     @Override
-    public void saveMember(CollabProjectMember member) {
-        memberMapper.insert(member);
+    public void saveMember(com.yumu.noveltranslator.domain.model.CollabProjectMember member) {
+        memberMapper.insert(CollabConverter.toMemberEntity(member));
     }
 
     @Override
-    public void updateMember(CollabProjectMember member) {
-        memberMapper.updateById(member);
+    public void updateMember(com.yumu.noveltranslator.domain.model.CollabProjectMember member) {
+        memberMapper.updateById(CollabConverter.toMemberEntity(member));
     }
 
     @Override
     public void deleteMembersByProjectId(Long projectId) {
-        memberMapper.delete(new QueryWrapper<CollabProjectMember>().eq("project_id", projectId));
+        memberMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<CollabProjectMember>().eq("project_id", projectId));
     }
 
     @Override
-    public Optional<CollabProjectMember> findMemberById(Long id) {
-        return Optional.ofNullable(memberMapper.selectById(id));
+    public Optional<com.yumu.noveltranslator.domain.model.CollabProjectMember> findMemberById(Long id) {
+        return Optional.ofNullable(CollabConverter.toMemberModel(memberMapper.selectById(id)));
     }
 
     @Override
-    public List<CollabChapterTask> findChapterTasksByProjectId(Long projectId) {
-        return chapterTaskMapper.selectByProjectId(projectId);
+    public List<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChapterTasksByProjectId(Long projectId) {
+        return CollabConverter.toChapterTaskModelList(chapterTaskMapper.selectByProjectId(projectId));
     }
 
     @Override
-    public List<CollabChapterTask> findChapterTasksByProjectIdAndStatus(Long projectId, String status) {
-        return chapterTaskMapper.selectByProjectIdAndStatus(projectId, status);
+    public List<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChapterTasksByProjectIdAndStatus(Long projectId, String status) {
+        return CollabConverter.toChapterTaskModelList(chapterTaskMapper.selectByProjectIdAndStatus(projectId, status));
     }
 
     @Override
-    public IPage<CollabChapterTask> findChapterTasksByProjectIdPaged(Long projectId, int page, int pageSize) {
+    public PageResult<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChapterTasksByProjectIdPaged(Long projectId, int page, int pageSize) {
         LambdaQueryWrapper<CollabChapterTask> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CollabChapterTask::getProjectId, projectId)
                .eq(CollabChapterTask::getDeleted, 0)
                .orderByAsc(CollabChapterTask::getChapterNumber);
-        return chapterTaskMapper.selectPage(new Page<>(page, pageSize), wrapper);
+        com.baomidou.mybatisplus.core.metadata.IPage<CollabChapterTask> entityPage = chapterTaskMapper.selectPage(new Page<>(page, pageSize), wrapper);
+        return new PageResult<>(
+            CollabConverter.toChapterTaskModelList(entityPage.getRecords()),
+            entityPage.getTotal(),
+            entityPage.getCurrent(),
+            entityPage.getSize()
+        );
     }
 
     @Override
-    public IPage<CollabChapterTask> findChapterTasksByAssigneeIdPaged(Long assigneeId, List<String> statuses, int page, int pageSize) {
+    public PageResult<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChapterTasksByAssigneeIdPaged(Long assigneeId, List<String> statuses, int page, int pageSize) {
         LambdaQueryWrapper<CollabChapterTask> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CollabChapterTask::getAssigneeId, assigneeId)
                .eq(CollabChapterTask::getDeleted, 0)
                .in(CollabChapterTask::getStatus, statuses)
                .orderByDesc(CollabChapterTask::getUpdateTime);
-        return chapterTaskMapper.selectPage(new Page<>(page, pageSize), wrapper);
+        com.baomidou.mybatisplus.core.metadata.IPage<CollabChapterTask> entityPage = chapterTaskMapper.selectPage(new Page<>(page, pageSize), wrapper);
+        return new PageResult<>(
+            CollabConverter.toChapterTaskModelList(entityPage.getRecords()),
+            entityPage.getTotal(),
+            entityPage.getCurrent(),
+            entityPage.getSize()
+        );
     }
 
     @Override
@@ -147,13 +159,13 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
     }
 
     @Override
-    public List<CollabChapterTask> findChapterTasksByAssigneeId(Long assigneeId) {
-        return chapterTaskMapper.selectByAssigneeId(assigneeId);
+    public List<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChapterTasksByAssigneeId(Long assigneeId) {
+        return CollabConverter.toChapterTaskModelList(chapterTaskMapper.selectByAssigneeId(assigneeId));
     }
 
     @Override
-    public List<CollabChapterTask> findChapterTasksByStatusAndUpdateTimeBefore(String status, LocalDateTime cutoff) {
-        return chapterTaskMapper.findByStatusAndUpdateTimeBefore(status, cutoff);
+    public List<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChapterTasksByStatusAndUpdateTimeBefore(String status, LocalDateTime cutoff) {
+        return CollabConverter.toChapterTaskModelList(chapterTaskMapper.findByStatusAndUpdateTimeBefore(status, cutoff));
     }
 
     @Override
@@ -162,56 +174,66 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
     }
 
     @Override
-    public List<CollabChapterTask> findChaptersWithRetryCountGreaterThan(int retryCount) {
+    public List<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChaptersWithRetryCountGreaterThan(int retryCount) {
         LambdaQueryWrapper<CollabChapterTask> wrapper = new LambdaQueryWrapper<>();
         wrapper.gt(CollabChapterTask::getRetryCount, retryCount)
                .eq(CollabChapterTask::getDeleted, 0);
-        return chapterTaskMapper.selectList(wrapper);
+        return CollabConverter.toChapterTaskModelList(chapterTaskMapper.selectList(wrapper));
     }
 
     @Override
-    public void saveChapterTask(CollabChapterTask task) {
-        chapterTaskMapper.insert(task);
+    public void saveChapterTask(com.yumu.noveltranslator.domain.model.CollabChapterTask task) {
+        chapterTaskMapper.insert(CollabConverter.toChapterTaskEntity(task));
     }
 
     @Override
-    public void updateChapterTask(CollabChapterTask task) {
-        chapterTaskMapper.updateById(task);
+    public void updateChapterTask(com.yumu.noveltranslator.domain.model.CollabChapterTask task) {
+        chapterTaskMapper.updateById(CollabConverter.toChapterTaskEntity(task));
     }
 
     @Override
     public void deleteChapterTasksByProjectId(Long projectId) {
-        chapterTaskMapper.delete(new QueryWrapper<CollabChapterTask>().eq("project_id", projectId));
+        chapterTaskMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<CollabChapterTask>().eq("project_id", projectId));
     }
 
     @Override
-    public Optional<CollabChapterTask> findChapterTaskById(Long id) {
-        return Optional.ofNullable(chapterTaskMapper.selectById(id));
+    public Optional<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChapterTaskById(Long id) {
+        return Optional.ofNullable(CollabConverter.toChapterTaskModel(chapterTaskMapper.selectById(id)));
     }
 
     @Override
-    public List<CollabComment> findCommentsByChapterTaskId(Long chapterTaskId) {
-        return commentMapper.selectByChapterTaskId(chapterTaskId);
+    public List<com.yumu.noveltranslator.domain.model.CollabComment> findCommentsByChapterTaskId(Long chapterTaskId) {
+        return CollabConverter.toCommentModelList(commentMapper.selectByChapterTaskId(chapterTaskId));
     }
 
     @Override
-    public IPage<CollabComment> findCommentsByChapterTaskIdPage(Page<CollabComment> page, Long chapterTaskId) {
-        return commentMapper.selectByChapterTaskIdPage(page, chapterTaskId);
+    public PageResult<com.yumu.noveltranslator.domain.model.CollabComment> findCommentsByChapterTaskIdPaged(Long chapterTaskId, int page, int pageSize) {
+        LambdaQueryWrapper<CollabComment> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CollabComment::getChapterTaskId, chapterTaskId)
+               .eq(CollabComment::getDeleted, 0)
+               .orderByAsc(CollabComment::getCreateTime);
+        com.baomidou.mybatisplus.core.metadata.IPage<CollabComment> entityPage = commentMapper.selectPage(new Page<>(page, pageSize), wrapper);
+        return new PageResult<>(
+            CollabConverter.toCommentModelList(entityPage.getRecords()),
+            entityPage.getTotal(),
+            entityPage.getCurrent(),
+            entityPage.getSize()
+        );
     }
 
     @Override
-    public List<CollabComment> findRepliesByParentId(Long parentId) {
-        return commentMapper.selectRepliesByParentId(parentId);
+    public List<com.yumu.noveltranslator.domain.model.CollabComment> findRepliesByParentId(Long parentId) {
+        return CollabConverter.toCommentModelList(commentMapper.selectRepliesByParentId(parentId));
     }
 
     @Override
-    public void saveComment(CollabComment comment) {
-        commentMapper.insert(comment);
+    public void saveComment(com.yumu.noveltranslator.domain.model.CollabComment comment) {
+        commentMapper.insert(CollabConverter.toCommentEntity(comment));
     }
 
     @Override
-    public void updateComment(CollabComment comment) {
-        commentMapper.updateById(comment);
+    public void updateComment(com.yumu.noveltranslator.domain.model.CollabComment comment) {
+        commentMapper.updateById(CollabConverter.toCommentEntity(comment));
     }
 
     @Override
@@ -221,22 +243,22 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
 
     @Override
     public void deleteCommentsByChapterTaskId(Long chapterTaskId) {
-        commentMapper.delete(new QueryWrapper<CollabComment>().eq("chapter_task_id", chapterTaskId));
+        commentMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<CollabComment>().eq("chapter_task_id", chapterTaskId));
     }
 
     @Override
-    public Optional<CollabComment> findCommentById(Long id) {
-        return Optional.ofNullable(commentMapper.selectById(id));
+    public Optional<com.yumu.noveltranslator.domain.model.CollabComment> findCommentById(Long id) {
+        return Optional.ofNullable(CollabConverter.toCommentModel(commentMapper.selectById(id)));
     }
 
     @Override
-    public CollabInviteCode findValidInviteCode(String code) {
-        return inviteCodeMapper.selectByValidCode(code);
+    public com.yumu.noveltranslator.domain.model.CollabInviteCode findValidInviteCode(String code) {
+        return CollabConverter.toInviteCodeModel(inviteCodeMapper.selectByValidCode(code));
     }
 
     @Override
-    public CollabInviteCode findInviteCodeByCode(String code) {
-        return inviteCodeMapper.selectByCode(code);
+    public com.yumu.noveltranslator.domain.model.CollabInviteCode findInviteCodeByCode(String code) {
+        return CollabConverter.toInviteCodeModel(inviteCodeMapper.selectByCode(code));
     }
 
     @Override
@@ -245,7 +267,7 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
     }
 
     @Override
-    public void saveInviteCode(CollabInviteCode inviteCode) {
-        inviteCodeMapper.insert(inviteCode);
+    public void saveInviteCode(com.yumu.noveltranslator.domain.model.CollabInviteCode inviteCode) {
+        inviteCodeMapper.insert(CollabConverter.toInviteCodeEntity(inviteCode));
     }
 }

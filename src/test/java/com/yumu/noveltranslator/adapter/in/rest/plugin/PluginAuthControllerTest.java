@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.rest.plugin;
 
 import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.adapter.out.email.DeviceTokenService;
 import com.yumu.noveltranslator.util.JwtUtils;

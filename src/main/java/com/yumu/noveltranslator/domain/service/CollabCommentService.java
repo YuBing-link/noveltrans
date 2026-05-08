@@ -2,14 +2,13 @@ package com.yumu.noveltranslator.domain.service;
 
 import com.yumu.noveltranslator.dto.collab.CommentResponse;
 import com.yumu.noveltranslator.dto.collab.CreateCommentRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabComment;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.CollabComment;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yumu.noveltranslator.dto.common.PageResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -71,7 +70,7 @@ public class CollabCommentService {
     /**
      * 获取章节评论列表（分页，树形结构）
      */
-    public IPage<CommentResponse> getCommentsByChapterPage(Long chapterTaskId, Long userId, int page, int size) {
+    public PageResult<CommentResponse> getCommentsByChapterPage(Long chapterTaskId, Long userId, int page, int size) {
         var task = collabPort.findChapterTaskById(chapterTaskId);
         if (task.isEmpty()) {
             throw new BusinessException(ErrorCodeEnum.NOT_FOUND, "章节不存在: " + chapterTaskId);
@@ -82,8 +81,7 @@ public class CollabCommentService {
         }
 
         // 分页查询根评论
-        Page<CollabComment> commentPage = new Page<>(page, size);
-        var rootPage = collabPort.findCommentsByChapterTaskIdPage(commentPage, chapterTaskId);
+        var rootPage = collabPort.findCommentsByChapterTaskIdPaged(chapterTaskId, page, size);
 
         // 批量加载回复和用户，避免 N+1
         Set<Long> userIds = new HashSet<>();
@@ -115,8 +113,7 @@ public class CollabCommentService {
                 })
                 .collect(Collectors.toList());
 
-        IPage<CommentResponse> resultPage = new Page<>(rootPage.getCurrent(), rootPage.getSize(), rootPage.getTotal());
-        resultPage.setRecords(responses);
+        PageResult<CommentResponse> resultPage = new PageResult<>(responses, rootPage.getTotal(), (long) page, (long) size);
         return resultPage;
     }
 

@@ -1,7 +1,6 @@
 package com.yumu.noveltranslator.port.in;
 
 import com.yumu.noveltranslator.dto.subscription.*;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 
 public interface SubscriptionPort {
     PaymentVerificationResponse verifyCheckoutSession(String sessionId, Long userId);

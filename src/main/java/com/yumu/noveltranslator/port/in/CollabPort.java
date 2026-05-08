@@ -1,12 +1,11 @@
 package com.yumu.noveltranslator.port.in;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.dto.collab.CollabProjectResponse;
 import com.yumu.noveltranslator.dto.collab.CreateCollabProjectRequest;
 import com.yumu.noveltranslator.dto.collab.InviteMemberRequest;
 import com.yumu.noveltranslator.dto.collab.ProjectMemberResponse;
 import com.yumu.noveltranslator.dto.common.PageResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 
 import java.util.List;

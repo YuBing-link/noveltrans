@@ -2,7 +2,7 @@ package com.yumu.noveltranslator.adapter.in.security.aspect;
 import com.yumu.noveltranslator.exception.BusinessException;
 
 import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMemberMapper;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;

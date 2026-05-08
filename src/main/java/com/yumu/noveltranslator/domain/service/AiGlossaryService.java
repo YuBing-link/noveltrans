@@ -1,6 +1,6 @@
 package com.yumu.noveltranslator.domain.service;
 
-import com.yumu.noveltranslator.adapter.out.persistence.entity.AiGlossary;
+import com.yumu.noveltranslator.domain.model.AiGlossary;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

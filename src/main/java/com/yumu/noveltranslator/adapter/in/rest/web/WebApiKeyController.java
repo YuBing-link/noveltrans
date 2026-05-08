@@ -1,22 +1,17 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yumu.noveltranslator.dto.entity.ApiKeyResponse;
-import com.yumu.noveltranslator.dto.entity.CreateApiKeyRequest;
+import com.yumu.noveltranslator.domain.model.ApiKey;
 import com.yumu.noveltranslator.dto.common.PageResponse;
 import com.yumu.noveltranslator.dto.common.Result;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.ApiKey;
+import com.yumu.noveltranslator.dto.entity.ApiKeyResponse;
+import com.yumu.noveltranslator.dto.entity.CreateApiKeyRequest;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.ApiKeyMapper;
-import com.yumu.noveltranslator.adapter.out.redis.ApiKeyCacheService;
-import com.yumu.noveltranslator.util.OwnershipVerifier;
+import com.yumu.noveltranslator.port.in.ApiKeyPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.SecureRandom;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,21 +22,10 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/user/api-keys")
+@RequiredArgsConstructor
 public class WebApiKeyController {
 
-    private final ApiKeyMapper apiKeyMapper;
-    private final ApiKeyCacheService apiKeyCacheService;
-    private final OwnershipVerifier ownershipVerifier;
-
-    public WebApiKeyController(ApiKeyMapper apiKeyMapper, ApiKeyCacheService apiKeyCacheService,
-                                OwnershipVerifier ownershipVerifier) {
-        this.apiKeyMapper = apiKeyMapper;
-        this.apiKeyCacheService = apiKeyCacheService;
-        this.ownershipVerifier = ownershipVerifier;
-    }
-
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final String API_KEY_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
+    private final ApiKeyPort apiKeyPort;
 
     /**
      * 生成 API Key
@@ -50,22 +34,12 @@ public class WebApiKeyController {
     @PostMapping
     public Result<Map<String, Object>> createApiKey(@Valid @RequestBody CreateApiKeyRequest request) {
         Long userId = SecurityUtil.getRequiredUserId();
-        String name = request.getName();
-
-        String key = generateApiKey();
-        ApiKey apiKey = new ApiKey();
-        apiKey.setUserId(userId);
-        apiKey.setApiKey(key);
-        apiKey.setName(name);
-        apiKey.setActive(true);
-        apiKey.setTotalUsage(0L);
-        apiKey.setCreatedAt(LocalDateTime.now());
-        apiKeyMapper.insert(apiKey);
+        ApiKey apiKey = apiKeyPort.createApiKey(userId, request.getName());
 
         return Result.ok(Map.of(
             "id", apiKey.getId(),
-            "apiKey", key,
-            "name", name,
+            "apiKey", apiKey.getApiKey(),
+            "name", apiKey.getName(),
             "isActive", true,
             "createdAt", apiKey.getCreatedAt()
         ));
@@ -80,11 +54,8 @@ public class WebApiKeyController {
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer pageSize) {
         Long userId = SecurityUtil.getRequiredUserId();
-        LambdaQueryWrapper<ApiKey> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ApiKey::getUserId, userId).orderByDesc(ApiKey::getCreatedAt);
-        Page<ApiKey> pageParam = new Page<>(page, pageSize);
-        Page<ApiKey> resultPage = apiKeyMapper.selectPage(pageParam, wrapper);
-        List<ApiKeyResponse> responses = resultPage.getRecords().stream().map(k -> {
+        PageResponse<ApiKey> result = apiKeyPort.listApiKeys(userId, page, pageSize);
+        List<ApiKeyResponse> responses = result.getList().stream().map(k -> {
             ApiKeyResponse r = new ApiKeyResponse();
             r.setId(k.getId());
             r.setName(k.getName());
@@ -95,7 +66,7 @@ public class WebApiKeyController {
             r.setCreatedAt(k.getCreatedAt());
             return r;
         }).collect(Collectors.toList());
-        return Result.ok(PageResponse.of(page, pageSize, resultPage.getTotal(), responses));
+        return Result.ok(PageResponse.of(page, pageSize, result.getTotal(), responses));
     }
 
     /**
@@ -105,13 +76,10 @@ public class WebApiKeyController {
     @DeleteMapping("/{id}")
     public Result deleteApiKey(@PathVariable Long id) {
         Long userId = SecurityUtil.getRequiredUserId();
-        ApiKey key = ownershipVerifier.verifyAndGet(id, userId, apiKeyMapper::selectById, ApiKey::getUserId)
-                .orElse(null);
-        if (key == null) {
+        boolean success = apiKeyPort.deleteApiKey(id, userId);
+        if (!success) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "API Key 不存在");
         }
-        apiKeyCacheService.invalidate(key.getApiKey());
-        apiKeyMapper.deleteById(id);
         return Result.ok(null);
     }
 
@@ -122,18 +90,11 @@ public class WebApiKeyController {
     @PostMapping("/{id}/reset")
     public Result<Map<String, Object>> resetApiKey(@PathVariable Long id) {
         Long userId = SecurityUtil.getRequiredUserId();
-        ApiKey key = ownershipVerifier.verifyAndGet(id, userId, apiKeyMapper::selectById, ApiKey::getUserId)
-                .orElse(null);
+        ApiKey key = apiKeyPort.resetApiKey(id, userId);
         if (key == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "API Key 不存在");
         }
-        // 使旧 key 缓存失效
-        apiKeyCacheService.invalidate(key.getApiKey());
-        String newKey = generateApiKey();
-        key.setApiKey(newKey);
-        key.setTotalUsage(0L);
-        apiKeyMapper.updateById(key);
-        return Result.ok(Map.of("id", key.getId(), "apiKey", newKey));
+        return Result.ok(Map.of("id", key.getId(), "apiKey", key.getApiKey()));
     }
 
     /**
@@ -143,20 +104,10 @@ public class WebApiKeyController {
     @GetMapping("/{id}/reveal")
     public Result<Map<String, Object>> revealApiKey(@PathVariable Long id) {
         Long userId = SecurityUtil.getRequiredUserId();
-        ApiKey key = ownershipVerifier.verifyAndGet(id, userId, apiKeyMapper::selectById, ApiKey::getUserId)
-                .orElse(null);
+        ApiKey key = apiKeyPort.revealApiKey(id, userId);
         if (key == null) {
             return Result.error(ErrorCodeEnum.NOT_FOUND, "API Key 不存在");
         }
         return Result.ok(Map.of("id", key.getId(), "apiKey", key.getApiKey()));
     }
-
-    private String generateApiKey() {
-        StringBuilder sb = new StringBuilder("nt_sk_");
-        for (int i = 0; i < 32; i++) {
-            sb.append(API_KEY_CHARS.charAt(SECURE_RANDOM.nextInt(API_KEY_CHARS.length())));
-        }
-        return sb.toString();
-    }
-
 }

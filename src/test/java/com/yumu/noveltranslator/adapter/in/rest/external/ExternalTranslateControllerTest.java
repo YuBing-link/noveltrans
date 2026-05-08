@@ -1,5 +1,5 @@
 package com.yumu.noveltranslator.adapter.in.rest.external;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.dto.translation.SelectionTranslateResponse;
 
 import com.yumu.noveltranslator.dto.common.*;

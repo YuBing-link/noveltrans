@@ -6,8 +6,8 @@ import com.yumu.noveltranslator.dto.auth.RegisterRequest;
 import com.yumu.noveltranslator.dto.auth.RefreshTokenRequest;
 import com.yumu.noveltranslator.dto.auth.ChangePasswordRequest;
 import com.yumu.noveltranslator.dto.auth.ResetPasswordRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Tenant;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.Tenant;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.adapter.in.security.CustomUserDetails;
 import com.yumu.noveltranslator.port.out.EmailPort;
@@ -24,6 +24,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
@@ -335,5 +336,10 @@ public class AuthService implements UserDetailsService, com.yumu.noveltranslator
         String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@" +
                            "(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
         return Pattern.matches(emailRegex, email);
+    }
+
+    @Override
+    public Optional<User> getUserById(Long userId) {
+        return userRepositoryPort.findById(userId);
     }
 }

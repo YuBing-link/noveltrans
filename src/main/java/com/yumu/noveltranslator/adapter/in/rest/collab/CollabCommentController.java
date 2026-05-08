@@ -34,10 +34,10 @@ public class CollabCommentController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         Long userId = SecurityUtil.getRequiredUserId();
-        com.baomidou.mybatisplus.core.metadata.IPage<CommentResponse> iPage =
+        com.yumu.noveltranslator.dto.common.PageResult<CommentResponse> pageResult =
             collabCommentService.getCommentsByChapterPage(chapterTaskId, userId, page, size);
         PageResponse<CommentResponse> response = PageResponse.of(
-            (int) iPage.getCurrent(), (int) iPage.getSize(), iPage.getTotal(), iPage.getRecords());
+            (int) pageResult.getCurrent(), (int) pageResult.getSize(), pageResult.getTotal(), pageResult.getRecords());
         return Result.ok(response);
     }
 
