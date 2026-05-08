@@ -480,6 +480,14 @@ public class TranslationTaskService implements com.yumu.noveltranslator.port.in.
         return translationPort.countHistoryByUserId(userId);
     }
 
+    @Override
+    public int countTranslationHistory(Long userId, String type) {
+        if ("all".equals(type)) {
+            return translationPort.countHistoryByUserId(userId);
+        }
+        return translationPort.countHistoryByUserIdAndType(userId, type);
+    }
+
     /**
      * 生成任务 ID
      */

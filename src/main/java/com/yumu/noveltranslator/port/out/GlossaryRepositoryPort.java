@@ -14,6 +14,7 @@ public interface GlossaryRepositoryPort {
     // === Glossary ===
     void saveGlossary(Glossary glossary);
     void updateGlossary(Glossary glossary);
+    boolean deleteGlossary(Glossary glossary);
     Optional<Glossary> findGlossaryById(Long id);
     List<Glossary> findGlossaryByUserId(Long userId);
     List<Glossary> findActiveGlossaryByUserId(Long userId);

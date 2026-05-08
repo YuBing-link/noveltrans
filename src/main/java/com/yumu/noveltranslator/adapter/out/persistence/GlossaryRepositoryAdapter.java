@@ -42,6 +42,16 @@ public class GlossaryRepositoryAdapter implements GlossaryRepositoryPort {
     }
 
     @Override
+    public boolean deleteGlossary(com.yumu.noveltranslator.domain.model.Glossary glossary) {
+        // @TableLogic 字段不能通过 updateById 更新，需要用 UpdateWrapper 显式设置
+        com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Glossary> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
+        wrapper.eq(Glossary::getId, glossary.getId())
+               .set(Glossary::getDeleted, 1);
+        return glossaryMapper.update(null, wrapper) > 0;
+    }
+
+    @Override
     public Optional<com.yumu.noveltranslator.domain.model.Glossary> findGlossaryById(Long id) {
         return Optional.ofNullable(GlossaryConverter.glossaryToModel(glossaryMapper.selectById(id)));
     }

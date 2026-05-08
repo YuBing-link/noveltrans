@@ -221,7 +221,7 @@ public class WebUserController {
 
         Long userId = SecurityUtil.getRequiredUserId();
         var histories = translationTaskPort.getTranslationHistory(userId, page, pageSize, type);
-        int total = translationTaskPort.countTranslationHistory(userId);
+        int total = translationTaskPort.countTranslationHistory(userId, type);
 
         var responseList = histories.stream()
                 .map(translationTaskPort::toHistoryResponse)

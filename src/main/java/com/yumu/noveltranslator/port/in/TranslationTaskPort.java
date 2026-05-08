@@ -22,6 +22,7 @@ public interface TranslationTaskPort {
     String getDownloadPath(String taskId, Long userId);
     List<TranslationHistory> getTranslationHistory(Long userId, int page, int pageSize, String type);
     int countTranslationHistory(Long userId);
+    int countTranslationHistory(Long userId, String type);
     TaskStatusResponse toTaskStatusResponse(TranslationTask task);
     TranslationHistoryResponse toHistoryResponse(TranslationHistory history);
     SseEmitter streamTranslateDocumentById(Long docId, String targetLang, String mode);

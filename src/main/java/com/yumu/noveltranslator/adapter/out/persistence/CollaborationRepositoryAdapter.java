@@ -44,7 +44,9 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
 
     @Override
     public void saveProject(com.yumu.noveltranslator.domain.model.CollabProject project) {
-        projectMapper.insert(CollabConverter.toProjectEntity(project));
+        var entity = CollabConverter.toProjectEntity(project);
+        projectMapper.insert(entity);
+        project.setId(entity.getId()); // 回填自增主键
     }
 
     @Override
@@ -89,7 +91,9 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
 
     @Override
     public void saveMember(com.yumu.noveltranslator.domain.model.CollabProjectMember member) {
-        memberMapper.insert(CollabConverter.toMemberEntity(member));
+        var entity = CollabConverter.toMemberEntity(member);
+        memberMapper.insert(entity);
+        member.setId(entity.getId()); // 回填自增主键
     }
 
     @Override
@@ -193,7 +197,9 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
 
     @Override
     public void saveChapterTask(com.yumu.noveltranslator.domain.model.CollabChapterTask task) {
-        chapterTaskMapper.insert(CollabConverter.toChapterTaskEntity(task));
+        var entity = CollabConverter.toChapterTaskEntity(task);
+        chapterTaskMapper.insert(entity);
+        task.setId(entity.getId()); // 回填自增主键
     }
 
     @Override
@@ -238,7 +244,9 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
 
     @Override
     public void saveComment(com.yumu.noveltranslator.domain.model.CollabComment comment) {
-        commentMapper.insert(CollabConverter.toCommentEntity(comment));
+        var entity = CollabConverter.toCommentEntity(comment);
+        commentMapper.insert(entity);
+        comment.setId(entity.getId()); // 回填自增主键
     }
 
     @Override

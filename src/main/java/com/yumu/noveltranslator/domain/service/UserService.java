@@ -190,10 +190,8 @@ public class UserService implements com.yumu.noveltranslator.port.in.UserPort {
         return glossaryPort.findGlossaryById(glossaryId)
                 .filter(g -> g.getDeleted() == null || g.getDeleted() != 1)
                 .filter(g -> g.getUserId().equals(userId))
-                .map(g -> {
-                    glossaryPort.updateGlossary(g);
-                    return true;
-                }).orElse(false);
+                .map(glossaryPort::deleteGlossary)
+                .orElse(false);
     }
 
     /**
