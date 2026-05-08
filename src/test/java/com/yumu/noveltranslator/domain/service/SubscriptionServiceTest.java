@@ -76,10 +76,13 @@ class SubscriptionServiceTest {
     private TokenBlacklistService tokenBlacklistService;
 
     @Mock
-    private com.yumu.noveltranslator.util.JwtUtils jwtUtils;
+    private com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService jwtAuthCacheService;
 
     @Mock
     private com.yumu.noveltranslator.port.out.PaymentPort paymentPort;
+
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private SubscriptionService subscriptionService;
 
@@ -95,7 +98,8 @@ class SubscriptionServiceTest {
     void setUp() {
         subscriptionService = new SubscriptionService(
                 stripeProperties, billingPort, userRepositoryPort,
-                stringRedisTemplate, tokenBlacklistService, jwtUtils, paymentPort);
+                stringRedisTemplate, tokenBlacklistService, jwtAuthCacheService,
+                paymentPort, transactionManager);
     }
 
     // ==================== getSubscriptionStatus ====================

@@ -65,10 +65,13 @@ class SubscriptionServiceSecondExtendedTest {
     @Mock
     private TokenBlacklistService tokenBlacklistService;
     @Mock
-    private com.yumu.noveltranslator.util.JwtUtils jwtUtils;
+    private com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService jwtAuthCacheService;
 
     @Mock
     private com.yumu.noveltranslator.port.out.PaymentPort paymentPort;
+
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private SubscriptionService service;
 
@@ -80,7 +83,7 @@ class SubscriptionServiceSecondExtendedTest {
 
         service = new SubscriptionService(
                 stripeProperties, billingPort, userRepositoryPort, stringRedisTemplate,
-                tokenBlacklistService, jwtUtils, paymentPort);
+                tokenBlacklistService, jwtAuthCacheService, paymentPort, transactionManager);
     }
 
     // ============ verifyCheckoutSession ============

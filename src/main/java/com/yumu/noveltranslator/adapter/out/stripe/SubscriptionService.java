@@ -22,6 +22,7 @@ import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
 import com.yumu.noveltranslator.port.out.PaymentPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.StripeProperties;
+import com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService;
 import com.yumu.noveltranslator.adapter.out.redis.TokenBlacklistService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -55,6 +56,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
     private final UserRepositoryPort userRepositoryPort;
     private final StringRedisTemplate stringRedisTemplate;
     private final TokenBlacklistService tokenBlacklistService;
+    private final JwtAuthCacheService jwtAuthCacheService;
     private final PaymentPort paymentPort;
     private final PlatformTransactionManager transactionManager;
 
@@ -65,6 +67,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
                                UserRepositoryPort userRepositoryPort,
                                StringRedisTemplate stringRedisTemplate,
                                TokenBlacklistService tokenBlacklistService,
+                               JwtAuthCacheService jwtAuthCacheService,
                                PaymentPort paymentPort,
                                PlatformTransactionManager transactionManager) {
         this.stripeProperties = stripeProperties;
@@ -72,6 +75,7 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
         this.userRepositoryPort = userRepositoryPort;
         this.stringRedisTemplate = stringRedisTemplate;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.jwtAuthCacheService = jwtAuthCacheService;
         this.paymentPort = paymentPort;
         this.transactionManager = transactionManager;
 
@@ -927,22 +931,41 @@ public class SubscriptionService implements com.yumu.noveltranslator.port.in.Sub
 
         log.info("User {} level changed: {} -> {} (reason: {})", userId, oldLevel, newLevel, reason);
 
-        // 降级到 FREE 时吊销用户所有 JWT
+        // 降级到 FREE 时：先写黑名单，再清认证缓存，确保旧 JWT 立即失效
         if ("FREE".equals(newLevel) && !"FREE".equals(oldLevel)) {
-            revokeAllUserTokens(user.getEmail(), "subscription_downgrade: " + reason);
+            revokeAllUserTokens(userId, user.getEmail(), "subscription_downgrade: " + reason);
         }
     }
 
     /**
-     * 吊销用户所有 JWT 令牌
+     * 吊销用户所有 JWT 令牌。
+     * <p>
+     * 顺序至关重要：先写黑名单（MySQL + Redis），再清 JWT 认证缓存（L1 + L2 + pub/sub）。
+     * 如果只清缓存不清黑名单，用户下次请求会重新查 DB 并写回缓存（仍是旧等级）。
+     * 如果只写黑名单不清缓存，JwtAuthenticationFilter 会直接从 L1 缓存返回 PRO 等级，
+     * 根本走不到黑名单检查。
      */
-    private void revokeAllUserTokens(String email, String reason) {
+    private void revokeAllUserTokens(Long userId, String email, String reason) {
+        LocalDateTime expiresAt = LocalDateTime.now(ZoneId.of("UTC")).plusDays(7);
+
+        // Step 1: 写黑名单（MySQL + Redis Set）
         try {
-            LocalDateTime expiresAt = LocalDateTime.now(ZoneId.of("UTC")).plusDays(7);
             tokenBlacklistService.blacklistAllUserTokens(email, reason, expiresAt);
-            log.info("已吊销用户 {} 的所有 JWT 令牌（原因：{}）", email, reason);
+            log.info("已吊销用户 {} 的 JWT 令牌 — 黑名单写入成功（原因：{}）", email, reason);
         } catch (Exception e) {
-            log.warn("吊销用户 JWT 失败: {}", e.getMessage());
+            // 黑名单写入失败意味着旧 JWT 在 Redis 黑名单恢复前仍然可用
+            // 必须仍然清缓存，至少保证下次请求走 MySQL 兜底路径
+            log.error("吊销用户 JWT 黑名单写入失败 — userId={}, email={}, reason={}. "
+                    + "旧 JWT 在缓存过期前仍可使用。请手动处理。", userId, email, reason, e);
+        }
+
+        // Step 2: 清除 JWT 认证缓存（L1 Caffeine + L2 Redis + pub/sub）
+        // 无论黑名单是否写入成功，都必须执行
+        try {
+            jwtAuthCacheService.invalidate(userId);
+            log.info("已清除用户 {} 的 JWT 认证缓存", userId);
+        } catch (Exception e) {
+            log.error("清除用户 {} JWT 认证缓存失败 — 缓存中可能仍保留旧等级信息", userId, e);
         }
     }
 }
