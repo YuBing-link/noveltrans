@@ -174,6 +174,16 @@ public class CollaborationRepositoryAdapter implements CollaborationRepositoryPo
     }
 
     @Override
+    public int casResetChapterToUnassigned(Long id, String expectedStatus, int newRetryCount, String reviewComment) {
+        return chapterTaskMapper.casResetToUnassigned(id, expectedStatus, newRetryCount, reviewComment);
+    }
+
+    @Override
+    public int casRejectChapter(Long id, String expectedStatus, int retryCount, String reviewComment) {
+        return chapterTaskMapper.casReject(id, expectedStatus, retryCount, reviewComment);
+    }
+
+    @Override
     public List<com.yumu.noveltranslator.domain.model.CollabChapterTask> findChaptersWithRetryCountGreaterThan(int retryCount) {
         LambdaQueryWrapper<CollabChapterTask> wrapper = new LambdaQueryWrapper<>();
         wrapper.gt(CollabChapterTask::getRetryCount, retryCount)

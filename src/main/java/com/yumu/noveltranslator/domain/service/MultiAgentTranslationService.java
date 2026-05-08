@@ -29,7 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -38,10 +37,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 /**
  * 多 Agent 协作翻译服务
@@ -61,9 +64,15 @@ public class MultiAgentTranslationService {
     private static final long RETRY_MAX_DELAY_MS = 30000;
 
     /**
-     * 内存映射跟踪章节重试次数（服务重启后由 init() 从 DB 恢复）
+     * 虚拟线程执行器，用于并发翻译章节（统一生命周期管理）
      */
-    private final Map<Long, Integer> retryCounterMap = new ConcurrentHashMap<>();
+    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+
+    /**
+     * 内存映射跟踪章节重试次数（服务重启后由 init() 从 DB 恢复）
+     * 使用 AtomicInteger 保证并发安全的读-改-写
+     */
+    private final Map<Long, AtomicInteger> retryCounterMap = new ConcurrentHashMap<>();
 
     private final CollaborationRepositoryPort collabPort;
     private final DocumentRepositoryPort documentPort;
@@ -85,13 +94,30 @@ public class MultiAgentTranslationService {
         try {
             List<CollabChapterTask> chaptersWithRetries = collabPort.findChaptersWithRetryCountGreaterThan(0);
             for (CollabChapterTask chapter : chaptersWithRetries) {
-                retryCounterMap.put(chapter.getId(), chapter.getRetryCount());
+                retryCounterMap.put(chapter.getId(), new AtomicInteger(chapter.getRetryCount()));
             }
             if (!chaptersWithRetries.isEmpty()) {
                 log.info("从数据库恢复 {} 个章节的重试计数", chaptersWithRetries.size());
             }
         } catch (Exception e) {
             log.warn("初始化重试计数失败: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 服务关闭时优雅停止翻译线程池
+     */
+    @PreDestroy
+    public void shutdown() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("翻译线程池 30 秒内未关闭，强制执行 shutdownNow");
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -134,7 +160,7 @@ public class MultiAgentTranslationService {
         Semaphore agentSemaphore = new Semaphore(MAX_CONCURRENT_AGENTS);
 
         for (CollabChapterTask chapter : chapters) {
-            Thread.startVirtualThread(() -> {
+            executor.submit(() -> {
                 try {
                     agentSemaphore.acquire();
                     try {
@@ -155,7 +181,7 @@ public class MultiAgentTranslationService {
                     log.error("翻译章节被中断: chapterId={}", chapter.getId());
                 } catch (Exception e) {
                     failed.incrementAndGet();
-                    log.error("Agent 翻译章节失败: chapterId={}, error={}", chapter.getId(), e.getMessage());
+                    log.error("Agent 翻译章节异常: chapterId={}", chapter.getId(), e);
                 } finally {
                     latch.countDown();
                 }
@@ -163,7 +189,7 @@ public class MultiAgentTranslationService {
         }
 
         // 异步等待所有 Agent 完成，完成后更新项目进度并拼接完整文档
-        Thread.startVirtualThread(() -> {
+        executor.submit(() -> {
             try {
                 latch.await();
                 log.info("多 Agent 翻译全部完成: projectId={}, success={}, failed={}",
@@ -294,12 +320,14 @@ public class MultiAgentTranslationService {
                 collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REJECTED);
                 chapter.setReviewComment("翻译异常（已重试 " + retryCount + " 次）: " + e.getMessage());
             } else {
+                incrementRetryCount(chapter);
+                int newRetry = retryCount + 1;
+                chapter.setRetryCount(newRetry);
                 collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.UNASSIGNED);
-                chapter.setReviewComment("翻译异常，等待重试（第 " + (retryCount + 1) + " 次）: " + e.getMessage());
+                chapter.setReviewComment("翻译异常，等待重试（第 " + newRetry + " 次）: " + e.getMessage());
                 // 指数退避，避免立即重试
                 sleepWithBackoff(retryCount, e);
             }
-            chapter.setRetryCount(retryCount);
             collabPort.updateChapterTask(chapter);
             return false;
         }
@@ -335,21 +363,23 @@ public class MultiAgentTranslationService {
     }
 
     /**
-     * 获取章节重试次数
+     * 获取章节重试次数（原子读）
      */
     private int getRetryCount(CollabChapterTask chapter) {
-        return retryCounterMap.getOrDefault(chapter.getId(), 0);
+        AtomicInteger counter = retryCounterMap.get(chapter.getId());
+        return counter == null ? 0 : counter.get();
     }
 
     /**
-     * 增加章节重试次数
+     * 增加章节重试次数（原子递增）
      */
     private void incrementRetryCount(CollabChapterTask chapter) {
-        retryCounterMap.merge(chapter.getId(), 1, Integer::sum);
+        retryCounterMap.computeIfAbsent(chapter.getId(), k -> new AtomicInteger(0)).incrementAndGet();
     }
 
     /**
      * 定时清理卡在 TRANSLATING 状态的章节（每 5 分钟执行一次）
+     * 使用 CAS 单行更新保证并发安全，不依赖事务
      */
     @Scheduled(fixedRate = 300000)
     public void cleanupStuckChapters() {
@@ -361,23 +391,42 @@ public class MultiAgentTranslationService {
             return;
         }
 
+        String expectedStatus = ChapterTaskStatus.TRANSLATING.getValue();
         log.info("定时清理: 发现 {} 个卡住超过 30 分钟的章节", stuckChapters.size());
         for (CollabChapterTask chapter : stuckChapters) {
             int retryCount = getRetryCount(chapter);
             if (retryCount >= MAX_RETRY_COUNT) {
-                // 经 REVIEWING 中间状态转入 REJECTED
-                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REVIEWING);
-                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REJECTED);
-                chapter.setReviewComment("翻译超时（已重试 " + retryCount + " 次），自动终止");
-                log.info("定时清理: 章节 {} 已达到最大重试次数，标记为 REJECTED", chapter.getId());
+                // CAS 直接转到 REJECTED
+                int rows = collabPort.casRejectChapter(
+                        chapter.getId(), expectedStatus, retryCount,
+                        "翻译超时（已重试 " + retryCount + " 次），自动终止");
+                if (rows > 0) {
+                    chapter.setStatus(ChapterTaskStatus.REJECTED.getValue());
+                    chapter.setRetryCount(retryCount);
+                    log.info("定时清理: 章节 {} 已达到最大重试次数，标记为 REJECTED", chapter.getId());
+                } else {
+                    log.debug("定时清理: 章节 {} 状态已被其他线程修改，跳过", chapter.getId());
+                }
             } else {
                 incrementRetryCount(chapter);
-                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.UNASSIGNED);
-                chapter.setReviewComment("翻译超时，自动重试（第 " + (retryCount + 1) + " 次）");
-                chapter.setRetryCount(retryCount + 1);
-                log.info("定时清理: 章节 {} 回退到 UNASSIGNED", chapter.getId());
+                int newRetry = retryCount + 1;
+                String comment = "翻译超时，自动重试（第 " + newRetry + " 次）";
+                int rows = collabPort.casResetChapterToUnassigned(
+                        chapter.getId(), expectedStatus, newRetry, comment);
+                if (rows > 0) {
+                    chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
+                    chapter.setRetryCount(newRetry);
+                    chapter.setReviewComment(comment);
+                    log.info("定时清理: 章节 {} 回退到 UNASSIGNED", chapter.getId());
+                } else {
+                    // CAS 失败，回退内存计数避免虚高
+                    AtomicInteger counter = retryCounterMap.get(chapter.getId());
+                    if (counter != null && counter.get() > 0) {
+                        counter.decrementAndGet();
+                    }
+                    log.debug("定时清理: 章节 {} 状态已被其他线程修改，跳过", chapter.getId());
+                }
             }
-            collabPort.updateChapterTask(chapter);
         }
     }
 
@@ -402,34 +451,6 @@ public class MultiAgentTranslationService {
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         }
-    }
-
-    /**
-     * 构建基础缓存键：SHA256(sourceText)[:16] + "_" + targetLang（不含模式标签）
-     */
-    private String buildBaseCacheKey(String sourceText, String targetLang) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(sourceText.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder();
-            for (int i = 0; i < 8; i++) { // 8 bytes = 16 hex chars
-                hex.append(String.format("%02x", hash[i]));
-            }
-            return hex.toString() + "_" + targetLang;
-        } catch (Exception e) {
-            // fallback: 使用 hashCode
-            log.warn("SHA-256 计算失败，使用 fallback cacheKey: {}", e.getMessage());
-            return Math.abs(sourceText.hashCode()) + "_" + targetLang;
-        }
-    }
-
-    /**
-     * 构建缓存键：SHA256(sourceText)[:16] + "_" + targetLang
-     * @deprecated 使用 {@link #buildBaseCacheKey(String, String)} 替代
-     */
-    @Deprecated
-    private String buildCacheKey(String sourceText, String targetLang) {
-        return buildBaseCacheKey(sourceText, targetLang);
     }
 
     /**

@@ -42,6 +42,16 @@ public interface CollaborationRepositoryPort {
     List<CollabChapterTask> findChapterTasksByAssigneeId(Long assigneeId);
     List<CollabChapterTask> findChapterTasksByStatusAndUpdateTimeBefore(String status, LocalDateTime cutoff);
     void updateChapterTaskRetryCount(Long id, int retryCount);
+    /**
+     * CAS 原子更新：仅在状态匹配时将章节回退到 UNASSIGNED 并递增重试计数
+     * @return 影响行数（0 表示状态已被其他线程修改，CAS 失败）
+     */
+    int casResetChapterToUnassigned(Long id, String expectedStatus, int newRetryCount, String reviewComment);
+    /**
+     * CAS 原子更新：仅在状态匹配时将章节标记为 REJECTED
+     * @return 影响行数（0 表示状态已被其他线程修改，CAS 失败）
+     */
+    int casRejectChapter(Long id, String expectedStatus, int retryCount, String reviewComment);
     List<CollabChapterTask> findChaptersWithRetryCountGreaterThan(int retryCount);
     void saveChapterTask(CollabChapterTask task);
     void updateChapterTask(CollabChapterTask task);

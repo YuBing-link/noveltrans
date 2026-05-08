@@ -34,4 +34,16 @@ public interface CollabChapterTaskMapper extends BaseMapper<CollabChapterTask> {
 
     @Update("UPDATE collab_chapter_task SET retry_count = #{retryCount}, update_time = NOW() WHERE id = #{id}")
     int updateRetryCount(@Param("id") Long id, @Param("retryCount") int retryCount);
+
+    @Update("UPDATE collab_chapter_task SET status = 'UNASSIGNED', retry_count = #{newRetryCount}, "
+            + "review_comment = #{reviewComment}, update_time = NOW() "
+            + "WHERE id = #{id} AND status = #{expectedStatus} AND deleted = 0")
+    int casResetToUnassigned(@Param("id") Long id, @Param("expectedStatus") String expectedStatus,
+                             @Param("newRetryCount") int newRetryCount, @Param("reviewComment") String reviewComment);
+
+    @Update("UPDATE collab_chapter_task SET status = 'REJECTED', retry_count = #{retryCount}, "
+            + "review_comment = #{reviewComment}, update_time = NOW() "
+            + "WHERE id = #{id} AND status = #{expectedStatus} AND deleted = 0")
+    int casReject(@Param("id") Long id, @Param("expectedStatus") String expectedStatus,
+                  @Param("retryCount") int retryCount, @Param("reviewComment") String reviewComment);
 }
