@@ -1,8 +1,7 @@
 package com.yumu.noveltranslator.adapter.in.rest.admin;
 
 import com.yumu.noveltranslator.port.dto.common.Result;
-import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
+import com.yumu.noveltranslator.port.in.CacheAdminPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,10 +25,7 @@ class CacheAdminControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private TranslationCacheService cacheService;
-
-    @org.mockito.Mock
-    private RagTranslationApplicationService ragTranslationService;
+    private CacheAdminPort cacheAdminPort;
 
     private CacheAdminController controller;
 
@@ -47,7 +43,7 @@ class CacheAdminControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new CacheAdminController(cacheService, ragTranslationService);
+        controller = new CacheAdminController(cacheAdminPort);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new TestExceptionHandler())
             .build();
@@ -61,31 +57,17 @@ class CacheAdminControllerTest {
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data").value("缓存已清空"));
 
-        verify(cacheService).clearAllCache();
-        verify(ragTranslationService).clearAllTranslationMemory();
+        verify(cacheAdminPort).clearAllTranslationCache();
     }
 
     @Test
-    @DisplayName("清空缓存时cacheService抛出异常返回500")
-    void clearAllCache_cacheServiceThrowsException() throws Exception {
-        doThrow(new RuntimeException("Redis connection failed")).when(cacheService).clearAllCache();
+    @DisplayName("清空缓存时抛出异常返回500")
+    void clearAllCache_throwsException() throws Exception {
+        doThrow(new RuntimeException("Redis connection failed")).when(cacheAdminPort).clearAllTranslationCache();
 
         mockMvc.perform(post("/admin/cache/clear"))
             .andExpect(status().is5xxServerError());
 
-        verify(cacheService).clearAllCache();
-        verifyNoInteractions(ragTranslationService);
-    }
-
-    @Test
-    @DisplayName("清空缓存时ragTranslationService抛出异常返回500")
-    void clearAllCache_ragServiceThrowsException() throws Exception {
-        doThrow(new RuntimeException("Memory store unavailable")).when(ragTranslationService).clearAllTranslationMemory();
-
-        mockMvc.perform(post("/admin/cache/clear"))
-            .andExpect(status().is5xxServerError());
-
-        verify(cacheService).clearAllCache();
-        verify(ragTranslationService).clearAllTranslationMemory();
+        verify(cacheAdminPort).clearAllTranslationCache();
     }
 }

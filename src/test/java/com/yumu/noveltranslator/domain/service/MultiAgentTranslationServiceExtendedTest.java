@@ -1,17 +1,16 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
+import com.yumu.noveltranslator.port.out.TeamTranslationPort;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.AiGlossaryService;
 import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.domain.model.CollabProject;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.*;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
@@ -50,7 +49,7 @@ class MultiAgentTranslationServiceExtendedTest {
     @Mock
     private TranslationRepositoryPort translationPort;
     @Mock
-    private TeamTranslationService teamTranslationService;
+    private TeamTranslationPort teamTranslationPort;
     @Mock
     private TranslationCachePort cachePort;
     @Mock
@@ -72,7 +71,7 @@ class MultiAgentTranslationServiceExtendedTest {
     void setUp() throws Exception {
         service = new MultiAgentTranslationService(
                 collabPort, documentPort, translationPort,
-                teamTranslationService, cachePort, entityConsistencyService,
+                teamTranslationPort, cachePort, entityConsistencyService,
                 glossaryPort, ragTranslationService, aiGlossaryService, postProcessingService,
                 collabStateMachine);
         clearRetryCounterMap();
@@ -85,7 +84,7 @@ class MultiAgentTranslationServiceExtendedTest {
         lenient().doReturn(new RagTranslationResponse()).when(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList());
         lenient().doNothing().when(ragTranslationService).storeTranslationMemory(anyString(), anyString(), anyString(), anyString(), anyLong(), anyString());
         // Team translation stub
-        lenient().doReturn("AI翻译结果").when(teamTranslationService).translateChapter(anyString(), anyString(), anyString(), anyString(), anyList());
+        lenient().doReturn("AI翻译结果").when(teamTranslationPort).translateChapter(anyString(), anyString(), anyString(), anyString(), anyList());
         // AI glossary stub
         lenient().doReturn(List.of()).when(aiGlossaryService).getProjectGlossary(anyLong());
         lenient().doNothing().when(aiGlossaryService).addTerm(anyLong(), anyString(), anyString(), anyString(), any(), any());

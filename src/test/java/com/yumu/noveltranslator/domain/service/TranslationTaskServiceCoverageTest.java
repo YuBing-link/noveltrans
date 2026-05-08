@@ -33,6 +33,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.lang.reflect.Method;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -573,13 +574,12 @@ class TranslationTaskServiceCoverageTest {
     class UpdateTaskProgressCoverageTests {
 
         @Test
-        void current任务为null正常更新() {
+        void current任务为null正常更新() throws Exception {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-no-current");
             when(translationPort.findTaskByTaskId("task-no-current")).thenReturn(Optional.empty());
 
-            // 注意：updateTaskProgress 是 protected，测试类在同包下可直接调用
-            taskService.updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
+            invokeUpdateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
 
             assertEquals("completed", task.getStatus());
             assertEquals(100, task.getProgress());
@@ -588,7 +588,7 @@ class TranslationTaskServiceCoverageTest {
         }
 
         @Test
-        void current任务状态为failed但错误消息不匹配正常更新() {
+        void current任务状态为failed但错误消息不匹配正常更新() throws Exception {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-other-failed");
 
@@ -598,14 +598,14 @@ class TranslationTaskServiceCoverageTest {
             current.setErrorMessage("网络错误"); // 不是"用户取消任务"
             when(translationPort.findTaskByTaskId("task-other-failed")).thenReturn(Optional.of(current));
 
-            taskService.updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
+            invokeUpdateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
 
             assertEquals("completed", task.getStatus());
             verify(translationPort).updateTask(task);
         }
 
         @Test
-        void completed状态设置完成时间() {
+        void completed状态设置完成时间() throws Exception {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-complete-time");
 
@@ -614,14 +614,14 @@ class TranslationTaskServiceCoverageTest {
             current.setStatus("processing");
             when(translationPort.findTaskByTaskId("task-complete-time")).thenReturn(Optional.of(current));
 
-            taskService.updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
+            invokeUpdateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
 
             assertNotNull(task.getCompletedTime());
             verify(translationPort).updateTask(task);
         }
 
         @Test
-        void nonCompleted状态不设置完成时间() {
+        void nonCompleted状态不设置完成时间() throws Exception {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-no-complete-time");
 
@@ -630,10 +630,17 @@ class TranslationTaskServiceCoverageTest {
             current.setStatus("processing");
             when(translationPort.findTaskByTaskId("task-no-complete-time")).thenReturn(Optional.of(current));
 
-            taskService.updateTaskProgress(task, TranslationStatus.PROCESSING, 50, null);
+            invokeUpdateTaskProgress(task, TranslationStatus.PROCESSING, 50, null);
 
             assertNull(task.getCompletedTime());
             verify(translationPort).updateTask(task);
+        }
+
+        private void invokeUpdateTaskProgress(TranslationTask task, TranslationStatus status, int progress, String errorMessage) throws Exception {
+            Method m = TranslationTaskApplicationService.class.getDeclaredMethod(
+                    "updateTaskProgress", TranslationTask.class, TranslationStatus.class, int.class, String.class);
+            m.setAccessible(true);
+            m.invoke(taskService, task, status, progress, errorMessage);
         }
     }
 
@@ -891,13 +898,13 @@ class TranslationTaskServiceCoverageTest {
         @Test
         void 返回零() {
             when(translationPort.countHistoryByUserId(1L)).thenReturn(0);
-            assertEquals(0, taskService.countTranslationHistory(1L));
+            assertEquals(0, taskService.countTranslationHistory(1L, "all"));
         }
 
         @Test
         void 返回正数() {
             when(translationPort.countHistoryByUserId(1L)).thenReturn(100);
-            assertEquals(100, taskService.countTranslationHistory(1L));
+            assertEquals(100, taskService.countTranslationHistory(1L, "all"));
         }
     }
 

@@ -2,16 +2,15 @@ package com.yumu.noveltranslator.application.service;
 import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.application.service.CollabCommentApplicationService;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.yumu.noveltranslator.port.dto.collab.CommentResponse;
 import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabComment;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabComment;
+import com.yumu.noveltranslator.domain.model.CollabProjectMember;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -104,18 +103,19 @@ class CollabCommentServiceTest {
             when(collabPort.findChapterTaskById(1L)).thenReturn(Optional.of(buildTask(1L, 10L)));
             when(collabPort.findMemberByProjectAndUser(10L, 1L)).thenReturn(buildMember(10L, 1L));
 
-            Page<CollabComment> commentPage = new Page<>(1, 10);
+            // Mock: findCommentsByChapterTaskIdPaged returns a PageResult<CollabComment>
+            PageResult<CollabComment> mockPage = new PageResult<>();
             CollabComment root = new CollabComment();
             root.setId(1L);
             root.setChapterTaskId(1L);
             root.setUserId(10L);
             root.setContent("根评论");
-            commentPage.setRecords(List.of(root));
-            commentPage.setTotal(1);
-            when(collabPort.findCommentsByChapterTaskIdPage(any(Page.class), eq(1L))).thenReturn(commentPage);
+            mockPage = new PageResult<>(List.of(root), 1, 1, 10);
+            when(collabPort.findCommentsByChapterTaskIdPaged(1L, 1, 10)).thenReturn(mockPage);
             when(collabPort.findRepliesByParentId(1L)).thenReturn(List.of());
+            when(userPort.findById(10L)).thenReturn(Optional.of(buildUser(10L)));
 
-            IPage<CommentResponse> result = service.getCommentsByChapterPage(1L, 1L, 1, 10);
+            PageResult<CommentResponse> result = service.getCommentsByChapterPage(1L, 1L, 1, 10);
 
             assertEquals(1, result.getTotal());
         }
@@ -239,5 +239,12 @@ class CollabCommentServiceTest {
         m.setUserId(userId);
         m.setRole("OWNER");
         return m;
+    }
+
+    private User buildUser(Long userId) {
+        User u = new User();
+        u.setId(userId);
+        u.setUsername("testuser");
+        return u;
     }
 }

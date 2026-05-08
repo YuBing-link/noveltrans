@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
 
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
+import com.yumu.noveltranslator.domain.model.TranslationMemory;
 import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;

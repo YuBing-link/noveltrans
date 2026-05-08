@@ -1,22 +1,20 @@
 package com.yumu.noveltranslator.domain.service;
-import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
-
 import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
 import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.TranslationHistory;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.TranslationStatus;
 import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
-import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,7 +56,7 @@ class TranslationTaskServiceTest {
     private TranslationStateMachine stateMachine;
 
     @Mock
-    private UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
+    private TranslationClientPort translationClientPort;
 
     @Mock
     private TranslationCachePort cachePort;
@@ -78,7 +76,7 @@ class TranslationTaskServiceTest {
     void setUp() {
         taskService = new TranslationTaskApplicationService(
                 translationPort, documentPort, glossaryPort,
-                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
+                stateMachine, translationClientPort, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
     }
 
@@ -514,7 +512,7 @@ class TranslationTaskServiceTest {
             current.setStatus("processing");
             when(translationPort.findTaskByTaskId("task-123")).thenReturn(Optional.of(current));
 
-            taskService.updateTaskProgress(task, TranslationStatus.PROCESSING, 50, null);
+            invokeUpdateTaskProgress(task, TranslationStatus.PROCESSING, 50, null);
 
             assertEquals("processing", task.getStatus());
             assertEquals(50, task.getProgress());
@@ -533,7 +531,7 @@ class TranslationTaskServiceTest {
             current.setErrorMessage("用户取消任务");
             when(translationPort.findTaskByTaskId("task-123")).thenReturn(Optional.of(current));
 
-            taskService.updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
+            invokeUpdateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
 
             // 由于任务被取消，不应调用 updateById
             verify(translationPort, never()).updateTask(task);
@@ -550,7 +548,7 @@ class TranslationTaskServiceTest {
             current.setStatus("processing");
             when(translationPort.findTaskByTaskId("task-123")).thenReturn(Optional.of(current));
 
-            taskService.updateTaskProgress(task, TranslationStatus.FAILED, 0, "翻译出错");
+            invokeUpdateTaskProgress(task, TranslationStatus.FAILED, 0, "翻译出错");
 
             assertEquals("翻译出错", task.getErrorMessage());
             verify(translationPort).updateTask(task);
@@ -565,7 +563,7 @@ class TranslationTaskServiceTest {
         void 委托给mapper() {
             when(translationPort.countHistoryByUserId(1L)).thenReturn(25);
 
-            int result = taskService.countTranslationHistory(1L);
+            int result = taskService.countTranslationHistory(1L, null);
 
             assertEquals(25, result);
             verify(translationPort).countHistoryByUserId(1L);
@@ -822,6 +820,18 @@ class TranslationTaskServiceTest {
 
             assertEquals("failed", stuckTask.getStatus());
             verify(documentPort, never()).update(doc);
+        }
+    }
+
+    // Helper to invoke protected updateTaskProgress via reflection
+    private void invokeUpdateTaskProgress(TranslationTask task, TranslationStatus status, int progress, String errorMessage) {
+        try {
+            java.lang.reflect.Method method = TranslationTaskApplicationService.class.getDeclaredMethod(
+                    "updateTaskProgress", TranslationTask.class, TranslationStatus.class, int.class, String.class);
+            method.setAccessible(true);
+            method.invoke(taskService, task, status, progress, errorMessage);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 }

@@ -1,25 +1,20 @@
 package com.yumu.noveltranslator.application.service;
-import com.yumu.noveltranslator.util.JwtUtils;
-import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
-import com.yumu.noveltranslator.port.out.TokenRevocationPort;
-
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.stripe.exception.StripeException;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.stripe.model.Event;
 import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.Invoice;
-import com.stripe.model.Subscription;
-import com.stripe.model.SubscriptionItem;
-import com.stripe.model.SubscriptionItemCollection;
-import com.stripe.model.Price;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeCustomer;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
+import com.yumu.noveltranslator.domain.model.StripeCustomer;
+import com.yumu.noveltranslator.domain.model.StripeSubscription;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.domain.model.UserPlanHistory;
 import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
+import com.yumu.noveltranslator.port.out.TokenRevocationPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.out.payment.SubscriptionInfo;
 import com.yumu.noveltranslator.properties.StripeProperties;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
@@ -27,15 +22,12 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -70,11 +62,20 @@ class SubscriptionServiceInvoiceTest {
 
     private SubscriptionApplicationService subscriptionService;
 
+    @BeforeAll
+    static void initMybatisPlusCache() {
+        Configuration configuration = new Configuration();
+        MapperBuilderAssistant assistant = new MapperBuilderAssistant(configuration, "");
+        assistant.setCurrentNamespace("test");
+        TableInfoHelper.initTableInfo(assistant, StripeSubscription.class);
+    }
+
     @BeforeEach
     void setUp() {
         subscriptionService = new SubscriptionApplicationService(
-                stripeProperties, billingPort, userRepositoryPort, stringRedisTemplate,
-                tokenRevocationPort, paymentPort, transactionManager);
+                stripeProperties, billingPort, userRepositoryPort,
+                stringRedisTemplate, tokenRevocationPort,
+                paymentPort, transactionManager);
     }
 
     // ==================== Fallback activation: existing record, non-active status ====================
@@ -127,7 +128,7 @@ class SubscriptionServiceInvoiceTest {
 
             subscriptionService.handleInvoicePaymentSucceeded(event);
 
-            verify(billingPort, never()).updateSubscriptionByWrapper(any());
+            verify(billingPort, never()).atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong());
             verifyNoInteractions(stringRedisTemplate);
         }
 
@@ -152,7 +153,7 @@ class SubscriptionServiceInvoiceTest {
 
             subscriptionService.handleInvoicePaymentSucceeded(event);
 
-            verify(billingPort, never()).updateSubscriptionByWrapper(any());
+            verify(billingPort, never()).atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong());
         }
 
         // 注意：此测试被禁用，因为 MyBatis-Plus LambdaUpdateWrapper 需要 Spring 上下文初始化实体缓存
@@ -176,8 +177,8 @@ class SubscriptionServiceInvoiceTest {
             doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
             when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
-            // Mock the update for atomic activation (LambdaUpdateWrapper triggers MP table cache issue in tests)
-            lenient().when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            // Mock the atomic update for activation (atomicUpdate replaces updateSubscriptionByWrapper)
+            lenient().when(billingPort.atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong())).thenReturn(1);
 
             ValueOperations<String, String> valueOps = mock(ValueOperations.class);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
@@ -196,7 +197,7 @@ class SubscriptionServiceInvoiceTest {
             subscriptionService.handleInvoicePaymentSucceeded(event);
 
             // Verify the atomic update was called
-            verify(billingPort).updateSubscriptionByWrapper(any());
+            verify(billingPort).atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong());
             // Verify user level was updated
             verify(userRepositoryPort).update(argThat(u -> "PRO".equals(u.getUserLevel())));
         }
@@ -214,7 +215,7 @@ class SubscriptionServiceInvoiceTest {
 
             when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
             // 原子更新返回0表示被幂等拦截
-            lenient().when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(0);
+            lenient().when(billingPort.atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong())).thenReturn(0);
 
             Invoice invoice = mock(Invoice.class);
             when(invoice.getSubscription()).thenReturn("sub_test123");
@@ -277,12 +278,10 @@ class SubscriptionServiceInvoiceTest {
             when(deserializer.getObject()).thenReturn(Optional.of(invoice));
             when(event.getId()).thenReturn("evt_orphan_api_err");
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                subStatic.when(() -> Subscription.retrieve("sub_orphan"))
-                        .thenThrow(new com.stripe.exception.ApiConnectionException("Stripe API connection error", null));
+            when(paymentPort.retrieveSubscription("sub_orphan"))
+                    .thenThrow(new com.stripe.exception.ApiConnectionException("Stripe API connection error", null));
 
-                assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
-            }
+            assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
 
             verify(billingPort, never()).saveSubscription(any());
         }
@@ -312,25 +311,12 @@ class SubscriptionServiceInvoiceTest {
             doNothing().when(userRepositoryPort).update(any(User.class));
             doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
-            Subscription stripeSub = mock(Subscription.class);
-            when(stripeSub.getId()).thenReturn("sub_orphan123");
-            when(stripeSub.getStatus()).thenReturn("active");
-            when(stripeSub.getCancelAtPeriodEnd()).thenReturn(false);
-            when(stripeSub.getCurrentPeriodStart()).thenReturn(1700000000L);
-            when(stripeSub.getCurrentPeriodEnd()).thenReturn(1700100000L);
-            when(stripeSub.getMetadata()).thenReturn(Map.of(
-                    "userId", "1",
-                    "plan", "MAX",
-                    "billingCycle", "yearly"
-            ));
-
-            SubscriptionItem subItem = mock(SubscriptionItem.class);
-            Price price = mock(Price.class);
-            when(price.getId()).thenReturn("price_max_yearly");
-            when(subItem.getPrice()).thenReturn(price);
-            SubscriptionItemCollection items = mock(SubscriptionItemCollection.class);
-            when(items.getData()).thenReturn(List.of(subItem));
-            when(stripeSub.getItems()).thenReturn(items);
+            // SubscriptionInfo from paymentPort.retrieveSubscription
+            SubscriptionInfo stripeSubInfo = new SubscriptionInfo(
+                    "sub_orphan123", "active",
+                    1700000000L, 1700100000L,
+                    false, "si_item1", "price_max_yearly", null);
+            when(paymentPort.retrieveSubscription("sub_orphan123")).thenReturn(stripeSubInfo);
 
             Event event = mock(Event.class);
             EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
@@ -343,11 +329,7 @@ class SubscriptionServiceInvoiceTest {
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
             when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                subStatic.when(() -> Subscription.retrieve("sub_orphan123")).thenReturn(stripeSub);
-
-                subscriptionService.handleInvoicePaymentSucceeded(event);
-            }
+            subscriptionService.handleInvoicePaymentSucceeded(event);
 
             // Verify insert was called
             verify(billingPort).saveSubscription(argThat(sub ->
@@ -381,21 +363,12 @@ class SubscriptionServiceInvoiceTest {
             doNothing().when(userRepositoryPort).update(any(User.class));
             doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
-            Subscription stripeSub = mock(Subscription.class);
-            when(stripeSub.getId()).thenReturn("sub_orphan_noplan");
-            when(stripeSub.getStatus()).thenReturn("active");
-            when(stripeSub.getCancelAtPeriodEnd()).thenReturn(false);
-            when(stripeSub.getCurrentPeriodStart()).thenReturn(null);
-            when(stripeSub.getCurrentPeriodEnd()).thenReturn(null);
-            when(stripeSub.getMetadata()).thenReturn(Map.of("userId", "1"));
-
-            SubscriptionItem subItem = mock(SubscriptionItem.class);
-            Price price = mock(Price.class);
-            when(price.getId()).thenReturn("price_pro_monthly");
-            when(subItem.getPrice()).thenReturn(price);
-            SubscriptionItemCollection items = mock(SubscriptionItemCollection.class);
-            when(items.getData()).thenReturn(List.of(subItem));
-            when(stripeSub.getItems()).thenReturn(items);
+            // SubscriptionInfo from paymentPort.retrieveSubscription
+            SubscriptionInfo stripeSubInfo = new SubscriptionInfo(
+                    "sub_orphan_noplan", "active",
+                    null, null,
+                    false, "si_item2", "price_pro_monthly", null);
+            when(paymentPort.retrieveSubscription("sub_orphan_noplan")).thenReturn(stripeSubInfo);
 
             Event event = mock(Event.class);
             EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
@@ -408,11 +381,7 @@ class SubscriptionServiceInvoiceTest {
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
             when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                subStatic.when(() -> Subscription.retrieve("sub_orphan_noplan")).thenReturn(stripeSub);
-
-                subscriptionService.handleInvoicePaymentSucceeded(event);
-            }
+            subscriptionService.handleInvoicePaymentSucceeded(event);
 
             verify(billingPort).saveSubscription(argThat(sub ->
                     "PRO".equals(sub.getPlan()) && "monthly".equals(sub.getBillingCycle())
@@ -440,21 +409,12 @@ class SubscriptionServiceInvoiceTest {
             existingCustomer.setStripeCustomerId("cus_test123");
             when(billingPort.findCustomerByUserIdAndNotDeleted(1L)).thenReturn(existingCustomer);
 
-            Subscription stripeSub = mock(Subscription.class);
-            when(stripeSub.getId()).thenReturn("sub_race");
-            when(stripeSub.getStatus()).thenReturn("active");
-            when(stripeSub.getCancelAtPeriodEnd()).thenReturn(false);
-            when(stripeSub.getCurrentPeriodStart()).thenReturn(null);
-            when(stripeSub.getCurrentPeriodEnd()).thenReturn(null);
-            when(stripeSub.getMetadata()).thenReturn(Map.of("userId", "1", "plan", "PRO"));
-
-            SubscriptionItem subItem = mock(SubscriptionItem.class);
-            Price price = mock(Price.class);
-            when(price.getId()).thenReturn("price_pro_monthly");
-            when(subItem.getPrice()).thenReturn(price);
-            SubscriptionItemCollection items = mock(SubscriptionItemCollection.class);
-            when(items.getData()).thenReturn(List.of(subItem));
-            when(stripeSub.getItems()).thenReturn(items);
+            // SubscriptionInfo from paymentPort.retrieveSubscription
+            SubscriptionInfo stripeSubInfo = new SubscriptionInfo(
+                    "sub_race", "active",
+                    null, null,
+                    false, "si_item3", "price_pro_monthly", null);
+            when(paymentPort.retrieveSubscription("sub_race")).thenReturn(stripeSubInfo);
 
             Event event = mock(Event.class);
             EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
@@ -467,11 +427,7 @@ class SubscriptionServiceInvoiceTest {
             doThrow(new org.springframework.dao.DuplicateKeyException("duplicate"))
                     .when(billingPort).saveSubscription(any());
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                subStatic.when(() -> Subscription.retrieve("sub_race")).thenReturn(stripeSub);
-
-                assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
-            }
+            assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
         }
     }
 
@@ -501,7 +457,7 @@ class SubscriptionServiceInvoiceTest {
 
             when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
             // 第一次调用成功更新（返回1），后续调用被幂等拦截（返回0）
-            lenient().when(billingPort.updateSubscriptionByWrapper(any()))
+            lenient().when(billingPort.atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong()))
                     .thenReturn(1)
                     .thenReturn(0)
                     .thenReturn(0);

@@ -1,13 +1,13 @@
 package com.yumu.noveltranslator.adapter.in.rest.collab;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.port.dto.collab.CommentResponse;
 import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
-import com.yumu.noveltranslator.application.service.CollabCommentApplicationService;
+import com.yumu.noveltranslator.port.in.CollabCommentPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,13 +38,13 @@ class CollabCommentControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @org.mockito.Mock
-    private CollabCommentApplicationService collabCommentService;
+    private CollabCommentPort collabCommentPort;
 
     private CollabCommentController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new CollabCommentController(collabCommentService);
+        controller = new CollabCommentController(collabCommentPort);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -85,7 +85,7 @@ class CollabCommentControllerTest {
             CreateCommentRequest req = new CreateCommentRequest();
             req.setContent("评论内容");
 
-            when(collabCommentService.createComment(eq(1L), eq(1L), any())).thenReturn(resp);
+            when(collabCommentPort.createComment(eq(1L), eq(1L), any())).thenReturn(resp);
 
             mockMvc.perform(post("/v1/collab/chapters/1/comments")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -105,12 +105,8 @@ class CollabCommentControllerTest {
             setupSecurityContext();
             CommentResponse resp = createCommentResponse();
 
-            Page<CommentResponse> iPage = new Page<>();
-            iPage.setCurrent(1);
-            iPage.setSize(20);
-            iPage.setTotal(1);
-            iPage.setRecords(List.of(resp));
-            when(collabCommentService.getCommentsByChapterPage(1L, 1L, 1, 20)).thenReturn(iPage);
+            PageResult<CommentResponse> pageResult = new PageResult<>(List.of(resp), 1L, 1L, 20L);
+            when(collabCommentPort.getCommentsByChapterPage(1L, 1L, 1, 20)).thenReturn(pageResult);
 
             mockMvc.perform(get("/v1/collab/chapters/1/comments"))
                 .andExpect(status().isOk())
@@ -126,7 +122,7 @@ class CollabCommentControllerTest {
         @Test
         void 解决评论成功() throws Exception {
             setupSecurityContext();
-            doNothing().when(collabCommentService).resolveComment(1L, 1L);
+            doNothing().when(collabCommentPort).resolveComment(1L, 1L);
 
             mockMvc.perform(put("/v1/collab/comments/1/resolve"))
                 .andExpect(status().isOk())
@@ -141,7 +137,7 @@ class CollabCommentControllerTest {
         @Test
         void 删除评论成功() throws Exception {
             setupSecurityContext();
-            doNothing().when(collabCommentService).deleteComment(1L, 1L);
+            doNothing().when(collabCommentPort).deleteComment(1L, 1L);
 
             mockMvc.perform(delete("/v1/collab/comments/1"))
                 .andExpect(status().isOk())

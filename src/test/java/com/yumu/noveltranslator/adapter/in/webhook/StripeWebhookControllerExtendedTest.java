@@ -6,7 +6,7 @@ import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.StripeProperties;
-import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
+import com.yumu.noveltranslator.port.in.SubscriptionPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,16 +34,16 @@ import static org.mockito.Mockito.*;
 class StripeWebhookControllerExtendedTest {
 
     private StripeWebhookController controller;
-    private SubscriptionApplicationService subscriptionService;
+    private SubscriptionPort subscriptionPort;
     private StripeProperties stripeProperties;
     private UserRepositoryPort userRepositoryPort;
 
     @BeforeEach
     void setUp() {
-        subscriptionService = mock(SubscriptionService.class);
+        subscriptionPort = mock(SubscriptionPort.class);
         stripeProperties = mock(StripeProperties.class);
         userRepositoryPort = mock(UserRepositoryPort.class);
-        controller = new StripeWebhookController(subscriptionService, stripeProperties, userRepositoryPort);
+        controller = new StripeWebhookController(subscriptionPort, stripeProperties, userRepositoryPort);
     }
 
     @AfterEach

@@ -102,7 +102,7 @@ class TranslationServiceStreamTest {
         void 空文本立即返回错误() {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("");
-            SseEmitter emitter = service.streamTextTranslate(req);
+            SseEmitter emitter = service.streamTextTranslate(null, req);
             assertNotNull(emitter);
         }
 
@@ -110,24 +110,20 @@ class TranslationServiceStreamTest {
         void null文本立即返回错误() {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText(null);
-            SseEmitter emitter = service.streamTextTranslate(req);
+            SseEmitter emitter = service.streamTextTranslate(null, req);
             assertNotNull(emitter);
         }
 
         @Test
         void 配额不足立即返回错误() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
+            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(false);
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello World");
             req.setEngine("google");
             req.setTargetLang("zh");
-            SseEmitter emitter = service.streamTextTranslate(req);
+            SseEmitter emitter = service.streamTextTranslate(null, req);
             assertNotNull(emitter);
         }
 
@@ -135,14 +131,14 @@ class TranslationServiceStreamTest {
         void 无认证用户正常翻译() {
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setEngine("google");
             req.setTargetLang("zh");
-            SseEmitter emitter = service.streamTextTranslate(req);
+            SseEmitter emitter = service.streamTextTranslate(null, req);
             assertNotNull(emitter);
         }
     }
@@ -158,7 +154,7 @@ class TranslationServiceStreamTest {
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of());
             req.setTargetLang("zh");
-            SseEmitter emitter = service.webpageTranslateStream(req);
+            SseEmitter emitter = service.webpageTranslateStream(null, req);
             assertNotNull(emitter);
         }
 
@@ -168,42 +164,34 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of());
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = service.webpageTranslateStream(req);
+            SseEmitter emitter = service.webpageTranslateStream(null, req);
             assertNotNull(emitter);
         }
 
         @Test
         void 配额不足直接发送错误() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
+            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(false);
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
-            SseEmitter emitter = service.webpageTranslateStream(req);
+            SseEmitter emitter = service.webpageTranslateStream(null, req);
             assertNotNull(emitter);
         }
 
         @Test
         void 单条文本翻译成功() throws InterruptedException {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of(createTextItem("1", "Hello World")));
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = service.webpageTranslateStream(req);
+            SseEmitter emitter = service.webpageTranslateStream(null, req);
             assertNotNull(emitter);
 
             // Allow virtual threads to complete
@@ -221,10 +209,10 @@ class TranslationServiceStreamTest {
             // No auth user, no quota check
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn(null); // simulate failure
 
-            SseEmitter emitter = service.webpageTranslateStream(req);
+            SseEmitter emitter = service.webpageTranslateStream(null, req);
             assertNotNull(emitter);
         }
 
@@ -238,10 +226,10 @@ class TranslationServiceStreamTest {
 
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"Expert translation\"}");
 
-            SseEmitter emitter = service.webpageTranslateStream(req);
+            SseEmitter emitter = service.webpageTranslateStream(null, req);
             assertNotNull(emitter);
         }
 
@@ -262,10 +250,6 @@ class TranslationServiceStreamTest {
         @Test
         void fastMode使用fast配额() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("pro");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
@@ -274,7 +258,7 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
             req.setFastMode(true);
             req.setTargetLang("zh");
-            SseEmitter emitter = service.webpageTranslateStream(req);
+            SseEmitter emitter = service.webpageTranslateStream(null, req);
             assertNotNull(emitter);
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), eq("fast"));
@@ -283,10 +267,6 @@ class TranslationServiceStreamTest {
         @Test
         void expertMode使用expert配额() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("pro");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
@@ -294,7 +274,7 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
             req.setFastMode(false);
             req.setTargetLang("zh");
-            SseEmitter emitter = service.webpageTranslateStream(req);
+            SseEmitter emitter = service.webpageTranslateStream(null, req);
             assertNotNull(emitter);
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), eq("expert"));
@@ -317,23 +297,19 @@ class TranslationServiceStreamTest {
         @Test
         void 默认fast模式() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
             // No mode set, should default to "fast"
-            var resp = service.selectionTranslate(req);
+            var resp = service.selectionTranslate(null, req);
             assertTrue(resp.getSuccess());
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("fast"));
@@ -342,24 +318,20 @@ class TranslationServiceStreamTest {
         @Test
         void expert模式() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            // mode=expert uses pipeline.execute() which calls 4-param translate
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean()))
+            // mode=expert uses pipeline.execute() which calls 8-param translate
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setMode("expert");
-            var resp = service.selectionTranslate(req);
+            var resp = service.selectionTranslate(null, req);
             assertTrue(resp.getSuccess());
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
@@ -368,16 +340,16 @@ class TranslationServiceStreamTest {
         @Test
         void 翻译返回空结果() {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            var resp = service.selectionTranslate(req);
+            var resp = service.selectionTranslate(null, req);
 
             // executeFast returns original text on empty result, which is non-empty -> success=true
             assertTrue(resp.getSuccess());
@@ -387,16 +359,16 @@ class TranslationServiceStreamTest {
         @Test
         void 翻译客户端抛异常() {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(ragTranslationService.searchSimilar(anyString(), anyString(), anyString()))
+            when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenThrow(new RuntimeException("connection timeout"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            var resp = service.selectionTranslate(req);
+            var resp = service.selectionTranslate(null, req);
 
             // executeFast catches exception and returns original text -> success=true
             assertTrue(resp.getSuccess());
@@ -418,24 +390,24 @@ class TranslationServiceStreamTest {
             req.setContent("<p>test</p>");
             req.setTargetLang("zh");
             req.setEngine("google");
-            var resp = service.readerTranslate(req);
+            var resp = service.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("cached translation", resp.getTranslatedContent());
-            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString());
         }
 
         @Test
         void 翻译失败时使用原文兜底() {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenThrow(new RuntimeException("engine failed"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
             req.setTargetLang("zh");
             req.setEngine("google");
-            var resp = service.readerTranslate(req);
+            var resp = service.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             // Should fall back to original text
@@ -445,17 +417,17 @@ class TranslationServiceStreamTest {
         @Test
         void 阅读器模式html为true() {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>test</p>");
             req.setTargetLang("zh");
-            var resp = service.readerTranslate(req);
+            var resp = service.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             // reader mode uses html=true for MTranServer
-            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true), anyList());
+            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true), anyList(), anyString(), anyString());
         }
     }
 }

@@ -21,7 +21,6 @@ import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,8 +73,6 @@ class TranslationServiceExtended2Test {
     private TeamTranslationService teamTranslationService;
     @Mock
     private QuotaService quotaService;
-    @Mock
-    private UserMapper userMapper;
 
     private TranslationApplicationService translationService;
 
@@ -125,7 +122,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello World");
             req.setTargetLang("zh");
             req.setEngine("ai"); // maps to EXPERT
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("expert", resp.getEngine());
@@ -142,7 +139,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("ai-team"); // maps to TEAM
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("team", resp.getEngine());
@@ -159,7 +156,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("deepl"); // maps to EXPERT
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("expert", resp.getEngine());
@@ -175,7 +172,7 @@ class TranslationServiceExtended2Test {
             req.setText("test");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("fast", resp.getEngine());
@@ -190,7 +187,7 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("test");
             req.setEngine("unknown-engine");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("fast", resp.getEngine());
@@ -207,7 +204,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"))).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -217,7 +213,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setEngine("ai");
             req.setMode("expert");
-            var resp = translationService.selectionTranslate(req);
+            var resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
@@ -229,7 +225,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("team"))).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -239,7 +234,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setEngine("ai-team");
             req.setMode("team");
-            var resp = translationService.selectionTranslate(req);
+            var resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("team"));
@@ -262,7 +257,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            var resp = translationService.selectionTranslate(req);
+            var resp = translationService.selectionTranslate(null, req);
 
             // executeFast catches exception internally and returns original text -> success=true
             assertTrue(resp.getSuccess());
@@ -280,7 +275,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            var resp = translationService.selectionTranslate(req);
+            var resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("Hello", resp.getTranslation());
@@ -297,7 +292,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            var resp = translationService.selectionTranslate(req);
+            var resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("Hello", resp.getTranslation());
@@ -319,7 +314,7 @@ class TranslationServiceExtended2Test {
             req.setText("test");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertFalse(resp.getTranslation().contains("<script>"));
@@ -336,7 +331,7 @@ class TranslationServiceExtended2Test {
             req.setText("test");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertFalse(resp.getTranslation().contains("<iframe"));
@@ -353,7 +348,7 @@ class TranslationServiceExtended2Test {
             req.setText("test");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertTrue(resp.getTranslation().contains("<p>"));
@@ -380,7 +375,7 @@ class TranslationServiceExtended2Test {
             req.setContent("test");
             req.setTargetLang("zh");
             req.setEngine("ai");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("expert", resp.getEngine());
@@ -397,7 +392,7 @@ class TranslationServiceExtended2Test {
             req.setContent("test");
             req.setTargetLang("zh");
             req.setEngine("ai-team");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("team", resp.getEngine());
@@ -413,7 +408,7 @@ class TranslationServiceExtended2Test {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("test");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("fast", resp.getEngine());
@@ -430,7 +425,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -440,7 +434,7 @@ class TranslationServiceExtended2Test {
             req.setContent("<p>Hello</p>");
             req.setTargetLang("zh");
             req.setEngine("google");
-            var resp = translationService.readerTranslate(req);
+            var resp = translationService.readerTranslate(null, req);
 
             // readerTranslate 的虚拟线程会捕获异常并用原文兜底
             // 整体 try-catch 不抛出异常
@@ -451,18 +445,17 @@ class TranslationServiceExtended2Test {
         @Test
         void 用户不存在时跳过配额检查() {
             setAuthenticatedUser(999L);
-            when(userMapper.selectById(999L)).thenReturn(null);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("cached", resp.getTranslatedContent());
-            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyInt(), anyString());
-            verify(quotaService, never()).refundChars(anyLong(), anyInt(), anyString());
+            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
+            verify(quotaService, never()).refundChars(anyLong(), anyLong(), anyString());
         }
 
         @Test
@@ -471,7 +464,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("pro");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("pro"), anyLong(), eq("expert"))).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -482,7 +474,7 @@ class TranslationServiceExtended2Test {
             req.setTargetLang("zh");
             req.setEngine("ai");
             req.setMode("expert");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), eq("expert"));
@@ -501,7 +493,7 @@ class TranslationServiceExtended2Test {
             req.setContent("<p>p1</p><p>p2</p>");
             req.setTargetLang("zh");
             req.setEngine("google");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("cached-result", resp.getTranslatedContent());
@@ -518,7 +510,7 @@ class TranslationServiceExtended2Test {
             req.setContent("<p>unique-content</p>");
             req.setTargetLang("zh");
             req.setEngine("google");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertTrue(resp.getTranslatedContent().contains("translated-by-client"));
@@ -534,7 +526,7 @@ class TranslationServiceExtended2Test {
         void 仅空白字符返回没有收到内容() {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("   ");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertFalse(resp.getSuccess());
             assertEquals("没有收到内容", resp.getTranslatedContent());
@@ -544,7 +536,7 @@ class TranslationServiceExtended2Test {
         void 仅换行符返回没有收到内容() {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("\n\n\n");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertFalse(resp.getSuccess());
             assertEquals("没有收到内容", resp.getTranslatedContent());
@@ -560,7 +552,7 @@ class TranslationServiceExtended2Test {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>test</p>");
             // targetLang = null
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
         }
@@ -576,7 +568,7 @@ class TranslationServiceExtended2Test {
             req.setContent("<p>Special chars: &lt;script&gt; &amp; unicode</p>");
             req.setTargetLang("zh");
             req.setEngine("google");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertNotNull(resp.getTranslatedContent());
@@ -602,12 +594,12 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("翻译结果", resp.getTranslation());
             // 未认证用户不检查配额
-            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyInt(), anyString());
+            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
         }
 
         @Test
@@ -620,10 +612,10 @@ class TranslationServiceExtended2Test {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
-            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyInt(), anyString());
+            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
         }
 
         @Test
@@ -633,7 +625,7 @@ class TranslationServiceExtended2Test {
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("test");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("cached", resp.getTranslation());
@@ -650,7 +642,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("pro");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("pro"), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -660,7 +651,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), anyString());
@@ -672,7 +663,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("max");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("max"), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -682,7 +672,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("max"), anyLong(), anyString());
@@ -694,7 +684,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("premium");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("premium"), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -704,7 +693,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
         }
@@ -715,7 +704,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("pro");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("pro"), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -724,7 +712,7 @@ class TranslationServiceExtended2Test {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>test</p>");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), anyString());
@@ -750,7 +738,7 @@ class TranslationServiceExtended2Test {
             req.setText("Paragraph 1\n\nParagraph 2\n\nParagraph 3");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(null, req);
 
             assertNotNull(emitter);
             Thread.sleep(1000);
@@ -767,7 +755,7 @@ class TranslationServiceExtended2Test {
             req.setText("line1\nline2");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(null, req);
 
             assertNotNull(emitter);
             Thread.sleep(1000);
@@ -782,7 +770,7 @@ class TranslationServiceExtended2Test {
             req.setText("\n\n");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(null, req);
 
             assertNotNull(emitter);
             Thread.sleep(1000);
@@ -798,7 +786,7 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(null, req);
 
             assertNotNull(emitter);
             Thread.sleep(1000);
@@ -814,7 +802,7 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(null, req);
 
             assertNotNull(emitter);
             Thread.sleep(1000);
@@ -830,7 +818,7 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(null, req);
 
             assertNotNull(emitter);
             Thread.sleep(1000);
@@ -847,7 +835,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
@@ -857,7 +844,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello World");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(null, req);
 
             assertNotNull(emitter);
             Thread.sleep(1000);
@@ -866,7 +853,6 @@ class TranslationServiceExtended2Test {
         @Test
         void 用户不存在跳过配额() {
             setAuthenticatedUser(999L);
-            when(userMapper.selectById(999L)).thenReturn(null);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
@@ -874,11 +860,11 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SseEmitter emitter = translationService.streamTextTranslate(req);
+            SseEmitter emitter = translationService.streamTextTranslate(null, req);
 
             assertNotNull(emitter);
-            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyInt(), anyString());
-            verify(quotaService, never()).refundChars(anyLong(), anyInt(), anyString());
+            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
+            verify(quotaService, never()).refundChars(anyLong(), anyLong(), anyString());
         }
     }
 
@@ -906,7 +892,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
             assertNotNull(emitter);
             Thread.sleep(1000);
         }
@@ -924,7 +910,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
             assertNotNull(emitter);
             Thread.sleep(1000);
         }
@@ -945,7 +931,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
             assertNotNull(emitter);
             Thread.sleep(1000);
         }
@@ -956,7 +942,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"))).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
@@ -970,7 +955,7 @@ class TranslationServiceExtended2Test {
             req.setFastMode(false); // expert mode
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
             assertNotNull(emitter);
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
@@ -995,7 +980,7 @@ class TranslationServiceExtended2Test {
             req.setTargetLang("zh");
             req.setEngine("google");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
             assertNotNull(emitter);
             Thread.sleep(2000);
         }
@@ -1011,7 +996,6 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
 
             // 让 cachePort 在虚拟线程中抛异常来触发全局 catch
@@ -1027,7 +1011,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
             assertNotNull(emitter);
             Thread.sleep(2000);
         }
@@ -1035,7 +1019,6 @@ class TranslationServiceExtended2Test {
         @Test
         void 用户不存在跳过配额检查() {
             setAuthenticatedUser(999L);
-            when(userMapper.selectById(999L)).thenReturn(null);
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             List<WebpageTranslateRequest.TextItem> items = new ArrayList<>();
@@ -1046,9 +1029,9 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(req);
+            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
             assertNotNull(emitter);
-            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyInt(), anyString());
+            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
         }
     }
 
@@ -1079,7 +1062,7 @@ class TranslationServiceExtended2Test {
             req.setContent(sb.toString());
             req.setTargetLang("zh");
             req.setEngine("google");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertNotNull(resp.getTranslatedContent());
@@ -1107,7 +1090,7 @@ class TranslationServiceExtended2Test {
             req.setContent(longContent);
             req.setTargetLang("zh");
             req.setEngine("google");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertNotNull(resp.getTranslatedContent());
@@ -1130,7 +1113,7 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             // selectionTranslate 的 try-catch 捕获缓存异常，返回翻译失败
             assertFalse(resp.getSuccess());
@@ -1145,7 +1128,7 @@ class TranslationServiceExtended2Test {
             req.setContent("p1 p2");
             req.setTargetLang("zh");
             req.setEngine("google");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertEquals("cached-result", resp.getTranslatedContent());
@@ -1160,7 +1143,7 @@ class TranslationServiceExtended2Test {
             req.setContent("<p>p1</p><p>p2</p>");
             req.setTargetLang("zh");
             req.setEngine("google");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             // Content "<p>p1</p><p>p2</p>" is 16 chars, under segmentation threshold -> single segment
@@ -1179,7 +1162,7 @@ class TranslationServiceExtended2Test {
             req.setContent("<p>unique-content</p>");
             req.setTargetLang("zh");
             req.setEngine("google");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
             assertTrue(resp.getTranslatedContent().contains("translated-by-client"));
@@ -1201,13 +1184,12 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertFalse(resp.getSuccess());
             assertTrue(resp.getTranslation().contains("字符配额不足"));
@@ -1220,46 +1202,43 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertFalse(resp.getSuccess());
             assertTrue(resp.getTranslatedContent().contains("字符配额不足"));
         }
 
         @Test
-        void userMapper返回null时跳过配额() {
+        void 用户不存在时跳过配额_selectionTranslate() {
             setAuthenticatedUser(1L, "free");
-            when(userMapper.selectById(1L)).thenReturn(null);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
-            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyInt(), anyString());
+            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
         }
 
         @Test
         void readerTranslate用户不存在跳过配额() {
             setAuthenticatedUser(1L, "free");
-            when(userMapper.selectById(1L)).thenReturn(null);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.of("cached"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
 
             assertTrue(resp.getSuccess());
-            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyInt(), anyString());
+            verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
         }
     }
 
@@ -1275,7 +1254,7 @@ class TranslationServiceExtended2Test {
         void 仅空白字符返回内容为空() {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("   ");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertFalse(resp.getSuccess());
             assertEquals("内容为空", resp.getTranslation());
@@ -1285,7 +1264,7 @@ class TranslationServiceExtended2Test {
         void 仅换行符返回内容为空() {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("\n\n");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertFalse(resp.getSuccess());
             assertEquals("内容为空", resp.getTranslation());
@@ -1302,7 +1281,7 @@ class TranslationServiceExtended2Test {
             req.setText("  Hello World  ");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
         }
@@ -1317,7 +1296,7 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("test");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
         }
@@ -1334,7 +1313,7 @@ class TranslationServiceExtended2Test {
             req.setSourceLang(null);
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
 
             assertTrue(resp.getSuccess());
         }

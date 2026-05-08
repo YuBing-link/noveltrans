@@ -4,9 +4,9 @@ import com.yumu.noveltranslator.application.service.CollabProjectApplicationServ
 import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.CollabProjectMember;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;

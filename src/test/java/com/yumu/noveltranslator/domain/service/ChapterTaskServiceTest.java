@@ -3,14 +3,13 @@ import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.application.service.ChapterTaskApplicationService;
 import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
 
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.CollabProjectMember;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 import com.yumu.noveltranslator.port.dto.collab.ChapterTaskResponse;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.ProjectMemberRole;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
@@ -136,9 +135,7 @@ class ChapterTaskServiceTest {
             task.setChapterNumber(1);
             task.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());
 
-            Page<CollabChapterTask> page = new Page<>(1, 10);
-            page.setRecords(List.of(task));
-            page.setTotal(1);
+            PageResult<CollabChapterTask> page = new PageResult<>(List.of(task), 1, 1, 10);
             when(collabPort.findChapterTasksByProjectIdPaged(10L, 1, 10)).thenReturn(page);
 
             PageResponse<ChapterTaskResponse> result = chapterTaskService.listByProjectId(10L, 1, 10);
@@ -179,9 +176,7 @@ class ChapterTaskServiceTest {
             task.setAssigneeId(1L);
             task.setStatus(ChapterTaskStatus.TRANSLATING.getValue());
 
-            Page<CollabChapterTask> page = new Page<>(1, 10);
-            page.setRecords(List.of(task));
-            page.setTotal(1);
+            PageResult<CollabChapterTask> page = new PageResult<>(List.of(task), 1, 1, 10);
             when(collabPort.findChapterTasksByAssigneeIdPaged(eq(1L), anyList(), eq(1), eq(10))).thenReturn(page);
 
             PageResponse<ChapterTaskResponse> result = chapterTaskService.listByAssigneeId(1L, 1, 10);

@@ -4,7 +4,7 @@ import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionRequest;
 import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionResponse;
 import com.yumu.noveltranslator.application.service.SubscriptionApplicationService;
 import com.yumu.noveltranslator.port.out.TokenRevocationPort;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
+import com.yumu.noveltranslator.domain.model.StripeSubscription;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -26,10 +26,9 @@ import com.yumu.noveltranslator.port.dto.entity.*;
 import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeCustomer;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
+import com.yumu.noveltranslator.domain.model.StripeCustomer;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.domain.model.UserPlanHistory;
 import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.StripeProperties;
@@ -235,12 +234,12 @@ class SubscriptionServiceExtendedTest {
                 when(billingPort.findCustomerByUserIdAndNotDeleted(2L)).thenReturn(customer);
                 // billingPort.findSubscriptionByStripeId 返回已有订阅
                 when(billingPort.findSubscriptionByStripeId("sub_existing")).thenReturn(existingSub);
-                when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+                doNothing().when(billingPort).updateSubscription(any());
 
                 subscriptionService.handleCheckoutSessionCompleted(event);
 
                 verify(billingPort, never()).saveSubscription(any());
-                verify(billingPort).updateSubscriptionByWrapper(any());
+                verify(billingPort).updateSubscription(any());
             }
         }
     }
@@ -295,14 +294,14 @@ class SubscriptionServiceExtendedTest {
         void past_due状态不降级仅记录() {
             StripeSubscription localSub = buildLocalSub("sub_pastdue", "PRO");
             when(billingPort.findSubscriptionByStripeId("sub_pastdue")).thenReturn(localSub);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            doNothing().when(billingPort).updateSubscription(any());
 
             Subscription stripeSub = buildStripeSub("sub_pastdue", "past_due");
             Event event = buildUpdatedEvent(stripeSub, "evt_pastdue");
 
             subscriptionService.handleSubscriptionUpdated(event);
 
-            verify(billingPort).updateSubscriptionByWrapper(any());
+            verify(billingPort).updateSubscription(any());
             verify(userRepositoryPort, never()).update(any());
         }
 
@@ -310,14 +309,14 @@ class SubscriptionServiceExtendedTest {
         void paused状态不更改用户等级() {
             StripeSubscription localSub = buildLocalSub("sub_paused", "PRO");
             when(billingPort.findSubscriptionByStripeId("sub_paused")).thenReturn(localSub);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            doNothing().when(billingPort).updateSubscription(any());
 
             Subscription stripeSub = buildStripeSub("sub_paused", "paused");
             Event event = buildUpdatedEvent(stripeSub, "evt_paused");
 
             subscriptionService.handleSubscriptionUpdated(event);
 
-            verify(billingPort).updateSubscriptionByWrapper(any());
+            verify(billingPort).updateSubscription(any());
             verify(userRepositoryPort, never()).update(any());
         }
 
@@ -332,7 +331,7 @@ class SubscriptionServiceExtendedTest {
 
             StripeSubscription localSub = buildLocalSub("sub_trialing", "PRO");
             when(billingPort.findSubscriptionByStripeId("sub_trialing")).thenReturn(localSub);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            doNothing().when(billingPort).updateSubscription(any());
 
             Subscription stripeSub = buildStripeSub("sub_trialing", "trialing");
             Event event = buildUpdatedEvent(stripeSub, "evt_trialing");
@@ -353,7 +352,7 @@ class SubscriptionServiceExtendedTest {
 
             StripeSubscription localSub = buildLocalSub("sub_unpaid", "PRO");
             when(billingPort.findSubscriptionByStripeId("sub_unpaid")).thenReturn(localSub);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            doNothing().when(billingPort).updateSubscription(any());
 
             Subscription stripeSub = buildStripeSub("sub_unpaid", "unpaid");
             Event event = buildUpdatedEvent(stripeSub, "evt_unpaid");
@@ -374,7 +373,7 @@ class SubscriptionServiceExtendedTest {
 
             StripeSubscription localSub = buildLocalSub("sub_reactivated", "PRO");
             when(billingPort.findSubscriptionByStripeId("sub_reactivated")).thenReturn(localSub);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            doNothing().when(billingPort).updateSubscription(any());
 
             Subscription stripeSub = buildStripeSub("sub_reactivated", "active");
             Event event = buildUpdatedEvent(stripeSub, "evt_reactivated");
@@ -414,7 +413,7 @@ class SubscriptionServiceExtendedTest {
 
             subscriptionService.handleSubscriptionResumed(event);
 
-            verify(billingPort).updateSubscriptionByWrapper(argThat(w -> true));
+            verify(billingPort).updateSubscription(argThat(w -> true));
         }
     }
 
@@ -527,7 +526,7 @@ class SubscriptionServiceExtendedTest {
             when(event.getId()).thenReturn("evt_upgrade");
 
             when(billingPort.findSubscriptionByStripeId("sub_upgrade")).thenReturn(subRecord);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            doNothing().when(billingPort).updateSubscription(any());
 
             subscriptionService.handleSubscriptionUpdated(event);
 
@@ -577,7 +576,7 @@ class SubscriptionServiceExtendedTest {
             when(event.getId()).thenReturn("evt_nulllevel");
 
             when(billingPort.findSubscriptionByStripeId("sub_nulllevel")).thenReturn(subRecord);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            doNothing().when(billingPort).updateSubscription(any());
 
             subscriptionService.handleSubscriptionUpdated(event);
 

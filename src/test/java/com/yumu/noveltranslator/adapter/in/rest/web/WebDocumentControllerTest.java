@@ -8,12 +8,11 @@ import com.yumu.noveltranslator.port.dto.entity.*;
 import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
-import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
-import com.yumu.noveltranslator.application.service.DocumentApplicationService;
-import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
+import com.yumu.noveltranslator.port.in.DocumentPort;
+import com.yumu.noveltranslator.port.in.CollabPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,24 +43,21 @@ class WebDocumentControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private DocumentApplicationService documentService;
+    private DocumentPort documentPort;
 
     @org.mockito.Mock
-    private TranslationTaskApplicationService translationTaskService;
-
-    @org.mockito.Mock
-    private CollabProjectApplicationService collabProjectService;
+    private CollabPort collabPort;
 
     private WebDocumentController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new WebDocumentController(documentService, translationTaskService, collabProjectService);
+        controller = new WebDocumentController(documentPort, collabPort);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
     private void setupSecurityContext() {
-        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
+        User user = new User();
         user.setId(1L);
         user.setEmail("test@test.com");
         user.setUserLevel("free");
@@ -97,12 +93,12 @@ class WebDocumentControllerTest {
         void 获取文档列表成功() throws Exception {
             setupSecurityContext();
             Document doc = createTestDocument();
-            when(documentService.getUserDocuments(eq(1L), eq("all"))).thenReturn(List.of(doc));
+            when(documentPort.getUserDocuments(eq(1L), eq("all"))).thenReturn(List.of(doc));
 
             DocumentInfoResponse infoResp = new DocumentInfoResponse();
             infoResp.setId(1L);
             infoResp.setName("test.txt");
-            when(documentService.toDocumentInfoResponse(any())).thenReturn(infoResp);
+            when(documentPort.toDocumentInfoResponse(any())).thenReturn(infoResp);
 
             mockMvc.perform(get("/user/documents"))
                 .andExpect(status().isOk())
@@ -113,7 +109,7 @@ class WebDocumentControllerTest {
         @Test
         void 带分页和状态参数() throws Exception {
             setupSecurityContext();
-            when(documentService.getUserDocuments(eq(1L), eq("completed"))).thenReturn(List.of());
+            when(documentPort.getUserDocuments(eq(1L), eq("completed"))).thenReturn(List.of());
 
             mockMvc.perform(get("/user/documents")
                     .param("page", "1")
@@ -132,11 +128,11 @@ class WebDocumentControllerTest {
         void 获取文档详情成功() throws Exception {
             setupSecurityContext();
             Document doc = createTestDocument();
-            when(documentService.getDocumentById(1L, 1L)).thenReturn(doc);
+            when(documentPort.getDocumentById(1L, 1L)).thenReturn(doc);
 
             DocumentInfoResponse infoResp = new DocumentInfoResponse();
             infoResp.setId(1L);
-            when(documentService.toDocumentInfoResponse(any())).thenReturn(infoResp);
+            when(documentPort.toDocumentInfoResponse(any())).thenReturn(infoResp);
 
             mockMvc.perform(get("/user/documents/1"))
                 .andExpect(status().isOk())
@@ -147,7 +143,7 @@ class WebDocumentControllerTest {
         @Test
         void 文档不存在返回错误() throws Exception {
             setupSecurityContext();
-            when(documentService.getDocumentById(999L, 1L)).thenReturn(null);
+            when(documentPort.getDocumentById(999L, 1L)).thenReturn(null);
 
             mockMvc.perform(get("/user/documents/999"))
                 .andExpect(status().isOk())
@@ -163,7 +159,7 @@ class WebDocumentControllerTest {
         @Test
         void 删除文档成功() throws Exception {
             setupSecurityContext();
-            when(documentService.deleteDocument(1L, 1L)).thenReturn(true);
+            when(documentPort.deleteDocument(1L, 1L)).thenReturn(true);
 
             mockMvc.perform(delete("/user/documents/1"))
                 .andExpect(status().isOk())
@@ -173,7 +169,7 @@ class WebDocumentControllerTest {
         @Test
         void 删除失败返回错误() throws Exception {
             setupSecurityContext();
-            when(documentService.deleteDocument(1L, 1L)).thenReturn(false);
+            when(documentPort.deleteDocument(1L, 1L)).thenReturn(false);
 
             mockMvc.perform(delete("/user/documents/1"))
                 .andExpect(status().isOk())
@@ -189,11 +185,7 @@ class WebDocumentControllerTest {
         @Test
         void 取消翻译成功() throws Exception {
             setupSecurityContext();
-            TranslationTask task = new TranslationTask();
-            task.setTaskId("task-001");
-            task.setUserId(1L);
-            when(translationTaskService.getTaskByDocumentId(1L)).thenReturn(task);
-            when(translationTaskService.cancelTask("task-001", 1L)).thenReturn(true);
+            when(documentPort.cancelTranslation(1L, 1L)).thenReturn(true);
 
             mockMvc.perform(post("/user/documents/1/cancel"))
                 .andExpect(status().isOk())
@@ -201,39 +193,25 @@ class WebDocumentControllerTest {
         }
 
         @Test
-        void 任务不存在返回错误() throws Exception {
+        void 取消失败返回错误() throws Exception {
             setupSecurityContext();
-            when(translationTaskService.getTaskByDocumentId(1L)).thenReturn(null);
+            when(documentPort.cancelTranslation(1L, 1L)).thenReturn(false);
 
             mockMvc.perform(post("/user/documents/1/cancel"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("翻译任务不存在"));
-        }
-
-        @Test
-        void 无权操作返回错误() throws Exception {
-            setupSecurityContext();
-            TranslationTask task = new TranslationTask();
-            task.setTaskId("task-001");
-            task.setUserId(2L);
-            when(translationTaskService.getTaskByDocumentId(1L)).thenReturn(task);
-
-            mockMvc.perform(post("/user/documents/1/cancel"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("无权操作"));
+                .andExpect(jsonPath("$.message").value("取消失败"));
         }
     }
 
     @Nested
     @DisplayName("重新翻译")
-    class RetryTranslationTests {
+    class RetryTranslateTests {
 
         @Test
         void 重新翻译成功() throws Exception {
             setupSecurityContext();
-            when(documentService.retryTranslation(1L, 1L)).thenReturn(true);
+            when(documentPort.retryTranslation(1L, 1L)).thenReturn(true);
 
             mockMvc.perform(post("/user/documents/1/retry"))
                 .andExpect(status().isOk())
@@ -243,7 +221,7 @@ class WebDocumentControllerTest {
         @Test
         void 重试失败返回错误() throws Exception {
             setupSecurityContext();
-            when(documentService.retryTranslation(1L, 1L)).thenReturn(false);
+            when(documentPort.retryTranslation(1L, 1L)).thenReturn(false);
 
             mockMvc.perform(post("/user/documents/1/retry"))
                 .andExpect(status().isOk())
@@ -260,13 +238,13 @@ class WebDocumentControllerTest {
         void 上传文档成功_fast模式() throws Exception {
             setupSecurityContext();
             Document doc = createTestDocument();
-            when(documentService.uploadDocument(eq(1L), any(), any())).thenReturn(doc);
-
-            TranslationTask task = new TranslationTask();
-            task.setTaskId("task-001");
-            task.setStatus("pending");
-            when(translationTaskService.createDocumentTask(eq(1L), any())).thenReturn(task);
-            doNothing().when(translationTaskService).startDocumentTranslation(any(), any());
+            when(documentPort.uploadAndStartTranslation(eq(1L), any(), any())).thenAnswer(inv -> {
+                DocumentTranslationResponse resp = new DocumentTranslationResponse();
+                resp.setDocumentId(1L);
+                resp.setTaskId("task-001");
+                resp.setStatus("pending");
+                return resp;
+            });
 
             MockMultipartFile file = new MockMultipartFile(
                 "file", "test.txt", "text/plain", "Hello World".getBytes());
@@ -285,13 +263,13 @@ class WebDocumentControllerTest {
         void 上传文档_team模式() throws Exception {
             setupSecurityContext();
             Document doc = createTestDocument();
-            when(documentService.uploadDocument(eq(1L), any(), any())).thenReturn(doc);
+            when(documentPort.uploadDocument(eq(1L), any(), any())).thenReturn(doc);
 
-            CollabProjectService.TeamProjectCreateResult projectResult =
-                new CollabProjectService.TeamProjectCreateResult(1L, "test.txt", 3);
-            when(collabProjectService.createProjectFromDocument(anyLong(), anyLong(), anyString(), anyString(), anyString(), anyString(), anyString()))
+            CollabPort.TeamProjectCreateResult projectResult =
+                new CollabPort.TeamProjectCreateResult(1L, "test.txt", 3);
+            when(collabPort.createProjectFromDocument(anyLong(), anyLong(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(projectResult);
-            doNothing().when(collabProjectService).startMultiAgentTranslation(1L);
+            doNothing().when(collabPort).startMultiAgentTranslation(1L);
 
             MockMultipartFile file = new MockMultipartFile(
                 "file", "test.txt", "text/plain", "Hello World".getBytes());
@@ -315,7 +293,7 @@ class WebDocumentControllerTest {
         @Test
         void 文档不存在返回404() throws Exception {
             setupSecurityContext();
-            when(documentService.getDocumentById(1L, 1L)).thenReturn(null);
+            when(documentPort.getDocumentById(1L, 1L)).thenReturn(null);
 
             mockMvc.perform(get("/user/documents/1/download"))
                 .andExpect(status().isNotFound());
@@ -328,7 +306,7 @@ class WebDocumentControllerTest {
 
             Document doc = createTestDocument();
             doc.setStatus("completed");
-            when(documentService.getDocumentById(1L, 1L)).thenReturn(doc);
+            when(documentPort.getDocumentById(1L, 1L)).thenReturn(doc);
 
             Path fakePath = Path.of("/uploads/test_translated.txt");
             byte[] fileContent = "translated content".getBytes();
@@ -353,7 +331,7 @@ class WebDocumentControllerTest {
 
             Document doc = createTestDocument();
             doc.setStatus("completed");
-            when(documentService.getDocumentById(1L, 1L)).thenReturn(doc);
+            when(documentPort.getDocumentById(1L, 1L)).thenReturn(doc);
 
             try (var mockedFiles = mockStatic(Files.class)) {
                 // Document exists in DB, but Files.exists returns false for the path
@@ -372,7 +350,7 @@ class WebDocumentControllerTest {
 
             // User 1 tries to download, but the document belongs to another user
             // Service returns null because getDocumentById filters by userId
-            when(documentService.getDocumentById(1L, 1L)).thenReturn(null);
+            when(documentPort.getDocumentById(1L, 1L)).thenReturn(null);
 
             mockMvc.perform(get("/user/documents/1/download"))
                 .andExpect(status().isNotFound());
@@ -384,7 +362,7 @@ class WebDocumentControllerTest {
             setupSecurityContext();
 
             Document doc = createTestDocument();
-            when(documentService.getDocumentById(1L, 1L)).thenReturn(doc);
+            when(documentPort.getDocumentById(1L, 1L)).thenReturn(doc);
 
             try (var mockedFiles = mockStatic(Files.class)) {
                 mockedFiles.when(() -> Files.exists(any(Path.class)))

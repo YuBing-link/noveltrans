@@ -3,12 +3,14 @@ import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 
 import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
-import com.yumu.noveltranslator.enums.TranslationMode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -33,7 +35,7 @@ class TranslationPipelineTest {
     @BeforeEach
     void setUp() {
         cacheService = mock(TranslationCachePort.class);
-        ragTranslationService = mock(RagTranslationService.class);
+        ragTranslationService = mock(RagTranslationApplicationService.class);
         entityConsistencyService = mock(EntityConsistencyService.class);
         translationClient = mock(UserLevelThrottledTranslationClient.class);
         postProcessingService = mock(TranslationPostProcessingService.class);
@@ -118,7 +120,7 @@ class TranslationPipelineTest {
             String result = pipeline.execute("Hello", "zh", TranslationMode.FAST);
 
             assertEquals("缓存结果", result);
-            verify(cacheService, never()).putCache(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test

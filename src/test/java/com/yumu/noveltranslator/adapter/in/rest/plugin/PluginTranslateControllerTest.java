@@ -8,7 +8,7 @@ import com.yumu.noveltranslator.port.dto.entity.*;
 import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
-import com.yumu.noveltranslator.application.service.TranslationApplicationService;
+import com.yumu.noveltranslator.port.in.TranslatePort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -31,13 +32,13 @@ class PluginTranslateControllerTest {
     private MockMvc mockMvc;
 
     @Mock
-    private TranslationApplicationService translationService;
+    private TranslatePort translatePort;
 
     private PluginTranslateController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new PluginTranslateController(translationService);
+        controller = new PluginTranslateController(translatePort);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -47,7 +48,7 @@ class PluginTranslateControllerTest {
 
         @Test
         void 选中文本翻译成功() throws Exception {
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                     .thenReturn(new SelectionTranslateResponse(true, "google", "翻译结果"));
 
             mockMvc.perform(post("/v1/translate/selection")
@@ -73,7 +74,7 @@ class PluginTranslateControllerTest {
 
         @Test
         void 阅读器翻译成功() throws Exception {
-            when(translationService.readerTranslate(any()))
+            when(translatePort.readerTranslate(anyLong(), any()))
                     .thenReturn(new ReaderTranslateResponse(true, "google", "<p>翻译内容</p>"));
 
             mockMvc.perform(post("/v1/translate/reader")

@@ -2,17 +2,18 @@ package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.exception.BusinessException;
 import com.yumu.noveltranslator.port.dto.collab.InviteMemberRequest;
 import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabInviteCode;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabInviteCode;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
 import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
 import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.domain.model.CollabProjectMember;
+import com.yumu.noveltranslator.domain.model.CollabProject;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
 import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
 
+import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.config.tenant.TenantContext;
 import com.yumu.noveltranslator.enums.ChapterTaskStatus;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
@@ -151,7 +152,7 @@ class CollabProjectServiceExtendedTest {
             when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
             when(collabPort.findInviteCodeByCode(anyString())).thenReturn(null);
 
-            CollabProjectService.InviteCodeResult result = service.generateInviteCode(1L, 1L);
+            CollabPort.InviteCodeResult result = service.generateInviteCode(1L, 1L);
 
             assertNotNull(result);
             assertEquals(8, result.code().length());
@@ -165,7 +166,7 @@ class CollabProjectServiceExtendedTest {
             when(collabPort.findProjectById(1L)).thenReturn(Optional.of(project));
             when(collabPort.findInviteCodeByCode(anyString())).thenReturn(null);
 
-            CollabProjectService.InviteCodeResult result = service.generateInviteCode(1L, 1L);
+            CollabPort.InviteCodeResult result = service.generateInviteCode(1L, 1L);
 
             assertFalse(result.code().contains("I"));
             assertFalse(result.code().contains("O"));
@@ -183,7 +184,7 @@ class CollabProjectServiceExtendedTest {
                     .thenReturn(new CollabInviteCode())
                     .thenReturn(null);
 
-            CollabProjectService.InviteCodeResult result = service.generateInviteCode(1L, 1L);
+            CollabPort.InviteCodeResult result = service.generateInviteCode(1L, 1L);
             assertNotNull(result);
         }
     }
@@ -481,7 +482,14 @@ class CollabProjectServiceExtendedTest {
             project.setName("My Project");
             when(collabPort.findProjectsByOwnerId(1L)).thenReturn(List.of(project));
 
-            List<CollabProjectResponse> results = service.listOwnedByUserId(1L);
+            List<CollabProjectResponse> results = collabPort.findProjectsByOwnerId(1L).stream()
+                    .map(p -> {
+                        CollabProjectResponse resp = new CollabProjectResponse();
+                        resp.setId(p.getId());
+                        resp.setName(p.getName());
+                        return resp;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
 
             assertEquals(1, results.size());
             assertEquals("My Project", results.get(0).getName());

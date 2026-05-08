@@ -25,10 +25,10 @@ import com.yumu.noveltranslator.port.dto.entity.*;
 import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeCustomer;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.StripeSubscription;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPlanHistory;
+import com.yumu.noveltranslator.domain.model.StripeCustomer;
+import com.yumu.noveltranslator.domain.model.StripeSubscription;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.domain.model.UserPlanHistory;
 import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.StripeProperties;
@@ -512,7 +512,7 @@ class SubscriptionServiceTest {
             assertDoesNotThrow(() -> subscriptionService.handleSubscriptionUpdated(event));
 
             // 原子更新会执行，但幂等检查会阻止实际更新
-            verify(billingPort).updateSubscriptionByWrapper(any());
+            verify(billingPort).atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong());
         }
 
         @Disabled("LambdaUpdateWrapper 需要 Spring 上下文初始化实体缓存")
@@ -556,7 +556,7 @@ class SubscriptionServiceTest {
             when(event.getId()).thenReturn("evt_new123");
 
             when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            when(billingPort.atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong())).thenReturn(1);
             ValueOperations<String, String> valueOps = mock(ValueOperations.class);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
             when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
@@ -655,14 +655,14 @@ class SubscriptionServiceTest {
             when(event.getId()).thenReturn("evt_deleted123");
 
             when(billingPort.findSubscriptionByStripeId("sub_test123")).thenReturn(subRecord);
-            when(billingPort.updateSubscriptionByWrapper(any())).thenReturn(1);
+            when(billingPort.atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong())).thenReturn(1);
             ValueOperations<String, String> valueOps = mock(ValueOperations.class);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
             when(valueOps.setIfAbsent(anyString(), anyString(), any())).thenReturn(true);
 
             subscriptionService.handleSubscriptionDeleted(event);
 
-            verify(billingPort).updateSubscriptionByWrapper(any());
+            verify(billingPort).atomicUpdateSubscription(anyLong(), anyString(), anyString(), anyLong());
             verify(userRepositoryPort).update(argThat(u -> "FREE".equals(u.getUserLevel())));
             verify(userRepositoryPort).savePlanHistory(argThat(h ->
                     "subscription.deleted".equals(h.getNote())));

@@ -1,21 +1,11 @@
 package com.yumu.noveltranslator.adapter.in.rest.web;
-import com.yumu.noveltranslator.port.dto.translation.GlossaryItemRequest;
 import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryItemRequest;
 import com.yumu.noveltranslator.port.dto.translation.GlossaryResponse;
 import com.yumu.noveltranslator.port.dto.common.PageResponse;
 
-import com.yumu.noveltranslator.port.dto.common.*;
-import com.yumu.noveltranslator.port.dto.collab.*;
-import com.yumu.noveltranslator.port.dto.entity.*;
-import com.yumu.noveltranslator.port.dto.translation.*;
-import com.yumu.noveltranslator.port.dto.subscription.*;
-import com.yumu.noveltranslator.port.dto.auth.*;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.GlossaryMapper;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
-import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
-import com.yumu.noveltranslator.application.service.UserApplicationService;
+import com.yumu.noveltranslator.port.in.GlossaryPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,27 +35,18 @@ class WebGlossaryControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private UserApplicationService userService;
-
-    @org.mockito.Mock
-    private GlossaryMapper glossaryMapper;
-
-    @org.mockito.Mock
-    private CacheVersionService cacheVersionService;
-
-    @org.mockito.Mock
-    private TranslationCacheService translationCacheService;
+    private GlossaryPort glossaryPort;
 
     private WebGlossaryController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new WebGlossaryController(userService, glossaryMapper, cacheVersionService, translationCacheService);
+        controller = new WebGlossaryController(glossaryPort);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
     private void setupSecurityContext() {
-        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
+        User user = new User();
         user.setId(1L);
         user.setEmail("test@test.com");
         user.setUserLevel("free");
@@ -96,7 +77,7 @@ class WebGlossaryControllerTest {
         void 获取术语库列表成功() throws Exception {
             setupSecurityContext();
             PageResponse<GlossaryResponse> page = PageResponse.of(1, 20, 1L, List.of(createTestGlossary()));
-            when(userService.getGlossaryList(eq(1L), eq(1), eq(20), eq(null))).thenReturn(page);
+            when(glossaryPort.listGlossaries(eq(1L), eq(1), eq(20), eq(null))).thenReturn(page);
 
             mockMvc.perform(get("/user/glossaries"))
                 .andExpect(status().isOk())
@@ -113,7 +94,7 @@ class WebGlossaryControllerTest {
         void 获取详情成功() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.getGlossaryDetail(1L, 1L)).thenReturn(glossary);
+            when(glossaryPort.getGlossaryDetail(eq(1L), eq(1L))).thenReturn(glossary);
 
             mockMvc.perform(get("/user/glossaries/1"))
                 .andExpect(status().isOk())
@@ -124,7 +105,7 @@ class WebGlossaryControllerTest {
         @Test
         void 术语库不存在返回错误() throws Exception {
             setupSecurityContext();
-            when(userService.getGlossaryDetail(1L, 999L)).thenReturn(null);
+            when(glossaryPort.getGlossaryDetail(eq(1L), eq(999L))).thenReturn(null);
 
             mockMvc.perform(get("/user/glossaries/999"))
                 .andExpect(status().isOk())
@@ -141,7 +122,7 @@ class WebGlossaryControllerTest {
         void 创建术语项成功() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.createGlossaryItem(eq(1L), any(GlossaryItemRequest.class))).thenReturn(glossary);
+            when(glossaryPort.createGlossaryItem(eq(1L), any(GlossaryItemRequest.class))).thenReturn(glossary);
 
             mockMvc.perform(post("/user/glossaries")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -180,7 +161,7 @@ class WebGlossaryControllerTest {
         void 更新术语项成功() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.updateGlossaryItem(eq(1L), eq(1L), any(GlossaryItemRequest.class))).thenReturn(glossary);
+            when(glossaryPort.updateGlossaryItem(eq(1L), eq(1L), any(GlossaryItemRequest.class))).thenReturn(glossary);
 
             mockMvc.perform(put("/user/glossaries/1")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -192,7 +173,7 @@ class WebGlossaryControllerTest {
         @Test
         void 术语项不存在返回错误() throws Exception {
             setupSecurityContext();
-            when(userService.updateGlossaryItem(eq(1L), eq(999L), any(GlossaryItemRequest.class))).thenReturn(null);
+            when(glossaryPort.updateGlossaryItem(eq(1L), eq(999L), any(GlossaryItemRequest.class))).thenReturn(null);
 
             mockMvc.perform(put("/user/glossaries/999")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -210,7 +191,7 @@ class WebGlossaryControllerTest {
         @Test
         void 删除术语项成功() throws Exception {
             setupSecurityContext();
-            when(userService.deleteGlossaryItem(1L, 1L)).thenReturn(true);
+            when(glossaryPort.deleteGlossaryItem(eq(1L), eq(1L))).thenReturn(true);
 
             mockMvc.perform(delete("/user/glossaries/1"))
                 .andExpect(status().isOk())
@@ -220,7 +201,7 @@ class WebGlossaryControllerTest {
         @Test
         void 术语项不存在返回错误() throws Exception {
             setupSecurityContext();
-            when(userService.deleteGlossaryItem(1L, 999L)).thenReturn(false);
+            when(glossaryPort.deleteGlossaryItem(eq(1L), eq(999L))).thenReturn(false);
 
             mockMvc.perform(delete("/user/glossaries/999"))
                 .andExpect(status().isOk())
@@ -237,8 +218,8 @@ class WebGlossaryControllerTest {
         void 获取术语列表成功() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.getGlossaryDetail(1L, 1L)).thenReturn(glossary);
-            when(userService.getGlossaryTerms(1L)).thenReturn(List.of(glossary));
+            when(glossaryPort.getGlossaryDetail(eq(1L), eq(1L))).thenReturn(glossary);
+            when(glossaryPort.getAllGlossaryTerms(eq(1L))).thenReturn(List.of(glossary));
 
             mockMvc.perform(get("/user/glossaries/1/terms"))
                 .andExpect(status().isOk())
@@ -248,7 +229,7 @@ class WebGlossaryControllerTest {
         @Test
         void 术语库不存在返回错误() throws Exception {
             setupSecurityContext();
-            when(userService.getGlossaryDetail(1L, 999L)).thenReturn(null);
+            when(glossaryPort.getGlossaryDetail(eq(1L), eq(999L))).thenReturn(null);
 
             mockMvc.perform(get("/user/glossaries/999/terms"))
                 .andExpect(status().isOk())
@@ -265,7 +246,7 @@ class WebGlossaryControllerTest {
         void 导出CSV成功() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.getGlossaryTerms(1L)).thenReturn(List.of(glossary));
+            when(glossaryPort.getAllGlossaryTerms(eq(1L))).thenReturn(List.of(glossary));
 
             mockMvc.perform(get("/user/glossaries/export"))
                 .andExpect(status().isOk())
@@ -276,7 +257,7 @@ class WebGlossaryControllerTest {
         @Test
         void 导出空列表也返回CSV() throws Exception {
             setupSecurityContext();
-            when(userService.getGlossaryTerms(1L)).thenReturn(List.of());
+            when(glossaryPort.getAllGlossaryTerms(eq(1L))).thenReturn(List.of());
 
             mockMvc.perform(get("/user/glossaries/export"))
                 .andExpect(status().isOk())
@@ -287,7 +268,7 @@ class WebGlossaryControllerTest {
         void 导出CSV包含BOM头() throws Exception {
             setupSecurityContext();
             GlossaryResponse glossary = createTestGlossary();
-            when(userService.getGlossaryTerms(1L)).thenReturn(List.of(glossary));
+            when(glossaryPort.getAllGlossaryTerms(eq(1L))).thenReturn(List.of(glossary));
 
             mockMvc.perform(get("/user/glossaries/export"))
                 .andExpect(status().isOk())
@@ -306,7 +287,7 @@ class WebGlossaryControllerTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "glossary.csv", "text/csv", csvContent.getBytes(StandardCharsets.UTF_8));
 
-            when(glossaryMapper.insert(any(Glossary.class))).thenReturn(1);
+            when(glossaryPort.importGlossaryCsv(eq(1L), any())).thenReturn(1);
 
             mockMvc.perform(multipart("/user/glossaries/import")
                     .file(file))
@@ -349,7 +330,7 @@ class WebGlossaryControllerTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "glossary.csv", "text/csv", csvContent.getBytes(StandardCharsets.UTF_8));
 
-            when(glossaryMapper.insert(any(Glossary.class))).thenReturn(1);
+            when(glossaryPort.importGlossaryCsv(eq(1L), any())).thenReturn(2);
 
             mockMvc.perform(multipart("/user/glossaries/import")
                     .file(file))
@@ -365,7 +346,7 @@ class WebGlossaryControllerTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "glossary.csv", "text/csv", csvContent.getBytes(StandardCharsets.UTF_8));
 
-            when(glossaryMapper.insert(any(Glossary.class))).thenReturn(1);
+            when(glossaryPort.importGlossaryCsv(eq(1L), any())).thenReturn(1);
 
             mockMvc.perform(multipart("/user/glossaries/import")
                     .file(file))

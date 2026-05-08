@@ -1,17 +1,16 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
-import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
-import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
 import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
 import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.TranslationHistory;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
@@ -60,7 +59,7 @@ class TranslationTaskServiceExtendedTest {
     @Mock
     private GlossaryRepositoryPort glossaryPort;
     @Mock
-    private UserLevelThrottledTranslationClient userLevelThrottledTranslationClient;
+    private TranslationClientPort translationClientPort;
     @Mock
     private TranslationCachePort cachePort;
     @Mock
@@ -78,7 +77,7 @@ class TranslationTaskServiceExtendedTest {
     void setUp() {
         taskService = new TranslationTaskApplicationService(
                 translationPort, documentPort, glossaryPort,
-                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
+                stateMachine, translationClientPort, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
     }
@@ -89,7 +88,7 @@ class TranslationTaskServiceExtendedTest {
     }
 
     private void setAuthenticatedUser(Long userId) {
-        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
+        com.yumu.noveltranslator.domain.model.User user = new com.yumu.noveltranslator.domain.model.User();
         user.setId(userId);
         user.setUserLevel("free");
         com.yumu.noveltranslator.adapter.out.security.CustomUserDetails userDetails =
@@ -473,7 +472,7 @@ class TranslationTaskServiceExtendedTest {
         @Test
         void 返回正确计数() {
             when(translationPort.countHistoryByUserId(1L)).thenReturn(42);
-            assertEquals(42, taskService.countTranslationHistory(1L));
+            assertEquals(42, taskService.countTranslationHistory(1L, "all"));
         }
     }
 }

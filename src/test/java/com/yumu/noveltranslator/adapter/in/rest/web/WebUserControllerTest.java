@@ -8,7 +8,7 @@ import com.yumu.noveltranslator.port.dto.auth.RefreshTokenRequest;
 import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
+import com.yumu.noveltranslator.domain.model.TranslationHistory;
 import com.yumu.noveltranslator.port.dto.entity.UserQuotaResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserStatisticsResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
@@ -22,9 +22,9 @@ import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
-import com.yumu.noveltranslator.application.service.AuthApplicationService;
-import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
-import com.yumu.noveltranslator.application.service.UserApplicationService;
+import com.yumu.noveltranslator.port.in.AuthPort;
+import com.yumu.noveltranslator.port.in.UserPort;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,13 +54,13 @@ class WebUserControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @org.mockito.Mock
-    private AuthApplicationService authService;
+    private AuthPort authPort;
 
     @org.mockito.Mock
-    private UserApplicationService userService;
+    private UserPort userPort;
 
     @org.mockito.Mock
-    private TranslationTaskApplicationService translationTaskService;
+    private TranslationTaskPort translationTaskPort;
 
     @org.mockito.Mock
     private com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter loginRateLimiter;
@@ -69,7 +69,7 @@ class WebUserControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new WebUserController(authService, userService, translationTaskService, loginRateLimiter);
+        controller = new WebUserController(authPort, userPort, loginRateLimiter);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -100,7 +100,7 @@ class WebUserControllerTest {
 
         @Test
         void 发送注册验证码成功() throws Exception {
-            when(authService.sendVerificationCode("test@test.com"))
+            when(authPort.sendVerificationCode("test@test.com"))
                 .thenReturn(Result.ok(null));
 
             mockMvc.perform(post("/user/send-code")
@@ -133,7 +133,7 @@ class WebUserControllerTest {
 
         @Test
         void 发送重置验证码成功() throws Exception {
-            when(authService.sendResetCode("test@test.com"))
+            when(authPort.sendResetCode("test@test.com"))
                 .thenReturn(Result.ok(null));
 
             mockMvc.perform(post("/user/send-reset-code")
@@ -159,7 +159,7 @@ class WebUserControllerTest {
         @Test
         void 登录成功() throws Exception {
             User user = createTestUser();
-            when(authService.login(any(LoginRequest.class)))
+            when(authPort.login(any(LoginRequest.class)))
                 .thenReturn(Result.ok(user));
 
             mockMvc.perform(post("/user/login")
@@ -194,7 +194,7 @@ class WebUserControllerTest {
         @Test
         void 注册成功() throws Exception {
             User user = createTestUser();
-            when(authService.register(any(RegisterRequest.class)))
+            when(authPort.register(any(RegisterRequest.class)))
                 .thenReturn(Result.ok(user));
 
             mockMvc.perform(post("/user/register")
@@ -245,7 +245,7 @@ class WebUserControllerTest {
         @Test
         void 更新用户信息成功() throws Exception {
             setupSecurityContext(createTestUser());
-            doNothing().when(userService).updateUser(any());
+            doNothing().when(userPort).updateUser(any());
 
             mockMvc.perform(put("/user/profile")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -262,7 +262,7 @@ class WebUserControllerTest {
         @Test
         void 修改密码成功() throws Exception {
             setupSecurityContext(createTestUser());
-            when(authService.changePassword(eq(1L), any(ChangePasswordRequest.class)))
+            when(authPort.changePassword(eq(1L), any(ChangePasswordRequest.class)))
                 .thenReturn(Result.ok(null));
 
             mockMvc.perform(post("/user/change-password")
@@ -299,7 +299,7 @@ class WebUserControllerTest {
 
         @Test
         void 重置密码成功() throws Exception {
-            when(authService.resetPassword(any(ResetPasswordRequest.class)))
+            when(authPort.resetPassword(any(ResetPasswordRequest.class)))
                 .thenReturn(Result.ok(null));
 
             mockMvc.perform(post("/user/reset-password")
@@ -317,7 +317,7 @@ class WebUserControllerTest {
         @Test
         void 刷新令牌成功() throws Exception {
             User user = createTestUser();
-            when(authService.refreshToken(any(RefreshTokenRequest.class)))
+            when(authPort.refreshToken(any(RefreshTokenRequest.class)))
                 .thenReturn(Result.ok(user));
 
             mockMvc.perform(post("/user/refresh-token")
@@ -343,7 +343,7 @@ class WebUserControllerTest {
         @Test
         void 退出登录成功() throws Exception {
             setupSecurityContext(createTestUser());
-            when(authService.logout(eq(1L), any(), any())).thenReturn(Result.ok(null));
+            when(authPort.logout(eq(1L), any(), any())).thenReturn(Result.ok(null));
 
             mockMvc.perform(post("/user/logout")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -355,7 +355,7 @@ class WebUserControllerTest {
         @Test
         void 退出登录无请求体() throws Exception {
             setupSecurityContext(createTestUser());
-            when(authService.logout(eq(1L), any(), any())).thenReturn(Result.ok(null));
+            when(authPort.logout(eq(1L), any(), any())).thenReturn(Result.ok(null));
 
             mockMvc.perform(post("/user/logout"))
                 .andExpect(status().isOk())
@@ -371,7 +371,7 @@ class WebUserControllerTest {
         void 获取统计信息成功() throws Exception {
             setupSecurityContext(createTestUser());
             UserStatisticsResponse stats = new UserStatisticsResponse();
-            when(userService.getUserStatistics(1L)).thenReturn(stats);
+            when(userPort.getUserStatistics(1L)).thenReturn(stats);
 
             mockMvc.perform(get("/user/statistics"))
                 .andExpect(status().isOk())
@@ -387,7 +387,7 @@ class WebUserControllerTest {
         void 获取配额信息成功() throws Exception {
             setupSecurityContext(createTestUser());
             UserQuotaResponse quota = new UserQuotaResponse();
-            when(userService.getUserQuota(any(User.class))).thenReturn(quota);
+            when(userPort.getUserQuota(any(User.class))).thenReturn(quota);
 
             mockMvc.perform(get("/user/quota"))
                 .andExpect(status().isOk())
@@ -402,13 +402,13 @@ class WebUserControllerTest {
         @Test
         void 获取翻译历史成功() throws Exception {
             setupSecurityContext(createTestUser());
-            com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory history = new com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory();
+            TranslationHistory history = new TranslationHistory();
             history.setTaskId("task-001");
             history.setUserId(1L);
-            when(translationTaskService.getTranslationHistory(eq(1L), eq(1), eq(20), eq("all")))
+            when(translationTaskPort.getTranslationHistory(eq(1L), eq(1), eq(20), eq("all")))
                 .thenReturn(List.of(history));
-            when(translationTaskService.countTranslationHistory(1L)).thenReturn(1);
-            when(translationTaskService.toHistoryResponse(any())).thenReturn(new TranslationHistoryResponse());
+            when(translationTaskPort.countTranslationHistory(1L, "all")).thenReturn(1);
+            when(translationTaskPort.toHistoryResponse(any())).thenReturn(new TranslationHistoryResponse());
 
             mockMvc.perform(get("/user/translation-history"))
                 .andExpect(status().isOk())
@@ -419,9 +419,9 @@ class WebUserControllerTest {
         @Test
         void 带分页参数获取历史() throws Exception {
             setupSecurityContext(createTestUser());
-            when(translationTaskService.getTranslationHistory(eq(1L), eq(2), eq(10), eq("webpage")))
+            when(translationTaskPort.getTranslationHistory(eq(1L), eq(2), eq(10), eq("webpage")))
                 .thenReturn(List.of());
-            when(translationTaskService.countTranslationHistory(1L)).thenReturn(0);
+            when(translationTaskPort.countTranslationHistory(1L, "all")).thenReturn(0);
 
             mockMvc.perform(get("/user/translation-history")
                     .param("page", "2")
@@ -440,7 +440,7 @@ class WebUserControllerTest {
         void 获取偏好设置成功() throws Exception {
             setupSecurityContext(createTestUser());
             UserPreferencesResponse prefs = new UserPreferencesResponse();
-            when(userService.getUserPreferences(1L)).thenReturn(prefs);
+            when(userPort.getUserPreferences(1L)).thenReturn(prefs);
 
             mockMvc.perform(get("/user/preferences"))
                 .andExpect(status().isOk())
@@ -451,7 +451,7 @@ class WebUserControllerTest {
         void 更新偏好设置成功() throws Exception {
             setupSecurityContext(createTestUser());
             UserPreferencesResponse prefs = new UserPreferencesResponse();
-            when(userService.updateUserPreferences(eq(1L), any(UserPreferencesRequest.class))).thenReturn(prefs);
+            when(userPort.updateUserPreferences(eq(1L), any(UserPreferencesRequest.class))).thenReturn(prefs);
 
             mockMvc.perform(put("/user/preferences")
                     .contentType(MediaType.APPLICATION_JSON)

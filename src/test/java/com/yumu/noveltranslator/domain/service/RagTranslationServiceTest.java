@@ -7,6 +7,7 @@ import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.port.out.VectorSearchResult;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +25,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -73,17 +73,12 @@ class RagTranslationServiceTest {
     }
 
     /**
-     * 构建 VectorStorePort 返回结果
+     * 构建 VectorSearchResult 返回结果
      */
-    private List<Map<String, String>> buildVectorSearchResult(long total, String sourceText, String targetText, String score, String id) {
-        List<Map<String, String>> result = new java.util.ArrayList<>();
+    private List<VectorSearchResult> buildVectorSearchResult(long total, String sourceText, String targetText, double similarity, Long id) {
+        List<VectorSearchResult> result = new java.util.ArrayList<>();
         if (total > 0) {
-            Map<String, String> match = new java.util.LinkedHashMap<>();
-            match.put("source_text", sourceText);
-            match.put("target_text", targetText);
-            match.put("score", score);
-            match.put("id", id);
-            result.add(match);
+            result.add(new VectorSearchResult(id, sourceText, targetText, similarity));
         }
         return result;
     }
@@ -91,7 +86,7 @@ class RagTranslationServiceTest {
     /**
      * 模拟 vectorStorePort.vectorSearch 调用
      */
-    private void mockVectorSearch(List<Map<String, String>> result) {
+    private void mockVectorSearch(List<VectorSearchResult> result) {
         when(vectorStorePort.vectorSearch(any(float[].class), anyLong(), anyString(), anyList(), anyInt()))
                 .thenReturn(result);
     }
@@ -103,7 +98,7 @@ class RagTranslationServiceTest {
         @Test
         void 空文本返回空响应() {
             setAuthenticatedUser(1L);
-            RagTranslationResponse response = service.searchSimilarWithModes(1L, null, "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, null, "zh", List.of("google"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -111,7 +106,7 @@ class RagTranslationServiceTest {
         @Test
         void 空白文本返回空响应() {
             setAuthenticatedUser(1L);
-            RagTranslationResponse response = service.searchSimilarWithModes(1L, "   ", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "   ", "zh", List.of("google"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -119,7 +114,7 @@ class RagTranslationServiceTest {
         @Test
         void 未认证用户返回空响应() {
             SecurityContextHolder.clearContext();
-            RagTranslationResponse response = service.searchSimilarWithModes(null, "Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(null, "Hello world", "zh", List.of("google"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -129,7 +124,7 @@ class RagTranslationServiceTest {
             setAuthenticatedUser(1L);
             when(embeddingPort.embed(anyString())).thenReturn(new float[0]);
 
-            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", List.of("google"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -139,7 +134,7 @@ class RagTranslationServiceTest {
             setAuthenticatedUser(1L);
             when(embeddingPort.embed(anyString())).thenThrow(new RuntimeException("embedding failed"));
 
-            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", List.of("google"));
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());
         }
@@ -155,12 +150,12 @@ class RagTranslationServiceTest {
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
             when(embeddingPort.embed("Hello world")).thenReturn(vec);
 
-            // score = 0.1 means similarity = 1 - 0.1 = 0.9 >= 0.85 direct hit
-            List<Map<String, String>> searchResult = buildVectorSearchResult(1,
-                    "Hello world", "你好世界", "0.1", "1");
+            // similarity = 0.9 >= 0.85 direct hit
+            List<VectorSearchResult> searchResult = buildVectorSearchResult(1,
+                    "Hello world", "你好世界", 0.9, 1L);
             mockVectorSearch(searchResult);
 
-            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", List.of("google"));
 
             assertTrue(response.isDirectHit());
             assertEquals("你好世界", response.getTranslation());
@@ -175,12 +170,12 @@ class RagTranslationServiceTest {
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
             when(embeddingPort.embed("Hello world")).thenReturn(vec);
 
-            // score = 0.4 means similarity = 1 - 0.4 = 0.6, 0.5 <= 0.6 < 0.85
-            List<Map<String, String>> searchResult = buildVectorSearchResult(1,
-                    "Hello world", "你好世界", "0.4", "1");
+            // similarity = 0.6, 0.5 <= 0.6 < 0.85
+            List<VectorSearchResult> searchResult = buildVectorSearchResult(1,
+                    "Hello world", "你好世界", 0.6, 1L);
             mockVectorSearch(searchResult);
 
-            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", List.of("google"));
 
             assertFalse(response.isDirectHit());
             assertNull(response.getTranslation());
@@ -203,7 +198,7 @@ class RagTranslationServiceTest {
             when(translationMemoryService.searchByUserAndLang(anyLong(), anyString(), anyString(), anyInt()))
                     .thenReturn(Collections.emptyList());
 
-            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", "google");
+            RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello world", "zh", List.of("google"));
 
             assertFalse(response.isDirectHit());
             assertTrue(response.getMatches().isEmpty());

@@ -1,9 +1,9 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest;
 import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateResponse;
-import com.yumu.noveltranslator.adapter.out.translate.UserLevelThrottledTranslationClient;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
 import com.yumu.noveltranslator.domain.service.QuotaService;
-import com.yumu.noveltranslator.adapter.out.translate.TeamTranslationService;
+import com.yumu.noveltranslator.port.out.TeamTranslationPort;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
@@ -20,7 +20,6 @@ import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.domain.model.User;
-import com.yumu.noveltranslator.adapter.out.persistence.mapper.UserMapper;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,7 +58,7 @@ import static org.mockito.Mockito.*;
 class TranslationServiceExtendedTest {
 
     @Mock
-    private UserLevelThrottledTranslationClient translationClient;
+    private TranslationClientPort translationClient;
     @Mock
     private TranslationCachePort cachePort;
     @Mock
@@ -69,11 +68,9 @@ class TranslationServiceExtendedTest {
     @Mock
     private TranslationPostProcessingService postProcessingService;
     @Mock
-    private TeamTranslationService teamTranslationService;
+    private TeamTranslationPort teamTranslationPort;
     @Mock
     private QuotaService quotaService;
-    @Mock
-    private UserMapper userMapper;
 
     private TranslationApplicationService translationService;
 
@@ -81,7 +78,7 @@ class TranslationServiceExtendedTest {
     void setUp() {
         translationService = new TranslationApplicationService(
                 translationClient, cachePort, ragTranslationService,
-                entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
+                entityConsistencyService, postProcessingService, teamTranslationPort, quotaService);
         when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
         SecurityContextHolder.clearContext();
@@ -112,7 +109,7 @@ class TranslationServiceExtendedTest {
             // 快速模式 (默认) 使用 executeFast，失败时返回原文
             // 测试需要验证空结果行为：直接模式走 executeFast，返回原文
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -129,7 +126,7 @@ class TranslationServiceExtendedTest {
         @Test
         void 翻译返回null判定失败() {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn(null);
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -170,13 +167,11 @@ class TranslationServiceExtendedTest {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(true);
 
             // 缓存全部未命中
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             // 翻译抛出异常 → 管线捕获异常并返回原文
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenThrow(new RuntimeException("translation error"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -193,14 +188,9 @@ class TranslationServiceExtendedTest {
         @Test
         void 阅读器翻译使用指定引擎() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
-            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(true);
 
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"translated\"}");
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -223,10 +213,6 @@ class TranslationServiceExtendedTest {
         @Test
         void 配额不足返回错误SSE() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
@@ -241,7 +227,6 @@ class TranslationServiceExtendedTest {
         @Test
         void 用户不存在跳过配额检查() {
             setAuthenticatedUser(999L);
-            when(userMapper.selectById(999L)).thenReturn(null);
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of());
@@ -291,10 +276,6 @@ class TranslationServiceExtendedTest {
         @Test
         void 配额不足返回错误SSE() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("free");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -308,10 +289,6 @@ class TranslationServiceExtendedTest {
         @Test
         void 使用指定mode参数() {
             setAuthenticatedUser(1L);
-            User user = new User();
-            user.setId(1L);
-            user.setUserLevel("pro");
-            when(userMapper.selectById(1L)).thenReturn(user);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), eq("expert"))).thenReturn(true);
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();

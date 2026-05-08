@@ -10,10 +10,10 @@ import com.yumu.noveltranslator.application.service.RagTranslationApplicationSer
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
 import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationHistory;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.domain.model.TranslationHistory;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
@@ -111,7 +111,7 @@ class TranslationTaskServiceExtended2Test {
     }
 
     private void setAuthenticatedUser(Long userId) {
-        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
+        com.yumu.noveltranslator.domain.model.User user = new com.yumu.noveltranslator.domain.model.User();
         user.setId(userId);
         user.setUserLevel("free");
         com.yumu.noveltranslator.adapter.out.security.CustomUserDetails userDetails =
@@ -669,7 +669,7 @@ class TranslationTaskServiceExtended2Test {
 
         @SuppressWarnings("unchecked")
         private java.lang.reflect.Method getLoadGlossaryTermsMethod() throws Exception {
-            java.lang.reflect.Method method = TranslationTaskService.class.getDeclaredMethod(
+            java.lang.reflect.Method method = TranslationTaskApplicationService.class.getDeclaredMethod(
                     "loadGlossaryTermsForUser", Long.class, String.class);
             method.setAccessible(true);
             return method;

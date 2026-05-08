@@ -1,8 +1,8 @@
 package com.yumu.noveltranslator.adapter.in.rest.shared;
 import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
-import com.yumu.noveltranslator.adapter.in.rest.plugin.PluginTranslateController;
 import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationRequest;
 
 import com.yumu.noveltranslator.port.dto.common.*;
 import com.yumu.noveltranslator.port.dto.collab.*;
@@ -10,13 +10,11 @@ import com.yumu.noveltranslator.port.dto.entity.*;
 import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
-import com.yumu.noveltranslator.application.service.DocumentApplicationService;
-import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
-import com.yumu.noveltranslator.application.service.TranslationApplicationService;
-import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
+import com.yumu.noveltranslator.port.in.RagTranslationPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,22 +43,16 @@ class SharedTranslateControllerTest {
     private MockMvc mockMvc;
 
     @Mock
-    private TranslationApplicationService translationService;
+    private TranslationTaskPort translationTaskPort;
 
     @Mock
-    private TranslationTaskApplicationService translationTaskService;
-
-    @Mock
-    private DocumentApplicationService documentService;
-
-    @Mock
-    private RagTranslationApplicationService ragTranslationService;
+    private RagTranslationPort ragTranslationPort;
 
     private SharedTranslateController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new SharedTranslateController(translationTaskService, documentService, ragTranslationService);
+        controller = new SharedTranslateController(translationTaskPort, ragTranslationPort);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -80,9 +72,6 @@ class SharedTranslateControllerTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
-    // 文本翻译端点 (/v1/translate/text) 在 PluginTranslateController 中定义
-    // 该控制器的测试请参见 PluginTranslateControllerTest
-
     @Nested
     @DisplayName("取消翻译任务")
     class CancelTaskTests {
@@ -90,7 +79,7 @@ class SharedTranslateControllerTest {
         @Test
         void 取消任务成功() throws Exception {
             setupSecurityContext();
-            when(translationTaskService.cancelTask("task-001", 1L)).thenReturn(true);
+            when(translationTaskPort.cancelTask("task-001", 1L)).thenReturn(true);
 
             mockMvc.perform(delete("/v1/translate/task/task-001"))
                     .andExpect(status().isOk())
@@ -100,7 +89,7 @@ class SharedTranslateControllerTest {
         @Test
         void 取消失败返回错误() throws Exception {
             setupSecurityContext();
-            when(translationTaskService.cancelTask("task-002", 1L)).thenReturn(false);
+            when(translationTaskPort.cancelTask("task-002", 1L)).thenReturn(false);
 
             mockMvc.perform(delete("/v1/translate/task/task-002"))
                     .andExpect(status().isOk())
@@ -116,7 +105,7 @@ class SharedTranslateControllerTest {
         @Test
         void 删除历史成功() throws Exception {
             setupSecurityContext();
-            when(translationTaskService.deleteHistory("history-001", 1L)).thenReturn(true);
+            when(translationTaskPort.deleteHistory("history-001", 1L)).thenReturn(true);
 
             mockMvc.perform(delete("/v1/translate/history/history-001"))
                     .andExpect(status().isOk())
@@ -126,7 +115,7 @@ class SharedTranslateControllerTest {
         @Test
         void 记录不存在返回错误() throws Exception {
             setupSecurityContext();
-            when(translationTaskService.deleteHistory("history-999", 1L)).thenReturn(false);
+            when(translationTaskPort.deleteHistory("history-999", 1L)).thenReturn(false);
 
             mockMvc.perform(delete("/v1/translate/history/history-999"))
                     .andExpect(status().isOk())
@@ -147,7 +136,7 @@ class SharedTranslateControllerTest {
             result.setTranslatedText("翻译结果");
             result.setSourceLang("en");
             result.setTargetLang("zh");
-            when(translationTaskService.getTranslationResult("task-001")).thenReturn(result);
+            when(translationTaskPort.getTranslationResult("task-001")).thenReturn(result);
 
             mockMvc.perform(get("/v1/translate/task/task-001/result"))
                     .andExpect(status().isOk())
@@ -160,7 +149,7 @@ class SharedTranslateControllerTest {
 
         @Test
         void 翻译结果不可用返回错误() throws Exception {
-            when(translationTaskService.getTranslationResult("not-found")).thenReturn(null);
+            when(translationTaskPort.getTranslationResult("not-found")).thenReturn(null);
 
             mockMvc.perform(get("/v1/translate/task/not-found/result"))
                     .andExpect(status().isOk())
@@ -176,7 +165,7 @@ class SharedTranslateControllerTest {
         @Test
         void 下载路径不存在返回404() throws Exception {
             setupSecurityContext();
-            when(translationTaskService.getDownloadPath("task-999", 1L)).thenReturn(null);
+            when(translationTaskPort.getDownloadPath("task-999", 1L)).thenReturn(null);
 
             mockMvc.perform(get("/v1/translate/task/task-999/download"))
                     .andExpect(status().isNotFound());
@@ -194,7 +183,7 @@ class SharedTranslateControllerTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".getBytes());
 
-            when(translationTaskService.streamTranslateDocument(any(), eq("en"), eq("zh"), eq("fast")))
+            when(translationTaskPort.streamTranslateDocument(any(), eq("en"), eq("zh"), eq("fast")))
                     .thenReturn(emitter);
 
             mockMvc.perform(multipart("/v1/translate/document/stream")
@@ -212,7 +201,7 @@ class SharedTranslateControllerTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "Hello".getBytes());
 
-            when(translationTaskService.streamTranslateDocument(any(), eq("auto"), eq("zh"), eq("fast")))
+            when(translationTaskPort.streamTranslateDocument(any(), eq("auto"), eq("zh"), eq("fast")))
                     .thenReturn(emitter);
 
             mockMvc.perform(multipart("/v1/translate/document/stream")
@@ -229,7 +218,7 @@ class SharedTranslateControllerTest {
         void 基于已有文档流式翻译成功() throws Exception {
             setupSecurityContext();
             SseEmitter emitter = new SseEmitter();
-            when(translationTaskService.streamTranslateDocumentById(1L, "zh", "fast"))
+            when(translationTaskPort.streamTranslateDocumentById(1L, "zh", "fast"))
                     .thenReturn(emitter);
 
             mockMvc.perform(post("/v1/translate/document/stream/1")
@@ -242,7 +231,7 @@ class SharedTranslateControllerTest {
         void 使用默认参数流式翻译() throws Exception {
             setupSecurityContext();
             SseEmitter emitter = new SseEmitter();
-            when(translationTaskService.streamTranslateDocumentById(42L, "zh", "fast"))
+            when(translationTaskPort.streamTranslateDocumentById(42L, "zh", "fast"))
                     .thenReturn(emitter);
 
             mockMvc.perform(post("/v1/translate/document/stream/42"))
@@ -259,12 +248,12 @@ class SharedTranslateControllerTest {
             TranslationTask task = new TranslationTask();
             task.setTaskId("task-001");
             task.setStatus("completed");
-            when(translationTaskService.getTaskByTaskId("task-001")).thenReturn(task);
+            when(translationTaskPort.getTaskByTaskId("task-001")).thenReturn(task);
 
             TaskStatusResponse statusResp = new TaskStatusResponse();
             statusResp.setTaskId("task-001");
             statusResp.setStatus("completed");
-            when(translationTaskService.toTaskStatusResponse(any())).thenReturn(statusResp);
+            when(translationTaskPort.toTaskStatusResponse(any())).thenReturn(statusResp);
 
             mockMvc.perform(get("/v1/translate/task/task-001"))
                     .andExpect(status().isOk())
@@ -274,7 +263,7 @@ class SharedTranslateControllerTest {
 
         @Test
         void 任务不存在返回404() throws Exception {
-            when(translationTaskService.getTaskByTaskId("not-found")).thenReturn(null);
+            when(translationTaskPort.getTaskByTaskId("not-found")).thenReturn(null);
 
             mockMvc.perform(get("/v1/translate/task/not-found"))
                     .andExpect(status().isOk())
@@ -292,11 +281,11 @@ class SharedTranslateControllerTest {
             response.setTranslation("参考译文");
             response.setDirectHit(false);
             response.setSimilarity(0.85);
-            when(ragTranslationService.searchSimilar(any(), any(), any())).thenReturn(response);
+            when(ragTranslationPort.searchSimilarWithModes(any(), any(), any(), any())).thenReturn(response);
 
             mockMvc.perform(post("/v1/translate/rag")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"text\":\"Hello World\",\"targetLang\":\"zh\"}"))
+                            .content("{\"text\":\"Hello World\",\"targetLang\":\"zh\",\"engine\":\"fast\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.translation").value("参考译文"))

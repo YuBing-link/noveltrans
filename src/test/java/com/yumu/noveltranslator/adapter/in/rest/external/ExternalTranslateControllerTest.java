@@ -11,10 +11,8 @@ import com.yumu.noveltranslator.port.dto.auth.*;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationTask;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
-import com.yumu.noveltranslator.application.service.DocumentApplicationService;
-import com.yumu.noveltranslator.domain.service.QuotaService;
-import com.yumu.noveltranslator.application.service.TranslationApplicationService;
-import com.yumu.noveltranslator.application.service.TranslationTaskApplicationService;
+import com.yumu.noveltranslator.port.in.TranslatePort;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -49,28 +48,22 @@ class ExternalTranslateControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private TranslationApplicationService translationService;
+    private TranslatePort translatePort;
 
     @org.mockito.Mock
-    private DocumentApplicationService documentService;
-
-    @org.mockito.Mock
-    private TranslationTaskApplicationService translationTaskService;
-
-    @org.mockito.Mock
-    private QuotaService quotaService;
+    private TranslationTaskPort translationTaskPort;
 
     private ExternalTranslateController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new ExternalTranslateController(translationService, documentService, translationTaskService, quotaService);
+        controller = new ExternalTranslateController(translatePort, translationTaskPort);
         ReflectionTestUtils.setField(controller, "maxCharsPerRequest", 5000);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
     private void setupSecurityContext() {
-        com.yumu.noveltranslator.adapter.out.persistence.entity.User user = new com.yumu.noveltranslator.adapter.out.persistence.entity.User();
+        User user = new User();
         user.setId(1L);
         user.setEmail("test@test.com");
         user.setUserLevel("free");
@@ -124,7 +117,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("translate successfully with minimal fields")
         void translateSuccessMinimal() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "google", "Hello translated"));
 
             mockMvc.perform(post("/v1/external/translate")
@@ -139,7 +132,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("translate successfully with all fields")
         void translateSuccessAllFields() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "deepl", "Uebersetzt"));
 
             mockMvc.perform(post("/v1/external/translate")
@@ -210,7 +203,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("translation service exception returns error")
         void translateServiceException() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                 .thenThrow(new RuntimeException("Engine connection failed"));
 
             mockMvc.perform(post("/v1/external/translate")
@@ -218,7 +211,7 @@ class ExternalTranslateControllerTest {
                     .content(translateJson("Hello", "zh", null, null, null)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("翻译失败：Engine connection failed"));
+                .andExpect(jsonPath("$.message").value("翻译失败，请稍后重试"));
         }
     }
 
@@ -234,7 +227,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("batch translate successfully with multiple texts")
         void batchTranslateSuccess() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "google", "translated"));
 
             mockMvc.perform(post("/v1/external/batch")
@@ -251,7 +244,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("batch translate single item")
         void batchTranslateSingleItem() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "google", "result"));
 
             mockMvc.perform(post("/v1/external/batch")
@@ -311,7 +304,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("exactly 50 items is allowed")
         void batchTranslateExactly50() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "google", "ok"));
 
             String[] texts = new String[50];
@@ -332,7 +325,7 @@ class ExternalTranslateControllerTest {
         void batchTranslatePartialFailure() throws Exception {
             setupSecurityContext();
             // All calls throw - each item gets an error field
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                 .thenThrow(new RuntimeException("Engine timeout"));
 
             mockMvc.perform(post("/v1/external/batch")
@@ -348,7 +341,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("batch translate with expert mode")
         void batchTranslateWithMode() throws Exception {
             setupSecurityContext();
-            when(translationService.selectionTranslate(anyLong(), any()))
+            when(translatePort.selectionTranslate(anyLong(), any()))
                 .thenReturn(new SelectionTranslateResponse(true, "openai", "AI result"));
 
             mockMvc.perform(post("/v1/external/batch")
@@ -416,7 +409,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("task not found returns 404")
         void downloadTaskNotFound() throws Exception {
             setupSecurityContext();
-            when(translationTaskService.getDownloadPath("task-nonexistent", 1L)).thenReturn(null);
+            when(translationTaskPort.getDownloadPath("task-nonexistent", 1L)).thenReturn(null);
 
             mockMvc.perform(get("/v1/external/task/task-nonexistent/download"))
                 .andExpect(status().isNotFound());
@@ -429,7 +422,7 @@ class ExternalTranslateControllerTest {
             Path tempFile = Files.createTempFile("translated-", ".txt");
             Files.writeString(tempFile, "Translated content");
 
-            when(translationTaskService.getDownloadPath("task-001", 1L))
+            when(translationTaskPort.getDownloadPath("task-001", 1L))
                 .thenReturn(tempFile.toString());
 
             mockMvc.perform(get("/v1/external/task/task-001/download"))
@@ -444,7 +437,7 @@ class ExternalTranslateControllerTest {
         @DisplayName("file read IOException returns 500")
         void downloadFileReadError() throws Exception {
             setupSecurityContext();
-            when(translationTaskService.getDownloadPath("task-002", 1L))
+            when(translationTaskPort.getDownloadPath("task-002", 1L))
                 .thenReturn("/nonexistent/path/to/file.txt");
 
             mockMvc.perform(get("/v1/external/task/task-002/download"))

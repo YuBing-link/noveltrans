@@ -1,11 +1,12 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.application.service.CollabProjectApplicationService;
 
+import com.yumu.noveltranslator.port.in.CollabPort;
 import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabChapterTask;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProjectMember;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Document;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.CollabProjectMember;
+import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.enums.CollabProjectStatus;
 import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
 import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
@@ -133,7 +134,7 @@ class CollabProjectServiceStatusTest {
             doNothing().when(collabPort).saveChapterTask(any(CollabChapterTask.class));
 
             // when
-            CollabProjectService.TeamProjectCreateResult result = service.createProjectFromDocument(
+            CollabPort.TeamProjectCreateResult result = service.createProjectFromDocument(
                     1L, 100L, "test-novel.txt", testFile.toString(), "txt", "en", "zh");
 
             // then

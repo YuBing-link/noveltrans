@@ -3,8 +3,8 @@ package com.yumu.noveltranslator.adapter.in.rest.plugin;
 import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
-import com.yumu.noveltranslator.adapter.out.email.DeviceTokenService;
-import com.yumu.noveltranslator.util.JwtUtils;
+import com.yumu.noveltranslator.port.in.AuthPort;
+import com.yumu.noveltranslator.port.in.DeviceTokenPort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,16 +34,16 @@ class PluginAuthControllerTest {
     private MockMvc mockMvc;
 
     @org.mockito.Mock
-    private DeviceTokenService deviceTokenService;
+    private AuthPort authPort;
 
     @org.mockito.Mock
-    private JwtUtils jwtUtils;
+    private DeviceTokenPort deviceTokenPort;
 
     private PluginAuthController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new PluginAuthController(deviceTokenService, jwtUtils);
+        controller = new PluginAuthController(authPort, deviceTokenPort);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -69,8 +70,11 @@ class PluginAuthControllerTest {
         @Test
         void 注册设备成功() throws Exception {
             setupSecurityContext();
-            when(jwtUtils.createToken(eq(1L), eq("test@test.com"))).thenReturn("mock-token");
-            doNothing().when(deviceTokenService).registerToken(eq("device-001"), eq("mock-token"));
+            User user = new User();
+            user.setId(1L);
+            user.setEmail("test@test.com");
+            when(authPort.getUserById(1L)).thenReturn(Optional.of(user));
+            doNothing().when(deviceTokenPort).generateAndRegisterToken(eq("device-001"), eq(1L), eq("test@test.com"), any());
 
             mockMvc.perform(post("/user/register-device")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -99,43 +103,33 @@ class PluginAuthControllerTest {
 
         @Test
         void 获取Token成功() throws Exception {
-            when(deviceTokenService.getToken("device-001")).thenReturn("valid-token");
-            when(jwtUtils.getUserInfoFromToken("valid-token")).thenReturn(new java.util.HashMap<>(Map.of("userId", "1", "email", "test@test.com")));
+            when(deviceTokenPort.verifyAndGetUserInfo("device-001")).thenReturn(Map.of("userId", "1", "email", "test@test.com"));
 
             mockMvc.perform(get("/user/get-token/device-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.token").value("valid-token"));
+                .andExpect(jsonPath("$.data.userId").value("1"))
+                .andExpect(jsonPath("$.data.email").value("test@test.com"));
         }
 
         @Test
         void 设备未登录返回404() throws Exception {
-            when(deviceTokenService.getToken("unknown-device")).thenReturn(null);
+            when(deviceTokenPort.verifyAndGetUserInfo("unknown-device")).thenReturn(null);
 
             mockMvc.perform(get("/user/get-token/unknown-device"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value("404"));
+                .andExpect(jsonPath("$.message").value("未找到登录信息，请先在网站登录"));
         }
 
         @Test
-        void 设备ID为空路径返回错误() throws Exception {
-            // Path variable cannot be null, but let's test empty-ish scenario
-            // In practice, this will match the path param which requires a non-empty segment
-            // We test the explicit null check by noting the controller validates it
-            // For the path variable case, Spring requires a value so this is covered by the null check
-        }
-
-        @Test
-        void Token过期返回401() throws Exception {
-            when(deviceTokenService.getToken("device-001")).thenReturn("expired-token");
-            when(jwtUtils.verifyToken("expired-token")).thenThrow(new RuntimeException("Token expired"));
+        void Token过期返回设备未登录() throws Exception {
+            when(deviceTokenPort.verifyAndGetUserInfo("device-001")).thenReturn(null);
 
             mockMvc.perform(get("/user/get-token/device-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value("401"))
-                .andExpect(jsonPath("$.message").value("登录已过期，请重新登录"));
+                .andExpect(jsonPath("$.message").value("未找到登录信息，请先在网站登录"));
         }
     }
 }

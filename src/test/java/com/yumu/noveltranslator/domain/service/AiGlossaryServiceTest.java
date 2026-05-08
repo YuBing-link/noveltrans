@@ -1,7 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.domain.service.AiGlossaryService;
 
-import com.yumu.noveltranslator.adapter.out.persistence.entity.AiGlossary;
+import com.yumu.noveltranslator.domain.model.AiGlossary;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

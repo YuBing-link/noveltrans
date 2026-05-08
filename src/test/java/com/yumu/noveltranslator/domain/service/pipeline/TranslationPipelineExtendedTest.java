@@ -4,7 +4,7 @@ import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
 import com.yumu.noveltranslator.port.dto.translation.EntityMapping;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
+import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
@@ -840,7 +840,7 @@ class TranslationPipelineExtendedTest {
         void nullTextHandled() {
             // Create fresh mocks to avoid interference from setUp stubs
             TranslationCachePort cs = mock(TranslationCachePort.class);
-            RagTranslationService rag = mock(RagTranslationService.class);
+            RagTranslationApplicationService rag = mock(RagTranslationApplicationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
@@ -867,7 +867,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("空字符串文本 — 翻译长度校验失败返回 null")
         void emptyText() {
             TranslationCachePort cs = mock(TranslationCachePort.class);
-            RagTranslationService rag = mock(RagTranslationService.class);
+            RagTranslationApplicationService rag = mock(RagTranslationApplicationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
@@ -893,7 +893,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("空白字符串文本")
         void blankText() {
             TranslationCachePort cs = mock(TranslationCachePort.class);
-            RagTranslationService rag = mock(RagTranslationService.class);
+            RagTranslationApplicationService rag = mock(RagTranslationApplicationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
@@ -919,7 +919,7 @@ class TranslationPipelineExtendedTest {
         void fastModeNullText() {
             // executeFast(null, ...) calls translate(null, ...) directly
             TranslationCachePort cs = mock(TranslationCachePort.class);
-            RagTranslationService rag = mock(RagTranslationService.class);
+            RagTranslationApplicationService rag = mock(RagTranslationApplicationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
@@ -939,7 +939,7 @@ class TranslationPipelineExtendedTest {
         @DisplayName("executeFast — 空字符串返回原文")
         void fastModeEmptyText() {
             TranslationCachePort cs = mock(TranslationCachePort.class);
-            RagTranslationService rag = mock(RagTranslationService.class);
+            RagTranslationApplicationService rag = mock(RagTranslationApplicationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
             TranslationPostProcessingService pps = mock(TranslationPostProcessingService.class);
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
@@ -1066,7 +1066,7 @@ class TranslationPipelineExtendedTest {
             pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             verify(translationClient).translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
-            verify(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), eq(List.of("team", "expert", "fast")));
+            verify(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), eq(List.of("team", "expert", "fast")));
         }
 
         @Test
@@ -1078,7 +1078,7 @@ class TranslationPipelineExtendedTest {
             pipeline.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
             verify(translationClient).translate(anyString(), anyString(), eq("expert"), anyBoolean(), anyBoolean(), anyList(), any(), any());
-            verify(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), eq(List.of("team", "expert")));
+            verify(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), eq(List.of("team", "expert")));
         }
 
         @Test
@@ -1086,7 +1086,7 @@ class TranslationPipelineExtendedTest {
         void teamModeViaExecuteTeam() {
             teamPipeline.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "daily", List.of());
 
-            verify(ragTranslationService).searchSimilarWithModes(anyString(), anyString(), eq(List.of("team")));
+            verify(ragTranslationService).searchSimilarWithModes(anyLong(), anyString(), anyString(), eq(List.of("team")));
         }
 
         @Test

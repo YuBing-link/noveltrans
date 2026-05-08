@@ -3,8 +3,8 @@ import com.yumu.noveltranslator.port.out.EntityCachePort;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 
 import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.domain.model.UserPreference;
 import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;

@@ -14,9 +14,9 @@ import com.yumu.noveltranslator.port.dto.entity.*;
 import com.yumu.noveltranslator.port.dto.translation.*;
 import com.yumu.noveltranslator.port.dto.subscription.*;
 import com.yumu.noveltranslator.port.dto.auth.*;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.UserPreference;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.Glossary;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.domain.model.UserPreference;
+import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
@@ -31,7 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.yumu.noveltranslator.util.PasswordUtil;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -49,9 +49,10 @@ class UserServiceTest {
     @Mock private GlossaryRepositoryPort glossaryPort;
     @Mock private TranslationLimitProperties limitProperties;
     @Mock private QuotaService quotaService;
+    @Mock private com.yumu.noveltranslator.port.in.TranslationTaskPort translationTaskPort;
 
     private UserApplicationService createUserService() {
-        return new UserApplicationService(userPort, translationPort, glossaryPort, limitProperties, quotaService);
+        return new UserApplicationService(userPort, translationPort, glossaryPort, limitProperties, quotaService, translationTaskPort);
     }
 
     @Nested
@@ -60,7 +61,7 @@ class UserServiceTest {
 
         @Test
         void 返回完整统计数据() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(translationPort.countHistoryByUserId(1L)).thenReturn(50);
             when(translationPort.countHistoryByUserIdAndType(1L, "text")).thenReturn(30);
             when(translationPort.countHistoryByUserIdAndType(1L, "document")).thenReturn(20);
@@ -82,7 +83,7 @@ class UserServiceTest {
 
         @Test
         void 返回配额信息() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
@@ -108,7 +109,7 @@ class UserServiceTest {
 
         @Test
         void 创建术语项成功() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             doAnswer(invocation -> {
                 Glossary g = invocation.getArgument(0);
                 g.setId(1L);
@@ -129,7 +130,7 @@ class UserServiceTest {
 
         @Test
         void 删除术语项成功() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(1L);
@@ -143,7 +144,7 @@ class UserServiceTest {
 
         @Test
         void 删除非自己的术语项失败() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(2L);
@@ -161,7 +162,7 @@ class UserServiceTest {
 
         @Test
         void 首次设置创建新偏好() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(userPort.findPreferenceByUserId(1L)).thenReturn(Optional.empty());
             doAnswer(invocation -> {
                 UserPreference p = invocation.getArgument(0);
@@ -188,7 +189,7 @@ class UserServiceTest {
 
         @Test
         void 获取不存在的偏好返回默认值() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(userPort.findPreferenceByUserId(1L)).thenReturn(Optional.empty());
 
             UserPreferencesResponse result = userService.getUserPreferences(1L);
@@ -206,7 +207,7 @@ class UserServiceTest {
 
         @Test
         void 返回完整平台统计() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(userPort.countActiveUsers()).thenReturn(1000);
             when(translationPort.countActiveUsersAfter(any())).thenReturn(100);
             when(translationPort.countAllHistory()).thenReturn(50000L);
@@ -230,13 +231,11 @@ class UserServiceTest {
 
         @Test
         void 返回术语分页第一页() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary g1 = buildGlossary(1L, 1L, "hello", "你好", "greeting");
             Glossary g2 = buildGlossary(2L, 1L, "world", "世界", "noun");
 
-            Page<Glossary> page = new Page<>(1, 20);
-            page.setRecords(List.of(g1, g2));
-            page.setTotal(2);
+            PageResult<Glossary> page = new PageResult<>(List.of(g1, g2), 2, 1, 20);
             when(glossaryPort.findGlossaryPaged(eq(1L), isNull(), eq(1), eq(20))).thenReturn(page);
 
             PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, null);
@@ -251,11 +250,9 @@ class UserServiceTest {
 
         @Test
         void 分页第二页返回空() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
 
-            Page<Glossary> page = new Page<>(2, 20);
-            page.setRecords(List.of());
-            page.setTotal(2);
+            PageResult<Glossary> page = new PageResult<>(List.of(), 2, 2, 20);
             when(glossaryPort.findGlossaryPaged(eq(1L), isNull(), eq(2), eq(20))).thenReturn(page);
 
             PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 2, 20, null);
@@ -267,12 +264,10 @@ class UserServiceTest {
 
         @Test
         void 搜索过滤返回匹配结果() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary g = buildGlossary(1L, 1L, "hello", "你好", "greeting");
 
-            Page<Glossary> page = new Page<>(1, 20);
-            page.setRecords(List.of(g));
-            page.setTotal(1);
+            PageResult<Glossary> page = new PageResult<>(List.of(g), 1, 1, 20);
             when(glossaryPort.findGlossaryPaged(eq(1L), eq("hello"), eq(1), eq(20))).thenReturn(page);
 
             PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, "hello");
@@ -283,11 +278,9 @@ class UserServiceTest {
 
         @Test
         void 空列表返回空数组() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
 
-            Page<Glossary> page = new Page<>(1, 20);
-            page.setRecords(List.of());
-            page.setTotal(0);
+            PageResult<Glossary> page = new PageResult<>(List.of(), 0, 1, 20);
             when(glossaryPort.findGlossaryPaged(eq(1L), isNull(), eq(1), eq(20))).thenReturn(page);
 
             PageResponse<GlossaryResponse> result = userService.getGlossaryList(1L, 1, 20, null);
@@ -313,7 +306,7 @@ class UserServiceTest {
 
         @Test
         void 返回自己的术语详情() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(1L);
@@ -330,7 +323,7 @@ class UserServiceTest {
 
         @Test
         void 术语不存在返回null() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(glossaryPort.findGlossaryById(999L)).thenReturn(Optional.empty());
 
             GlossaryResponse result = userService.getGlossaryDetail(1L, 999L);
@@ -340,7 +333,7 @@ class UserServiceTest {
 
         @Test
         void 术语已删除返回null() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(1L);
@@ -354,7 +347,7 @@ class UserServiceTest {
 
         @Test
         void 非自己的术语返回null() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(2L);
@@ -373,7 +366,7 @@ class UserServiceTest {
 
         @Test
         void 创建成功返回术语响应() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             doAnswer(invocation -> {
                 Glossary g = invocation.getArgument(0);
                 g.setId(10L);
@@ -400,7 +393,7 @@ class UserServiceTest {
 
         @Test
         void 更新成功() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(1L);
@@ -426,7 +419,7 @@ class UserServiceTest {
 
         @Test
         void 术语不存在返回null() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(glossaryPort.findGlossaryById(999L)).thenReturn(Optional.empty());
 
             GlossaryItemRequest req = new GlossaryItemRequest();
@@ -438,7 +431,7 @@ class UserServiceTest {
 
         @Test
         void 非自己的术语返回null() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(2L);
@@ -453,7 +446,7 @@ class UserServiceTest {
 
         @Test
         void 已删除术语返回null() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(1L);
@@ -468,7 +461,7 @@ class UserServiceTest {
 
         @Test
         void 只更新非空字段() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(1L);
@@ -498,7 +491,7 @@ class UserServiceTest {
 
         @Test
         void 术语不存在返回false() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(glossaryPort.findGlossaryById(999L)).thenReturn(Optional.empty());
 
             boolean result = userService.deleteGlossaryItem(1L, 999L);
@@ -508,7 +501,7 @@ class UserServiceTest {
 
         @Test
         void 已删除术语返回false() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             Glossary glossary = new Glossary();
             glossary.setId(1L);
             glossary.setUserId(1L);
@@ -527,7 +520,7 @@ class UserServiceTest {
 
         @Test
         void 全部导入成功() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             doAnswer(invocation -> {
                 Glossary g = invocation.getArgument(0);
                 g.setId(1L);
@@ -547,7 +540,7 @@ class UserServiceTest {
 
         @Test
         void 部分失败跳过() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             doAnswer(invocation -> {
                 Glossary g = invocation.getArgument(0);
                 g.setId(1L);
@@ -585,7 +578,7 @@ class UserServiceTest {
 
         @Test
         void 更新已有偏好() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             UserPreference existing = new UserPreference();
             existing.setId(1L);
             existing.setUserId(1L);
@@ -613,7 +606,7 @@ class UserServiceTest {
 
         @Test
         void 创建新偏好使用默认值() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(userPort.findPreferenceByUserId(1L)).thenReturn(Optional.empty());
             doAnswer(invocation -> {
                 UserPreference p = invocation.getArgument(0);
@@ -640,7 +633,7 @@ class UserServiceTest {
 
         @Test
         void pro用户配额() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             User user = new User();
             user.setId(1L);
             user.setUserLevel("pro");
@@ -663,7 +656,7 @@ class UserServiceTest {
 
         @Test
         void 默认free等级() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             User user = new User();
             user.setId(1L);
             user.setUserLevel(null);
@@ -683,7 +676,7 @@ class UserServiceTest {
 
         @Test
         void 已用完配额() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
@@ -706,7 +699,7 @@ class UserServiceTest {
 
         @Test
         void sumSourceTextLength为null时返回0() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             when(translationPort.countHistoryByUserId(1L)).thenReturn(10);
             when(translationPort.countHistoryByUserIdAndType(1L, "text")).thenReturn(8);
             when(translationPort.countHistoryByUserIdAndType(1L, "document")).thenReturn(2);
@@ -726,7 +719,7 @@ class UserServiceTest {
 
         @Test
         void 调用port更新() {
-            UserService userService = createUserService();
+            UserApplicationService userService = createUserService();
             User user = new User();
             user.setId(1L);
             user.setEmail("test@example.com");

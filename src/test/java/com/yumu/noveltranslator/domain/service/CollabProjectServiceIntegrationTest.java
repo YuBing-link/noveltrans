@@ -116,7 +116,7 @@ class CollabProjectServiceIntegrationTest {
         assertNotNull(createdProjectId);
         TenantContext.setTenantId(103L);
         try {
-            CollabProjectService.InviteCodeResult result = collabProjectService.generateInviteCode(createdProjectId, 103L);
+            com.yumu.noveltranslator.port.in.CollabPort.InviteCodeResult result = collabProjectService.generateInviteCode(createdProjectId, 103L);
             assertNotNull(result);
             assertNotNull(result.code());
             assertNotNull(result.expiresAt());

@@ -8,9 +8,9 @@ import com.yumu.noveltranslator.port.dto.auth.RefreshTokenRequest;
 import com.yumu.noveltranslator.port.dto.common.Result;
 
 import com.auth0.jwt.interfaces.DecodedJWT;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.User;
+import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
-import com.yumu.noveltranslator.adapter.out.security.CustomUserDetails;
+import com.yumu.noveltranslator.port.out.UserDetailsFactoryPort;
 import com.yumu.noveltranslator.port.out.EmailPort;
 import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.util.JwtUtils;
@@ -51,11 +51,14 @@ class AuthServiceTest {
     @Mock
     private VerificationCodeService verificationCodeService;
 
+    @Mock
+    private UserDetailsFactoryPort userDetailsFactoryPort;
+
     private AuthApplicationService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthApplicationService(userRepositoryPort, jwtUtils, emailPort, verificationCodeService);
+        authService = new AuthApplicationService(userRepositoryPort, jwtUtils, emailPort, userDetailsFactoryPort, verificationCodeService);
     }
 
     @Nested
@@ -69,11 +72,13 @@ class AuthServiceTest {
             user.setEmail("test@test.com");
             user.setPassword(PasswordUtil.hashPassword("password123"));
             when(userRepositoryPort.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+            UserDetails mockUserDetails = mock(UserDetails.class);
+            when(mockUserDetails.getUsername()).thenReturn("test@test.com");
+            when(userDetailsFactoryPort.createUserDetails(user)).thenReturn(mockUserDetails);
 
             UserDetails userDetails = authService.loadUserByUsername("test@test.com");
 
             assertNotNull(userDetails);
-            assertInstanceOf(CustomUserDetails.class, userDetails);
             assertEquals("test@test.com", userDetails.getUsername());
         }
 

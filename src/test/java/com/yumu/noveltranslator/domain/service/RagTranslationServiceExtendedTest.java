@@ -4,7 +4,8 @@ import com.yumu.noveltranslator.application.service.RagTranslationApplicationSer
 
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.port.out.EmbeddingPort;
-import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationMemory;
+import com.yumu.noveltranslator.domain.model.TranslationMemory;
+import com.yumu.noveltranslator.port.out.VectorSearchResult;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -100,8 +101,8 @@ class RagTranslationServiceExtendedTest {
             float[] vec = new float[]{0.1f, 0.2f, 0.3f};
             when(embeddingPort.embed("Hello")).thenReturn(vec);
 
-            List<Map<String, String>> redisResult = buildVectorSearchResult(1,
-                    "Hello", "你好", "0.05", "42");
+            List<VectorSearchResult> redisResult = buildVectorSearchResult(1,
+                    "Hello", "你好", 0.95, 42L);
             mockVectorSearch(redisResult);
 
             RagTranslationResponse response = service.searchSimilarWithModes(1L, "Hello", "zh", List.of("team"));
@@ -345,25 +346,20 @@ class RagTranslationServiceExtendedTest {
 
     // ============ 辅助方法 ============
 
-    private List<Map<String, String>> buildVectorSearchResult(long total, String sourceText, String targetText, String score, String id) {
-        List<Map<String, String>> result = new ArrayList<>();
+    private List<VectorSearchResult> buildVectorSearchResult(long total, String sourceText, String targetText, double score, long id) {
+        List<VectorSearchResult> result = new ArrayList<>();
         if (total > 0) {
-            Map<String, String> match = new LinkedHashMap<>();
-            match.put("source_text", sourceText);
-            match.put("target_text", targetText);
-            match.put("score", score);
-            match.put("id", id);
-            result.add(match);
+            result.add(new VectorSearchResult(id, sourceText, targetText, score));
         }
         return result;
     }
 
-    private void mockVectorSearch(List<Map<String, String>> result) {
+    private void mockVectorSearch(List<VectorSearchResult> result) {
         when(vectorStorePort.vectorSearch(any(float[].class), anyLong(), anyString(), anyList(), anyInt()))
                 .thenReturn(result);
     }
 
     private void mockStoreVector() {
-        doNothing().when(vectorStorePort).storeVector(anyString(), anyMap());
+        doNothing().when(vectorStorePort).storeVector(anyLong(), anyString(), anyString(), anyString(), anyString(), anyLong(), anyString(), any(float[].class));
     }
 }

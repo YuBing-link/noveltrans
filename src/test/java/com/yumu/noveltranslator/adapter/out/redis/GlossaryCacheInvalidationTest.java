@@ -52,7 +52,7 @@ class GlossaryCacheInvalidationTest {
         cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate, cacheVersionService);
         lenient().when(cacheVersionService.getVersion(anyString(), anyString())).thenReturn("1");
         lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        lenient().when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any())).thenReturn(true);
+        lenient().doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
         lenient().when(stringRedisTemplate.delete(anyString())).thenReturn(true);
         lenient().when(stringRedisTemplate.opsForSet()).thenReturn(setOperations);
     }
@@ -71,7 +71,7 @@ class GlossaryCacheInvalidationTest {
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
             cacheService.putCache("test-key", "The Apple is delicious and the Apple pie too",
-                    "translated", "en", "zh", "google", null);
+                    "translated", "en", "zh", "google");
 
             // 验证对提取的单词调用了 SADD
             verify(setOperations, atLeastOnce()).add(eq("glossary:cache_keys:apple"), anyString());
@@ -90,7 +90,7 @@ class GlossaryCacheInvalidationTest {
             when(setOperations.add(anyString(), anyString())).thenReturn(1L);
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
-            cacheService.putCache("test-key", "A an is be at", "translated", "en", "zh", "google", null);
+            cacheService.putCache("test-key", "A an is be at", "translated", "en", "zh", "google");
 
             // 这些短词不应该被索引
             verify(setOperations, never()).add(eq("glossary:cache_keys:a"), anyString());
@@ -120,7 +120,7 @@ class GlossaryCacheInvalidationTest {
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
             String repeatedText = "Apple Apple Apple";
-            cacheService.putCache("test-key", repeatedText, "translated", "en", "zh", "google", null);
+            cacheService.putCache("test-key", repeatedText, "translated", "en", "zh", "google");
 
             // 验证 apple 只被 SADD 了一次（虽然有三次出现），注意 key 带版本号前缀
             verify(setOperations, times(1)).add(eq("glossary:cache_keys:apple"), eq("v1:test-key"));
@@ -235,7 +235,7 @@ class GlossaryCacheInvalidationTest {
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
             cacheService.putCache("v1:apple-text", "Apple is a fruit", "Apple 是一种水果",
-                    "en", "zh", "google", null);
+                    "en", "zh", "google");
 
             // 2. 术语变更：触发 invalidateKeysForTerm("Apple")
             Set<String> affectedKeys = Set.of("v1:apple-text");
@@ -260,7 +260,7 @@ class GlossaryCacheInvalidationTest {
             when(setOperations.add(anyString(), anyString())).thenReturn(1L);
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
-            cacheService.putCache("test-key", "Testing word boundary", "translated", "en", "zh", "google", null);
+            cacheService.putCache("test-key", "Testing word boundary", "translated", "en", "zh", "google");
 
             verify(stringRedisTemplate).expire(
                     eq("glossary:cache_keys:testing"),
