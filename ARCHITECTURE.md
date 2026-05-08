@@ -104,121 +104,129 @@ NovelTrans is a full-stack bilingual novel translation system built with the fol
 
 **Role**: REST API service, business logic, authentication, cache management, translation pipeline orchestration.
 
-#### 4.1 Controller Layer
+#### 4.1 Hexagonal Architecture Package Structure
 
-| Controller Package | Responsibility |
-|--------------------|----------------|
-| `controller/web/` | Web dashboard API (users, documents, glossaries, translation) |
-| `controller/plugin/` | Browser extension API (translation endpoints) |
-| `controller/external/` | External integration API (API key authenticated) |
-| `controller/shared/` | Shared translation API (text, document, RAG, task management) |
-| `controller/collab/` | Collaboration workspace API |
-| `controller/web/stripe` | Stripe subscription API |
+The backend follows strict hexagonal architecture with dependency flowing inward: `adapter` → `port` → `domain`. The `adapter` and `port` packages depend on `domain`, but `domain` has zero external dependencies.
 
-#### 4.2 Service Layer
+```
+src/main/java/com/yumu/noveltranslator/
+├── adapter/in/          Inbound adapters (drivers)
+│   ├── rest/            REST controllers (Web, Plugin, External, Shared, Admin, Collab)
+│   ├── security/        JWT/API-Key filters, SecurityUserDetails, rate limiters
+│   ├── service/         SSE event streaming adapters
+│   └── webhook/         Stripe webhook handler
+├── adapter/out/         Outbound adapters (driven)
+│   ├── persistence/     MyBatis-Plus repositories, entities, mappers, converters
+│   ├── redis/           Redis cache, pub/sub, rate limiter, token blacklist
+│   ├── translate/       LLM engine clients (Python, MTranServer)
+│   ├── email/           Email service, device token management
+│   ├── stripe/          Stripe client adapter
+│   └── embedding/       Vector embedding adapter
+├── port/in/             Inbound port interfaces (use cases)
+│   ├── AuthPort, UserPort, DocumentPort, GlossaryPort
+│   ├── TranslationTaskPort, TranslatePort, RagTranslationPort
+│   ├── CollabPort, ChapterTaskPort, CollabCommentPort
+│   ├── SubscriptionPort, WebhookPort, ApiKeyPort
+│   ├── CacheAdminPort, DeviceTokenPort
+├── port/out/            Outbound port interfaces (infrastructure contracts)
+│   ├── UserRepositoryPort, DocumentRepositoryPort, GlossaryRepositoryPort
+│   ├── TranslationRepositoryPort, CollaborationRepositoryPort
+│   ├── TranslationEnginePort, EmailPort, StripePort
+│   ├── CachePort, EmbeddingPort, DeviceTokenPort
+├── port/dto/            Data Transfer Objects (request/response)
+├── domain/model/        Domain entities (User, Document, Glossary, etc.)
+├── domain/service/      Domain services (business logic)
+├── domain/event/        Domain events (CollabChapterSplitEvent, etc.)
+├── domain/util/         Domain utilities (state machines, validators)
+├── config/              Spring configuration classes
+├── properties/          @ConfigurationProperties bindings
+├── bootstrap/           Application startup initialization
+├── task/                @Scheduled tasks (recovery, cleanup)
+├── exception/           Global exception handler
+└── enums/               Enumerations
+```
 
-| Service | Responsibility |
+#### 4.2 Inbound Adapters (`adapter/in/`)
+
+| Adapter | Responsibility |
 |---------|----------------|
-| `TranslationService` | Core translation logic, SSE streaming, TranslationPipeline orchestration |
-| `TranslationTaskService` | Async document translation task management, SSE streaming |
-| `MultiAgentTranslationService` | Multi-agent collaborative translation (by project chapters) |
-| `TranslationPipeline` | **Unified translation pipeline**: encapsulates 4-level flow (cache → RAG → entity consistency → direct LLM) |
-| `TranslationCacheService` | Caffeine (L1) + Redis (L2) cache management, **term reverse index for fine-grained glossary invalidation** |
-| `CacheVersionService` | Version-stamped cache keys, `bumpVersionForGlossaryTerm()` for targeted invalidation |
-| `RagTranslationService` | RAG semantic retrieval translation memory |
-| `EntityConsistencyService` | Entity consistency (glossary + placeholder protection) |
-| `TranslationPostProcessingService` | Post-processing (residual Chinese detection and correction) |
-| `UserLevelThrottledTranslationClient` | User-tier-based translation concurrency throttling |
-| `UserService` | User CRUD, password management, permission checks |
-| `ExternalTranslationService` | External translation engine coordination |
-| `QuotaService` | Character quota management, tier checks |
-| `SubscriptionService` | Stripe subscription lifecycle, **`invoice.payment_succeeded` fallback activation** |
-| `CollabProjectService` | Team collaboration project management, **async chapter split via domain event** |
-| `ChapterSplitAsyncListener` | **`@Async` listener**: batch inserts 50 chapters per transaction, activates project via state machine |
-| `CollabEventPublisher` | **Collaboration event publisher**: publishes to Redis Stream for SSE replay |
-| `ChapterTaskService` | Chapter assignment, submission, review — uses **state machine `transitionChapter()`** |
-| `DraftProjectRecoveryTask` | **`@Scheduled` compensation task**: activates stalled DRAFT projects or logs stale for manual review |
-
-#### 4.3 Translation Pipeline (`service/pipeline/`)
-
-`TranslationPipeline` is the unified translation pipeline component that eliminates duplicated pipeline logic across services.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    TranslationPipeline                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Input Text                                                  │
-│    │                                                         │
-│    ▼                                                         │
-│  L1: 3-Level Cache Query (Caffeine → Redis → MySQL)          │
-│    │ Hit → return                                            │
-│    ▼ Miss                                                    │
-│  L2: RAG Semantic Match (Redis HNSW vector search)           │
-│    │ Direct hit → post-process → cache → return              │
-│    ▼ Miss                                                    │
-│  L3: Entity Consistency Translation (conditional)            │
-│    │   Trigger: userId != null && text exceeds threshold     │
-│    │ Extract entities → merge glossary → placeholders        │
-│    │ → translate → entity restore → post-process → cache     │
-│    ▼ Not triggered / failed                                  │
-│  L4: Direct Translation (Python/MTranServer round-robin)     │
-│    │ Quality validation (ad keyword detection, length check) │
-│    │ Post-process → cache → TranslationMemory store → return │
-│                                                              │
-│  executeFast(): L1 + L4 only, skips RAG and consistency      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-| Method | Description |
-|--------|-------------|
-| `execute(text, targetLang, engine)` | Full 4-level pipeline |
-| `executeFast(text, targetLang, engine)` | Fast mode (cache + direct only) |
-| `shouldCache(original, translated)` | Static method: determines if result should be cached |
-| `isValidTranslation(text, result)` | Static method: validates translation quality |
-
-#### 4.4 Configuration Classes
-
-| Config | Responsibility |
-|--------|----------------|
-| `SecurityConfig` | Spring Security filter chain configuration |
-| `RedisConfig` | Redis connection pool, serialization |
-| `RedisVectorConfig` | Redis HNSW vector index configuration |
-| `TranslationExecutorConfig` | Virtual thread executor configuration |
-| `ChapterSplitExecutorConfig` | **Dedicated thread pool for async chapter split**: core=2, max=5, queue=100 |
-| `TranslationLimitProperties` | Translation limit configuration property binding |
-| `SecurityPermitAllPaths` | Anonymous access path whitelist |
-| `MyMetaObjectHandler` | MyBatis-Plus auto-fill (created_at, updated_at) |
-
-#### 4.5 Security Module
-
-| Component | Responsibility |
-|-----------|----------------|
-| `SecurityConfig` | Spring Security filter chain, translation endpoint auth enforcement |
-| `JwtAuthenticationFilter` | JWT token parsing and authentication, invalid token returns 401 |
-| `JwtAuthenticationEntryPoint` | 401 response for unauthenticated requests |
-| `ApiKeyAuthenticationFilter` | API Key (`nt_sk_xxxx`) authentication filter |
-| `TranslationRateLimitFilter` | **IP-level rate limiting for `/v1/translate/**`**: Redis Sorted Set sliding window, 100 req/60s |
-| `TranslationIpRateLimiter` | **Redis Sorted Set rate limiter**: `ZREMRANGEBYSCORE` + `ZADD` + `ZCARD`, fail-open on Redis errors |
-| `CustomUserDetails` | Spring Security UserDetails implementation |
-| `SecurityPermitAllPaths` | Centralized whitelist paths shared by SecurityConfig and JwtAuthenticationFilter |
-| `ProjectAccessAspect` | `@RequireProjectAccess` annotation AOP permission check |
+| `rest/web/` | Web dashboard API — `WebUserController`, `WebDocumentController`, `WebGlossaryController`, `WebTranslationController` |
+| `rest/plugin/` | Chrome extension API — `PluginTranslationController` |
+| `rest/external/` | External API key authenticated endpoints — `ExternalTranslationController`, `ExternalApiKeyController` |
+| `rest/shared/` | Shared translation endpoints — `SharedTranslationController` |
+| `rest/admin/` | Admin management endpoints — `AdminCacheController` |
+| `rest/collab/` | Collaboration workspace — `CollabProjectController`, `CollabChapterTaskController`, `CollabCommentController` |
+| `rest/web/stripe/` | Stripe subscription management — `WebSubscriptionController` |
+| `security/` | `JwtAuthenticationFilter`, `ApiKeyAuthenticationFilter`, `TranslationRateLimitFilter`, `CustomUserDetails`, `LoginRateLimiter`, `ProjectAccessAspect` |
+| `service/` | SSE event streaming — `TranslationSseService` |
+| `webhook/` | Stripe webhook handler — `StripeWebhookController` |
 
 > **Note**: Filter classes (`JwtAuthenticationFilter`, `ApiKeyAuthenticationFilter`, `SecurityHeadersFilter`, `TranslationRateLimitFilter`) are **not** annotated with `@Component`. They are created with `new` in `SecurityConfig.filterChain()` to avoid Spring Security's CGLIB proxy ordering conflicts.
 
-#### 4.6 Utilities
+#### 4.3 Outbound Adapters (`adapter/out/`)
 
-| Utility | Responsibility |
+| Adapter | Responsibility |
 |---------|----------------|
-| `CacheKeyUtil` | Unified cache key generation strategy |
-| `SseEmitterUtil` | SSE event builder and serialization |
-| `TextCleaningUtil` | Pre/post translation text cleaning |
-| `TextSegmentationUtil` | Long text segmentation strategy |
-| `EmailVerificationCodeUtil` | Email verification code generation and validation |
-| `SecurityUtil` | Current user context accessor |
-| `ExternalResponseUtil` | External translation service response parsing + translated file path building |
-| `JwtUtils` | JWT token generation and validation |
-| `PasswordUtil` | BCrypt password encryption |
+| `persistence/` | Repository adapters implementing `port/out` interfaces — each adapter wraps MyBatis-Plus `Mapper` operations and converts between domain models ↔ entities |
+| `persistence/entity` | JPA-annotated entity classes (`User`, `Document`, `Glossary`, `TranslationTask`, etc.) |
+| `persistence/Mapper` | MyBatis-Plus BaseMapper interfaces (`UserMapper`, `DocumentMapper`, `GlossaryMapper`, etc.) |
+| `persistence/Converter` | Model ↔ Entity converters (`UserConverter`, `GlossaryConverter`, `TranslationConverter`, `CollabConverter`) |
+| `redis/` | Redis operations — `TranslationCacheService`, `CacheVersionService`, `TokenBlacklistService`, `RedisRateLimiter`, `CollabEventPublisher` |
+| `translate/` | Translation engine clients — `OpenAiTranslationEngine`, `MTranTranslationEngine`, engine round-robin routing |
+| `email/` | Email sending and device token management — `EmailService`, `DeviceTokenService` |
+| `stripe/` | Stripe SDK wrapper — `StripeSubscriptionAdapter` |
+| `embedding/` | Vector embedding generation — `OllamaEmbeddingAdapter` |
+
+#### 4.4 Inbound Ports (`port/in/`)
+
+Inbound port interfaces define use cases that inbound adapters call. Each interface is implemented by a domain service in `domain/service/`.
+
+| Port Interface | Implemented By | Responsibility |
+|---------------|----------------|----------------|
+| `AuthPort` | `AuthService` | Login, register, password change/reset, logout, token refresh |
+| `UserPort` | `UserService` | User profile, preferences, glossary CRUD, quota, statistics |
+| `DocumentPort` | `DocumentService` | Document upload, cancel, delete, status update |
+| `GlossaryPort` | *(via UserService)* | Glossary import/export, batch operations |
+| `TranslationTaskPort` | `TranslationTaskService` | Async document translation, history, task management |
+| `TranslatePort` | `TranslationService` | Real-time text translation (SSE streaming) |
+| `RagTranslationPort` | `RagTranslationService` | RAG-based translation with vector memory |
+| `CollabPort` | `CollabProjectService` | Collaboration project CRUD, invite codes, member management |
+| `ChapterTaskPort` | `ChapterTaskService` | Chapter assignment, submission, review (state machine) |
+| `CollabCommentPort` | *(via CollabPort)* | Chapter comments and replies |
+| `SubscriptionPort` | `SubscriptionService` | Stripe subscription lifecycle, checkout, portal |
+| `WebhookPort` | `StripeWebhookService` | Stripe webhook event processing |
+| `ApiKeyPort` | `ApiKeyService` | API key CRUD, usage tracking |
+| `CacheAdminPort` | `CacheAdminService` | Cache management (clear, version bump) |
+| `DeviceTokenPort` | `DeviceTokenService` | Device token management |
+
+#### 4.5 Outbound Ports (`port/out/`)
+
+Outbound port interfaces define infrastructure contracts. Each interface is implemented by an adapter in `adapter/out/`.
+
+| Port Interface | Implemented By | Responsibility |
+|---------------|----------------|----------------|
+| `UserRepositoryPort` | `UserMapperAdapter` | User, preference, tenant, API key, blacklist CRUD |
+| `DocumentRepositoryPort` | `DocumentRepositoryAdapter` | Document CRUD, status updates |
+| `GlossaryRepositoryPort` | `GlossaryRepositoryAdapter` | Glossary, AI glossary, chapter entity map, translation memory CRUD |
+| `TranslationRepositoryPort` | `TranslationRepositoryAdapter` | Translation task, history, cache CRUD |
+| `CollaborationRepositoryPort` | `CollaborationRepositoryAdapter` | Collab project, member, chapter task, comment, invite code CRUD |
+| `TranslationEnginePort` | `TranslateEngineAdapter` | LLM engine invocation (OpenAI-compatible API) |
+| `CachePort` | Redis/Caffeine services | 4-level cache operations, pub/sub, version management |
+| `EmailPort` | `EmailService` | Email verification code sending |
+| `StripePort` | Stripe adapter | Stripe API operations |
+| `EmbeddingPort` | Embedding adapter | Vector embedding generation for RAG |
+| `DeviceTokenPort` | `DeviceTokenService` | Device token storage |
+
+#### 4.6 Domain Layer (`domain/`)
+
+The core business logic layer with zero external dependencies.
+
+| Package | Responsibility |
+|---------|----------------|
+| `domain/model/` | Domain entities: `User`, `Document`, `Glossary`, `TranslationTask`, `TranslationHistory`, `TranslationCache`, `CollabProject`, `CollabProjectMember`, `CollabChapterTask`, `CollabComment`, `ApiKey`, `Tenant`, `UserPreference`, `UserPlanHistory`, `TokenBlacklist`, `AiGlossary`, `ChapterEntityMap`, `TranslationMemory` |
+| `domain/service/` | Business logic implementations: `AuthService`, `UserService`, `DocumentService`, `TranslationService`, `TranslationTaskService`, `RagTranslationService`, `CollabProjectService`, `ChapterTaskService`, `SubscriptionService`, `ApiKeyService`, `CacheAdminService`, `QuotaService`, `TranslationPipeline` |
+| `domain/event/` | Domain events: `CollabChapterSplitEvent` (async chapter splitting) |
+| `domain/util/` | Domain utilities: state machines, validators |
 
 ### 5. Translation Microservice (`services/translate-engine/`)
 
@@ -334,12 +342,17 @@ User Action (Chrome Extension / Web App)
 User Login Request
     │
     ▼
-UserController.login()
-    │
+WebUserController.login()          ← adapter/in (inbound adapter)
+    │ delegates to
     ▼
-UserService.authenticate()
+AuthPort.login()                   ← port/in (inbound port interface)
+    │ implemented by
+    ▼
+AuthService.login()                ← domain/service (domain service)
     │
     ├── Verify email and password (BCrypt)
+    │   via UserRepositoryPort      ← port/out (outbound port interface)
+    │   implemented by UserMapperAdapter  ← adapter/out (outbound adapter)
     │
     ▼
 JwtUtils.generateToken()
@@ -375,19 +388,19 @@ JwtAuthenticationFilter intercepts
 
 ### Unified Pipeline Design
 
-Previously, translation pipeline logic was duplicated across three Service classes. It has been consolidated into a single `TranslationPipeline` component.
+Previously, translation pipeline logic was duplicated across three domain services. It has been consolidated into a single `TranslationPipeline` component in `domain/service/`.
 
 ```
                     ┌─────────────────────┐
                     │  TranslationService │
                     │  TranslationTaskSvc │
-                    │  MultiAgentSvc      │
+                    │  RagTranslationSvc  │
                     └──────────┬──────────┘
                                │ Create Pipeline instance
                                ▼
                     ┌─────────────────────┐
                     │ TranslationPipeline  │
-                    │ (single impl)        │
+                    │ (domain service)     │
                     └──────────┬──────────┘
                                │
                   ┌────────────┼────────────┐
@@ -409,8 +422,6 @@ Previously, translation pipeline logic was duplicated across three Service class
 | 4-level pipeline impl | 3 duplicated copies | `TranslationPipeline.execute()` |
 | `shouldCache` method | 3 copies | `TranslationPipeline.shouldCache()` static |
 | `isValidTranslation` | Only in TranslationService | `TranslationPipeline.isValidTranslation()` static |
-| `extractTranslatedContent` | 2 copies | `ExternalResponseUtil.extractDataField()` |
-| `buildTranslatedPath` | 2 copies | `ExternalResponseUtil.buildTranslatedPath()` |
 | Post-processing | Only 2/3 Services had it | Unified across all paths |
 
 ---
@@ -761,4 +772,4 @@ user (1) ──── (N) translation_memory
 
 ---
 
-**Last updated**: 2026-05-06 — Round 27 load testing performance optimizations
+**Last updated**: 2026-05-08 — Hexagonal architecture migration complete. Components reorganized into `adapter/in`, `adapter/out`, `port/in`, `port/out`, `domain` layers.

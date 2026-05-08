@@ -179,7 +179,7 @@ Implemented Redis Stream-based message buffering:
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/util/SseEmitterUtil.java` (converted to `@Component`, added publish/replay methods)
+- `src/main/java/com/yumu/noveltranslator/util/SseEmitterUtil.java` (converted to `@Component` Spring Bean, added publish/replay methods; remains in `util/` package)
 - `src/main/java/com/yumu/noveltranslator/domain/service/CollabEventPublisher.java` (new)
 - `src/main/java/com/yumu/noveltranslator/domain/service/ChapterTaskService.java` (event publishing in afterCommit hooks)
 - `src/main/java/com/yumu/noveltranslator/adapter/in/rest/collab/CollabProjectController.java` (new SSE endpoint)
@@ -271,11 +271,12 @@ The existing `validate*` methods are preserved for read-only checks but the Java
 
 ### Files Changed
 
-- `src/main/java/com/yumu/noveltranslator/domain/service/state/CollabStateMachine.java` (4 new transition methods)
+- `src/main/java/com/yumu/noveltranslator/domain/service/CollabStateMachine.java` (4 new transition methods; moved from `domain/service/state/`)
+- `src/main/java/com/yumu/noveltranslator/domain/service/TranslationStateMachine.java` (translation state machine; moved from `domain/service/state/`)
 - `src/main/java/com/yumu/noveltranslator/domain/service/CollabProjectService.java` (updated `changeProjectStatus`)
 - `src/main/java/com/yumu/noveltranslator/domain/service/ChapterTaskService.java` (updated all status transitions)
 - `src/main/java/com/yumu/noveltranslator/domain/service/MultiAgentTranslationService.java` (updated 12+ call sites)
-- `src/test/java/com/yumu/noveltranslator/domain/service/state/CollabStateMachineTest.java` (updated with 24 new transition tests)
+- `src/test/java/com/yumu/noveltranslator/domain/service/CollabStateMachineTest.java` (updated with 24 new transition tests)
 - `src/test/java/com/yumu/noveltranslator/domain/service/MultiAgentTranslationServiceTest.java` (updated mock)
 - `src/test/java/com/yumu/noveltranslator/domain/service/MultiAgentTranslationServiceExtendedTest.java` (updated mock)
 
@@ -575,42 +576,71 @@ Restructure from package-by-layer to **package-by-component within a hexagonal a
 ```
 src/main/java/com/yumu/noveltranslator/
 ├── port/in/                          # Inbound port interfaces (driving)
-│   ├── TranslatePort.java
 │   ├── AuthPort.java
+│   ├── UserPort.java
+│   ├── DocumentPort.java
+│   ├── GlossaryPort.java
+│   ├── TranslatePort.java
+│   ├── TranslationTaskPort.java
+│   ├── RagTranslationPort.java
 │   ├── CollabPort.java
+│   ├── ChapterTaskPort.java
+│   ├── CollabCommentPort.java
 │   ├── SubscriptionPort.java
-│   └── WebhookPort.java
+│   ├── WebhookPort.java
+│   ├── ApiKeyPort.java
+│   ├── CacheAdminPort.java
+│   └── DeviceTokenPort.java
 ├── port/out/                         # Outbound port interfaces (driven)
-│   ├── TranslationEnginePort.java
 │   ├── UserRepositoryPort.java
+│   ├── DocumentRepositoryPort.java
+│   ├── GlossaryRepositoryPort.java
+│   ├── TranslationRepositoryPort.java
+│   ├── CollaborationRepositoryPort.java
+│   ├── TranslationEnginePort.java
 │   ├── CachePort.java
 │   ├── EmailPort.java
-│   ├── PaymentPort.java
-│   └── EmbeddingPort.java
-├── adapter/in/                       # Inbound adapters (implement inbound ports)
-│   ├── rest/                         # REST controllers
-│   ├── webhook/                      # Stripe webhook handler
-│   └── sse/                          # SSE event endpoints
-├── adapter/out/                      # Outbound adapters
-│   ├── persistence/                  # MyBatis-Plus mappers + repository impls
-│   ├── redis/                        # Redis cache implementations
-│   ├── translate/                    # LLM engine, MTranServer clients
-│   ├── email/                        # SMTP email sender
+│   ├── StripePort.java
+│   ├── EmbeddingPort.java
+│   └── DeviceTokenPort.java
+├── port/dto/                         # Data Transfer Objects
+│   ├── auth/                         # LoginRequest, RegisterRequest, etc.
+│   ├── subscription/                 # SubscriptionResponse, CheckoutRequest
+│   ├── collab/                       # CollabProjectResponse, ChapterTaskResponse
+│   ├── translation/                  # TranslationRequest, DocumentTranslationRequest
+│   ├── entity/                       # ApiKeyResponse, DocumentInfoResponse
+│   └── common/                       # Result, PageResponse, ErrorResponse
+├── adapter/in/                       # Inbound adapters (driving)
+│   ├── rest/                         # REST controllers (web, plugin, external, shared, admin, collab)
+│   ├── security/                     # JWT/API-Key filters, CustomUserDetails, rate limiters, ProjectAccessAspect
+│   ├── service/                      # SSE event streaming (TranslationSseService)
+│   └── webhook/                      # Stripe webhook handler
+├── adapter/out/                      # Outbound adapters (driven)
+│   ├── persistence/                  # Repository adapters + converters
+│   │   ├── entity/                   # MyBatis-Plus entities
+│   │   ├── mapper/                   # MyBatis-Plus BaseMapper interfaces
+│   │   └── converter/                # Domain model ↔ Entity converters
+│   ├── redis/                        # Redis cache, pub/sub, rate limiter, token blacklist, event publisher
+│   ├── translate/                    # LLM engine clients (OpenAI, MTranServer)
+│   ├── email/                        # SMTP email sender, device token service
 │   └── stripe/                       # Stripe API client
 ├── domain/                           # Core domain (depends on NOTHING)
-│   ├── model/                        # Domain entities (rich objects)
-│   ├── service/                      # Domain services (pipeline, state machine, quota)
-│   └── event/                        # Domain events
+│   ├── model/                        # Domain entities (User, Document, Glossary, etc.)
+│   ├── service/                      # Domain services (Auth, User, Translation, Pipeline, State Machine, etc.)
+│   ├── event/                        # Domain events (ChapterSplitEvent)
+│   └── util/                         # Domain utilities (state machines, validators)
 ├── config/                           # Spring configuration (wiring)
-├── security/                         # Security filters and rate limiters
-├── dto/                              # Request/response objects
-├── util/                             # Shared utilities
-└── bootstrap/                        # Application entry point
+├── properties/                       # @ConfigurationProperties bindings
+├── bootstrap/                        # Application startup initialization
+├── task/                             # @Scheduled tasks (DraftProjectRecoveryTask)
+├── exception/                        # Global exception handler
+├── enums/                            # Enumerations (ErrorCodeEnum, etc.)
+└── util/                             # Cross-cutting utilities (JwtUtils, SecurityUtil, etc.)
 ```
 
 **Key rules:**
 - `domain/` has NO dependencies on Spring, MyBatis, Redis, HTTP — pure Java
-- `port/` contains ONLY Java interfaces — no implementations
+- `port/` contains ONLY Java interfaces and DTOs — no implementations
 - `adapter/in/` depends on `port/in/` and `domain/`
 - `adapter/out/` depends on `port/out/` and implements them with infrastructure
 - `config/` wires everything together — the ONLY place where adapters are connected to ports
@@ -645,15 +675,17 @@ src/main/java/com/yumu/noveltranslator/
 - `security/` → `adapter/in/security/` (filters, CustomUserDetails, rate limiters, annotations)
 - `mapper/` → `adapter/out/persistence/mapper/` (all MyBatis-Plus mappers)
 - `entity/` → `adapter/out/persistence/entity/` (all JPA/MyBatis entities)
-- `service/TranslationCacheService`, `CacheVersionService`, `ApiKeyCacheService` → `adapter/out/redis/`
-- `service/SubscriptionService` → `adapter/out/stripe/`
-- `service/AuthService` (email-related) → `adapter/out/email/`
-- `service/state/` → `domain/service/` (CollabStateMachine, TranslationStateMachine)
-- `service/CollabEventPublisher`, `SseEmitterUtil` → `util/` / `domain/service/`
+- `service/` → split across:
+  - `adapter/out/redis/` (TranslationCacheService, CacheVersionService, ApiKeyCacheService)
+  - `adapter/out/stripe/` (SubscriptionService)
+  - `adapter/out/email/` (email-related services)
+  - `adapter/out/translate/` (translation engine clients)
+  - `domain/service/` (business logic: AuthService, UserService, TranslationPipeline, StateMachines, etc.)
 - `event/` → `domain/event/`
-- `util/` → `util/` (unchanged, plus new extractors: OwnershipVerifier, FilterResponseUtil, SecurityUtil helpers)
+- `dto/` → `port/dto/` (with subdirectories: auth, subscription, collab, translation, entity, common)
+- `util/` → `util/` (unchanged, plus new extractors: SecurityUtil helpers)
 
-**DTO reorganization** (`dto/` → 6 subdirectories):
+**DTO reorganization** (`dto/` → `port/dto/` with 6 subdirectories):
 - `dto/auth/` — LoginRequest, RegisterRequest, TokenResponse, etc.
 - `dto/subscription/` — SubscriptionResponse, CheckoutRequest, etc.
 - `dto/collab/` — CollabProjectResponse, ChapterTaskResponse, AssignChapterRequest, etc.
@@ -674,7 +706,7 @@ src/main/java/com/yumu/noveltranslator/
 - `com.yumu.noveltranslator.security.*` → `com.yumu.noveltranslator.adapter.in.security.*`
 - `com.yumu.noveltranslator.controller.*` → `com.yumu.noveltranslator.adapter.in.rest.*`
 - `com.yumu.noveltranslator.service.state.*` → `com.yumu.noveltranslator.domain.service.*`
-- `com.yumu.noveltranslator.dto.*` → categorized subdirectory imports
+- `com.yumu.noveltranslator.dto.*` → `com.yumu.noveltranslator.port.dto.*` (categorized subdirectory imports)
 
 ---
 

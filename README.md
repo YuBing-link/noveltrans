@@ -52,15 +52,22 @@ For detailed setup instructions, see [`SETUP.md`](SETUP.md).
 
 ```
 noveltrans/
-├── src/main/java/          # Spring Boot backend (Java 21)
-├── src/test/java/          # Unit + integration tests
-├── web-app/                # React web dashboard (TypeScript + Vite)
-├── extension/              # Chrome browser extension (MV3)
-├── services/translate-engine/  # Python translation microservice
-├── nginx/                  # Nginx gateway configuration
-├── load-test/              # k6 load testing scripts
-├── docker-compose.yml      # Full-stack orchestration (6 containers)
-└── .env.example            # Environment variable template
+├── src/main/java/                  # Spring Boot backend (hexagonal architecture)
+│   ├── adapter/in/                 #   Inbound adapters (REST controllers, security)
+│   ├── adapter/out/                #   Outbound adapters (persistence, redis, translation)
+│   ├── port/in/                    #   Inbound port interfaces (use cases)
+│   ├── port/out/                   #   Outbound port interfaces (infrastructure contracts)
+│   ├── domain/                     #   Core domain (models, services, events)
+│   └── config/                     #   Spring configuration + cross-cutting
+├── src/main/resources/             # Application config, SQL migrations, templates
+├── src/test/java/                  # Unit + integration tests
+├── web-app/                        # React web dashboard (TypeScript + Vite)
+├── extension/                      # Chrome browser extension (MV3)
+├── services/translate-engine/      # Python translation microservice
+├── nginx/                          # Nginx gateway configuration
+├── load-test/                      # k6 load testing scripts
+├── docker-compose.yml              # Full-stack orchestration (6 containers)
+└── .env.example                    # Environment variable template
 ```
 
 ## Documentation
