@@ -55,6 +55,9 @@ mvn spotless:check
   ```bash
   mvn verify
   ```
+  - [Interactive Coverage Report](coverage/index.html) — JaCoCo HTML report
+  - [Coverage Summary](coverage-report-summary.md) — Markdown summary with top uncovered classes
+
 - **Frontend**: Vitest for unit tests, Playwright for E2E.
   ```bash
   cd web-app && npm test
@@ -63,3 +66,4 @@ mvn spotless:check
   ```bash
   k6 run load-test/scenarios/login.js
   ```
+  - [Load Test Reports](../load-test/results/) — HTML reports from stress tests
