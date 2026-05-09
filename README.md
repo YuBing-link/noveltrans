@@ -7,7 +7,7 @@ A production SaaS backend for AI-powered novel/document translation — multi-en
 [![CI](https://github.com/YuBing-link/noveltrans/actions/workflows/ci.yml/badge.svg)](https://github.com/YuBing-link/noveltrans/actions/workflows/ci.yml)
 [![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2-green?logo=spring)](https://spring.io/)
-[![Coverage](https://img.shields.io/badge/Coverage-86%25-brightgreen)]()
+[![Coverage](https://img.shields.io/badge/Coverage-80.5%25-brightgreen)](docs/coverage-report-summary.md)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ## Overview
@@ -163,6 +163,9 @@ noveltrans/
 | [`SETUP.md`](docs/SETUP.md) | Deployment & local development guide |
 | [`ADR.md`](docs/ADR.md) | Architecture decision records |
 | [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Contribution guidelines |
+| [`Coverage Report`](docs/coverage/index.html) | Interactive JaCoCo HTML coverage report (80.5% instruction) |
+| [`Coverage Summary`](docs/coverage-report-summary.md) | Markdown coverage summary with top uncovered classes |
+| [`Load Test Report`](load-test/results/) | k6 load test results — 100 VU stress test with HTML report |
 
 ## License
 
