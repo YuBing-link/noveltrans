@@ -58,7 +58,7 @@ Three client channels share the same backend:
 Domain layer is pure Java — zero framework annotations, zero ORM references, zero HTTP types. All infrastructure access goes through port interfaces. Stripe SDK is isolated behind `PaymentPort`; Redis behind `CachePort` and `QuotaPort`; MySQL behind `BillingRepositoryPort`. Security filters are instantiated with `new` in `SecurityConfig.filterChain()` rather than `@Component` to avoid Spring Security's CGLIB proxy ordering conflicts.
 
 **Two-level per-user rate limiting.**
-Concurrency: each user gets an independent `Semaphore` (FREE=2, PRO=5, MAX=10). Throughput: sliding-window TPM limiter with estimated token cost per request and automatic refund on failure. Idle semaphores are cleaned every 30 minutes. Monthly character quota uses Lua script atomic check + INCR in Redis with MySQL fallback.
+Concurrency: each user gets an independent `Semaphore` (FREE=1, PRO=3, MAX=5). Throughput: sliding-window TPM limiter with estimated token cost per request and automatic refund on failure. Idle semaphores are cleaned every 30 minutes. Monthly character quota uses Lua script atomic check + INCR in Redis with MySQL fallback.
 
 **Statistics-based multi-engine routing.**
 Two engines (Python LLM at :8000, local MTranServer at :8989) with rolling 60-second performance windows. Each engine's "excellent rate" (response ≤ 1000ms) determines selection probability. MTranServer serves dual purpose — fast translation mode for quick results and automatic fallback when the LLM engine degrades. Bidirectional failover — calling code never sees which engine served the request.

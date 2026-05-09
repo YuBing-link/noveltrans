@@ -58,7 +58,7 @@ NovelTrans 是一个全栈翻译平台，为网文作者和译者设计。它取
 领域层是纯 Java — 零框架注解、零 ORM 引用、零 HTTP 类型。所有基础设施访问通过端口接口。Stripe SDK 隔离在 `PaymentPort` 后，Redis 在 `CachePort` 和 `QuotaPort` 后，MySQL 在 `BillingRepositoryPort` 后。安全过滤器在 `SecurityConfig.filterChain()` 中用 `new` 实例化而非 `@Component`，避免 Spring Security CGLIB 代理排序冲突。
 
 **两层用户级限流。**
-并发控制：每个用户独立 `Semaphore`（FREE=2, PRO=5, MAX=10）。吞吐控制：滑动窗口 TPM 限流器，每请求估算 token 消耗，失败自动退款。空闲信号量每 30 分钟清理。月度字数配额使用 Lua 脚本原子校验 + INCR，MySQL 兜底。
+并发控制：每个用户独立 `Semaphore`（FREE=1, PRO=3, MAX=5）。吞吐控制：滑动窗口 TPM 限流器，每请求估算 token 消耗，失败自动退款。空闲信号量每 30 分钟清理。月度字数配额使用 Lua 脚本原子校验 + INCR，MySQL 兜底。
 
 **基于统计的多引擎路由。**
 两个翻译引擎（Python LLM :8000、本地 MTranServer :8989），60 秒滚动统计窗口。引擎的"优秀率"（响应 ≤ 1000ms）决定选中概率。MTranServer 承担双重角色 — 快速翻译模式下提供即时结果，LLM 引擎降级时自动兜底。双向自动降级，调用方无感知。

@@ -284,7 +284,7 @@
         "features": [
           "100,000 characters per month",
           "500 translations per day",
-          "10 concurrent translations"
+          "1 concurrent translation"
         ],
         "current": "Current Plan"
       },
@@ -297,7 +297,7 @@
         "features": [
           "500,000 characters per month",
           "5,000 translations per day",
-          "50 concurrent translations"
+          "3 concurrent translations"
         ],
         "subscribe": "Subscribe to Pro",
         "popular": "Most Popular"
@@ -311,7 +311,7 @@
         "features": [
           "2,000,000 characters per month",
           "Unlimited translations",
-          "100 concurrent translations"
+          "5 concurrent translations"
         ],
         "subscribe": "Subscribe to Ultimate"
       }
