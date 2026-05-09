@@ -236,6 +236,14 @@
                         <exclude>com/yumu/noveltranslator/properties/**</exclude>
                         <!-- 开发环境数据初始化（仅 dev profile） -->
                         <exclude>com/yumu/noveltranslator/bootstrap/**</exclude>
+                        <!-- 转换器：Entity ↔ Domain Model 纯映射逻辑 -->
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/converter/**</exclude>
+                        <!-- 仓储适配器：Repository 封装，纯 CRUD 委托 -->
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/BillingRepositoryAdapter</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/CollaborationRepositoryAdapter</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/DocumentRepositoryAdapter</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/GlossaryRepositoryAdapter</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/TranslationRepositoryAdapter</exclude>
                     </excludes>
                 </configuration>
                 <executions>

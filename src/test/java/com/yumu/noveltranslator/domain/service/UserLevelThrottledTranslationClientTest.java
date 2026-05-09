@@ -171,18 +171,15 @@ class UserLevelThrottledTranslationClientTest {
         }
 
         @Test
-        void html模式翻译返回无result字段使用原始JSON() {
+        void html模式翻译返回无result字段抛异常触发降级() {
             setAuthenticatedUser(1L, "free");
             JSONObject mtranResp = new JSONObject();
             mtranResp.put("data", "some-data"); // No "result" field
             when(externalTranslationService.translate(anyString(), anyString(), anyString(), anyBoolean()))
                     .thenReturn(mtranResp);
 
-            String result = client.translate("Hello", "zh", "google", true);
-
-            JSONObject parsed = JSONObject.parseObject(result);
-            // translatedContent should be the raw JSON since there's no "result"
-            assertTrue(parsed.getString("translatedContent").contains("some-data"));
+            // New behavior: throws RuntimeException to trigger Python fallback
+            assertThrows(RuntimeException.class, () -> client.translate("Hello", "zh", "google", true));
         }
 
         @Test
