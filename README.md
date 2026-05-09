@@ -24,7 +24,7 @@ Three client channels share the same backend:
 - **Multi-engine AI orchestration** — Routes translation requests across LLM (Python FastAPI + OpenAI SDK) and local engines (MTranServer) with probability-based load balancing using rolling 60-second performance windows; MTranServer serves dual purpose — fast translation mode for instant results and automatic fallback when LLM degrades; bidirectional failover — calling code never sees which engine served the request
 - **RAG translation memory** — Redis HNSW vector search with embedding-based semantic matching (OpenAI `text-embedding-3-small` or Ollama `bge-m3`); skips LLM calls when cosine similarity ≥ 0.85, reducing API costs for repetitive content
 - **Entity consistency pipeline** — Extracts proper nouns via Python `/extract-entities`, replaces with SHA-256 placeholders (`__ENT_<hash>__`), translates entities separately against user glossary, then restores — prevents "John" becoming "Jon" across chapters
-- **Multi-agent collaboration (AgentScope)** — Three AI agents (translator + terminologist + polisher) per chapter, with genre-specific prompts for fantasy, romance, scifi, mystery, horror, and daily styles
+- **Multi-agent collaboration (AgentScope)** — Three AI agents (translator + terminologist + polisher) per chapter, with genre-matched prompts (battle, mystery, daily and more to add)
 - **4-level translation pipeline** — L1: Caffeine → Redis → MySQL three-tier cache; L2: RAG semantic search; L3: entity extraction → placeholder substitution → translate → restore; L4: direct AI engine call. Each level can short-circuit
 - **Subscription monetization (Stripe)** — Checkout + Billing Portal + Webhook + JWT revocation; 3-tier plan (FREE/PRO/MAX) with per-user concurrent semaphore + sliding-window TPM rate limiting + monthly character quota (Lua script atomic check)
 - **Team workspaces** — Multi-tenant project management, chapter assignment, review-and-approve workflow with `CollabStateMachine`, CAS-based optimistic locking for status transitions, automatic retry with exponential backoff
@@ -149,7 +149,7 @@ noveltrans/
 | **Message Queue** | CollabStateMachine and Quota operations are synchronous | RabbitMQ/RocketMQ for async chapter events, quota audit |
 | **Object Storage** | Document uploads stored locally | S3/MinIO for PDF/Word translation documents |
 | **Vector Store Scale** | Redis HNSW sufficient for <1M vectors | Evaluate Milvus/Pinecone if scale exceeds 1M entries |
-| **Plugin Engine Selection** | Translation engine fixed server-side, no client-side choice | Allow Chrome extension users to select preferred engine (LLM / MTranServer / auto) |
+| **Plugin Engine Selection** | Extension shows multiple engine options but routing ignores user choice | Route by actual user preference with proper fallback; remove fake options |
 | **Plugin DOM Translation** | Basic text replacement, page layout may break | Structure-aware DOM translation preserving layout, images, and interactive elements |
 
 > The hexagonal port/adapter design ensures these upgrades remain non-breaking.
