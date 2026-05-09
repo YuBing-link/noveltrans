@@ -165,7 +165,7 @@ noveltrans/
 | [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Contribution guidelines |
 | [`Coverage Report`](docs/coverage/index.html) | Interactive JaCoCo HTML coverage report (80.5% instruction) |
 | [`Coverage Summary`](docs/coverage-report-summary.md) | Markdown coverage summary with top uncovered classes |
-| [`Load Test Report`](load-test/results/) | k6 load test results — 100 VU stress test with HTML report |
+| [`Load Test Report`](load-test/results/) | k6 load test results — 200 VU stress test with HTML report |
 
 ## License
 

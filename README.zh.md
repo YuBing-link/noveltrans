@@ -180,7 +180,7 @@ noveltrans/
 | [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) | 贡献指南 |
 | [`Coverage Report`](docs/coverage/index.html) | JaCoCo 交互式 HTML 覆盖率报告（80.5% 指令覆盖） |
 | [`Coverage Summary`](docs/coverage-report-summary.md) | Markdown 覆盖率摘要，含未覆盖最多的类 |
-| [`Load Test Report`](load-test/results/) | k6 压测结果 — 100 VU 压力测试 HTML 报告 |
+| [`Load Test Report`](load-test/results/) | k6 压测结果 — 200 VU 压力测试 HTML 报告 |
 
 ## License
 
