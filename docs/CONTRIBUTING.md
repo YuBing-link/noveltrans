@@ -6,7 +6,7 @@ Thank you for your interest in NovelTrans!
 
 - [`SETUP.md`](SETUP.md) — Deployment & development environment setup
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — System architecture and data flow
-- [`README.md`](README.md) — Project overview
+- [`README.md`](../README.md) — Project overview
 
 ## Git Workflow
 

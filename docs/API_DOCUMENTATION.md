@@ -4,7 +4,7 @@
 
 **Related documents:**
 
-- [README.md](README.md) — Project overview and quick start
+- [README.md](../README.md) — Project overview and quick start
 - [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture and data flow
 
 ---

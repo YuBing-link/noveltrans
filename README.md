@@ -33,47 +33,77 @@ Three client channels share the same backend:
 
 ## Architecture
 
+![Architecture Diagram](docs/architecture.svg)
+
 ```
-┌──────────┐
-│ Chrome   │────┐
-│ Extension│    │   ┌──────────┐    ┌──────────────────────────────────────────┐
-│          │    ├──▶│  Nginx   │───▶│        Spring Boot Backend (Undertow)    │
-└──────────┘    │   │ :7341    │    │  ┌────────────────────────────────────┐  │
-┌──────────┐    │   │          │    │  │   Application Layer (Use Cases)    │  │
-│ Web App  │────┘   │  · /   static│  │   SubscriptionAppService           │  │
-│ React+TS │        │  · /api → API│  │   TranslationAppService            │  │
-│          │        │  · /v1  → API│  │   AuthAppService                   │  │
-└──────────┘        └──────────┘    │  └───────────────┬────────────────────┘  │
-                                    │                  │                       │
-                                    │  ┌───────────────┴────────────────────┐  │
-                                    │  │      Domain Layer (Pure Java)      │  │
-                                    │  │   TranslationPipeline (4 levels)   │  │
-                                    │  │   EntityConsistencyService         │  │
-                                    │  │   MultiAgentTranslationService     │  │
-                                    │  │   CollabStateMachine + Quota       │  │
-                                    │  └───────────────┬────────────────────┘  │
-                                    │                  │                       │
-                                    │  ┌───────────────┴────────────────────┐  │
-                                    │  │   Port/Out Interfaces              │  │
-                                    │  │   (Repository, Cache, Payment)     │  │
-                                    │  └───────────────┬────────────────────┘  │
-                                    └────────┬─────────┼───────────────────────┘
-                                             │         │
-             ┌──────────────────┬────────────┼─────────┼──────────┬────────────────────┐
-             │                  │            │         │          │                    │
-        ┌────┴─────┐     ┌─────┴──────┐     │    ┌────┴─────┐   ┌┴────────────┐
-        │  MySQL   │     │    Redis   │     │    │  Python  │   │  MTranServer │
-        │ 8.0      │     │  Stack 7.4 │     │    │ FastAPI  │   │  Local :8989 │
-        │ Flyway   │     │  HNSW      │     │    │ :8000    │   │  lightweight │
-        └──────────┘     └────────────┘     │    └──────────┘   └─────────────┘
-        Persistence      Cache + Vectors    │    Multi-agent     Fast mode
-                                            │
-                                 ┌──────────┴──────────┐          External
-                                 │      Stripe         │
-                                 │  Checkout / Portal  │
-                                 │  Webhook (callback) │
-                                 └─────────────────────┘
-                                   Subscription & Billing
+                   ┌──────────────────────────────────────┐
+                   │         CLIENTS / EXTERNAL            │
+                   │  Chrome Ext · Web App · 3rd Party    │
+                   └──────────────┬───────────────────────┘
+                                  │
+                           ┌──────┴──────┐
+                           │   Nginx     │
+                           │  Gateway    │
+                           └──────┬──────┘
+                                  │  HTTP
+          ╔═══════════════════════╧══════════════════════════╗
+          ║  INBOUND ADAPTERS (driving side)                ║
+          ║  ┌──────────┐ ┌──────────┐ ┌────────────────┐  ║
+          ║  │  REST    │ │ Security │ │ Stripe Webhook │  ║
+          ║  │ Ctrlers  │ │ Filters  │ │ + Rate Limiter │  ║
+          ║  └────┬─────┘ └────┬─────┘ └───────┬────────┘  ║
+          ╚═══════╪════════════╪═══════════════╪════════════╝
+                  │            │               │
+          ╔═══════╧════════════╧═══════════════╧════════════╗
+          ║  APPLICATION LAYER (use cases + implementations) ║
+          ║   TranslationAppService · SubscriptionAppService ║
+          ║   AuthAppService · CollabAppService              ║
+          ╚══════════════════════╤═══════════════════════════╝
+                                 │
+          ╔══════════════════════╧═══════════════════════════╗
+          ║  DOMAIN (pure Java, zero framework deps)        ║
+          ║  ┌─────────────────────────────────────────┐    ║
+          ║  │ TranslationPipeline · CollabStateMachine │    ║
+          ║  │ EntityConsistency  · QuotaManager       │    ║
+          ║  │ EngineRouter (calls ports, not adapters)│    ║
+          ║  └─────────────────────────────────────────┘    ║
+          ╚══════════════════════╧═══════════════════════════╝
+                                 │  depends on interfaces
+          ╔══════════════════════╧═══════════════════════════╗
+          ║  OUTBOUND PORTS (interfaces owned by domain)    ║
+          ║  Repository · Cache · Payment · Engine · Quota  ║
+          ╚══════════════════════╧═══════════════════════════╝
+                                 │  implemented by
+          ╔══════════════════════╧═══════════════════════════╗
+          ║  OUTBOUND ADAPTERS (driven side)                ║
+          ║  ┌──────────┐ ┌────────────┐ ┌──────────────┐  ║
+          ║  │ MyBatis  │ │ Redis      │ │ LLM          │  ║
+          ║  │ Impl     │ │ Adapter    │ │ Client       │  ║
+          ║  ├──────────┤ ├────────────┤ ├──────────────┤  ║
+          ║  │ Stripe   │ │ MTranServer│ │ Embedding    │  ║
+          ║  │ Adapter  │ │ Adapter    │ │ Client       │  ║
+          ║  └──────────┘ └────────────┘ └──────────────┘  ║
+          ╚══════════════════════╧═══════════════════════════╝
+                                 │
+     ┌───────────────────────────┼──────────────────┐
+     ▼              ▼            ▼                   │
+┌──────────┐ ┌────────────┐ ┌──────────────┐        │
+│  MySQL   │ │   Redis    │ │ Python LLM   │        │
+│  8.0     │ │  Stack 7.4 │ │ MTranServer  │        │
+│          │ │ Cache+Vec  │ │ (fallback)   │        │
+└──────────┘ └────────────┘ └──────────────┘        │
+│              Internal Infrastructure                │
+├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│              ┌──────────────┐                      │
+│              │   Stripe     │                      │
+│              │ (ext. SaaS)  │                      │
+│              └──────────────┘                      │
+│               External Services                     │
+└─────────────────────────────────────────────────────┘
+
+ Single-instance in current phase (Phase 2 adds horizontal scaling for engine & API tier).
+ Dependency flows inward: Adapters → Ports → Domain.
+ Domain has zero knowledge of frameworks, databases, or HTTP.
 ```
 
 ## Tech Stack
@@ -118,7 +148,7 @@ Chapter tasks transition through a finite state machine with CAS-based optimisti
 <details>
 <summary>Click to expand</summary>
 
-All endpoints below are accessed through Nginx at port 7341. External requests use the `/api/` prefix (stripped by Nginx), while plugin and external API routes use `/v1/` (passed through as-is).
+All endpoints below are accessed through Nginx at port 7341. Web dashboard requests use the `/api/` prefix (Nginx strips `/api` before forwarding), plugin and external API routes use `/v1/` (passed through as-is), and Stripe webhooks use `/webhook/` (passed through as-is).
 
 | Category | Backend Path | External Path (via Nginx) | Auth |
 |----------|-------------|--------------------------|------|
@@ -152,7 +182,7 @@ docker compose up -d
 
 Initial startup may take 5-10 minutes. Open [http://localhost:7341](http://localhost:7341).
 
-For detailed setup instructions, see [`SETUP.md`](SETUP.md).
+For detailed setup instructions, see [`SETUP.md`](docs/SETUP.md).
 
 ## Project Structure
 
@@ -177,15 +207,33 @@ noveltrans/
 └── .env.example                    # Environment variable template
 ```
 
+## Roadmap
+
+| Area | Current Status | Plan |
+|------|---------------|------|
+| **API Gateway Routing** | `/api/v1/**` (rewrite) and `/v1/**` (passthrough) coexist | Consolidate to single external prefix (`/api/v1/**` only) |
+| **Nginx / Gateway HA** | Single Nginx instance | Dual Nginx + Keepalived/VIP, or cloud LB (ALB/NLB) |
+| **Stripe Webhook Reliability** | Synchronous processing (full DB tx before returning 200) | Return 200 immediately, enqueue to Redis Stream / MQ, process async |
+| **Engine Call Resilience** | Python FastAPI path has connect/read timeouts but no circuit breaker | Add Resilience4j CB + fallback; unify under `TranslationEnginePort` |
+| **Service HA** | All components single-instance | Spring Boot multi-instance + service discovery; MySQL primary-replica; Redis Sentinel/Cluster |
+| **Observability** | No APM or distributed tracing | Jaeger/SkyWalking for tracing; ELK/Loki for log aggregation |
+| **Message Queue** | CollabStateMachine and Quota operations are synchronous | RabbitMQ/RocketMQ for async chapter events, quota audit |
+| **Object Storage** | Document uploads stored locally | S3/MinIO for PDF/Word translation documents |
+| **Vector Store Scale** | Redis HNSW sufficient for <1M vectors | Evaluate Milvus/Pinecone if scale exceeds 1M entries |
+| **Plugin Engine Selection** | Translation engine fixed server-side, no client-side choice | Allow Chrome extension users to select preferred engine (LLM / MTranServer / auto) |
+| **Plugin DOM Translation** | Basic text replacement, page layout may break | Structure-aware DOM translation preserving layout, images, and interactive elements |
+
+> The hexagonal port/adapter design ensures these upgrades remain non-breaking.
+
 ## Documentation
 
 | Document | Purpose |
 |----------|---------|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | System architecture, component responsibilities, data flow, cache hierarchy |
-| [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) | Full REST API reference with request/response examples |
-| [`SETUP.md`](SETUP.md) | Deployment & local development guide |
-| [`ADR.md`](ADR.md) | Architecture decision records |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution guidelines |
+| [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture, component responsibilities, data flow, cache hierarchy |
+| [`API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md) | Full REST API reference with request/response examples |
+| [`SETUP.md`](docs/SETUP.md) | Deployment & local development guide |
+| [`ADR.md`](docs/ADR.md) | Architecture decision records |
+| [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Contribution guidelines |
 
 ## License
 

@@ -4,10 +4,9 @@ This document describes the system architecture, component responsibilities, dat
 
 **Related documents:**
 
-- [README.md](README.md) — Project overview and quick start
+- [README.md](../README.md) — Project overview and quick start
 - [SETUP.md](SETUP.md) — Deployment guide
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Contributing guide and code style (Spotless)
-- [test-coverage-report.md](test-coverage-report.md) — Test coverage report
 
 ## Table of Contents
 
@@ -28,22 +27,70 @@ This document describes the system architecture, component responsibilities, dat
 NovelTrans is a full-stack bilingual novel translation system built with the following core components:
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          NovelTrans System Architecture                   │
-├──────────┐    ┌──────────┐    ┌────────────┐    ┌──────────────┐         │
-│ Chrome   │───▶│  Nginx   │───▶│ Spring Boot│───▶│ Translation  │         │
-│ Extension│    │ :7341    │    │  Backend   │    │   Engines    │         │
-│          │    │          │    │  :8080     │    │  :8000/:8989 │         │
-└──────────┘    └──────────┘    └─────┬──────┘    └──────────────┘         │
-┌──────────┐                          │                                    │
-│ Web App  │                          │                                    │
-│ React+TS │──────────────────────────┘                                    │
-└──────────┘              ┌─────────┴───────┐                              │
-                          │  MySQL 8.0      │                              │
-                          │  Redis Stack    │                              │
-                          │  Caffeine       │                              │
-                          └─────────────────┘                              │
-└──────────────────────────────────────────────────────────────────────────┘
+                   ┌──────────────────────────────────────┐
+                   │         CLIENTS / EXTERNAL            │
+                   │  Chrome Ext · Web App · 3rd Party    │
+                   └──────────────┬───────────────────────┘
+                                  │
+                           ┌──────┴──────┐
+                           │   Nginx     │
+                           │  Gateway    │
+                           └──────┬──────┘
+                                  │  HTTP
+          ╔═══════════════════════╧══════════════════════════╗
+          ║  INBOUND ADAPTERS (driving side)                ║
+          ║  ┌──────────┐ ┌──────────┐ ┌────────────────┐  ║
+          ║  │  REST    │ │ Security │ │ Stripe Webhook │  ║
+          ║  │ Ctrlers  │ │ Filters  │ │ + Rate Limiter │  ║
+          ║  └────┬─────┘ └────┬─────┘ └───────┬────────┘  ║
+          ╚═══════╪════════════╪═══════════════╪════════════╝
+                  │            │               │
+          ╔═══════╧════════════╧═══════════════╧════════════╗
+          ║  APPLICATION LAYER (use cases + implementations) ║
+          ║   TranslationAppService · SubscriptionAppService ║
+          ║   AuthAppService · CollabAppService              ║
+          ╚══════════════════════╤═══════════════════════════╝
+                                 │
+          ╔══════════════════════╧═══════════════════════════╗
+          ║  DOMAIN (pure Java, zero framework deps)        ║
+          ║  ┌─────────────────────────────────────────┐    ║
+          ║  │ TranslationPipeline · CollabStateMachine │    ║
+          ║  │ EntityConsistency  · QuotaManager       │    ║
+          ║  │ EngineRouter (calls ports, not adapters)│    ║
+          ║  └─────────────────────────────────────────┘    ║
+          ╚══════════════════════╧═══════════════════════════╝
+                                 │  depends on interfaces
+          ╔══════════════════════╧═══════════════════════════╗
+          ║  OUTBOUND PORTS (interfaces owned by domain)    ║
+          ║  Repository · Cache · Payment · Engine · Quota  ║
+          ╚══════════════════════╧═══════════════════════════╝
+                                 │  implemented by
+          ╔══════════════════════╧═══════════════════════════╗
+          ║  OUTBOUND ADAPTERS (driven side)                ║
+          ║  ┌──────────┐ ┌────────────┐ ┌──────────────┐  ║
+          ║  │ MyBatis  │ │ Redis      │ │ LLM          │  ║
+          ║  │ Impl     │ │ Adapter    │ │ Client       │  ║
+          ║  ├──────────┤ ├────────────┤ ├──────────────┤  ║
+          ║  │ Stripe   │ │ MTranServer│ │ Embedding    │  ║
+          ║  │ Adapter  │ │ Adapter    │ │ Client       │  ║
+          ║  └──────────┘ └────────────┘ └──────────────┘  ║
+          ╚══════════════════════╧═══════════════════════════╝
+                                 │
+     ┌───────────────────────────┼──────────────────┐
+     ▼              ▼            ▼                   │
+┌──────────┐ ┌────────────┐ ┌──────────────┐        │
+│  MySQL   │ │   Redis    │ │ Python LLM   │        │
+│  8.0     │ │  Stack 7.4 │ │ MTranServer  │        │
+│          │ │ Cache+Vec  │ │ (fallback)   │        │
+└──────────┘ └────────────┘ └──────────────┘        │
+│              Internal Infrastructure                │
+├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│              ┌──────────────┐                      │
+│              │   Stripe     │                      │
+│              │ (ext. SaaS)  │                      │
+│              └──────────────┘                      │
+│               External Services                     │
+└─────────────────────────────────────────────────────┘
 ```
 
 ### Tech Stack
@@ -92,12 +139,14 @@ NovelTrans is a full-stack bilingual novel translation system built with the fol
 
 ### 3. Nginx Gateway (`nginx/`)
 
-**Role**: Reverse proxy, static file serving, CORS handling.
+**Role**: Reverse proxy, static file serving, CORS handling, route normalization.
 
 - Listens on port 7341
-- Proxies `/v1/**` requests to `http://backend:8080`
-- Serves static files from `web-app/dist/` at `/`
-- Configures CORS headers for extension access
+- **Web routes**: `/api/**` — strips `/api` prefix, then proxies to backend (e.g. `/api/v1/translate` → `/v1/translate`)
+- **Plugin/External routes**: `/v1/**` — passed through as-is to backend
+- **Webhook routes**: `/webhook/**` — passed through as-is to backend (Stripe callbacks)
+- **Static files**: Serves `web-app/dist/` at `/`
+- **CORS**: Whitelist includes `chrome-extension://*`, `https://localhost`, and `https://127.0.0.1` origins via `map $http_origin`
 
 ### 4. Spring Boot Backend (`src/main/java/`)
 
@@ -644,27 +693,32 @@ The system applies 6 translation principles for novel content:
 ### Docker Compose Deployment
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Docker Network                      │
-│                                                      │
-│  ┌──────────┐    ┌──────────┐    ┌──────────────┐   │
-│  │  Nginx   │───▶│ Backend  │───▶│ MTranServer  │   │
-│  │  :7341   │    │  :8080   │    │  :8989       │   │
-│  └────┬─────┘    └────┬─────┘    └──────────────┘   │
-│       │               │                              │
-│       │          ┌────┴─────┐    ┌──────────────┐   │
-│       │          │ MySQL    │    │ LLM Engine   │   │
-│       │          │ :3306    │    │ :8000        │   │
-│       │          │ Redis    │    │              │   │
-│       │          │ :6379    │    └──────────────┘   │
-│       │          │ Ollama (:11434)                  │
-│       │          └──────────┘                       │
-│       │                                              │
-│  ┌────┴─────┐                                       │
-│  │ Frontend │ (static file mapping)                  │
-│  └──────────┘                                       │
-│                                                      │
-└─────────────────────────────────────────────────────┘
+                    ╔══════════════════════════════════════╗
+                    ║      Clients                        ║
+                    ║  Chrome Ext · Web App · 3rd Party   ║
+                    ╚══════════╤═══════════════════════════╝
+                               │
+                    ╔══════════╧═══════════════════════════╗
+                    ║   OUTBOUND ADAPTERS (driven side)   ║
+                    ║  ┌──────────┐ ┌────────┐           ║
+                    ║  │ MyBatis  │ │ Redis  │           ║
+                    ║  ├──────────┤ ├────────┤           ║
+                    ║  │ Stripe   │ │MTranSrv│           ║
+                    ║  ├──────────┤ ├────────┤           ║
+                    ║  │ LLM      │ │Embedd. │           ║
+                    ║  │ Client   │ │ Client │           ║
+                    ║  └──────────┘ └────────┘           ║
+                    ╚══════════╤═══════════════════════════╝
+                               │
+                    ╔══════════╧═══════════════════════════╗
+                    ║   MySQL    │  Redis    │  Python     ║
+                    ║   8.0      │ Stack 7.4 │  FastAPI    ║
+                    ║            │ Cache+Vec │  MTranSrv   ║
+                    ╚══════════╤═══════════════════════════╝
+                               │
+                    ╔══════════╧═══════════════════════════╗
+                    ║   Stripe (external SaaS)             ║
+                    ╚══════════════════════════════════════╝
 ```
 
 ### Port Mapping
@@ -680,6 +734,23 @@ The system applies 6 translation principles for novel content:
 | Ollama | 11434 | 11434 | Embedding model (GPU) |
 
 ---
+
+## Operations & Observability (Roadmap)
+
+The following items are planned for production-ready operations:
+
+| Area | Current Status | Plan |
+|------|---------------|------|
+| **APM / Distributed Tracing** | No request tracing across services | Jaeger or SkyWalking |
+| **Centralized Logging** | Logs are container-local; multi-service debugging is manual | ELK stack or Grafana Loki |
+| **Metrics & Alerting** | No service-level SLI/SLO dashboards | Prometheus + Grafana |
+| **Message Queue** | Collab events, quota audit, and Stripe webhooks are synchronous | RabbitMQ or RocketMQ |
+| **Object Storage** | Document files stored on local filesystem | S3-compatible store (MinIO/AWS S3) |
+| **Vector Store Scale-out** | Redis HNSW works for <1M vectors; memory cost rises linearly | Evaluate Milvus or Pinecone for >1M translation memories |
+| **Service HA** | All components single-instance | Multi-instance Spring Boot + MySQL primary-replica + Redis Sentinel/Cluster |
+| **Engine Resilience** | Python FastAPI path has timeouts but no circuit breaker | Add Resilience4j CB + fallback; unify under `TranslationEnginePort` |
+
+> The hexagonal port/adapter design ensures these upgrades remain non-breaking.
 
 ## Database Design
 
@@ -771,4 +842,4 @@ user (1) ──── (N) translation_memory
 
 ---
 
-**Last updated**: 2026-05-08 — Hexagonal architecture migration complete. Components reorganized into `adapter/in`, `adapter/out`, `port/in`, `port/out`, `domain` layers.
+**Last updated**: 2026-05-09 — Architecture diagram updated to hexagonal representation; docs consolidated under `docs/`.
