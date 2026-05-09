@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -27,9 +28,9 @@ import java.util.Optional;
 public class StripePaymentAdapter implements PaymentPort {
 
     @Override
-    public String createCheckoutSession(String customerId, String priceId, String successUrl, String cancelUrl) {
+    public String createCheckoutSession(String customerId, String priceId, String successUrl, String cancelUrl, Map<String, String> metadata) {
         try {
-            SessionCreateParams params = SessionCreateParams.builder()
+            SessionCreateParams.Builder paramsBuilder = SessionCreateParams.builder()
                 .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
                 .setCustomer(customerId)
                 .addLineItem(SessionCreateParams.LineItem.builder()
@@ -37,9 +38,15 @@ public class StripePaymentAdapter implements PaymentPort {
                     .setQuantity(1L)
                     .build())
                 .setSuccessUrl(successUrl)
-                .setCancelUrl(cancelUrl)
-                .build();
-            Session session = Session.create(params);
+                .setCancelUrl(cancelUrl);
+
+            if (metadata != null && !metadata.isEmpty()) {
+                for (var entry : metadata.entrySet()) {
+                    paramsBuilder.putMetadata(entry.getKey(), entry.getValue());
+                }
+            }
+
+            Session session = Session.create(paramsBuilder.build());
             return session.getUrl();
         } catch (StripeException e) {
             log.error("Failed to create checkout session for customer {}: {}", customerId, e.getMessage(), e);

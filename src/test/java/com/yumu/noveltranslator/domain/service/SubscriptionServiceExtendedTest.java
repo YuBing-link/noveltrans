@@ -609,7 +609,7 @@ class SubscriptionServiceExtendedTest {
             prices.setYearlyPriceId("price_pro_yearly");
             when(stripeProperties.getPrices()).thenReturn(Map.of("pro", prices));
 
-            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel")))
+            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel"), any(Map.class)))
                     .thenReturn("https://checkout.stripe.com/test");
 
             CheckoutSessionRequest req = new CheckoutSessionRequest();

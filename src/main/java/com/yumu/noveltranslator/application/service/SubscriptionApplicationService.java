@@ -147,9 +147,15 @@ public class SubscriptionApplicationService implements com.yumu.noveltranslator.
 
         // 3. 无活跃订阅 → 创建新 Checkout Session
         try {
+            Map<String, String> metadata = Map.of(
+                "userId", String.valueOf(userId),
+                "plan", plan.getValue(),
+                "billingCycle", billingCycle.getValue()
+            );
             String url = paymentPort.createCheckoutSession(
                 customer.getStripeCustomerId(), priceId,
-                stripeProperties.getSuccessUrl(), stripeProperties.getCancelUrl());
+                stripeProperties.getSuccessUrl(), stripeProperties.getCancelUrl(),
+                metadata);
             return new CheckoutSessionResponse(url);
         } catch (Exception e) {
             log.error("Failed to create Stripe Checkout Session for user {}: {}", userId, e.getMessage(), e);

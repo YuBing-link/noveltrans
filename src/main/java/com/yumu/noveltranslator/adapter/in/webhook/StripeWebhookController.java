@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/webhook")
+@RequestMapping("/v1/webhook")
 @RequiredArgsConstructor
 public class StripeWebhookController implements WebhookPort {
 
