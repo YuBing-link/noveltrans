@@ -7,7 +7,7 @@
 [![CI](https://github.com/YuBing-link/noveltrans/actions/workflows/ci.yml/badge.svg)](https://github.com/YuBing-link/noveltrans/actions/workflows/ci.yml)
 [![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2-green?logo=spring)](https://spring.io/)
-[![Coverage](https://img.shields.io/badge/Coverage-86%25-brightgreen)]()
+[![Coverage](https://img.shields.io/badge/Coverage-80.5%25-brightgreen)](docs/coverage-report-summary.md)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 ## 项目简介
@@ -47,7 +47,7 @@ NovelTrans 是一个全栈翻译平台，为网文作者和译者设计。它取
 | **支付** | Stripe SDK 24.20.0 (Checkout, 计费门户, Webhook) |
 | **缓存** | Caffeine L1 → Redis L2 → MySQL L3, Redis HNSW 向量索引, 缓存 PubSub |
 | **弹性** | Resilience4j 2.2.0 断路器, 用户级 Semaphore, 指数退避重试 |
-| **测试** | JUnit 5, Mockito, JaCoCo (86% 覆盖率), k6 压测 |
+| **测试** | JUnit 5, Mockito, JaCoCo (80.5% 覆盖率), k6 压测 |
 | **基础设施** | Docker Compose (6 容器), Nginx 1.28-alpine, GitHub Actions |
 | **前端** | React 19 + TypeScript + Vite (Web), Chrome Extension MV3 |
 | **Python 引擎** | FastAPI + OpenAI SDK (多智能体翻译微服务) |
@@ -141,7 +141,7 @@ noveltrans/
 │   ├── port/out/                   # 出站端口接口（26 个基础设施契约）
 │   └── config/                     # Spring 配置 + 横切关注点
 ├── src/main/resources/             # 应用配置、SQL 迁移、邮件模板
-├── src/test/java/                  # 单元测试 + 集成测试（JaCoCo 86%）
+├── src/test/java/                  # 单元测试 + 集成测试（JaCoCo 80.5%）
 ├── web-app/                        # React Web 仪表盘（TypeScript + Vite）
 ├── extension/                      # Chrome 浏览器扩展（MV3）
 ├── services/translate-engine/      # Python 翻译微服务（FastAPI）
@@ -178,6 +178,9 @@ noveltrans/
 | [`SETUP.md`](docs/SETUP.md) | 部署与本地开发指南 |
 | [`ADR.md`](docs/ADR.md) | 架构决策记录 |
 | [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) | 贡献指南 |
+| [`Coverage Report`](docs/coverage/index.html) | JaCoCo 交互式 HTML 覆盖率报告（80.5% 指令覆盖） |
+| [`Coverage Summary`](docs/coverage-report-summary.md) | Markdown 覆盖率摘要，含未覆盖最多的类 |
+| [`Load Test Report`](load-test/results/) | k6 压测结果 — 100 VU 压力测试 HTML 报告 |
 
 ## License
 
