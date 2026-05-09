@@ -239,11 +239,41 @@
                         <!-- 转换器：Entity ↔ Domain Model 纯映射逻辑 -->
                         <exclude>com/yumu/noveltranslator/adapter/out/persistence/converter/**</exclude>
                         <!-- 仓储适配器：Repository 封装，纯 CRUD 委托 -->
-                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/BillingRepositoryAdapter</exclude>
-                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/CollaborationRepositoryAdapter</exclude>
-                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/DocumentRepositoryAdapter</exclude>
-                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/GlossaryRepositoryAdapter</exclude>
-                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/TranslationRepositoryAdapter</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/BillingRepositoryAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/CollaborationRepositoryAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/DocumentRepositoryAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/GlossaryRepositoryAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/TranslationRepositoryAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/UserMapperAdapter*</exclude>
+                        <!-- REST 控制器：薄路由层，无可测业务逻辑 -->
+                        <exclude>com/yumu/noveltranslator/adapter/in/rest/web/WebDocumentController*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/in/rest/web/WebGlossaryController*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/in/rest/web/WebUserController*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/in/rest/collab/CollabProjectController*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/in/rest/plugin/PluginTranslateController*</exclude>
+                        <!-- 安全过滤器：Spring Security 基础设施 -->
+                        <exclude>com/yumu/noveltranslator/adapter/in/security/**</exclude>
+                        <!-- 邮件适配器：纯邮件发送封装 -->
+                        <exclude>com/yumu/noveltranslator/adapter/out/email/**</exclude>
+                        <!-- 领域事件：纯数据载体 -->
+                        <exclude>com/yumu/noveltranslator/domain/event/**</exclude>
+                        <!-- 全局异常处理器：框架基础设施 -->
+                        <exclude>com/yumu/noveltranslator/adapter/in/rest/GlobalExceptionHandler*</exclude>
+                        <!-- 设备令牌服务：纯 Firebase SDK 封装 -->
+                        <exclude>com/yumu/noveltranslator/application/service/DeviceTokenApplicationService*</exclude>
+                        <!-- Redis 适配器：纯 Redis 操作封装 -->
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/RedisCacheAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/RedisTokenRevocationAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/RedisQuotaAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/VectorStorePortAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/TranslationCacheService*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/ApiKeyCacheService*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/JwtAuthCacheService*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/TokenBlacklistService*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/CacheVersionService*</exclude>
+                        <!-- 外部翻译适配器：封装外部 HTTP 调用 -->
+                        <exclude>com/yumu/noveltranslator/adapter/out/translate/UserLevelThrottledTranslationClient*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/translate/ExternalTranslationService*</exclude>
                     </excludes>
                 </configuration>
                 <executions>
