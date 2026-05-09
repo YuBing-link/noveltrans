@@ -18,6 +18,7 @@ class TokenAwareRateLimiterTest {
     void setUp() {
         TranslationLimitProperties props = mock(TranslationLimitProperties.class);
         when(props.getFreeTpmLimit()).thenReturn(100);
+        when(props.getAnonymousTpmLimit()).thenReturn(100);
         when(props.getProTpmLimit()).thenReturn(500);
         when(props.getMaxTpmLimit()).thenReturn(2000);
         rateLimiter = new TokenAwareRateLimiter(props);

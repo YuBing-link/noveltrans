@@ -221,6 +221,7 @@ class SubscriptionServiceTest {
             user.setId(1L);
             user.setEmail("test@example.com");
             when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
+            when(paymentPort.createCustomer(anyString())).thenReturn(new com.yumu.noveltranslator.port.out.payment.CustomerInfo("cus_test123", "test@example.com"));
 
             StripeProperties.PlanPrices planPrices = new StripeProperties.PlanPrices();
             planPrices.setMonthlyPriceId("price_pro_monthly");
@@ -228,28 +229,18 @@ class SubscriptionServiceTest {
             when(stripeProperties.getSuccessUrl()).thenReturn("https://example.com/success");
             when(stripeProperties.getCancelUrl()).thenReturn("https://example.com/cancel");
 
-            try (MockedStatic<Stripe> stripeStatic = mockStatic(Stripe.class);
-                 MockedStatic<Session> sessionStatic = mockStatic(Session.class);
-                 MockedStatic<com.stripe.model.Customer> customerStatic = mockStatic(com.stripe.model.Customer.class)) {
+            when(paymentPort.createCheckoutSession(eq("cus_test123"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel")))
+                    .thenReturn("https://checkout.stripe.com/test");
 
-                com.stripe.model.Customer mockCustomer = mock(com.stripe.model.Customer.class);
-                when(mockCustomer.getId()).thenReturn("cus_test123");
-                customerStatic.when(() -> com.stripe.model.Customer.create(any(com.stripe.param.CustomerCreateParams.class))).thenReturn(mockCustomer);
+            CheckoutSessionRequest request = new CheckoutSessionRequest();
+            request.setPlan("PRO");
+            request.setBillingCycle("monthly");
 
-                Session mockSession = mock(Session.class);
-                when(mockSession.getUrl()).thenReturn("https://checkout.stripe.com/test");
-                sessionStatic.when(() -> Session.create(any(SessionCreateParams.class))).thenReturn(mockSession);
+            CheckoutSessionResponse response = subscriptionService.createCheckoutSession(1L, request);
 
-                CheckoutSessionRequest request = new CheckoutSessionRequest();
-                request.setPlan("PRO");
-                request.setBillingCycle("monthly");
-
-                CheckoutSessionResponse response = subscriptionService.createCheckoutSession(1L, request);
-
-                assertNotNull(response);
-                assertEquals("https://checkout.stripe.com/test", response.getCheckoutUrl());
-                verify(billingPort).saveCustomer(any(StripeCustomer.class));
-            }
+            assertNotNull(response);
+            assertEquals("https://checkout.stripe.com/test", response.getCheckoutUrl());
+            verify(billingPort).saveCustomer(any(StripeCustomer.class));
         }
 
         @Test
@@ -267,21 +258,18 @@ class SubscriptionServiceTest {
             when(stripeProperties.getSuccessUrl()).thenReturn("https://example.com/success");
             when(stripeProperties.getCancelUrl()).thenReturn("https://example.com/cancel");
 
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                Session mockSession = mock(Session.class);
-                when(mockSession.getUrl()).thenReturn("https://checkout.stripe.com/test2");
-                sessionStatic.when(() -> Session.create(any(SessionCreateParams.class))).thenReturn(mockSession);
+            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_yearly"), eq("https://example.com/success"), eq("https://example.com/cancel")))
+                    .thenReturn("https://checkout.stripe.com/test2");
 
-                CheckoutSessionRequest request = new CheckoutSessionRequest();
-                request.setPlan("PRO");
-                request.setBillingCycle("yearly");
+            CheckoutSessionRequest request = new CheckoutSessionRequest();
+            request.setPlan("PRO");
+            request.setBillingCycle("yearly");
 
-                CheckoutSessionResponse response = subscriptionService.createCheckoutSession(1L, request);
+            CheckoutSessionResponse response = subscriptionService.createCheckoutSession(1L, request);
 
-                assertNotNull(response);
-                assertEquals("https://checkout.stripe.com/test2", response.getCheckoutUrl());
-                verify(billingPort, never()).saveCustomer(any());
-            }
+            assertNotNull(response);
+            assertEquals("https://checkout.stripe.com/test2", response.getCheckoutUrl());
+            verify(billingPort, never()).saveCustomer(any());
         }
 
         @Test
@@ -324,19 +312,16 @@ class SubscriptionServiceTest {
             sub.setCurrentPeriodEnd(LocalDateTime.of(2026, 6, 1, 0, 0));
 
             when(billingPort.findActiveSubscriptionByUserId(1L)).thenReturn(sub);
+            when(paymentPort.updateSubscription(eq("sub_test123"), any()))
+                    .thenReturn(new com.yumu.noveltranslator.port.out.payment.SubscriptionInfo("sub_test123", "active", null, null, true, null, null, null));
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                Subscription stripeSub = mock(Subscription.class);
-                subStatic.when(() -> Subscription.retrieve("sub_test123")).thenReturn(stripeSub);
+            SubscriptionStatusResponse response = subscriptionService.cancelSubscription(1L);
 
-                SubscriptionStatusResponse response = subscriptionService.cancelSubscription(1L);
-
-                assertNotNull(response);
-                assertTrue(response.getCancelAtPeriodEnd());
-                assertDoesNotThrow(() -> verify(stripeSub).update(any(com.stripe.param.SubscriptionUpdateParams.class)));
-                verify(billingPort).updateSubscription(argThat(s ->
-                        Boolean.TRUE.equals(s.getCancelAtPeriodEnd()) && s.getCanceledAt() != null));
-            }
+            assertNotNull(response);
+            assertTrue(response.getCancelAtPeriodEnd());
+            verify(paymentPort).updateSubscription(eq("sub_test123"), any());
+            verify(billingPort).updateSubscription(argThat(s ->
+                    Boolean.TRUE.equals(s.getCancelAtPeriodEnd()) && s.getCanceledAt() != null));
         }
     }
 
@@ -387,7 +372,7 @@ class SubscriptionServiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.empty());
 
-            assertDoesNotThrow(() -> subscriptionService.handleCheckoutSessionCompleted(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleCheckoutSessionCompleted(event));
         }
 
         @Test
@@ -401,7 +386,7 @@ class SubscriptionServiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.of(session));
 
-            assertDoesNotThrow(() -> subscriptionService.handleCheckoutSessionCompleted(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleCheckoutSessionCompleted(event));
         }
 
         @Test
@@ -420,7 +405,7 @@ class SubscriptionServiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.of(session));
 
-            assertDoesNotThrow(() -> subscriptionService.handleCheckoutSessionCompleted(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleCheckoutSessionCompleted(event));
         }
 
         @Test
@@ -439,12 +424,10 @@ class SubscriptionServiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.of(session));
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                subStatic.when(() -> Subscription.retrieve("sub_test123"))
-                        .thenThrow(mock(com.stripe.exception.StripeException.class));
+            when(paymentPort.retrieveSubscription("sub_test123"))
+                    .thenThrow(new RuntimeException("Stripe API error"));
 
-                assertDoesNotThrow(() -> subscriptionService.handleCheckoutSessionCompleted(event));
-            }
+            assertThrows(RuntimeException.class, () -> subscriptionService.handleCheckoutSessionCompleted(event));
         }
     }
 
@@ -461,7 +444,7 @@ class SubscriptionServiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.empty());
 
-            assertDoesNotThrow(() -> subscriptionService.handleSubscriptionUpdated(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleSubscriptionUpdated(event));
         }
 
         @Test
@@ -582,7 +565,7 @@ class SubscriptionServiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.empty());
 
-            assertDoesNotThrow(() -> subscriptionService.handleSubscriptionDeleted(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleSubscriptionDeleted(event));
         }
 
         @Test
@@ -597,7 +580,7 @@ class SubscriptionServiceTest {
 
             when(billingPort.findSubscriptionByStripeId("sub_nonexistent")).thenReturn(null);
 
-            assertDoesNotThrow(() -> subscriptionService.handleSubscriptionDeleted(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleSubscriptionDeleted(event));
         }
 
         @Disabled("LambdaUpdateWrapper 需要 Spring 上下文初始化实体缓存")
@@ -682,7 +665,7 @@ class SubscriptionServiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.empty());
 
-            assertDoesNotThrow(() -> subscriptionService.handleSubscriptionResumed(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleSubscriptionResumed(event));
         }
 
         @Test
@@ -697,7 +680,7 @@ class SubscriptionServiceTest {
 
             when(billingPort.findSubscriptionByStripeId("sub_nonexistent")).thenReturn(null);
 
-            assertDoesNotThrow(() -> subscriptionService.handleSubscriptionResumed(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleSubscriptionResumed(event));
         }
 
         @Disabled("LambdaUpdateWrapper 需要 Spring 上下文初始化实体缓存")
@@ -741,7 +724,7 @@ class SubscriptionServiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.empty());
 
-            assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentFailed(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleInvoicePaymentFailed(event));
         }
 
         @Test
@@ -821,20 +804,17 @@ class SubscriptionServiceTest {
             when(stripeProperties.getSuccessUrl()).thenReturn("https://example.com/success");
             when(stripeProperties.getCancelUrl()).thenReturn("https://example.com/cancel");
 
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                Session mockSession = mock(Session.class);
-                when(mockSession.getUrl()).thenReturn("https://checkout.stripe.com/test");
-                sessionStatic.when(() -> Session.create(any(SessionCreateParams.class))).thenReturn(mockSession);
+            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel")))
+                    .thenReturn("https://checkout.stripe.com/test");
 
-                CheckoutSessionRequest request = new CheckoutSessionRequest();
-                request.setPlan("PRO");
-                request.setBillingCycle("monthly");
+            CheckoutSessionRequest request = new CheckoutSessionRequest();
+            request.setPlan("PRO");
+            request.setBillingCycle("monthly");
 
-                subscriptionService.createCheckoutSession(1L, request);
+            subscriptionService.createCheckoutSession(1L, request);
 
-                verify(billingPort, never()).saveCustomer(any());
-                verify(userRepositoryPort, never()).findById(anyLong());
-            }
+            verify(billingPort, never()).saveCustomer(any());
+            verify(userRepositoryPort, never()).findById(anyLong());
         }
     }
 

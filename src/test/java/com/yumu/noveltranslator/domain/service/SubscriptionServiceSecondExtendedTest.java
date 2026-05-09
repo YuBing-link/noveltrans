@@ -12,6 +12,9 @@ import com.stripe.model.SubscriptionItemCollection;
 import com.stripe.model.Price;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.checkout.SessionCreateParams;
+import com.yumu.noveltranslator.port.out.payment.PaymentSessionInfo;
+import com.yumu.noveltranslator.port.out.payment.SubscriptionInfo;
+import com.yumu.noveltranslator.port.out.payment.SubscriptionUpdateRequest;
 import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionRequest;
 import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionResponse;
 import com.yumu.noveltranslator.port.dto.subscription.PaymentVerificationResponse;
@@ -105,121 +108,78 @@ class SubscriptionServiceSecondExtendedTest {
 
         @Test
         void userId不匹配返回错误() {
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                Session mockSession = mock(Session.class);
-                when(mockSession.getMetadata()).thenReturn(Map.of("userId", "2"));
-                when(mockSession.getPaymentStatus()).thenReturn("paid");
-                sessionStatic.when(() -> Session.retrieve("cs_test"))
-                        .thenReturn(mockSession);
+            when(paymentPort.retrieveCheckoutSession("cs_test"))
+                    .thenReturn(new PaymentSessionInfo("cs_test", "paid", "sub_test", Map.of("userId", "999", "plan", "pro")));
 
-                PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
+            PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertFalse(resp.isPaid());
-                assertEquals("支付会话不属于当前用户", resp.getMessage());
-            }
+            assertFalse(resp.isPaid());
+            assertEquals("支付会话不属于当前用户", resp.getMessage());
         }
 
         @Test
         void paid且本地已处理返回成功() {
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                Session mockSession = mock(Session.class);
-                when(mockSession.getMetadata()).thenReturn(Map.of(
-                        "userId", "1",
-                        "plan", "PRO"
-                ));
-                when(mockSession.getPaymentStatus()).thenReturn("paid");
-                when(mockSession.getSubscription()).thenReturn("sub_123");
-                sessionStatic.when(() -> Session.retrieve("cs_test"))
-                        .thenReturn(mockSession);
+            when(paymentPort.retrieveCheckoutSession("cs_test"))
+                    .thenReturn(new PaymentSessionInfo("cs_test", "paid", "sub_123", Map.of("userId", "1", "plan", "PRO")));
 
-                StripeSubscription localSub = new StripeSubscription();
-                localSub.setId(1L);
-                localSub.setStatus("active");
-                when(billingPort.findSubscriptionByStripeId("sub_123")).thenReturn(localSub);
+            StripeSubscription localSub = new StripeSubscription();
+            localSub.setId(1L);
+            localSub.setStatus("active");
+            when(billingPort.findSubscriptionByStripeId("sub_123")).thenReturn(localSub);
 
-                PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
+            PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertTrue(resp.isPaid());
-                assertEquals("支付成功，订阅已激活", resp.getMessage());
-                assertEquals("active", resp.getStatus());
-            }
+            assertTrue(resp.isPaid());
+            assertEquals("支付成功，订阅已激活", resp.getMessage());
+            assertEquals("active", resp.getStatus());
         }
 
         @Test
         void paid但本地未处理返回pending() {
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                Session mockSession = mock(Session.class);
-                when(mockSession.getMetadata()).thenReturn(Map.of(
-                        "userId", "1",
-                        "plan", "PRO"
-                ));
-                when(mockSession.getPaymentStatus()).thenReturn("paid");
-                when(mockSession.getSubscription()).thenReturn("sub_123");
-                sessionStatic.when(() -> Session.retrieve("cs_test"))
-                        .thenReturn(mockSession);
+            when(paymentPort.retrieveCheckoutSession("cs_test"))
+                    .thenReturn(new PaymentSessionInfo("cs_test", "paid", "sub_123", Map.of("userId", "1", "plan", "PRO")));
 
-                when(billingPort.findSubscriptionByStripeId("sub_123")).thenReturn(null);
+            when(billingPort.findSubscriptionByStripeId("sub_123")).thenReturn(null);
 
-                PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
+            PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertTrue(resp.isPaid());
-                assertEquals("pending", resp.getStatus());
-                assertEquals("支付已确认，订阅正在激活中", resp.getMessage());
-            }
+            assertTrue(resp.isPaid());
+            assertEquals("pending", resp.getStatus());
+            assertEquals("支付已确认，订阅正在激活中", resp.getMessage());
         }
 
         @Test
         void unpaid返回失败() {
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                Session mockSession = mock(Session.class);
-                when(mockSession.getMetadata()).thenReturn(Map.of(
-                        "userId", "1",
-                        "plan", "PRO"
-                ));
-                when(mockSession.getPaymentStatus()).thenReturn("unpaid");
-                when(mockSession.getSubscription()).thenReturn("sub_123");
-                sessionStatic.when(() -> Session.retrieve("cs_test"))
-                        .thenReturn(mockSession);
+            when(paymentPort.retrieveCheckoutSession("cs_test"))
+                    .thenReturn(new PaymentSessionInfo("cs_test", "unpaid", null, Map.of("userId", "1", "plan", "PRO")));
 
-                PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
+            PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertFalse(resp.isPaid());
-                assertEquals("unpaid", resp.getStatus());
-                assertEquals("支付尚未完成", resp.getMessage());
-            }
+            assertFalse(resp.isPaid());
+            assertEquals("unpaid", resp.getStatus());
+            assertEquals("支付尚未完成", resp.getMessage());
         }
 
         @Test
         void noPaymentRequired返回失败() {
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                Session mockSession = mock(Session.class);
-                when(mockSession.getMetadata()).thenReturn(Map.of(
-                        "userId", "1",
-                        "plan", "PRO"
-                ));
-                when(mockSession.getPaymentStatus()).thenReturn("no_payment_required");
-                when(mockSession.getSubscription()).thenReturn("sub_123");
-                sessionStatic.when(() -> Session.retrieve("cs_test"))
-                        .thenReturn(mockSession);
+            when(paymentPort.retrieveCheckoutSession("cs_test"))
+                    .thenReturn(new PaymentSessionInfo("cs_test", "no_payment_required", null, Map.of("userId", "1", "plan", "PRO")));
 
-                PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
+            PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertFalse(resp.isPaid());
-                assertEquals("no_payment_required", resp.getStatus());
-            }
+            assertFalse(resp.isPaid());
+            assertEquals("no_payment_required", resp.getStatus());
         }
 
         @Test
         void stripe异常返回失败() {
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                sessionStatic.when(() -> Session.retrieve("cs_test"))
-                        .thenThrow(mock(StripeException.class));
+            when(paymentPort.retrieveCheckoutSession("cs_test"))
+                    .thenThrow(new RuntimeException("Stripe error"));
 
-                PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
+            PaymentVerificationResponse resp = service.verifyCheckoutSession("cs_test", 1L);
 
-                assertFalse(resp.isPaid());
-                assertEquals("无法验证支付状态", resp.getMessage());
-            }
+            assertFalse(resp.isPaid());
+            assertEquals("无法验证支付状态", resp.getMessage());
         }
     }
 
@@ -230,7 +190,7 @@ class SubscriptionServiceSecondExtendedTest {
     class CancelSubscriptionSuccessTests {
 
         @Test
-        void 成功取消订阅() throws StripeException {
+        void 成功取消订阅() {
             StripeSubscription sub = new StripeSubscription();
             sub.setId(1L);
             sub.setUserId(1L);
@@ -240,24 +200,19 @@ class SubscriptionServiceSecondExtendedTest {
             sub.setCurrentPeriodEnd(LocalDateTime.of(2026, 7, 1, 0, 0));
             sub.setCancelAtPeriodEnd(false);
             when(billingPort.findActiveSubscriptionByUserId(1L)).thenReturn(sub);
+            when(paymentPort.updateSubscription(eq("sub_cancel"), any()))
+                    .thenReturn(new SubscriptionInfo("sub_cancel", "active", null, null, true, null, null, null));
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                Subscription mockStripeSub = mock(Subscription.class);
-                when(mockStripeSub.getCancelAtPeriodEnd()).thenReturn(true);
-                when(mockStripeSub.update(any(SubscriptionUpdateParams.class))).thenReturn(mockStripeSub);
-                subStatic.when(() -> Subscription.retrieve("sub_cancel")).thenReturn(mockStripeSub);
+            SubscriptionStatusResponse resp = service.cancelSubscription(1L);
 
-                SubscriptionStatusResponse resp = service.cancelSubscription(1L);
-
-                assertNotNull(resp);
-                assertTrue(resp.getCancelAtPeriodEnd());
-                verify(billingPort).updateSubscription(argThat(s ->
-                        Boolean.TRUE.equals(s.getCancelAtPeriodEnd())));
-            }
+            assertNotNull(resp);
+            assertTrue(resp.getCancelAtPeriodEnd());
+            verify(billingPort).updateSubscription(argThat(s ->
+                    Boolean.TRUE.equals(s.getCancelAtPeriodEnd())));
         }
 
         @Test
-        void trialing状态可以取消() throws StripeException {
+        void trialing状态可以取消() {
             StripeSubscription sub = new StripeSubscription();
             sub.setId(1L);
             sub.setUserId(1L);
@@ -266,18 +221,13 @@ class SubscriptionServiceSecondExtendedTest {
             sub.setStatus("trialing");
             sub.setCurrentPeriodEnd(LocalDateTime.of(2026, 8, 1, 0, 0));
             when(billingPort.findActiveSubscriptionByUserId(1L)).thenReturn(sub);
+            when(paymentPort.updateSubscription(eq("sub_trial_cancel"), any()))
+                    .thenReturn(new SubscriptionInfo("sub_trial_cancel", "trialing", null, null, true, null, null, null));
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                Subscription mockStripeSub = mock(Subscription.class);
-                when(mockStripeSub.getCancelAtPeriodEnd()).thenReturn(true);
-                when(mockStripeSub.update(any(SubscriptionUpdateParams.class))).thenReturn(mockStripeSub);
-                subStatic.when(() -> Subscription.retrieve("sub_trial_cancel")).thenReturn(mockStripeSub);
+            SubscriptionStatusResponse resp = service.cancelSubscription(1L);
 
-                SubscriptionStatusResponse resp = service.cancelSubscription(1L);
-
-                assertNotNull(resp);
-                assertTrue(resp.getCancelAtPeriodEnd());
-            }
+            assertNotNull(resp);
+            assertTrue(resp.getCancelAtPeriodEnd());
         }
 
         @Test
@@ -288,13 +238,11 @@ class SubscriptionServiceSecondExtendedTest {
             sub.setStripeSubscriptionId("sub_err");
             sub.setStatus("active");
             when(billingPort.findActiveSubscriptionByUserId(1L)).thenReturn(sub);
+            when(paymentPort.updateSubscription(eq("sub_err"), any()))
+                    .thenThrow(new RuntimeException("Stripe API error"));
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                subStatic.when(() -> Subscription.retrieve("sub_err"))
-                        .thenThrow(new RuntimeException("Stripe API error"));
-
-                assertThrows(RuntimeException.class, () -> service.cancelSubscription(1L));
-            }
+            RuntimeException ex = assertThrows(RuntimeException.class, () -> service.cancelSubscription(1L));
+            assertEquals("取消订阅失败", ex.getMessage());
         }
     }
 
@@ -339,35 +287,20 @@ class SubscriptionServiceSecondExtendedTest {
             doNothing().when(userRepositoryPort).update(any(User.class));
             doNothing().when(userRepositoryPort).savePlanHistory(any(UserPlanHistory.class));
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                Subscription mockStripeSub = mock(Subscription.class);
-                when(mockStripeSub.getStatus()).thenReturn("active");
-                when(mockStripeSub.getCancelAtPeriodEnd()).thenReturn(false);
-                when(mockStripeSub.getCurrentPeriodStart()).thenReturn(1700000000L);
-                when(mockStripeSub.getCurrentPeriodEnd()).thenReturn(1702592000L);
+            when(paymentPort.retrieveSubscription("sub_existing")).thenReturn(
+                    new SubscriptionInfo("sub_existing", "active", 1700000000L, 1702592000L, false, "si_test", "price_pro_monthly", null));
+            when(paymentPort.updateSubscription(eq("sub_existing"), any(SubscriptionUpdateRequest.class))).thenReturn(
+                    new SubscriptionInfo("sub_existing", "active", 1700000000L, 1702592000L, false, "si_test", "price_max_monthly", null));
 
-                SubscriptionItem subItem = mock(SubscriptionItem.class);
-                Price price = mock(Price.class);
-                when(price.getId()).thenReturn("price_max_monthly");
-                when(subItem.getPrice()).thenReturn(price);
-                SubscriptionItemCollection items = mock(SubscriptionItemCollection.class);
-                when(items.getData()).thenReturn(List.of(subItem));
-                when(mockStripeSub.getItems()).thenReturn(items);
-                when(mockStripeSub.update(any(SubscriptionUpdateParams.class))).thenReturn(mockStripeSub);
+            CheckoutSessionRequest req = new CheckoutSessionRequest();
+            req.setPlan("MAX");
+            req.setBillingCycle("monthly");
 
-                subStatic.when(() -> Subscription.retrieve("sub_existing"))
-                        .thenReturn(mockStripeSub);
+            CheckoutSessionResponse resp = service.createCheckoutSession(1L, req);
 
-                CheckoutSessionRequest req = new CheckoutSessionRequest();
-                req.setPlan("MAX");
-                req.setBillingCycle("monthly");
-
-                CheckoutSessionResponse resp = service.createCheckoutSession(1L, req);
-
-                assertNull(resp.getCheckoutUrl());
-                verify(billingPort, never()).saveSubscription(any());
-                verify(billingPort).updateSubscription(any());
-            }
+            assertNull(resp.getCheckoutUrl());
+            verify(billingPort, never()).saveSubscription(any());
+            verify(billingPort).updateSubscription(any());
         }
     }
 }

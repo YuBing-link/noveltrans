@@ -122,21 +122,14 @@ class TranslationCacheServiceTest {
     class L3DatabaseCacheTests {
 
         @Test
-        void L3数据库命中回写L2和L1() {
-            // L1 miss, L2 miss, L3 hit
+        void L1和L2都未命中返回null() {
+            // L1 miss, L2 miss — getCache 不再查询 L3
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
             when(valueOperations.get(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectById("test-key")).thenReturn(null);
-
-            TranslationCache dbCache = new TranslationCache();
-            dbCache.setCacheKey("test-key");
-            dbCache.setTargetText("db-translated");
-            dbCache.setExpireTime(LocalDateTime.now().plusHours(24));
-            when(translationCacheMapper.selectOne(any())).thenReturn(dbCache);
 
             String result = cacheService.getCache("test-key");
 
-            assertEquals("db-translated", result);
+            assertNull(result);
         }
     }
 
@@ -237,44 +230,25 @@ class TranslationCacheServiceTest {
         }
 
         @Test
-        void L2查询时获取分布式锁() {
+        void L2查询直接返回无锁操作() {
             // L1 miss, L2 Redis hit
             when(valueOperations.get(anyString())).thenReturn("redis-value");
-            // Distributed lock acquired
-            when(valueOperations.setIfAbsent(eq("cache:lock:test-key"), eq("1"), eq(30L), any())).thenReturn(true);
-            when(stringRedisTemplate.delete(anyString())).thenReturn(true);
 
             String result = cacheService.getCache("test-key");
 
             assertEquals("redis-value", result);
-            // Verify distributed lock was attempted
-            verify(valueOperations).setIfAbsent(eq("cache:lock:test-key"), eq("1"), eq(30L), any());
+            verify(valueOperations).get("translator:cache:test-key");
         }
 
         @Test
-        void 分布式锁获取失败返回null() {
-            // L1 miss, L2 Redis miss, lock not acquired
+        void L1和L2都未命中返回null() {
+            // L1 miss, L2 Redis miss
             when(valueOperations.get(anyString())).thenReturn(null);
-            when(valueOperations.setIfAbsent(eq("cache:lock:test-key"), eq("1"), eq(30L), any())).thenReturn(false);
 
             String result = cacheService.getCache("test-key");
 
-            // Should fall through to L3, which should also miss
-            // Since L3 loader also goes through loadWithLock, it will also fail to acquire lock
-            // Result should be null (cache miss)
             assertNull(result);
-        }
-
-        @Test
-        void 分布式锁获取成功后删除锁key() {
-            // L1 miss, L2 Redis hit
-            when(valueOperations.get(anyString())).thenReturn("locked-value");
-            when(valueOperations.setIfAbsent(eq("cache:lock:test-key"), eq("1"), eq(30L), any())).thenReturn(true);
-            when(stringRedisTemplate.delete(eq("cache:lock:test-key"))).thenReturn(true);
-
-            cacheService.getCache("test-key");
-
-            verify(stringRedisTemplate).delete("cache:lock:test-key");
+            verify(valueOperations).get("translator:cache:test-key");
         }
 
         @Test

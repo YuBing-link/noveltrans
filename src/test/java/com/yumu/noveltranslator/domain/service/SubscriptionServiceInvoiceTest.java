@@ -91,7 +91,7 @@ class SubscriptionServiceInvoiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.empty());
 
-            assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleInvoicePaymentSucceeded(event));
         }
 
         @Test
@@ -252,7 +252,7 @@ class SubscriptionServiceInvoiceTest {
             when(event.getDataObjectDeserializer()).thenReturn(deserializer);
             when(deserializer.getObject()).thenReturn(Optional.of(invoice));
 
-            assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleInvoicePaymentSucceeded(event));
 
             verify(billingPort, never()).saveCustomer(any());
             verify(billingPort, never()).saveSubscription(any());
@@ -279,9 +279,9 @@ class SubscriptionServiceInvoiceTest {
             when(event.getId()).thenReturn("evt_orphan_api_err");
 
             when(paymentPort.retrieveSubscription("sub_orphan"))
-                    .thenThrow(new com.stripe.exception.ApiConnectionException("Stripe API connection error", null));
+                    .thenThrow(new RuntimeException("Stripe API connection error"));
 
-            assertDoesNotThrow(() -> subscriptionService.handleInvoicePaymentSucceeded(event));
+            assertThrows(RuntimeException.class, () -> subscriptionService.handleInvoicePaymentSucceeded(event));
 
             verify(billingPort, never()).saveSubscription(any());
         }

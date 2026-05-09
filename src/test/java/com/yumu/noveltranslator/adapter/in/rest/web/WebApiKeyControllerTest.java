@@ -98,7 +98,7 @@ class WebApiKeyControllerTest {
 
             mockMvc.perform(post("/user/api-keys")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("{}"))
+                    .content("{\"name\":\"Default\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.name").value("Default"));

@@ -116,7 +116,9 @@ class EntityConsistencyServiceTest {
             var mapping = context.mappings().get(0);
             assertEquals("Harry", mapping.getSourceText());
             assertEquals("哈利", mapping.getTranslatedText());
-            assertEquals("[{1}]", mapping.getPlaceholder());
+            assertNotNull(mapping.getPlaceholder());
+            assertTrue(mapping.getPlaceholder().startsWith("__ENT_"));
+            assertTrue(mapping.getPlaceholder().endsWith("__"));
             assertEquals(1, mapping.getIndex());
         }
 
@@ -131,9 +133,12 @@ class EntityConsistencyServiceTest {
             var context = service.buildMapping(translations);
 
             assertEquals(3, context.mappings().size());
-            assertEquals("[{1}]", context.mappings().get(0).getPlaceholder());
-            assertEquals("[{2}]", context.mappings().get(1).getPlaceholder());
-            assertEquals("[{3}]", context.mappings().get(2).getPlaceholder());
+            // Each has a unique __ENT_hash__ placeholder
+            assertNotNull(context.mappings().get(0).getPlaceholder());
+            assertNotNull(context.mappings().get(1).getPlaceholder());
+            assertNotNull(context.mappings().get(2).getPlaceholder());
+            // All placeholders are distinct
+            assertNotEquals(context.mappings().get(0).getPlaceholder(), context.mappings().get(1).getPlaceholder());
         }
 
         @Test
@@ -145,8 +150,10 @@ class EntityConsistencyServiceTest {
 
             var context = service.buildMapping(translations);
 
-            assertEquals("[{1}]", context.entityToPlaceholder().get("Harry"));
-            assertEquals("[{2}]", context.entityToPlaceholder().get("Ron"));
+            assertNotNull(context.entityToPlaceholder().get("Harry"));
+            assertTrue(context.entityToPlaceholder().get("Harry").startsWith("__ENT_"));
+            assertNotNull(context.entityToPlaceholder().get("Ron"));
+            assertTrue(context.entityToPlaceholder().get("Ron").startsWith("__ENT_"));
         }
 
         @Test
@@ -160,7 +167,7 @@ class EntityConsistencyServiceTest {
             var context = service.buildMapping(translations);
 
             assertEquals(20, context.mappings().size());
-            assertEquals("[{20}]", context.mappings().get(19).getPlaceholder());
+            assertEquals(20, context.mappings().get(19).getIndex());
         }
     }
 
@@ -176,7 +183,8 @@ class EntityConsistencyServiceTest {
             var context = service.buildMapping(Map.of("Harry", "哈利"));
             String result = service.replaceEntitiesWithPlaceholders("Harry went to school", context);
 
-            assertEquals("[{1}] went to school", result);
+            assertTrue(result.contains(context.entityToPlaceholder().get("Harry")));
+            assertFalse(result.contains("Harry"));
         }
 
         @Test
@@ -189,8 +197,8 @@ class EntityConsistencyServiceTest {
             var context = service.buildMapping(translations);
             String result = service.replaceEntitiesWithPlaceholders("Harry and Ron went out", context);
 
-            assertTrue(result.contains("[{1}]"));
-            assertTrue(result.contains("[{2}]"));
+            assertTrue(result.contains(context.entityToPlaceholder().get("Harry")));
+            assertTrue(result.contains(context.entityToPlaceholder().get("Ron")));
             assertFalse(result.contains("Harry"));
             assertFalse(result.contains("Ron"));
         }
@@ -201,7 +209,8 @@ class EntityConsistencyServiceTest {
             var context = service.buildMapping(Map.of("Harry", "哈利"));
             String result = service.replaceEntitiesWithPlaceholders("Harry saw Harry, Harry smiled", context);
 
-            assertEquals("[{1}] saw [{1}], [{1}] smiled", result);
+            String ph = context.entityToPlaceholder().get("Harry");
+            assertEquals(ph + " saw " + ph + ", " + ph + " smiled", result);
         }
 
         @Test
@@ -216,7 +225,7 @@ class EntityConsistencyServiceTest {
 
             // Long entity replaced first, short entity won't find a match
             assertFalse(result.contains("Harry Potter"));
-            assertTrue(result.contains("[{"));
+            assertTrue(result.contains("__ENT_"));
         }
 
         @Test
@@ -238,7 +247,7 @@ class EntityConsistencyServiceTest {
         }
 
         @Test
-        @DisplayName("占位符格式正确为方括号加数字")
+        @DisplayName("占位符格式为hash格式")
         void 占位符格式正确为方括号加数字() {
             Map<String, String> translations = new LinkedHashMap<>();
             translations.put("A", "译A");
@@ -247,7 +256,8 @@ class EntityConsistencyServiceTest {
             var context = service.buildMapping(translations);
             String result = service.replaceEntitiesWithPlaceholders("A and B", context);
 
-            assertTrue(result.matches("\\[\\{1\\}\\] and \\[\\{2\\}\\]"));
+            // New format: __ENT_<8hex>__
+            assertTrue(result.matches(".*__ENT_[0-9a-f]{8}__ and __ENT_[0-9a-f]{8}__.*"));
         }
     }
 
@@ -261,7 +271,8 @@ class EntityConsistencyServiceTest {
         @DisplayName("还原单个占位符")
         void 还原单个占位符() {
             var context = service.buildMapping(Map.of("Harry", "哈利"));
-            String result = service.restorePlaceholders("Hello [{1}] world", context);
+            String ph = context.entityToPlaceholder().get("Harry");
+            String result = service.restorePlaceholders("Hello " + ph + " world", context);
 
             assertEquals("Hello 哈利 world", result);
         }
@@ -274,7 +285,9 @@ class EntityConsistencyServiceTest {
             translations.put("Ron", "罗恩");
 
             var context = service.buildMapping(translations);
-            String result = service.restorePlaceholders("[{1}] and [{2}] went out", context);
+            String ph1 = context.entityToPlaceholder().get("Harry");
+            String ph2 = context.entityToPlaceholder().get("Ron");
+            String result = service.restorePlaceholders(ph1 + " and " + ph2 + " went out", context);
 
             assertEquals("哈利 and 罗恩 went out", result);
         }
@@ -283,7 +296,8 @@ class EntityConsistencyServiceTest {
         @DisplayName("占位符多次出现全部还原")
         void 占位符多次出现全部还原() {
             var context = service.buildMapping(Map.of("Harry", "哈利"));
-            String result = service.restorePlaceholders("[{1}] saw [{1}]", context);
+            String ph = context.entityToPlaceholder().get("Harry");
+            String result = service.restorePlaceholders(ph + " saw " + ph, context);
 
             assertEquals("哈利 saw 哈利", result);
         }
@@ -351,12 +365,12 @@ class EntityConsistencyServiceTest {
             String original = "猫和狗是朋友";
             String withPlaceholders = service.replaceEntitiesWithPlaceholders(original, context);
 
-            assertTrue(withPlaceholders.contains("[{"));
+            assertTrue(withPlaceholders.contains("__ENT_"));
             assertFalse(withPlaceholders.contains("猫"));
             assertFalse(withPlaceholders.contains("狗"));
 
             // Simulate English translation with placeholders preserved
-            String translated = "[{1}] and [{2}] are friends";
+            String translated = withPlaceholders.replace("和", " and ").replace("是朋友", " are friends");
             String restored = service.restorePlaceholders(translated, context);
 
             assertEquals("cat and dog are friends", restored);
@@ -372,7 +386,8 @@ class EntityConsistencyServiceTest {
             String original = "哈利波特与魔法石";
             String withPlaceholders = service.replaceEntitiesWithPlaceholders(original, context);
 
-            assertEquals("[{1}]与魔法石", withPlaceholders);
+            assertTrue(withPlaceholders.contains("__ENT_"));
+            assertEquals(context.entityToPlaceholder().get("哈利波特") + "与魔法石", withPlaceholders);
 
             String restored = service.restorePlaceholders(withPlaceholders, context);
             assertEquals("Harry Potter与魔法石", restored);
@@ -735,7 +750,8 @@ class EntityConsistencyServiceTest {
             var context = service.buildMapping(translations);
 
             assertEquals(1, context.mappings().size());
-            assertEquals("[{1}]", context.entityToPlaceholder().get("Test"));
+            assertNotNull(context.entityToPlaceholder().get("Test"));
+            assertTrue(context.entityToPlaceholder().get("Test").startsWith("__ENT_"));
         }
     }
 }

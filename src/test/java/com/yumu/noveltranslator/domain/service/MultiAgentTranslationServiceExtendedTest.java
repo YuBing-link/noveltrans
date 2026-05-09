@@ -182,47 +182,7 @@ class MultiAgentTranslationServiceExtendedTest {
         }
     }
 
-    // ============ buildBaseCacheKey 测试 ============
-
-    @Nested
-    @DisplayName("buildBaseCacheKey - 缓存键构建")
-    class BuildCacheKeyTests {
-
-        @Test
-        void 正常构建SHA256缓存键() throws Exception {
-            String key = invokeBuildBaseCacheKey("Hello World", "zh");
-            assertNotNull(key);
-            assertFalse(key.isEmpty());
-            assertTrue(key.endsWith("_zh"));
-        }
-
-        @Test
-        void 相同文本生成相同缓存键() throws Exception {
-            String key1 = invokeBuildBaseCacheKey("Hello", "en");
-            String key2 = invokeBuildBaseCacheKey("Hello", "en");
-            assertEquals(key1, key2);
-        }
-
-        @Test
-        void 不同文本生成不同缓存键() throws Exception {
-            String key1 = invokeBuildBaseCacheKey("Hello", "zh");
-            String key2 = invokeBuildBaseCacheKey("World", "zh");
-            assertNotEquals(key1, key2);
-        }
-
-        @Test
-        void 不同目标语言缓存键不同() throws Exception {
-            String key1 = invokeBuildBaseCacheKey("Hello", "zh");
-            String key2 = invokeBuildBaseCacheKey("Hello", "en");
-            assertNotEquals(key1, key2);
-        }
-
-        private String invokeBuildBaseCacheKey(String text, String target) throws Exception {
-            Method m = MultiAgentTranslationService.class.getDeclaredMethod("buildBaseCacheKey", String.class, String.class);
-            m.setAccessible(true);
-            return (String) m.invoke(service, text, target);
-        }
-    }
+    // buildBaseCacheKey 方法已删除，相关测试已移除
 
     // ============ translateChapter - 基本流程测试 ============
 

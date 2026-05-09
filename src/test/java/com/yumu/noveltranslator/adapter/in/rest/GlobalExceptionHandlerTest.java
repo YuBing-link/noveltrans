@@ -46,19 +46,19 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("TokenExpiredException返回401和过期消息")
+    @DisplayName("TokenExpiredException返回T102和过期消息")
     void handleTokenExpiredException() {
         TokenExpiredException ex = new TokenExpiredException("Token expired", Instant.now());
 
         var result = handler.handleJwtException(ex);
 
         assertFalse(result.isSuccess());
-        assertEquals("401", result.getCode());
+        assertEquals("T102", result.getCode());
         assertTrue(result.getMessage().contains("过期"));
     }
 
     @Test
-    @DisplayName("SignatureVerificationException返回401和签名错误消息")
+    @DisplayName("SignatureVerificationException返回T104和签名错误消息")
     void handleSignatureException() {
         SignatureVerificationException ex =
             new SignatureVerificationException(com.auth0.jwt.algorithms.Algorithm.HMAC256("secret"));
@@ -66,12 +66,12 @@ class GlobalExceptionHandlerTest {
         var result = handler.handleJwtException(ex);
 
         assertFalse(result.isSuccess());
-        assertEquals("401", result.getCode());
+        assertEquals("T104", result.getCode());
         assertTrue(result.getMessage().contains("签名"));
     }
 
     @Test
-    @DisplayName("其他JWT异常返回401和通用消息")
+    @DisplayName("其他JWT异常返回T101和通用消息")
     void handleOtherJwtException() {
         com.auth0.jwt.exceptions.JWTVerificationException ex =
             mock(com.auth0.jwt.exceptions.JWTVerificationException.class);
@@ -80,8 +80,8 @@ class GlobalExceptionHandlerTest {
         var result = handler.handleJwtException(ex);
 
         assertFalse(result.isSuccess());
-        assertEquals("401", result.getCode());
-        assertTrue(result.getMessage().contains("失败"));
+        assertEquals("T101", result.getCode());
+        assertTrue(result.getMessage().contains("令牌"));
     }
 
     @Test
@@ -93,6 +93,6 @@ class GlobalExceptionHandlerTest {
 
         assertFalse(result.isSuccess());
         assertEquals("500", result.getCode());
-        assertEquals("服务器内部错误", result.getMessage());
+        assertEquals("系统内部错误", result.getMessage());
     }
 }

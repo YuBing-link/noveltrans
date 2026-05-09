@@ -175,6 +175,9 @@ class SubscriptionServiceExtendedTest {
             customer.setUserId(1L);
             customer.setStripeCustomerId("cus_test");
 
+            when(paymentPort.retrieveSubscription(anyString())).thenReturn(
+                    new com.yumu.noveltranslator.port.out.payment.SubscriptionInfo("sub_new", "active", 1700000000L, 1702592000L, false, "si_test", "price_pro_monthly", null));
+
             try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
                 subStatic.when(() -> Subscription.retrieve("sub_new")).thenReturn(stripeSub);
 
@@ -221,26 +224,25 @@ class SubscriptionServiceExtendedTest {
 
             Subscription stripeSub = mock(Subscription.class);
 
-            try (MockedStatic<Subscription> subStatic = mockStatic(Subscription.class)) {
-                subStatic.when(() -> Subscription.retrieve("sub_existing")).thenReturn(stripeSub);
+            when(paymentPort.retrieveSubscription("sub_existing")).thenReturn(
+                    new com.yumu.noveltranslator.port.out.payment.SubscriptionInfo("sub_existing", "active", 1700000000L, 1702592000L, false, "si_test", "price_pro_monthly", null));
 
-                Event event = mock(Event.class);
-                EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
-                when(event.getDataObjectDeserializer()).thenReturn(deserializer);
-                when(deserializer.getObject()).thenReturn(Optional.of(session));
-                when(event.getId()).thenReturn("evt_checkout456");
+            Event event = mock(Event.class);
+            EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
+            when(event.getDataObjectDeserializer()).thenReturn(deserializer);
+            when(deserializer.getObject()).thenReturn(Optional.of(session));
+            when(event.getId()).thenReturn("evt_checkout456");
 
-                // billingPort.findCustomerByUserIdAndNotDeleted 返回已有客户
-                when(billingPort.findCustomerByUserIdAndNotDeleted(2L)).thenReturn(customer);
-                // billingPort.findSubscriptionByStripeId 返回已有订阅
-                when(billingPort.findSubscriptionByStripeId("sub_existing")).thenReturn(existingSub);
-                doNothing().when(billingPort).updateSubscription(any());
+            // billingPort.findCustomerByUserIdAndNotDeleted 返回已有客户
+            when(billingPort.findCustomerByUserIdAndNotDeleted(2L)).thenReturn(customer);
+            // billingPort.findSubscriptionByStripeId 返回已有订阅
+            when(billingPort.findSubscriptionByStripeId("sub_existing")).thenReturn(existingSub);
+            doNothing().when(billingPort).updateSubscription(any());
 
-                subscriptionService.handleCheckoutSessionCompleted(event);
+            subscriptionService.handleCheckoutSessionCompleted(event);
 
-                verify(billingPort, never()).saveSubscription(any());
-                verify(billingPort).updateSubscription(any());
-            }
+            verify(billingPort, never()).saveSubscription(any());
+            verify(billingPort).claimWebhookEvent(10L, "evt_checkout456");
         }
     }
 
@@ -607,22 +609,19 @@ class SubscriptionServiceExtendedTest {
             prices.setYearlyPriceId("price_pro_yearly");
             when(stripeProperties.getPrices()).thenReturn(Map.of("pro", prices));
 
-            try (MockedStatic<Session> sessionStatic = mockStatic(Session.class)) {
-                Session mockSession = mock(Session.class);
-                when(mockSession.getUrl()).thenReturn("https://checkout.stripe.com/test");
-                sessionStatic.when(() -> Session.create(any(SessionCreateParams.class))).thenReturn(mockSession);
+            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel")))
+                    .thenReturn("https://checkout.stripe.com/test");
 
-                CheckoutSessionRequest req = new CheckoutSessionRequest();
-                req.setPlan("pro");
-                req.setBillingCycle("monthly");
+            CheckoutSessionRequest req = new CheckoutSessionRequest();
+            req.setPlan("pro");
+            req.setBillingCycle("monthly");
 
-                CheckoutSessionResponse resp = subscriptionService.createCheckoutSession(1L, req);
+            CheckoutSessionResponse resp = subscriptionService.createCheckoutSession(1L, req);
 
-                assertNotNull(resp);
-                assertNotNull(resp.getCheckoutUrl());
-                // 验证没有创建新 customer（findCustomerByUserIdAndNotDeleted 只被调用一次）
-                verify(billingPort, times(1)).findCustomerByUserIdAndNotDeleted(1L);
-            }
+            assertNotNull(resp);
+            assertNotNull(resp.getCheckoutUrl());
+            // 验证没有创建新 customer（findCustomerByUserIdAndNotDeleted 只被调用一次）
+            verify(billingPort, times(1)).findCustomerByUserIdAndNotDeleted(1L);
         }
 
         @Test
@@ -635,6 +634,7 @@ class SubscriptionServiceExtendedTest {
             user.setEmail("test@example.com");
             user.setUsername("TestUser");
             when(userRepositoryPort.findById(1L)).thenReturn(Optional.of(user));
+            when(paymentPort.createCustomer(anyString())).thenReturn(new com.yumu.noveltranslator.port.out.payment.CustomerInfo("cus_new123", "test@example.com"));
 
             StripeProperties.PlanPrices prices = new StripeProperties.PlanPrices();
             prices.setMonthlyPriceId("price_pro_monthly");
@@ -682,8 +682,8 @@ class SubscriptionServiceExtendedTest {
             when(deserializer.getObject()).thenReturn(Optional.empty());
             when(deserializer.deserializeUnsafe()).thenReturn(null);
 
-            // handleCheckoutSessionCompleted 会捕获异常并安全返回，不抛出异常
-            assertDoesNotThrow(() -> subscriptionService.handleCheckoutSessionCompleted(event));
+            // handleCheckoutSessionCompleted throws IllegalStateException on deserialization failure
+            assertThrows(IllegalStateException.class, () -> subscriptionService.handleCheckoutSessionCompleted(event));
         }
     }
 }

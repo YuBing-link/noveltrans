@@ -63,21 +63,14 @@ class GlossaryCacheInvalidationTest {
 
         @Test
         void buildReverseIndexExtractsWordsAndSadd() {
-            // 当调用 putCache 时，应自动提取源文本中的单词并建立反向索引
-            when(valueOperations.get(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectById(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectOne(any())).thenReturn(null);
             when(setOperations.add(anyString(), anyString())).thenReturn(1L);
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
-            cacheService.putCache("test-key", "The Apple is delicious and the Apple pie too",
-                    "translated", "en", "zh", "google");
+            cacheService.buildReverseIndex("test-key", "The Apple is delicious and the Apple pie too");
 
-            // 验证对提取的单词调用了 SADD
-            verify(setOperations, atLeastOnce()).add(eq("glossary:cache_keys:apple"), anyString());
-            verify(setOperations, atLeastOnce()).add(eq("glossary:cache_keys:delicious"), anyString());
-            verify(setOperations, atLeastOnce()).add(eq("glossary:cache_keys:the"), anyString());
-            // 验证设置了 TTL
+            verify(setOperations, atLeastOnce()).add(eq("glossary:cache_keys:apple"), eq("test-key"));
+            verify(setOperations, atLeastOnce()).add(eq("glossary:cache_keys:delicious"), eq("test-key"));
+            verify(setOperations, atLeastOnce()).add(eq("glossary:cache_keys:the"), eq("test-key"));
             verify(stringRedisTemplate, atLeastOnce()).expire(startsWith("glossary:cache_keys:"), any(Duration.class));
         }
 
@@ -112,17 +105,12 @@ class GlossaryCacheInvalidationTest {
 
         @Test
         void buildReverseIndexDeduplicatesWords() {
-            // 同一单词在文本中出现多次，只应 SADD 一次（Set 特性）
-            when(valueOperations.get(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectById(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectOne(any())).thenReturn(null);
             when(setOperations.add(anyString(), anyString())).thenReturn(1L);
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
-            String repeatedText = "Apple Apple Apple";
-            cacheService.putCache("test-key", repeatedText, "translated", "en", "zh", "google");
+            cacheService.buildReverseIndex("v1:test-key", "Apple Apple Apple");
 
-            // 验证 apple 只被 SADD 了一次（虽然有三次出现），注意 key 带版本号前缀
+            // 验证 apple 只被 SADD 了一次（虽然有三次出现）
             verify(setOperations, times(1)).add(eq("glossary:cache_keys:apple"), eq("v1:test-key"));
         }
     }
@@ -226,16 +214,12 @@ class GlossaryCacheInvalidationTest {
 
         @Test
         void endToEnd_termAddedOnlyInvalidatesRelatedCache() {
-            // 场景：写入包含 "Apple" 的翻译，然后术语 "Apple" 被更新
-            // 1. 写入缓存（自动建立反向索引）
-            when(valueOperations.get(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectById(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectOne(any())).thenReturn(null);
+            // 场景：建立反向索引，然后术语变更触发失效
+            // 1. 直接建立反向索引（避免异步线程干扰 mock）
             when(setOperations.add(anyString(), anyString())).thenReturn(1L);
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
-            cacheService.putCache("v1:apple-text", "Apple is a fruit", "Apple 是一种水果",
-                    "en", "zh", "google");
+            cacheService.buildReverseIndex("v1:apple-text", "Apple is a fruit");
 
             // 2. 术语变更：触发 invalidateKeysForTerm("Apple")
             Set<String> affectedKeys = Set.of("v1:apple-text");
@@ -254,13 +238,10 @@ class GlossaryCacheInvalidationTest {
         @Test
         void reverseIndexMaintainsCorrectTtl() {
             // 验证反向索引 Set 的 TTL 为 24 小时
-            when(valueOperations.get(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectById(anyString())).thenReturn(null);
-            when(translationCacheMapper.selectOne(any())).thenReturn(null);
             when(setOperations.add(anyString(), anyString())).thenReturn(1L);
             lenient().when(stringRedisTemplate.expire(anyString(), any(Duration.class))).thenReturn(true);
 
-            cacheService.putCache("test-key", "Testing word boundary", "translated", "en", "zh", "google");
+            cacheService.buildReverseIndex("test-key", "Testing word boundary");
 
             verify(stringRedisTemplate).expire(
                     eq("glossary:cache_keys:testing"),

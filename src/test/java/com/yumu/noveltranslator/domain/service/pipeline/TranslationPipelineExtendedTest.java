@@ -732,12 +732,12 @@ class TranslationPipelineExtendedTest {
         @DisplayName("有术语表 — glossaryTerms 传入")
         void withGlossary() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(true), anyList(), any(), any());
+                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList(), any(), any());
 
             String result = pipelineWithGlossary.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("fast"), eq(false), eq(true), argThat(terms -> terms != null && terms.size() == 1), any(), any());
+            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("fast"), eq(false), eq(false), argThat(terms -> terms != null && terms.size() == 1), any(), any());
         }
 
         @Test
@@ -756,12 +756,12 @@ class TranslationPipelineExtendedTest {
         @DisplayName("executeSegment 有术语表 — L4 调用携带术语表")
         void executeSegmentWithGlossary() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("expert"), eq(false), eq(true), anyList(), any(), any());
+                    .translate(anyString(), anyString(), eq("expert"), eq(false), eq(false), anyList(), any(), any());
 
             String result = pipelineWithGlossary.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.EXPERT);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("expert"), eq(false), eq(true), argThat(terms -> terms != null && !terms.isEmpty()), any(), any());
+            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("expert"), eq(false), eq(false), argThat(terms -> terms != null && !terms.isEmpty()), any(), any());
         }
     }
 
@@ -915,9 +915,9 @@ class TranslationPipelineExtendedTest {
         }
 
         @Test
-        @DisplayName("快速模式 — null 文本返回原文(null)")
+        @DisplayName("快速模式 — null 文本抛出 NPE")
         void fastModeNullText() {
-            // executeFast(null, ...) calls translate(null, ...) directly
+            // executeFast 在日志中调用 text.length() 不对 null 做防护
             TranslationCachePort cs = mock(TranslationCachePort.class);
             RagTranslationApplicationService rag = mock(RagTranslationApplicationService.class);
             EntityConsistencyService ecs = mock(EntityConsistencyService.class);
@@ -925,14 +925,10 @@ class TranslationPipelineExtendedTest {
             UserLevelThrottledTranslationClient tc = mock(UserLevelThrottledTranslationClient.class);
 
             lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
-            lenient().doReturn(null).when(tc)
-                    .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
 
             TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
 
-            String result = p.executeFast(null, TARGET_LANG, TranslationMode.FAST);
-
-            assertNull(result);
+            assertThrows(NullPointerException.class, () -> p.executeFast(null, TARGET_LANG, TranslationMode.FAST));
         }
 
         @Test

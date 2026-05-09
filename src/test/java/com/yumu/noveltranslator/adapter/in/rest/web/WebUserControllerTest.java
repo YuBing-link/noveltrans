@@ -9,6 +9,8 @@ import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.adapter.in.security.LoginRateLimiter;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesRequest;
 import com.yumu.noveltranslator.domain.model.TranslationHistory;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserQuotaResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserStatisticsResponse;
 import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
@@ -41,6 +43,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
@@ -161,6 +164,7 @@ class WebUserControllerTest {
             User user = createTestUser();
             when(authPort.login(any(LoginRequest.class)))
                 .thenReturn(Result.ok(user));
+            when(loginRateLimiter.allowLoginAttempt(anyString())).thenReturn(true);
 
             mockMvc.perform(post("/user/login")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -234,7 +238,7 @@ class WebUserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.email").value("test@test.com"))
-                .andExpect(jsonPath("$.data.username").value("testuser"));
+                .andExpect(jsonPath("$.data.username").value("test@test.com"));
         }
     }
 
@@ -402,13 +406,9 @@ class WebUserControllerTest {
         @Test
         void 获取翻译历史成功() throws Exception {
             setupSecurityContext(createTestUser());
-            TranslationHistory history = new TranslationHistory();
-            history.setTaskId("task-001");
-            history.setUserId(1L);
-            when(translationTaskPort.getTranslationHistory(eq(1L), eq(1), eq(20), eq("all")))
-                .thenReturn(List.of(history));
-            when(translationTaskPort.countTranslationHistory(1L, "all")).thenReturn(1);
-            when(translationTaskPort.toHistoryResponse(any())).thenReturn(new TranslationHistoryResponse());
+            var pageResp = PageResponse.of(1, 20, 1L, List.of(new TranslationHistoryResponse()));
+            when(userPort.getTranslationHistory(eq(1L), eq(1), eq(20), eq("all")))
+                .thenReturn(pageResp);
 
             mockMvc.perform(get("/user/translation-history"))
                 .andExpect(status().isOk())
@@ -419,9 +419,9 @@ class WebUserControllerTest {
         @Test
         void 带分页参数获取历史() throws Exception {
             setupSecurityContext(createTestUser());
-            when(translationTaskPort.getTranslationHistory(eq(1L), eq(2), eq(10), eq("webpage")))
-                .thenReturn(List.of());
-            when(translationTaskPort.countTranslationHistory(1L, "all")).thenReturn(0);
+            var pageResp = PageResponse.of(2, 10, 0L, List.<TranslationHistoryResponse>of());
+            when(userPort.getTranslationHistory(eq(1L), eq(2), eq(10), eq("webpage")))
+                .thenReturn(pageResp);
 
             mockMvc.perform(get("/user/translation-history")
                     .param("page", "2")

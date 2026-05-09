@@ -33,7 +33,7 @@ class TranslationPhaseTest {
 
         @Test
         void valueOf无效名称抛出异常() {
-            assertThrows(IllegalStateException.class, () -> TranslationPhase.valueOf("INVALID"));
+            assertThrows(IllegalArgumentException.class, () -> TranslationPhase.valueOf("INVALID"));
         }
     }
 }

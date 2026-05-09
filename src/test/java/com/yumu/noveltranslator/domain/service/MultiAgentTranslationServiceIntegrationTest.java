@@ -325,8 +325,8 @@ class MultiAgentTranslationServiceIntegrationTest {
         java.lang.reflect.Field field = MultiAgentTranslationService.class.getDeclaredField("retryCounterMap");
         field.setAccessible(true);
         @SuppressWarnings("unchecked")
-        java.util.Map<Long, Integer> map = (java.util.Map<Long, Integer>) field.get(service);
-        map.put(chapterId, 3);
+        java.util.Map<Long, java.util.concurrent.atomic.AtomicInteger> map = (java.util.Map<Long, java.util.concurrent.atomic.AtomicInteger>) field.get(service);
+        map.put(chapterId, new java.util.concurrent.atomic.AtomicInteger(3));
 
         service.startMultiAgentTranslation(testProjectId);
 

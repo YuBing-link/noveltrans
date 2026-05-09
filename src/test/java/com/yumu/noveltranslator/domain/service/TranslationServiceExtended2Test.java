@@ -83,6 +83,9 @@ class TranslationServiceExtended2Test {
                 entityConsistencyService, postProcessingService, teamTranslationService, quotaService);
         lenient().when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
+        // Global stub for 8-param translate used by TranslationPipeline
+        lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
+                .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
         SecurityContextHolder.clearContext();
     }
 
@@ -117,6 +120,8 @@ class TranslationServiceExtended2Test {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
                     .thenReturn("{\"code\":200,\"data\":\"专家翻译结果\"}");
+            lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
+                    .thenReturn("{\"code\":200,\"data\":\"专家翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello World");
@@ -133,6 +138,8 @@ class TranslationServiceExtended2Test {
         void aiTeam引擎映射为team模式() {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+                    .thenReturn("{\"code\":200,\"data\":\"团队翻译结果\"}");
+            lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"团队翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -213,7 +220,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setEngine("ai");
             req.setMode("expert");
-            var resp = translationService.selectionTranslate(null, req);
+            var resp = translationService.selectionTranslate(1L, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
@@ -234,7 +241,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setEngine("ai-team");
             req.setMode("team");
-            var resp = translationService.selectionTranslate(null, req);
+            var resp = translationService.selectionTranslate(1L, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("team"));
@@ -250,7 +257,7 @@ class TranslationServiceExtended2Test {
             // 无认证用户，不检查配额
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenThrow(new RuntimeException("network error"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -268,7 +275,7 @@ class TranslationServiceExtended2Test {
         void 翻译返回null时executeFast返回原文() {
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn(null);
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -285,7 +292,7 @@ class TranslationServiceExtended2Test {
         void 翻译返回空data时executeFast返回原文() {
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -307,7 +314,7 @@ class TranslationServiceExtended2Test {
         void 翻译结果中的script标签被净化() {
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"<script>alert(1)</script>翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -324,7 +331,7 @@ class TranslationServiceExtended2Test {
         void 翻译结果中的iframe标签被净化() {
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"<iframe src='evil'>内容</iframe>正常文本\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -341,7 +348,7 @@ class TranslationServiceExtended2Test {
         void 安全的p和b标签被保留() {
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"<p><b>加粗文本</b></p>\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -474,7 +481,7 @@ class TranslationServiceExtended2Test {
             req.setTargetLang("zh");
             req.setEngine("ai");
             req.setMode("expert");
-            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(1L, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), eq("expert"));
@@ -503,7 +510,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 阅读器翻译中缓存未命中调用翻译客户端() throws InterruptedException {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"translated-by-client\"}");
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -651,7 +658,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(1L, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), anyString());
@@ -672,7 +679,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(1L, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("max"), anyLong(), anyString());
@@ -693,7 +700,7 @@ class TranslationServiceExtended2Test {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(1L, req);
 
             assertTrue(resp.getSuccess());
         }
@@ -712,7 +719,7 @@ class TranslationServiceExtended2Test {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>test</p>");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(1L, req);
 
             assertTrue(resp.getSuccess());
             verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), anyString());
@@ -955,7 +962,7 @@ class TranslationServiceExtended2Test {
             req.setFastMode(false); // expert mode
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
+            SseEmitter emitter = translationService.webpageTranslateStream(1L, req);
             assertNotNull(emitter);
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
@@ -1155,7 +1162,7 @@ class TranslationServiceExtended2Test {
         @Test
         void 阅读器翻译中缓存未命中调用翻译客户端() throws InterruptedException {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList()))
+            lenient().when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"translated-by-client\"}");
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -1184,12 +1191,12 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
+            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(false);
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
+            SelectionTranslateResponse resp = translationService.selectionTranslate(1L, req);
 
             assertFalse(resp.getSuccess());
             assertTrue(resp.getTranslation().contains("字符配额不足"));
@@ -1202,12 +1209,12 @@ class TranslationServiceExtended2Test {
             User user = new User();
             user.setId(1L);
             user.setUserLevel("free");
-            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyInt(), anyString())).thenReturn(false);
+            when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(false);
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
+            ReaderTranslateResponse resp = translationService.readerTranslate(1L, req);
 
             assertFalse(resp.getSuccess());
             assertTrue(resp.getTranslatedContent().contains("字符配额不足"));

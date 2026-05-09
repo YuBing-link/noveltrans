@@ -135,7 +135,7 @@ class UserServiceTest {
             glossary.setId(1L);
             glossary.setUserId(1L);
             when(glossaryPort.findGlossaryById(1L)).thenReturn(Optional.of(glossary));
-            doNothing().when(glossaryPort).updateGlossary(any(Glossary.class));
+            when(glossaryPort.deleteGlossary(any(Glossary.class))).thenReturn(true);
 
             boolean result = userService.deleteGlossaryItem(1L, 1L);
 

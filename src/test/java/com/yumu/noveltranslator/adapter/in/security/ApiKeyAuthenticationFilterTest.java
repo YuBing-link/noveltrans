@@ -38,11 +38,14 @@ class ApiKeyAuthenticationFilterTest {
     @Mock
     private FilterChain chain;
 
+    @Mock
+    private com.yumu.noveltranslator.adapter.out.redis.ApiKeyCacheService apiKeyCacheService;
+
     private ApiKeyAuthenticationFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new ApiKeyAuthenticationFilter(null, apiKeyMapper, userMapper);
+        filter = new ApiKeyAuthenticationFilter(apiKeyCacheService, apiKeyMapper, userMapper);
         SecurityContextHolder.clearContext();
     }
 

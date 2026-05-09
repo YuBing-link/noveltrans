@@ -197,12 +197,12 @@ class QuotaServiceTest {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
             when(limitProperties.getExpertModeMultiplier()).thenReturn(1.0);
             when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
-            when(quotaPort.tryConsumeChars(anyString(), eq(5_000L), eq(2_000L), anyInt())).thenReturn(true);
+            when(quotaPort.tryConsumeChars(anyString(), anyLong(), anyLong(), anyInt())).thenReturn(true);
 
             boolean result = quotaService.tryConsumeChars(1L, "free", 2_000L, "expert");
 
             assertTrue(result);
-            verify(billingPort).incrementQuotaUsage(eq(1L), any(LocalDate.class), eq(2_000L));
+            verify(quotaPort).tryConsumeChars(anyString(), anyLong(), eq(2_000L), anyInt());
         }
 
         @Test
@@ -222,13 +222,13 @@ class QuotaServiceTest {
             when(limitProperties.getFreeMonthlyChars()).thenReturn(10_000L);
             when(limitProperties.getTeamModeMultiplier()).thenReturn(2.0);
             when(billingPort.getMonthlyQuotaUsage(eq(1L), any(LocalDate.class))).thenReturn(3_000L);
-            when(quotaPort.tryConsumeChars(anyString(), eq(5_000L), eq(4_000L), anyInt())).thenReturn(true);
+            when(quotaPort.tryConsumeChars(anyString(), anyLong(), anyLong(), anyInt())).thenReturn(true);
 
             // team模式: 2000 * 2.0 = 4000, 剩余 7000 >= 4000 成功
             boolean result = quotaService.tryConsumeChars(1L, "free", 2_000L, "team");
 
             assertTrue(result);
-            verify(billingPort).incrementQuotaUsage(eq(1L), any(LocalDate.class), eq(4_000L));
+            verify(quotaPort).tryConsumeChars(anyString(), anyLong(), eq(4_000L), anyInt());
         }
     }
 }

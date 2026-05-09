@@ -563,7 +563,7 @@ class TranslationTaskServiceTest {
         void 委托给mapper() {
             when(translationPort.countHistoryByUserId(1L)).thenReturn(25);
 
-            int result = taskService.countTranslationHistory(1L, null);
+            int result = taskService.countTranslationHistory(1L, "all");
 
             assertEquals(25, result);
             verify(translationPort).countHistoryByUserId(1L);

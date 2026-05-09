@@ -36,6 +36,6 @@ class PasswordUtilTest {
 
     @Test
     void hashPasswordThrowsOnNull() {
-        assertThrows(IllegalStateException.class, () -> PasswordUtil.hashPassword(null));
+        assertThrows(IllegalArgumentException.class, () -> PasswordUtil.hashPassword(null));
     }
 }

@@ -74,7 +74,7 @@ class PluginAuthControllerTest {
             user.setId(1L);
             user.setEmail("test@test.com");
             when(authPort.getUserById(1L)).thenReturn(Optional.of(user));
-            doNothing().when(deviceTokenPort).generateAndRegisterToken(eq("device-001"), eq(1L), eq("test@test.com"), any());
+            when(deviceTokenPort.generateAndRegisterToken(eq("device-001"), eq(1L), eq("test@test.com"), any())).thenReturn("new-token");
 
             mockMvc.perform(post("/user/register-device")
                     .contentType(MediaType.APPLICATION_JSON)

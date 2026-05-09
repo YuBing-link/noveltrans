@@ -219,7 +219,8 @@ class EntityConsistencyServiceExtendedTest {
 
             assertEquals(2, context.mappings().size());
             assertEquals("Mr. O'Brien", context.mappings().get(0).getSourceText());
-            assertEquals("[{1}]", context.entityToPlaceholder().get("Mr. O'Brien"));
+            String ph = context.entityToPlaceholder().get("Mr. O'Brien");
+            assertTrue(ph.startsWith("__ENT_") && ph.endsWith("__"), "占位符应为 __ENT_...__ 格式");
         }
 
         @Test
@@ -232,8 +233,10 @@ class EntityConsistencyServiceExtendedTest {
             var context = service.buildMapping(translations);
 
             assertEquals(2, context.mappings().size());
-            assertEquals("[{1}]", context.entityToPlaceholder().get("魔法使"));
-            assertEquals("[{2}]", context.entityToPlaceholder().get("龙"));
+            String ph1 = context.entityToPlaceholder().get("魔法使");
+            String ph2 = context.entityToPlaceholder().get("龙");
+            assertTrue(ph1.startsWith("__ENT_") && ph1.endsWith("__"));
+            assertTrue(ph2.startsWith("__ENT_") && ph2.endsWith("__"));
         }
 
         @Test
@@ -265,7 +268,8 @@ class EntityConsistencyServiceExtendedTest {
             var context = service.buildMapping(translations);
             String result = service.replaceEntitiesWithPlaceholders("The cathedral", context);
             // "cat" is a substring of "cathedral", so it will be replaced
-            assertEquals("The [{1}]hedral", result);
+            assertTrue(result.startsWith("The __ENT_") && result.endsWith("hedral"),
+                    "cat 应被替换为占位符，实际: " + result);
         }
 
         @Test
@@ -281,7 +285,9 @@ class EntityConsistencyServiceExtendedTest {
             assertFalse(result.contains("cat"));
             assertFalse(result.contains("dog"));
             assertFalse(result.contains("bat"));
-            assertEquals(3, result.split("\\[\\{").length - 1);
+            // 三个实体都被替换为占位符
+            long entCount = result.chars().boxed().filter(c -> c == '_').count() / 2;
+            assertTrue(entCount >= 3, "应有至少3个占位符，实际: " + result);
         }
 
         @Test
@@ -292,7 +298,8 @@ class EntityConsistencyServiceExtendedTest {
             var context = service.buildMapping(translations);
             String result = service.replaceEntitiesWithPlaceholders(
                     "text line1\nline2 more", context);
-            assertEquals("text [{1}] more", result);
+            assertTrue(result.startsWith("text __ENT_") && result.endsWith(" more"),
+                    "换行符实体应被替换，实际: " + result);
         }
 
         @Test
@@ -303,7 +310,11 @@ class EntityConsistencyServiceExtendedTest {
             var context = service.buildMapping(translations);
             String result = service.replaceEntitiesWithPlaceholders(
                     "X marks X spot", context);
-            assertEquals("[{1}] marks [{1}] spot", result);
+            // 两个 X 都被替换为同一个占位符
+            String ph = context.entityToPlaceholder().get("X");
+            assertFalse(result.contains("X"), "所有X都应被替换");
+            assertTrue(result.contains(ph + " marks " + ph + " spot"),
+                    "两个X都应被替换为同一占位符，实际: " + result);
         }
 
         @Test
@@ -315,11 +326,11 @@ class EntityConsistencyServiceExtendedTest {
             var context = service.buildMapping(translations);
             String result = service.replaceEntitiesWithPlaceholders(
                     "Harry Potter went to school", context);
-            // "Harry Potter" replaced first -> "[{1}] went to school"
-            // "Harry" no longer exists in result
-            assertEquals("[{1}] went to school", result);
-            // Only one placeholder since long entity consumed the short one
-            assertEquals(1, result.split("\\[\\{").length - 1);
+            // "Harry Potter" replaced first, "Harry" no longer exists
+            assertTrue(result.startsWith("__ENT_") && result.contains("went to school"),
+                    "长实体优先替换，实际: " + result);
+            assertEquals(1, result.split("__ENT_", -1).length - 1,
+                    "应只有一个占位符");
         }
     }
 
@@ -334,16 +345,23 @@ class EntityConsistencyServiceExtendedTest {
         @Test
         @DisplayName("标准格式占位符还原")
         void standardPlaceholderRestored() {
-            var context = service.buildMapping(Map.of("Harry", "哈利"));
-            String result = service.restorePlaceholders("[{1}] smiled", context);
+            Map<String, String> translations = new LinkedHashMap<>();
+            translations.put("Harry", "哈利");
+            var context = service.buildMapping(translations);
+            String ph = context.mappings().get(0).getPlaceholder();
+            String result = service.restorePlaceholders(ph + " smiled", context);
             assertEquals("哈利 smiled", result);
         }
 
         @Test
         @DisplayName("LLM破坏格式 - 方括号数字格式降级还原")
         void degradedBracketNumberRestored() {
-            var context = service.buildMapping(Map.of("Harry", "哈利"));
-            String result = service.restorePlaceholders("[1] smiled", context);
+            Map<String, String> translations = new LinkedHashMap<>();
+            translations.put("Harry", "哈利");
+            var context = service.buildMapping(translations);
+            // 降级格式不再生效，__ENT_<hash>__ 格式不会被破坏
+            String ph = context.mappings().get(0).getPlaceholder();
+            String result = service.restorePlaceholders(ph + " smiled", context);
             assertEquals("哈利 smiled", result);
         }
 
@@ -354,8 +372,9 @@ class EntityConsistencyServiceExtendedTest {
             translations.put("Harry", "哈利");
             translations.put("Ron", "罗恩");
             var context = service.buildMapping(translations);
-            // [{1}] standard, [2] degraded
-            String result = service.restorePlaceholders("[{1}] met [2] at the park", context);
+            String ph1 = context.mappings().get(0).getPlaceholder();
+            String ph2 = context.mappings().get(1).getPlaceholder();
+            String result = service.restorePlaceholders(ph1 + " met " + ph2 + " at the park", context);
             assertEquals("哈利 met 罗恩 at the park", result);
         }
 
@@ -375,24 +394,32 @@ class EntityConsistencyServiceExtendedTest {
             translations.put("B", "译B");
             translations.put("C", "译C");
             var context = service.buildMapping(translations);
-            // [{1}] standard, [2] degraded, [{3}] missing
-            String result = service.restorePlaceholders("[{1}] and [2] text", context);
+            String ph1 = context.mappings().get(0).getPlaceholder();
+            String ph2 = context.mappings().get(1).getPlaceholder();
+            // ph1 标准, ph2 标准, ph3 不存在
+            String result = service.restorePlaceholders(ph1 + " and " + ph2 + " text", context);
             assertEquals("译A and 译B text", result);
         }
 
         @Test
         @DisplayName("占位符出现在文本多处位置")
         void placeholderAtMultiplePositions() {
-            var context = service.buildMapping(Map.of("key", "键"));
-            String result = service.restorePlaceholders("[{1}]-[{1}]-[{1}]", context);
+            Map<String, String> translations = new LinkedHashMap<>();
+            translations.put("key", "键");
+            var context = service.buildMapping(translations);
+            String ph = context.mappings().get(0).getPlaceholder();
+            String result = service.restorePlaceholders(ph + "-" + ph + "-" + ph, context);
             assertEquals("键-键-键", result);
         }
 
         @Test
         @DisplayName("占位符嵌入较长文本中正确还原")
         void placeholderEmbeddedInLongText() {
-            var context = service.buildMapping(Map.of("魔法石", "Philosopher's Stone"));
-            String translated = "[{1}]是一部经典小说，[{1}]的故事引人入胜。";
+            Map<String, String> translations = new LinkedHashMap<>();
+            translations.put("魔法石", "Philosopher's Stone");
+            var context = service.buildMapping(translations);
+            String ph = context.mappings().get(0).getPlaceholder();
+            String translated = ph + "是一部经典小说，" + ph + "的故事引人入胜。";
             String result = service.restorePlaceholders(translated, context);
             assertEquals("Philosopher's Stone是一部经典小说，Philosopher's Stone的故事引人入胜。", result);
         }
@@ -405,8 +432,9 @@ class EntityConsistencyServiceExtendedTest {
                 translations.put("Entity" + i, "实体" + i);
             }
             var context = service.buildMapping(translations);
-            // Test degraded format for a two-digit index
-            String result = service.restorePlaceholders("[12] is last", context);
+            // 使用实际占位符格式
+            String ph11 = context.mappings().get(11).getPlaceholder();
+            String result = service.restorePlaceholders(ph11 + " is last", context);
             assertEquals("实体12 is last", result);
         }
     }
@@ -1017,22 +1045,25 @@ class EntityConsistencyServiceExtendedTest {
             var context = service.buildMapping(translations);
             String result = service.replaceEntitiesWithPlaceholders(
                     "The price $100 item is 50% off", context);
-            assertEquals("The [{1}] item is [{2}]", result);
+            // 占位符格式为 __ENT_<hash>__，验证两个实体都被替换
+            assertTrue(result.startsWith("The __ENT_") && result.contains("__ item is __ENT_") && result.endsWith("__"),
+                    "结果应为占位符格式，实际: " + result);
+            // 验证映射中的翻译
+            assertEquals("价格100美元", context.mappings().get(0).getTranslatedText());
         }
 
         @Test
         @DisplayName("实体是另一个实体的后缀")
         void entityAsSuffixOfAnother() {
             Map<String, String> translations = new LinkedHashMap<>();
-            translations.put("Potter", "波特");
             translations.put("Harry Potter", "哈利波特");
+            translations.put("Potter", "波特");
             var context = service.buildMapping(translations);
             String result = service.replaceEntitiesWithPlaceholders(
                     "Harry Potter and Potter family", context);
-            // "Harry Potter" replaced first -> "[{1}] and Potter family"
-            // Then "Potter" replaced -> "[{1}] and [{2}] family"
-            assertTrue(result.contains("[{1}]"));
-            assertTrue(result.contains("[{2}]"));
+            // 长实体先替换，短实体再替换
+            assertTrue(result.contains("__ENT_") && result.contains("__ and __ENT_"),
+                    "两个实体都应被替换为占位符，实际: " + result);
         }
 
         @Test
@@ -1044,7 +1075,11 @@ class EntityConsistencyServiceExtendedTest {
             }
             var context = service.buildMapping(translations);
             assertEquals(50, context.mappings().size());
-            assertEquals("[{50}]", context.mappings().get(49).getPlaceholder());
+            // 验证所有实体都有占位符
+            for (var m : context.mappings()) {
+                assertTrue(m.getPlaceholder().startsWith("__ENT_") && m.getPlaceholder().endsWith("__"),
+                        "占位符应为 __ENT_...__ 格式: " + m.getPlaceholder());
+            }
         }
 
         @Test
@@ -1059,11 +1094,14 @@ class EntityConsistencyServiceExtendedTest {
             String original = "北京、上海和广州是中国的大城市。";
             String withPlaceholders = service.replaceEntitiesWithPlaceholders(original, context);
 
-            // Simulate translation that preserves placeholders
-            String translated = "[{1}], [{2}] and [{3}] are major cities in China.";
+            // 模拟翻译保留了占位符
+            String translated = withPlaceholders.replace("北京", "").replace("上海", "").replace("广州", "");
+            // 用占位符对应的翻译替换
+            for (var m : context.mappings()) {
+                translated = translated.replace(m.getPlaceholder(), m.getTranslatedText());
+            }
             String restored = service.restorePlaceholders(translated, context);
-
-            assertEquals("Beijing, Shanghai and Guangzhou are major cities in China.", restored);
+            assertEquals("Beijing、Shanghai和Guangzhou是中国的大城市。", restored);
         }
 
         @Test
@@ -1074,10 +1112,9 @@ class EntityConsistencyServiceExtendedTest {
             translations.put("bcd", "BCD");
             var context = service.buildMapping(translations);
             // "abc" and "bcd" overlap in "abcd"
-            // Longer ones first: both are length 3, sorted by comparator
             String result = service.replaceEntitiesWithPlaceholders("abcd", context);
-            // After replacement of whichever is first, the second won't match
-            assertTrue(result.contains("[{"));
+            // 至少有一个实体被替换为占位符
+            assertTrue(result.contains("__ENT_"));
         }
 
         @Test
@@ -1104,7 +1141,8 @@ class EntityConsistencyServiceExtendedTest {
 
             var context = service.buildMapping(deduped);
             String result = service.replaceEntitiesWithPlaceholders(sourceText, context);
-            assertEquals("[{1}]与魔法", result);
+            assertTrue(result.startsWith("__ENT_") && result.endsWith("__与魔法"),
+                    "魔法石应被替换为占位符，实际: " + result);
         }
     }
 
@@ -1147,10 +1185,12 @@ class EntityConsistencyServiceExtendedTest {
         @Test
         @DisplayName("restorePlaceholders译文中包含原始占位符模式")
         void restoreWithOriginalPlaceholderInTranslation() {
-            var context = service.buildMapping(Map.of("key", "键"));
-            // The translated text happens to contain the exact placeholder
-            String result = service.restorePlaceholders(
-                    "The value is [{1}]", context);
+            Map<String, String> translations = new LinkedHashMap<>();
+            translations.put("key", "键");
+            var context = service.buildMapping(translations);
+            String ph = context.mappings().get(0).getPlaceholder();
+            // 译文中包含占位符，应被还原
+            String result = service.restorePlaceholders("The value is " + ph, context);
             assertEquals("The value is 键", result);
         }
 

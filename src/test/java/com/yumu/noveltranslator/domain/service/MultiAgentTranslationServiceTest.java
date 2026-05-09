@@ -424,32 +424,7 @@ class MultiAgentTranslationServiceTest {
         }
     }
 
-    // ============ buildBaseCacheKey ============
-
-    @Nested
-    @DisplayName("buildBaseCacheKey - 缓存键构建")
-    class BuildBaseCacheKeyTests {
-
-        @Test
-        void 相同文本生成相同键() {
-            String key1 = (String) ReflectionTestUtils.invokeMethod(service, "buildBaseCacheKey", "Hello World", "zh");
-            String key2 = (String) ReflectionTestUtils.invokeMethod(service, "buildBaseCacheKey", "Hello World", "zh");
-            assertEquals(key1, key2);
-        }
-
-        @Test
-        void 不同目标语言生成不同键() {
-            String keyZh = (String) ReflectionTestUtils.invokeMethod(service, "buildBaseCacheKey", "Hello", "zh");
-            String keyJa = (String) ReflectionTestUtils.invokeMethod(service, "buildBaseCacheKey", "Hello", "ja");
-            assertNotEquals(keyZh, keyJa);
-        }
-
-        @Test
-        void 键包含目标语言后缀() {
-            String key = (String) ReflectionTestUtils.invokeMethod(service, "buildBaseCacheKey", "Test text", "en");
-            assertTrue(key.endsWith("_en"));
-        }
-    }
+    // buildBaseCacheKey 方法已删除，相关测试已移除
 
     // ============ loadGlossaryTermsForProject ============
 

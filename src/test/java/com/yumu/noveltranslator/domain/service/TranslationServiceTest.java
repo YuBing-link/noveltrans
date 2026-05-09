@@ -293,7 +293,8 @@ class TranslationServiceTest {
             req.setText("Hello World");
             req.setSourceLang("en");
             req.setTargetLang("zh");
-            SelectionTranslateResponse resp = translationService.selectionTranslate(null, req);
+            // Pass userId=1L so quota check is actually executed
+            SelectionTranslateResponse resp = translationService.selectionTranslate(1L, req);
 
             assertFalse(resp.getSuccess());
             assertTrue(resp.getTranslation().contains("字符配额不足"));
@@ -322,7 +323,8 @@ class TranslationServiceTest {
             ReaderTranslateRequest req = new ReaderTranslateRequest();
             req.setContent("<p>Hello</p>");
             req.setTargetLang("zh");
-            ReaderTranslateResponse resp = translationService.readerTranslate(null, req);
+            // Pass userId=1L so quota check is actually executed
+            ReaderTranslateResponse resp = translationService.readerTranslate(1L, req);
 
             assertFalse(resp.getSuccess());
             assertTrue(resp.getTranslatedContent().contains("字符配额不足"));

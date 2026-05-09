@@ -66,11 +66,14 @@ class JwtAuthenticationFilterTest {
     @Mock
     private Claim tenantIdClaim;
 
+    @Mock
+    private com.yumu.noveltranslator.adapter.out.redis.JwtAuthCacheService jwtAuthCacheService;
+
     private JwtAuthenticationFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter(jwtUtils, userMapper, tokenBlacklistService, null);
+        filter = new JwtAuthenticationFilter(jwtUtils, userMapper, tokenBlacklistService, jwtAuthCacheService);
 
         SecurityContextHolder.clearContext();
     }
@@ -180,7 +183,7 @@ class JwtAuthenticationFilterTest {
 
             filter.doFilterInternal(request, response, chain);
 
-            verify(chain).doFilter(request, response);
+            verify(chain, atLeastOnce()).doFilter(request, response);
             assertNotNull(SecurityContextHolder.getContext().getAuthentication());
         }
 

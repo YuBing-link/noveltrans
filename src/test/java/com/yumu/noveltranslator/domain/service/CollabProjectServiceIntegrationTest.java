@@ -171,7 +171,7 @@ class CollabProjectServiceIntegrationTest {
         assertNotNull(inviteCode);
         try {
             TenantContext.setBypassTenant(true);
-            assertThrows(IllegalStateException.class, () -> {
+            assertThrows(BusinessException.class, () -> {
                 collabProjectService.joinByInviteCode(inviteCode, 1L);
             });
         } finally {
@@ -254,7 +254,7 @@ class CollabProjectServiceIntegrationTest {
     void joinWithInvalidInviteCode() {
         try {
             TenantContext.setBypassTenant(true);
-            assertThrows(IllegalStateException.class, () -> {
+            assertThrows(BusinessException.class, () -> {
                 collabProjectService.joinByInviteCode("INVALID_CODE_XYZ", 1L);
             });
         } finally {
@@ -268,7 +268,7 @@ class CollabProjectServiceIntegrationTest {
     void getNonExistentProject() {
         TenantContext.setTenantId(103L);
         try {
-            assertThrows(IllegalStateException.class, () -> {
+            assertThrows(BusinessException.class, () -> {
                 collabProjectService.getProjectById(999999L);
             });
         } finally {

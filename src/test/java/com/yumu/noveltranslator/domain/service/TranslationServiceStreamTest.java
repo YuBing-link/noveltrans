@@ -258,10 +258,10 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
             req.setFastMode(true);
             req.setTargetLang("zh");
-            SseEmitter emitter = service.webpageTranslateStream(null, req);
+            SseEmitter emitter = service.webpageTranslateStream(1L, req);
             assertNotNull(emitter);
 
-            verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), eq("fast"));
+            verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("fast"));
         }
 
         @Test
@@ -274,10 +274,10 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
             req.setFastMode(false);
             req.setTargetLang("zh");
-            SseEmitter emitter = service.webpageTranslateStream(null, req);
+            SseEmitter emitter = service.webpageTranslateStream(1L, req);
             assertNotNull(emitter);
 
-            verify(quotaService).tryConsumeChars(eq(1L), eq("pro"), anyLong(), eq("expert"));
+            verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
         }
 
         private WebpageTranslateRequest.TextItem createTextItem(String id, String original) {
@@ -309,7 +309,7 @@ class TranslationServiceStreamTest {
             req.setText("Hello");
             req.setTargetLang("zh");
             // No mode set, should default to "fast"
-            var resp = service.selectionTranslate(null, req);
+            var resp = service.selectionTranslate(1L, req);
             assertTrue(resp.getSuccess());
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("fast"));
@@ -331,7 +331,7 @@ class TranslationServiceStreamTest {
             req.setText("Hello");
             req.setTargetLang("zh");
             req.setMode("expert");
-            var resp = service.selectionTranslate(null, req);
+            var resp = service.selectionTranslate(1L, req);
             assertTrue(resp.getSuccess());
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
@@ -417,7 +417,7 @@ class TranslationServiceStreamTest {
         @Test
         void 阅读器模式html为true() {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();
@@ -427,7 +427,7 @@ class TranslationServiceStreamTest {
 
             assertTrue(resp.getSuccess());
             // reader mode uses html=true for MTranServer
-            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true), anyList(), anyString(), anyString());
+            verify(translationClient).translate(anyString(), anyString(), anyString(), eq(true), eq(true), anyList(), any(), any());
         }
     }
 }

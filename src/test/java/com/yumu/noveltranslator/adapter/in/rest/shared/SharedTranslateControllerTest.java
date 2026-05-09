@@ -267,7 +267,8 @@ class SharedTranslateControllerTest {
 
             mockMvc.perform(get("/v1/translate/task/not-found"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.code").value("B0001"));
+                    .andExpect(jsonPath("$.code").value("404"))
+                    .andExpect(jsonPath("$.message").value("任务不存在"));
         }
     }
 

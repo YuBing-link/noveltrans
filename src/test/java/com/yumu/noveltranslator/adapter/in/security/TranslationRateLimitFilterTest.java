@@ -94,15 +94,16 @@ class TranslationRateLimitFilterTest {
     }
 
     @Test
-    @DisplayName("API Key 认证的请求跳过 IP 限流")
+    @DisplayName("API Key 认证的请求仍经过 IP 限流")
     void doFilter_apiKeyRequest_skipsRateLimit() throws Exception {
         request.setRequestURI("/v1/translate/reader");
         request.setRemoteAddr("10.0.0.5");
         request.setAttribute("apiKeyId", 42L);
+        when(ipRateLimiter.allowRequest("10.0.0.5")).thenReturn(true);
 
         filter.doFilterInternal(request, response, chain);
 
-        verifyNoInteractions(ipRateLimiter);
+        verify(ipRateLimiter).allowRequest("10.0.0.5");
         verify(chain).doFilter(request, response);
     }
 
