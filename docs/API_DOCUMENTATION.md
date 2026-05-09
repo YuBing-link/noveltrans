@@ -22,6 +22,7 @@
 - [Document Management](#document-management)
 - [Glossary Management](#glossary-management)
 - [Collaboration Projects](#collaboration-projects)
+- [API Key Management](#api-key-management)
 - [Platform Statistics](#platform-statistics)
 - [Page Routes](#page-routes)
 - [Error Codes](#error-codes)
@@ -91,19 +92,14 @@ These endpoints serve the browser extension. Authenticated users receive higher 
 | sourceLang | string | No | auto | Source language code |
 | targetLang | string | No | zh | Target language code |
 | engine | string | No | - | Translation engine: google, deepl, baidu, openai, mymemory, libre |
-| context | string | No | null | Surrounding context for improved accuracy |
+| mode | string | No | fast | Translation mode: fast, expert, team |
 
-**Success Response**:
+**Success Response** (direct body, not wrapped in `Result` envelope):
 ```json
 {
   "success": true,
-  "data": {
-    "success": true,
-    "engine": "google",
-    "translation": "Translation result"
-  },
-  "code": "200",
-  "message": null
+  "engine": "google",
+  "translation": "Translation result"
 }
 ```
 
@@ -122,17 +118,12 @@ These endpoints serve the browser extension. Authenticated users receive higher 
 | targetLang | string | Yes | - | Target language code |
 | engine | string | No | - | Translation engine |
 
-**Success Response**:
+**Success Response** (direct body, not wrapped in `Result` envelope):
 ```json
 {
   "success": true,
-  "data": {
-    "success": true,
-    "engine": "google",
-    "translatedContent": "<h1>Translated Title</h1><p>Translated content...</p>"
-  },
-  "code": "200",
-  "message": null
+  "engine": "google",
+  "translatedContent": "<h1>Translated Title</h1><p>Translated content...</p>"
 }
 ```
 
@@ -207,7 +198,9 @@ Parameters and responses match the non-premium equivalents.
     "progress": 45,
     "sourceLang": "en",
     "targetLang": "zh",
-    "createTime": "2026-02-24T10:00:00Z"
+    "createTime": "2026-02-24T10:00:00Z",
+    "completedTime": null,
+    "errorMessage": null
   },
   "code": "200"
 }
@@ -298,12 +291,12 @@ Parameters and responses match the non-premium equivalents.
 {
   "success": true,
   "data": [
-    { "id": "google", "name": "Google Translate", "type": "free" },
-    { "id": "mymemory", "name": "MyMemory", "type": "free" },
-    { "id": "libre", "name": "LibreTranslate", "type": "free" },
-    { "id": "baidu", "name": "Baidu Translate", "type": "api_key" },
-    { "id": "deepl", "name": "DeepL", "type": "api_key" },
-    { "id": "openai", "name": "OpenAI", "type": "api_key" }
+    { "id": "google", "name": "Google Translate", "type": "free", "modes": ["fast", "expert", "team"] },
+    { "id": "mymemory", "name": "MyMemory", "type": "free", "modes": ["fast", "expert", "team"] },
+    { "id": "libre", "name": "LibreTranslate", "type": "free", "modes": ["fast", "expert", "team"] },
+    { "id": "baidu", "name": "Baidu Translate", "type": "api_key", "modes": ["fast", "expert", "team"] },
+    { "id": "deepl", "name": "DeepL", "type": "api_key", "modes": ["fast", "expert", "team"] },
+    { "id": "openai", "name": "OpenAI", "type": "api_key", "modes": ["fast", "expert", "team"] }
   ],
   "code": "200"
 }
@@ -473,7 +466,8 @@ Returns `{ data: { user profile }, token: "JWT" }`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| priceId | string | Yes | Stripe price ID (e.g., `price_pro_monthly`) |
+| plan | string | Yes | Plan name: `PRO` or `MAX` |
+| billingCycle | string | Yes | Billing cycle: `monthly` or `yearly` |
 
 Returns `{ checkoutUrl }` — redirect user to Stripe Checkout.
 
@@ -534,6 +528,8 @@ Idempotency guaranteed via:
 | `/user/glossaries/{id}` | PUT | Update term |
 | `/user/glossaries/{id}` | DELETE | Delete term |
 | `/user/glossaries/{id}/terms` | GET | List terms |
+| `/user/glossaries/export` | GET | Export glossary as CSV |
+| `/user/glossaries/import` | POST | Import glossary from CSV file (multipart/form-data) |
 
 ---
 
@@ -604,6 +600,63 @@ Idempotency guaranteed via:
 |----------|--------|-------------|------------|
 | `/v1/collab/projects/{projectId}/chapters` | POST | Create chapter | Owner |
 | `/v1/collab/projects/{projectId}/chapters` | GET | Chapter list | Member |
+| `/v1/collab/projects/{projectId}/invite-code` | POST | Generate invite code | Owner |
+
+### Members
+
+| Endpoint | Method | Description | Permission |
+|----------|--------|-------------|------------|
+| `/v1/collab/projects/{projectId}/invite` | POST | Invite member | Owner |
+| `/v1/collab/projects/{projectId}/members` | GET | List members | Member |
+| `/v1/collab/projects/{projectId}/members/{memberId}` | DELETE | Remove member | Owner |
+| `/v1/collab/join` | POST | Join project via invite code | Authenticated |
+
+### Chapter Tasks
+
+| Endpoint | Method | Description | Permission |
+|----------|--------|-------------|------------|
+| `/v1/collab/chapters/{chapterId}` | GET | Get chapter detail | Authenticated |
+| `/v1/collab/chapters/{chapterId}/assign` | PUT | Assign chapter to translator | Owner/Reviewer |
+| `/v1/collab/chapters/{chapterId}/submit` | PUT | Submit translated chapter | Assignee |
+| `/v1/collab/chapters/{chapterId}/review` | PUT | Review submitted chapter | Reviewer |
+| `/v1/collab/chapters/my` | GET | List my assigned chapters | Authenticated |
+
+### Comments
+
+| Endpoint | Method | Description | Permission |
+|----------|--------|-------------|------------|
+| `/v1/collab/chapters/{chapterTaskId}/comments` | POST | Create comment | Authenticated |
+| `/v1/collab/chapters/{chapterTaskId}/comments` | GET | List comments (paginated) | Authenticated |
+| `/v1/collab/comments/{commentId}/resolve` | PUT | Mark comment as resolved | Authenticated |
+| `/v1/collab/comments/{commentId}` | DELETE | Delete comment | Authenticated |
+
+### SSE Event Stream
+
+`GET /v1/collab/sse/{projectId}` — **Auth**: Required, Project member
+
+Server-Sent Events for real-time collaboration updates. Supports `lastEventId` query parameter for reconnection.
+
+| Event | Description |
+|-------|-------------|
+| `connected` | Connection established, includes projectId |
+| `chapter.updated` | Chapter status changed |
+| `comment.added` | New comment added |
+
+---
+
+## API Key Management
+
+**Base path**: `/user/api-keys`
+**Controller**: `WebApiKeyController`
+**Auth**: Required
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/user/api-keys` | POST | Create API key |
+| `/user/api-keys` | GET | List API keys (paginated, masked) |
+| `/user/api-keys/{id}` | DELETE | Delete/disable API key |
+| `/user/api-keys/{id}/reset` | POST | Reset API key (generates new key) |
+| `/user/api-keys/{id}/reveal` | GET | Reveal full API key value |
 
 ---
 
@@ -674,4 +727,4 @@ Idempotency guaranteed via:
 
 ---
 
-**Last updated**: 2026-05-04
+**Last updated**: 2026-05-09

@@ -92,7 +92,7 @@ L1: Caffeine → Redis → MySQL 三级缓存（精确匹配直接返回）。L2
 | **API Key** | `CRUD /user/api-keys` | `GET/POST/DELETE /api/user/api-keys` | JWT |
 | **插件** | `POST /v1/translate/premium-reader`, `POST /v1/translate/premium-selection` | `POST /v1/translate/premium-reader` | API Key / JWT |
 | **外部** | `POST /v1/external/translate` | `POST /v1/external/translate` | API Key |
-| **Webhook** | `POST /stripe/webhook` | `POST /api/stripe/webhook` | Stripe 签名 |
+| **Webhook** | `POST /webhook/stripe` | `POST /api/webhook/stripe` | Stripe 签名 |
 | **管理** | `POST /admin/cache/evict`, `POST /admin/cache/stats` | `POST /api/admin/cache/evict` | 管理员 JWT |
 | **平台** | `GET /platform/stats`, `GET /platform/statistics` | `GET /api/platform/stats` | 管理员 JWT |
 
