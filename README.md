@@ -12,7 +12,7 @@ A production SaaS backend for AI-powered novel/document translation — multi-en
 
 ## Overview
 
-NovelTrans is a full-stack translation platform built for web novel authors and translators. It replaces the traditional "copy-paste into Google Translate" workflow with an intelligent pipeline that understands context, preserves character name consistency, and learns from past translations — all while reducing LLM API costs by 60-80% through RAG-based semantic reuse.
+NovelTrans is a full-stack translation platform built for web novel authors and translators. It replaces the traditional "copy-paste into Google Translate" workflow with an intelligent pipeline that understands context, preserves character name consistency, and learns from past translations — all while reducing LLM API costs through RAG-based semantic reuse.
 
 Three client channels share the same backend:
 - **React web dashboard** — DeepL-style interface with real-time chapter preview
@@ -22,7 +22,7 @@ Three client channels share the same backend:
 ## Features
 
 - **Multi-engine AI orchestration** — Routes translation requests across LLM (Python FastAPI + OpenAI SDK) and local engines (MTranServer) with probability-based load balancing using rolling 60-second performance windows; MTranServer serves dual purpose — fast translation mode for instant results and automatic fallback when LLM degrades; bidirectional failover — calling code never sees which engine served the request
-- **RAG translation memory** — Redis HNSW vector search with embedding-based semantic matching (OpenAI `text-embedding-3-small` or Ollama `bge-m3`); skips LLM calls when cosine similarity ≥ 0.85, reducing API costs by 60-80%
+- **RAG translation memory** — Redis HNSW vector search with embedding-based semantic matching (OpenAI `text-embedding-3-small` or Ollama `bge-m3`); skips LLM calls when cosine similarity ≥ 0.85, reducing API costs for repetitive content
 - **Entity consistency pipeline** — Extracts proper nouns via Python `/extract-entities`, replaces with SHA-256 placeholders (`__ENT_<hash>__`), translates entities separately against user glossary, then restores — prevents "John" becoming "Jon" across chapters
 - **Multi-agent collaboration (AgentScope)** — Three AI agents (translator + terminologist + polisher) per chapter, with genre-specific prompts for fantasy, romance, scifi, mystery, horror, and daily styles
 - **4-level translation pipeline** — L1: Caffeine → Redis → MySQL three-tier cache; L2: RAG semantic search; L3: entity extraction → placeholder substitution → translate → restore; L4: direct AI engine call. Each level can short-circuit
