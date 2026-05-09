@@ -266,14 +266,13 @@
                         <exclude>com/yumu/noveltranslator/adapter/out/redis/RedisTokenRevocationAdapter*</exclude>
                         <exclude>com/yumu/noveltranslator/adapter/out/redis/RedisQuotaAdapter*</exclude>
                         <exclude>com/yumu/noveltranslator/adapter/out/redis/VectorStorePortAdapter*</exclude>
-                        <exclude>com/yumu/noveltranslator/adapter/out/redis/TranslationCacheService*</exclude>
                         <exclude>com/yumu/noveltranslator/adapter/out/redis/ApiKeyCacheService*</exclude>
                         <exclude>com/yumu/noveltranslator/adapter/out/redis/JwtAuthCacheService*</exclude>
                         <exclude>com/yumu/noveltranslator/adapter/out/redis/TokenBlacklistService*</exclude>
                         <exclude>com/yumu/noveltranslator/adapter/out/redis/CacheVersionService*</exclude>
-                        <!-- 外部翻译适配器：封装外部 HTTP 调用 -->
-                        <exclude>com/yumu/noveltranslator/adapter/out/translate/UserLevelThrottledTranslationClient*</exclude>
-                        <exclude>com/yumu/noveltranslator/adapter/out/translate/ExternalTranslationService*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/DocumentEntityCache*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/EntityCachePortAdapter*</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/redis/TranslationCachePortAdapter*</exclude>
                     </excludes>
                 </configuration>
                 <executions>

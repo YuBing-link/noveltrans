@@ -188,6 +188,72 @@ class ExternalTranslationServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("Mock 模式")
+    class MockModeTests {
+
+        @Test
+        void mock模式返回中文() {
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null, true);
+
+            JSONObject result = service.translate("en", "zh", "Hello", false);
+
+            assertEquals("[简体中文] Hello", result.getString("result"));
+        }
+
+        @Test
+        void mock模式html模式() {
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null, true);
+
+            JSONObject result = service.translate("en", "zh", "<p>Hello</p>", true);
+
+            assertEquals("[简体中文] <p>Hello</p>", result.getString("result"));
+        }
+
+        @Test
+        void mock模式繁体中文() {
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null, true);
+
+            JSONObject result = service.translate("en", "zh-tw", "Hello", false);
+
+            assertEquals("[繁體中文] Hello", result.getString("result"));
+        }
+
+        @Test
+        void mock模式多行文本() {
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null, true);
+
+            JSONObject result = service.translate("en", "ja", "Line1\nLine2\nLine3", false);
+
+            String text = result.getString("result");
+            assertTrue(text.contains("[日本語] Line1"));
+            assertTrue(text.contains("[日本語] Line2"));
+            assertTrue(text.contains("[日本語] Line3"));
+        }
+
+        @Test
+        void mock模式空行跳过() {
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null, true);
+
+            JSONObject result = service.translate("en", "fr", "Hello\n\nWorld", false);
+
+            String text = result.getString("result");
+            assertTrue(text.contains("[Français] Hello"));
+            assertTrue(text.contains("[Français] World"));
+            // Empty line should remain empty
+            assertTrue(text.contains("\n\n"));
+        }
+
+        @Test
+        void mock模式未知语言使用原始代码() {
+            ExternalTranslationService service = new ExternalTranslationService("localhost", 8000, null, true);
+
+            JSONObject result = service.translate("en", "xyz", "Hello", false);
+
+            assertEquals("[xyz] Hello", result.getString("result"));
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void mockWebClient(ExternalTranslationService service, Mono<String> responseMono) {
         WebClient.RequestBodyUriSpec uriSpec = mock(WebClient.RequestBodyUriSpec.class);

@@ -1,9 +1,7 @@
 package com.yumu.noveltranslator.domain.service;
 import com.yumu.noveltranslator.adapter.out.redis.TranslationCacheService;
-import com.yumu.noveltranslator.port.dto.common.Result;
 import com.yumu.noveltranslator.adapter.out.redis.CacheVersionService;
 
-import com.github.benmanes.caffeine.cache.Cache;
 import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationCache;
 import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationCacheMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +21,9 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
+
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -243,7 +244,7 @@ class TranslationCacheServiceTest {
         @Test
         void L1和L2都未命中返回null() {
             // L1 miss, L2 Redis miss
-            when(valueOperations.get(anyString())).thenReturn(null);
+            lenient().when(valueOperations.get(anyString())).thenReturn(null);
 
             String result = cacheService.getCache("test-key");
 
@@ -265,6 +266,188 @@ class TranslationCacheServiceTest {
             String result = cacheService.getCache("recheck-key");
 
             assertEquals("l1-while-waiting", result);
+        }
+    }
+
+    @Nested
+    @DisplayName("模式缓存层级查询")
+    class ModeCacheHierarchyTests {
+
+        @Test
+        void getCacheByMode_L1命中返回() {
+            // Write to L1 with mode suffix
+            cacheService.putToMemoryCache("mode-key_team", "team-translated");
+
+            String result = cacheService.getCacheByMode("mode-key", "fast");
+
+            assertEquals("team-translated", result);
+        }
+    }
+
+    @Nested
+    @DisplayName("术语反向索引")
+    class TermReverseIndexTests {
+
+        @Test
+        void buildReverseIndex提取单词() {
+            when(stringRedisTemplate.opsForSet()).thenReturn(mock(org.springframework.data.redis.core.SetOperations.class));
+            lenient().when(stringRedisTemplate.expire(anyString(), any())).thenReturn(true);
+
+            ReflectionTestUtils.invokeMethod(cacheService, "buildReverseIndex", "cache-1", "The quick brown fox jumps over the lazy dog");
+
+            verify(stringRedisTemplate.opsForSet(), atLeastOnce()).add(anyString(), eq("cache-1"));
+        }
+
+        @Test
+        void buildReverseIndex空文本跳过() {
+            ReflectionTestUtils.invokeMethod(cacheService, "buildReverseIndex", "cache-1", "");
+            ReflectionTestUtils.invokeMethod(cacheService, "buildReverseIndex", "cache-1", null);
+
+            verifyNoInteractions(stringRedisTemplate);
+        }
+
+        @Test
+        void buildReverseIndex去重单词() {
+            when(stringRedisTemplate.opsForSet()).thenReturn(mock(org.springframework.data.redis.core.SetOperations.class));
+            lenient().when(stringRedisTemplate.expire(anyString(), any())).thenReturn(true);
+
+            // Same word repeated
+            ReflectionTestUtils.invokeMethod(cacheService, "buildReverseIndex", "cache-1", "hello hello hello");
+
+            // Should only add once (unique words)
+            verify(stringRedisTemplate.opsForSet(), times(1)).add(anyString(), eq("cache-1"));
+        }
+
+        @Test
+        void invalidateKeysForTerm失效匹配键() {
+            when(stringRedisTemplate.opsForSet()).thenReturn(mock(org.springframework.data.redis.core.SetOperations.class));
+            Set<String> cacheKeys = Set.of("key1", "key2");
+            when(stringRedisTemplate.opsForSet().members("glossary:cache_keys:apple")).thenReturn(cacheKeys);
+            lenient().when(stringRedisTemplate.delete(anyCollection())).thenReturn(2L);
+            lenient().when(stringRedisTemplate.delete(anyString())).thenReturn(true);
+            lenient().when(translationCacheMapper.delete(any())).thenReturn(1);
+
+            cacheService.invalidateKeysForTerm("Apple");
+
+            // L1 should be invalidated
+            assertNull(cacheService.getCache("key1"));
+        }
+
+        @Test
+        void invalidateKeysForTerm_空词跳过() {
+            cacheService.invalidateKeysForTerm(null);
+            cacheService.invalidateKeysForTerm("");
+            cacheService.invalidateKeysForTerm("   ");
+
+            verifyNoInteractions(stringRedisTemplate);
+        }
+
+        @Test
+        void invalidateKeysForTerm_无匹配键直接返回() {
+            when(stringRedisTemplate.opsForSet()).thenReturn(mock(org.springframework.data.redis.core.SetOperations.class));
+            when(stringRedisTemplate.opsForSet().members(anyString())).thenReturn(Set.of());
+
+            cacheService.invalidateKeysForTerm("nonexistent");
+
+            // Should not attempt deletion
+            verify(stringRedisTemplate, never()).delete(anyCollection());
+        }
+
+        @Test
+        void invalidateKeysForTerm_Redis删除失败继续() {
+            when(stringRedisTemplate.opsForSet()).thenReturn(mock(org.springframework.data.redis.core.SetOperations.class));
+            Set<String> cacheKeys = Set.of("key1");
+            when(stringRedisTemplate.opsForSet().members("glossary:cache_keys:word")).thenReturn(cacheKeys);
+            lenient().when(stringRedisTemplate.delete(anyCollection())).thenThrow(new RuntimeException("redis error"));
+            lenient().when(stringRedisTemplate.delete(anyString())).thenReturn(true);
+
+            // Should not throw — handles Redis failure gracefully
+            assertDoesNotThrow(() -> cacheService.invalidateKeysForTerm("word"));
+        }
+    }
+
+    @Nested
+    @DisplayName("缓存统计和管理")
+    class CacheStatsTests {
+
+        @Test
+        void getCacheStats_初始值为0() {
+            Map<String, Object> stats = cacheService.getCacheStats();
+
+            assertEquals(0L, stats.get("l1Hits"));
+            assertEquals(0L, stats.get("l2Hits"));
+            assertEquals(0L, stats.get("misses"));
+            assertEquals("0.00%", stats.get("hitRate"));
+            assertEquals(0L, stats.get("totalRequests"));
+        }
+
+        @Test
+        void getCacheStats_记录命中() {
+            cacheService.putToMemoryCache("stat-key", "stat-value");
+            cacheService.getCache("stat-key"); // L1 hit
+            cacheService.getCache("miss-key"); // miss
+
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+            when(valueOperations.get(anyString())).thenReturn(null);
+            when(translationCacheMapper.selectById(anyString())).thenReturn(null);
+            when(translationCacheMapper.selectOne(any())).thenReturn(null);
+
+            Map<String, Object> stats = cacheService.getCacheStats();
+
+            assertTrue((Long) stats.get("l1Hits") >= 1);
+            assertTrue((Long) stats.get("misses") >= 1);
+        }
+
+        @Test
+        void clearLocalCache清空Caffeine() {
+            cacheService.putToMemoryCache("a", "1");
+            cacheService.putToMemoryCache("b", "2");
+
+            cacheService.clearLocalCache();
+
+            assertNull(cacheService.getCache("a"));
+            assertNull(cacheService.getCache("b"));
+        }
+
+        @Test
+        void clearAllCache_清空所有层() {
+            cacheService.putToMemoryCache("clear-key", "clear-value");
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+            lenient().when(stringRedisTemplate.keys(REDIS_KEY_PREFIX + "*")).thenReturn(Set.of());
+            lenient().when(stringRedisTemplate.delete(anyCollection())).thenReturn(0L);
+            lenient().when(translationCacheMapper.delete(any())).thenReturn(0);
+
+            cacheService.clearAllCache();
+
+            assertNull(cacheService.getCache("clear-key"));
+        }
+
+        private static final String REDIS_KEY_PREFIX = "translator:cache:";
+    }
+
+    @Nested
+    @DisplayName("带模式的缓存写入")
+    class PutCacheWithModeTests {
+
+        @Test
+        void putCache_带模式写入L2() {
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+            doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+
+            cacheService.putCache("mode-key", "source", "target", "en", "zh", "google", "fast");
+
+            // Verify key has mode suffix
+            verify(valueOperations).set(eq("translator:cache:v1:mode-key_fast"), eq("target"), any());
+        }
+
+        @Test
+        void putCache_null模式不附加后缀() {
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+            doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+
+            cacheService.putCache("simple-key", "source", "target", "en", "zh", "google", null);
+
+            verify(valueOperations).set(eq("translator:cache:v1:simple-key"), eq("target"), any());
         }
     }
 }
