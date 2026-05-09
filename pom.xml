@@ -138,6 +138,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.3.0</version>
+        </dependency>
+
+        <dependency>
             <groupId>io.agentscope</groupId>
             <artifactId>agentscope-core</artifactId>
             <version>1.0.1</version> <!-- 建议使用最新版本 -->
@@ -207,15 +213,23 @@
                 <configuration>
                     <excludes>
                         <!-- 纯数据类：Entity（仅有字段和 Lombok getter/setter） -->
-                        <exclude>com/yumu/noveltranslator/entity/**</exclude>
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/entity/**</exclude>
                         <!-- 纯数据类：DTO（请求/响应对象，无业务逻辑） -->
-                        <exclude>com/yumu/noveltranslator/dto/**</exclude>
+                        <exclude>com/yumu/noveltranslator/port/dto/**</exclude>
+                        <!-- 纯数据类：Domain Model（仅有字段和 Lombok getter/setter） -->
+                        <exclude>com/yumu/noveltranslator/domain/model/**</exclude>
+                        <!-- 外部服务适配器：Stripe SDK 封装，无可测业务逻辑 -->
+                        <exclude>com/yumu/noveltranslator/adapter/out/stripe/**</exclude>
+                        <!-- 外部服务适配器：Embedding HTTP 封装，无可测业务逻辑 -->
+                        <exclude>com/yumu/noveltranslator/adapter/out/embedding/**</exclude>
                         <!-- 配置类（仅有 @Bean 定义和属性映射） -->
                         <exclude>com/yumu/noveltranslator/config/**</exclude>
                         <!-- 启动类 -->
                         <exclude>com/yumu/noveltranslator/NovelTranslatorApplication*</exclude>
                         <!-- MyBatis Mapper 接口（无实现逻辑，仅注解/XML SQL） -->
                         <exclude>com/yumu/noveltranslator/mapper/**</exclude>
+                        <!-- MyBatis Mapper 实现（无业务逻辑） -->
+                        <exclude>com/yumu/noveltranslator/adapter/out/persistence/mapper/**</exclude>
                         <!-- 枚举类（仅包含常量定义） -->
                         <exclude>com/yumu/noveltranslator/enums/**</exclude>
                         <!-- 属性配置类 -->

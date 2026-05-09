@@ -110,12 +110,6 @@ translation:
   python:
     url: "${PYTHON_TRANSLATE_URL:http://llm-engine:8000/translate}"  # Python 翻译服务地址
     api-key: "${TRANSLATE_SERVICE_API_KEY:}"  # 服务间认证 Key（可选，生产环境必填）
-
-# Python translate-server 地址（TeamTranslationService 使用）
-translate-server:
-  host: ${TRANSLATE_SERVER_HOST:llm-engine}
-  port: ${TRANSLATE_SERVER_PORT:8000}
-  api-key: "${TRANSLATE_SERVICE_API_KEY:}"  # 服务间认证 Key
   limit:
     free-daily-limit: ${TRANSLATION_LIMIT_FREE_DAILY:-500}
     pro-daily-limit: ${TRANSLATION_LIMIT_PRO_DAILY:-5000}
@@ -128,6 +122,12 @@ translate-server:
     pro-tpm-limit: ${TRANSLATION_LIMIT_PRO_TPM:-50000}
     max-tpm-limit: ${TRANSLATION_LIMIT_MAX_TPM:-200000}
     anonymous-tpm-limit: ${TRANSLATION_LIMIT_ANONYMOUS_TPM:-1000}
+
+# Python translate-server 地址（TeamTranslationService 使用）
+translate-server:
+  host: ${TRANSLATE_SERVER_HOST:llm-engine}
+  port: ${TRANSLATE_SERVER_PORT:8000}
+  api-key: "${TRANSLATE_SERVICE_API_KEY:}"  # 服务间认证 Key
   verification:
     code:
       validity: 5

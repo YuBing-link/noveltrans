@@ -638,9 +638,10 @@ public class UserLevelThrottledTranslationClient implements com.yumu.noveltransl
 
             // 从 MTranServer 响应中提取 result 字段
             String translatedContent = mtranResponse.getString("result");
-            if (translatedContent == null) {
-                // 如果没有 result 字段，返回原始 JSON 作为兜底
-                translatedContent = mtranResponse.toJSONString();
+            if (translatedContent == null || translatedContent.isBlank()) {
+                // MTran 返回错误响应，抛出异常以触发降级到 Python
+                log.warn("[MTran异常响应] 缺少 result 字段，原始响应: {}", mtranResponse);
+                throw new RuntimeException("MTran 返回异常响应: " + mtranResponse);
             }
 
             // 解码 HTML 实体编码（&nbsp; &amp; &lt; &gt; 等）

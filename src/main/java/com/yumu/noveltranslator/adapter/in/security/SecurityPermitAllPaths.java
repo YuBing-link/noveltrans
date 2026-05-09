@@ -19,6 +19,7 @@ public final class SecurityPermitAllPaths {
         "/health",
         "/actuator",
         "/swagger-ui",
+        "/swagger-ui.html",
         "/v3/api-docs",
         "/webhook/stripe"
     );

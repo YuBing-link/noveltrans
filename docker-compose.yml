@@ -41,7 +41,7 @@ services:
     ports:
       - "8989:8989"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8989/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8989/health"]
       interval: 10s
       timeout: 5s
       retries: 3
