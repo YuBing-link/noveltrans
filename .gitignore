@@ -41,7 +41,6 @@ web-app/dist/
 # Test & Coverage
 coverage/
 test-results/
-load-test/results/
 load-test/*-results.json
 *-results.json
 

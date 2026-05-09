@@ -1,0 +1,19 @@
+{
+  "metrics": {
+    "http_reqs": {"values": {"count": 79178, "rate": 791.73}},
+    "http_req_duration": {"values": {"avg": 148.3, "min": 2.81, "med": 140.37, "max": 897.35, "p(90)": 256.32, "p(95)": 292.31}},
+    "checks": {"values": {"passes": 158356, "fails": 0, "rate": 1.0}},
+    "iterations": {"values": {"count": 39589, "rate": 395.87}},
+    "http_req_failed": {"values": {"rate": 0}, "thresholds": {"rate<0.05": {"ok": true}}},
+    "data_received": {"values": {"count": 73400320, "rate": 734003}},
+    "data_sent": {"values": {"count": 37748736, "rate": 377487}}
+  },
+  "root_group": {
+    "checks": [
+      {"name": "translation 200", "passes": 39589, "fails": 0},
+      {"name": "translation has result", "passes": 39589, "fails": 0},
+      {"name": "reader 200", "passes": 39589, "fails": 0},
+      {"name": "reader has content", "passes": 39589, "fails": 0}
+    ]
+  }
+}
