@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ApiKeyApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">ApiKeyApplicationService.java</span></div><h1>ApiKeyApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.yumu.noveltranslator.domain.model.ApiKey;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.in.ApiKeyPort;
+import com.yumu.noveltranslator.port.out.ApiKeyCachePort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+<span class="fc" id="L16">@RequiredArgsConstructor</span>
+public class ApiKeyApplicationService implements ApiKeyPort {
+
+    private final UserRepositoryPort userRepositoryPort;
+    private final ApiKeyCachePort apiKeyCachePort;
+
+<span class="fc" id="L22">    private static final SecureRandom SECURE_RANDOM = new SecureRandom();</span>
+    private static final String API_KEY_CHARS = &quot;abcdefghijklmnopqrstuvwxyz0123456789&quot;;
+
+    @Override
+    public ApiKey createApiKey(Long userId, String name) {
+<span class="nc" id="L27">        ApiKey apiKey = new ApiKey();</span>
+<span class="nc" id="L28">        apiKey.setUserId(userId);</span>
+<span class="nc" id="L29">        apiKey.setApiKey(generateApiKey());</span>
+<span class="nc" id="L30">        apiKey.setName(name);</span>
+<span class="nc" id="L31">        apiKey.setActive(true);</span>
+<span class="nc" id="L32">        apiKey.setTotalUsage(0L);</span>
+<span class="nc" id="L33">        apiKey.setCreatedAt(LocalDateTime.now());</span>
+
+<span class="nc" id="L35">        userRepositoryPort.saveApiKey(apiKey);</span>
+<span class="nc" id="L36">        return apiKey;</span>
+    }
+
+    @Override
+    public PageResponse&lt;ApiKey&gt; listApiKeys(Long userId, int page, int pageSize) {
+<span class="nc" id="L41">        List&lt;ApiKey&gt; allKeys = userRepositoryPort.findApiKeysByUserId(userId);</span>
+<span class="nc" id="L42">        int start = (page - 1) * pageSize;</span>
+<span class="nc" id="L43">        int end = Math.min(start + pageSize, allKeys.size());</span>
+<span class="nc" id="L44">        List&lt;ApiKey&gt; pagedKeys = allKeys.subList(Math.max(0, start), Math.max(0, end));</span>
+<span class="nc" id="L45">        return PageResponse.of(page, pageSize, (long) allKeys.size(), pagedKeys);</span>
+    }
+
+    @Override
+    public boolean deleteApiKey(Long id, Long userId) {
+<span class="nc" id="L50">        return userRepositoryPort.findApiKeyById(id)</span>
+<span class="nc" id="L51">                .filter(key -&gt; key.getUserId().equals(userId))</span>
+<span class="nc" id="L52">                .map(key -&gt; {</span>
+<span class="nc" id="L53">                    apiKeyCachePort.invalidate(key.getApiKey());</span>
+<span class="nc" id="L54">                    userRepositoryPort.deleteApiKey(id);</span>
+<span class="nc" id="L55">                    return true;</span>
+<span class="nc" id="L56">                }).orElse(false);</span>
+    }
+
+    @Override
+    public ApiKey resetApiKey(Long id, Long userId) {
+<span class="nc" id="L61">        return userRepositoryPort.findApiKeyById(id)</span>
+<span class="nc" id="L62">                .filter(key -&gt; key.getUserId().equals(userId))</span>
+<span class="nc" id="L63">                .map(key -&gt; {</span>
+<span class="nc" id="L64">                    apiKeyCachePort.invalidate(key.getApiKey());</span>
+<span class="nc" id="L65">                    key.setApiKey(generateApiKey());</span>
+<span class="nc" id="L66">                    key.setTotalUsage(0L);</span>
+<span class="nc" id="L67">                    userRepositoryPort.updateApiKey(key);</span>
+<span class="nc" id="L68">                    return key;</span>
+<span class="nc" id="L69">                }).orElse(null);</span>
+    }
+
+    @Override
+    public ApiKey revealApiKey(Long id, Long userId) {
+<span class="nc" id="L74">        return userRepositoryPort.findApiKeyById(id)</span>
+<span class="nc" id="L75">                .filter(key -&gt; key.getUserId().equals(userId))</span>
+<span class="nc" id="L76">                .orElse(null);</span>
+    }
+
+    private String generateApiKey() {
+<span class="nc" id="L80">        StringBuilder sb = new StringBuilder(&quot;nt_sk_&quot;);</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        for (int i = 0; i &lt; 32; i++) {</span>
+<span class="nc" id="L82">            sb.append(API_KEY_CHARS.charAt(SECURE_RANDOM.nextInt(API_KEY_CHARS.length())));</span>
+        }
+<span class="nc" id="L84">        return sb.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

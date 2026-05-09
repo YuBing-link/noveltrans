@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SharedTranslateController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.in.rest.shared</a> &gt; <span class="el_source">SharedTranslateController.java</span></div><h1>SharedTranslateController.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.in.rest.shared;
+
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
+import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationRequest;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.port.in.RagTranslationPort;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
+import com.yumu.noveltranslator.util.SecurityUtil;
+import jakarta.validation.Valid;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+/**
+ * 共享翻译接口（Web 和插件共用）
+ * 路径前缀: /v1/translate
+ */
+@RestController
+@RequestMapping(&quot;/v1/translate&quot;)
+<span class="fc" id="L36">@RequiredArgsConstructor</span>
+public class SharedTranslateController {
+
+    private final TranslationTaskPort translationTaskPort;
+    private final RagTranslationPort ragTranslationPort;
+
+    /**
+     * 查询翻译任务状态
+     * GET /v1/translate/task/{taskId}
+     */
+    @GetMapping(&quot;/task/{taskId}&quot;)
+    public Result&lt;TaskStatusResponse&gt; getTaskStatus(@PathVariable String taskId) {
+<span class="fc" id="L48">        TranslationTask task = translationTaskPort.getTaskByTaskId(taskId);</span>
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        if (task == null) {</span>
+<span class="fc" id="L50">            return Result.error(ErrorCodeEnum.NOT_FOUND, &quot;任务不存在&quot;);</span>
+        }
+
+<span class="fc" id="L53">        return Result.ok(translationTaskPort.toTaskStatusResponse(task));</span>
+    }
+
+    /**
+     * 取消翻译任务
+     * DELETE /v1/translate/task/{taskId}
+     */
+    @DeleteMapping(&quot;/task/{taskId}&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public Result cancelTask(@PathVariable String taskId) {
+<span class="fc" id="L63">        Long userId = SecurityUtil.getRequiredUserId();</span>
+
+<span class="fc bfc" id="L65" title="All 2 branches covered.">        if (translationTaskPort.cancelTask(taskId, userId)) {</span>
+<span class="fc" id="L66">            return Result.ok(null);</span>
+        } else {
+<span class="fc" id="L68">            return Result.error(ErrorCodeEnum.INVALID_STATE, &quot;取消失败，任务可能已完成或正在处理&quot;);</span>
+        }
+    }
+
+    /**
+     * 删除翻译历史记录
+     * DELETE /v1/translate/history/{taskId}
+     */
+    @DeleteMapping(&quot;/history/{taskId}&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public Result deleteHistory(@PathVariable String taskId) {
+<span class="fc" id="L79">        Long userId = SecurityUtil.getRequiredUserId();</span>
+
+<span class="fc bfc" id="L81" title="All 2 branches covered.">        if (translationTaskPort.deleteHistory(taskId, userId)) {</span>
+<span class="fc" id="L82">            return Result.ok(null);</span>
+        } else {
+<span class="fc" id="L84">            return Result.error(ErrorCodeEnum.NOT_FOUND, &quot;记录不存在&quot;);</span>
+        }
+    }
+
+    /**
+     * 获取翻译结果
+     * GET /v1/translate/task/{taskId}/result
+     */
+    @GetMapping(&quot;/task/{taskId}/result&quot;)
+    public Result&lt;TranslationResultResponse&gt; getTranslationResult(@PathVariable String taskId) {
+<span class="fc" id="L94">        TranslationResultResponse result = translationTaskPort.getTranslationResult(taskId);</span>
+<span class="fc bfc" id="L95" title="All 2 branches covered.">        if (result == null) {</span>
+<span class="fc" id="L96">            return Result.error(ErrorCodeEnum.NOT_FOUND, &quot;任务不存在或结果不可用&quot;);</span>
+        }
+
+<span class="fc" id="L99">        return Result.ok(result);</span>
+    }
+
+    /**
+     * 下载翻译结果
+     * GET /v1/translate/task/{taskId}/download
+     */
+    @GetMapping(&quot;/task/{taskId}/download&quot;)
+    @PreAuthorize(&quot;isAuthenticated()&quot;)
+    public ResponseEntity&lt;byte[]&gt; downloadTranslation(@PathVariable String taskId) {
+<span class="fc" id="L109">        Long userId = SecurityUtil.getRequiredUserId();</span>
+
+<span class="fc" id="L111">        String filePath = translationTaskPort.getDownloadPath(taskId, userId);</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">        if (filePath == null) {</span>
+<span class="fc" id="L113">            return ResponseEntity.notFound().build();</span>
+        }
+
+        try {
+<span class="nc" id="L117">            byte[] fileContent = Files.readAllBytes(Paths.get(filePath));</span>
+
+<span class="nc" id="L119">            HttpHeaders headers = new HttpHeaders();</span>
+<span class="nc" id="L120">            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);</span>
+<span class="nc" id="L121">            headers.setContentDispositionFormData(&quot;attachment&quot;, &quot;translated_&quot; + taskId);</span>
+
+<span class="nc" id="L123">            return new ResponseEntity&lt;&gt;(fileContent, headers, HttpStatus.OK);</span>
+
+<span class="nc" id="L125">        } catch (IOException e) {</span>
+<span class="nc" id="L126">            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();</span>
+        }
+    }
+
+    /**
+     * 文档流式翻译（SSE）— 直接上传文件并翻译
+     * POST /v1/translate/document/stream
+     */
+    @PostMapping(value = &quot;/document/stream&quot;, produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamDocumentTranslate(
+            @RequestParam(&quot;file&quot;) MultipartFile file,
+            @RequestParam(value = &quot;sourceLang&quot;, defaultValue = &quot;auto&quot;) String sourceLang,
+            @RequestParam(value = &quot;targetLang&quot;, defaultValue = &quot;zh&quot;) String targetLang,
+            @RequestParam(value = &quot;mode&quot;, defaultValue = &quot;fast&quot;) String mode) {
+<span class="fc" id="L140">        return translationTaskPort.streamTranslateDocument(file, sourceLang, targetLang, mode);</span>
+    }
+
+    /**
+     * 文档流式翻译（SSE）— 基于已上传的文档
+     * POST /v1/translate/document/stream/{docId}
+     */
+    @PostMapping(value = &quot;/document/stream/{docId}&quot;, produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamDocumentTranslateById(
+            @PathVariable Long docId,
+            @RequestParam(value = &quot;targetLang&quot;, defaultValue = &quot;zh&quot;) String targetLang,
+            @RequestParam(value = &quot;mode&quot;, defaultValue = &quot;fast&quot;) String mode) {
+<span class="fc" id="L152">        return translationTaskPort.streamTranslateDocumentById(docId, targetLang, mode);</span>
+    }
+
+    /**
+     * RAG 翻译记忆查询
+     * POST /v1/translate/rag
+     */
+    @PostMapping(&quot;/rag&quot;)
+    public Result&lt;RagTranslationResponse&gt; queryRag(@RequestBody @Valid RagTranslationRequest request) {
+<span class="fc" id="L161">        Long userId = SecurityUtil.getCurrentUserId().orElse(null);</span>
+<span class="fc" id="L162">        RagTranslationResponse response = ragTranslationPort.searchSimilarWithModes(</span>
+<span class="fc" id="L163">                userId, request.getText(), request.getTargetLang(),</span>
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">                request.getEngine() != null ? List.of(request.getEngine()) : List.of());</span>
+<span class="fc" id="L165">        return Result.ok(response);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

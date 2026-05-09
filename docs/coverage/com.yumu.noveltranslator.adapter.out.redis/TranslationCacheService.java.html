@@ -1,0 +1,658 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslationCacheService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.out.redis</a> &gt; <span class="el_source">TranslationCacheService.java</span></div><h1>TranslationCacheService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.out.redis;
+
+import com.yumu.noveltranslator.adapter.out.persistence.entity.TranslationCache;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.TranslationCacheMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.yumu.noveltranslator.port.out.TranslationCacheAdminPort;
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 翻译缓存服务
+ * 二级缓存架构：Caffeine (L1) → Redis (L2) → 翻译引擎
+ *
+ * &lt;p&gt;缓存策略：&lt;/p&gt;
+ * &lt;ul&gt;
+ *   &lt;li&gt;L1 Caffeine：JVM 内存缓存，10 分钟过期，单实例最高性能&lt;/li&gt;
+ *   &lt;li&gt;L2 Redis：分布式缓存，30 分钟过期，支持多实例共享&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * &lt;p&gt;MySQL 已从查询热路径移除，仅用于异步持久化（saveToDatabaseAsync）。&lt;/p&gt;
+ *
+ * &lt;p&gt;防缓存问题：&lt;/p&gt;
+ * &lt;ul&gt;
+ *   &lt;li&gt;缓存穿透：空值占位（5 分钟短暂过期）&lt;/li&gt;
+ *   &lt;li&gt;缓存击穿：双层锁（JVM 本地 synchronized + Redis SET NX 分布式锁）&lt;/li&gt;
+ *   &lt;li&gt;缓存雪崩：过期时间添加随机抖动&lt;/li&gt;
+ *   &lt;li&gt;缓存一致性：版本号前缀 + 延迟双删 + Redis pub/sub&lt;/li&gt;
+ * &lt;/ul&gt;
+ */
+@Service
+<span class="fc" id="L47">@Slf4j</span>
+public class TranslationCacheService implements TranslationCacheAdminPort {
+
+    private final TranslationCacheMapper translationCacheMapper;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final CacheVersionService cacheVersionService;
+
+    /** 专用调度线程池，替代 Thread.sleep 保证延迟任务可靠执行 */
+<span class="fc" id="L55">    private final ScheduledExecutorService delayedCleanupExecutor = Executors.newScheduledThreadPool(</span>
+            2, r -&gt; {
+<span class="nc" id="L57">                Thread t = new Thread(r, &quot;cache-cleanup&quot;);</span>
+<span class="nc" id="L58">                t.setDaemon(true);</span>
+<span class="nc" id="L59">                return t;</span>
+            });
+
+    public TranslationCacheService(
+            TranslationCacheMapper translationCacheMapper,
+            StringRedisTemplate stringRedisTemplate,
+<span class="fc" id="L65">            @Lazy CacheVersionService cacheVersionService) {</span>
+<span class="fc" id="L66">        this.translationCacheMapper = translationCacheMapper;</span>
+<span class="fc" id="L67">        this.stringRedisTemplate = stringRedisTemplate;</span>
+<span class="fc" id="L68">        this.cacheVersionService = cacheVersionService;</span>
+<span class="fc" id="L69">    }</span>
+
+    // ==================== L1: Caffeine 内存缓存 ====================
+
+    /**
+     * Caffeine 本地缓存，最大 10000 条，写入后 10 分钟过期
+     */
+<span class="fc" id="L76">    private final Cache&lt;String, String&gt; caffeineCache = Caffeine.newBuilder()</span>
+<span class="fc" id="L77">            .maximumSize(10_000)</span>
+<span class="fc" id="L78">            .expireAfterWrite(Duration.ofMinutes(10))</span>
+<span class="fc" id="L79">            .recordStats()</span>
+<span class="fc" id="L80">            .build();</span>
+
+    // ==================== L2: Redis 配置常量 ====================
+
+    private static final String REDIS_KEY_PREFIX = &quot;translator:cache:&quot;;
+    private static final long REDIS_CACHE_SECONDS = 30 * 60;          // Redis 缓存 30 分钟
+    private static final long REDIS_NULL_SECONDS = 5 * 60;            // 空值占位 5 分钟
+
+    // ==================== 术语反向索引 ====================
+
+    /** Redis Set key 前缀: glossary:cache_keys:{word} */
+    private static final String GLOSSARY_CACHE_KEYS_PREFIX = &quot;glossary:cache_keys:&quot;;
+
+    /** 反向索引 Set 的 TTL（24 小时） */
+    private static final long GLOSSARY_INDEX_TTL_SECONDS = 24 * 3600;
+
+    /** 提取源文本中长度 &gt;= 3 的单词，用于构建反向索引 */
+<span class="fc" id="L97">    private static final Pattern WORD_EXTRACT_PATTERN = Pattern.compile(&quot;\\b[\\w\\p{L}]{3,}\\b&quot;);</span>
+
+    // ==================== L3: 数据库配置常量 ====================
+
+    private static final long DATABASE_CACHE_EXPIRY_HOURS = 24;       // 数据库缓存 24 小时
+
+    // ==================== 抖动配置（防雪崩） ====================
+
+    private static final long REDIS_JITTER_SECONDS = 60;              // Redis 过期时间抖动 ±60 秒
+    private static final long DB_JITTER_HOURS = 2;                    // 数据库过期时间抖动 ±2 小时
+
+    // ==================== 模式缓存层级 ====================
+
+    /**
+     * 模式缓存层级：查询顺序
+     */
+<span class="fc" id="L113">    private static final Map&lt;String, List&lt;String&gt;&gt; MODE_CACHE_HIERARCHY = Map.of(</span>
+<span class="fc" id="L114">        &quot;fast&quot;, List.of(&quot;team&quot;, &quot;expert&quot;, &quot;fast&quot;),</span>
+<span class="fc" id="L115">        &quot;expert&quot;, List.of(&quot;team&quot;, &quot;expert&quot;),</span>
+<span class="fc" id="L116">        &quot;team&quot;, List.of(&quot;team&quot;)</span>
+    );
+
+    // ==================== 核心查询方法 ====================
+
+    /**
+     * 空值占位标记
+     */
+    private static final String NULL_PLACEHOLDER = &quot;__NULL__&quot;;
+
+    // ==================== 缓存统计 ====================
+
+<span class="fc" id="L128">    private final AtomicLong l1HitCount = new AtomicLong(0);</span>
+<span class="fc" id="L129">    private final AtomicLong l2HitCount = new AtomicLong(0);</span>
+<span class="fc" id="L130">    private final AtomicLong cacheMissCount = new AtomicLong(0);</span>
+<span class="fc" id="L131">    private final AtomicLong nullHitCount = new AtomicLong(0);       // 空值命中（穿透防护）</span>
+
+    // ==================== 核心查询方法 ====================
+
+    /**
+     * 获取翻译缓存（L1 Caffeine → L2 Redis）
+     */
+    public String getCache(String cacheKey) {
+        // 1. L1: 尝试 Caffeine 缓存
+<span class="fc" id="L140">        String l1Value = caffeineCache.getIfPresent(cacheKey);</span>
+<span class="fc bfc" id="L141" title="All 2 branches covered.">        if (l1Value != null) {</span>
+<span class="fc bfc" id="L142" title="All 2 branches covered.">            if (NULL_PLACEHOLDER.equals(l1Value)) {</span>
+<span class="fc" id="L143">                nullHitCount.incrementAndGet();</span>
+<span class="fc" id="L144">                return null;</span>
+            }
+<span class="fc" id="L146">            l1HitCount.incrementAndGet();</span>
+<span class="fc" id="L147">            return l1Value;</span>
+        }
+
+        // 2. L2: 直接查 Redis（无分布式锁，高并发下由翻译引擎自然防击穿）
+<span class="fc" id="L151">        String redisKey = REDIS_KEY_PREFIX + cacheKey;</span>
+<span class="fc" id="L152">        String value = stringRedisTemplate.opsForValue().get(redisKey);</span>
+<span class="fc bfc" id="L153" title="All 2 branches covered.">        if (value != null) {</span>
+<span class="fc bfc" id="L154" title="All 2 branches covered.">            if (NULL_PLACEHOLDER.equals(value)) {</span>
+<span class="fc" id="L155">                caffeineCache.put(cacheKey, NULL_PLACEHOLDER);</span>
+<span class="fc" id="L156">                return null;</span>
+            }
+<span class="fc" id="L158">            caffeineCache.put(cacheKey, value);</span>
+<span class="fc" id="L159">            l2HitCount.incrementAndGet();</span>
+<span class="fc" id="L160">            return value;</span>
+        }
+
+<span class="fc" id="L163">        cacheMissCount.incrementAndGet();</span>
+<span class="fc" id="L164">        return null;</span>
+    }
+
+    /**
+     * 根据翻译模式获取缓存，使用 MGET 批量获取多个模式 key
+     * 按模式层级搜索：fast→[team, expert, fast], expert→[team, expert], team→[team]
+     */
+    public String getCacheByMode(String cacheKey, String currentMode) {
+<span class="fc" id="L172">        List&lt;String&gt; modesToSearch = MODE_CACHE_HIERARCHY.getOrDefault(</span>
+<span class="fc bfc" id="L173" title="All 2 branches covered.">            currentMode != null ? currentMode : &quot;fast&quot;, List.of(&quot;fast&quot;));</span>
+
+        // 构建待查 Redis key 列表
+<span class="fc" id="L176">        List&lt;String&gt; redisKeys = new ArrayList&lt;&gt;(modesToSearch.size());</span>
+<span class="fc bfc" id="L177" title="All 2 branches covered.">        for (String mode : modesToSearch) {</span>
+<span class="fc" id="L178">            String modeKey = cacheKey + &quot;_&quot; + mode;</span>
+            // 先查 L1
+<span class="fc" id="L180">            String l1 = caffeineCache.getIfPresent(modeKey);</span>
+<span class="fc bfc" id="L181" title="All 2 branches covered.">            if (l1 != null) {</span>
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">                if (NULL_PLACEHOLDER.equals(l1)) return null;</span>
+<span class="fc" id="L183">                l1HitCount.incrementAndGet();</span>
+<span class="fc" id="L184">                log.debug(&quot;L1 模式缓存命中: mode={}&quot;, mode);</span>
+<span class="fc" id="L185">                return l1;</span>
+            }
+<span class="fc" id="L187">            redisKeys.add(REDIS_KEY_PREFIX + modeKey);</span>
+<span class="fc" id="L188">        }</span>
+
+        // L1 全未命中 → MGET 批量查 L2
+<span class="pc bpc" id="L191" title="1 of 2 branches missed.">        if (!redisKeys.isEmpty()) {</span>
+<span class="fc" id="L192">            List&lt;String&gt; values = stringRedisTemplate.opsForValue().multiGet(redisKeys);</span>
+<span class="pc bpc" id="L193" title="1 of 4 branches missed.">            if (values != null &amp;&amp; !values.isEmpty()) {</span>
+<span class="nc bnc" id="L194" title="All 4 branches missed.">                for (int i = 0; i &lt; values.size() &amp;&amp; i &lt; modesToSearch.size(); i++) {</span>
+<span class="nc" id="L195">                    String modeKey = cacheKey + &quot;_&quot; + modesToSearch.get(i);</span>
+<span class="nc" id="L196">                    String v = values.get(i);</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">                    if (v != null) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">                        if (NULL_PLACEHOLDER.equals(v)) {</span>
+<span class="nc" id="L199">                            caffeineCache.put(modeKey, NULL_PLACEHOLDER);</span>
+<span class="nc" id="L200">                            return null;</span>
+                        }
+<span class="nc" id="L202">                        caffeineCache.put(modeKey, v);</span>
+<span class="nc" id="L203">                        l2HitCount.incrementAndGet();</span>
+<span class="nc" id="L204">                        log.debug(&quot;L2 模式缓存命中: mode={}&quot;, modesToSearch.get(i));</span>
+<span class="nc" id="L205">                        return v;</span>
+                    }
+                }
+            }
+        }
+
+<span class="fc" id="L211">        cacheMissCount.incrementAndGet();</span>
+<span class="fc" id="L212">        return null;</span>
+    }
+
+    // ==================== 核心写入方法 ====================
+
+    /**
+     * 从数据库查询缓存（高并发降级模式）
+     */
+    private TranslationCache queryDatabaseCache(String cacheKey) {
+        try {
+<span class="fc" id="L222">            TranslationCache cache = translationCacheMapper.selectById(cacheKey);</span>
+<span class="fc bfc" id="L223" title="All 2 branches covered.">            if (cache == null) {</span>
+<span class="fc" id="L224">                cache = translationCacheMapper.selectOne(</span>
+                        new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper&lt;TranslationCache&gt;()
+<span class="fc" id="L226">                                .eq(&quot;cache_key&quot;, cacheKey)</span>
+<span class="fc" id="L227">                                .gt(&quot;expire_time&quot;, LocalDateTime.now())</span>
+                );
+            }
+<span class="fc" id="L230">            return cache;</span>
+<span class="nc" id="L231">        } catch (Exception e) {</span>
+<span class="nc" id="L232">            log.debug(&quot;L3 数据库查询跳过（连接池繁忙或异常）: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L233">            return null;</span>
+        }
+    }
+
+    /**
+     * 保存翻译缓存到 L1 + L2 + L3
+     * 写入时使用当前版本号作为 key 前缀
+     *
+     * @param cacheKey   缓存键（不含版本号，由内部拼接）
+     * @param sourceText 源文本
+     * @param targetText 目标文本
+     * @param sourceLang 源语言
+     * @param targetLang 目标语言
+     * @param engine     翻译引擎
+     */
+    public void putCache(String cacheKey, String sourceText, String targetText,
+                         String sourceLang, String targetLang, String engine) {
+<span class="fc" id="L250">        putCache(cacheKey, sourceText, targetText, sourceLang, targetLang, engine, null);</span>
+<span class="fc" id="L251">    }</span>
+
+    /**
+     * 保存翻译缓存到 L1 + L2 + L3（带模式标签）
+     * 写入时使用当前版本号作为 key 前缀
+     *
+     * @param cacheKey   基础缓存键（不含版本号）
+     * @param sourceText 源文本
+     * @param targetText 目标文本
+     * @param sourceLang 源语言
+     * @param targetLang 目标语言
+     * @param engine     翻译引擎
+     * @param mode       翻译模式（fast/expert/team），为空则不附加模式标签
+     */
+    public void putCache(String cacheKey, String sourceText, String targetText,
+                         String sourceLang, String targetLang, String engine, String mode) {
+        // 获取当前版本号
+<span class="fc" id="L268">        String version = cacheVersionService.getVersion(sourceLang, targetLang);</span>
+        // cacheKey 可能已经包含 v{N}: 前缀（来自 CacheKeyUtil），先剥离再重新拼接
+<span class="fc" id="L270">        String strippedKey = cacheKey.replaceFirst(&quot;^v\\d+:&quot;, &quot;&quot;);</span>
+<span class="fc" id="L271">        String baseKey = &quot;v&quot; + version + &quot;:&quot; + strippedKey;</span>
+<span class="fc bfc" id="L272" title="All 4 branches covered.">        String finalKey = (mode != null &amp;&amp; !mode.isBlank()) ? baseKey + &quot;_&quot; + mode : baseKey;</span>
+
+<span class="fc" id="L274">        String redisKey = REDIS_KEY_PREFIX + finalKey;</span>
+
+        // 1. 写入 L1 Caffeine
+<span class="fc" id="L277">        caffeineCache.put(finalKey, targetText);</span>
+
+        // 2. 写入 L2 Redis（带随机抖动防雪崩）
+<span class="fc" id="L280">        long redisTtl = REDIS_CACHE_SECONDS + jitter(REDIS_JITTER_SECONDS);</span>
+<span class="fc" id="L281">        stringRedisTemplate.opsForValue().set(redisKey, targetText, Duration.ofSeconds(redisTtl));</span>
+
+        // 3. 异步维护术语反向索引（非关键路径，不阻塞响应）
+<span class="fc" id="L284">        Thread.startVirtualThread(() -&gt; buildReverseIndex(finalKey, sourceText));</span>
+
+        // 4. 异步写入 L3 数据库（带版本号）
+<span class="fc" id="L287">        saveToDatabaseAsync(finalKey, sourceText, targetText, sourceLang, targetLang, engine, version);</span>
+
+<span class="fc" id="L289">        log.debug(&quot;L1+L2+L3 写入成功: key={}, version={}, mode={}&quot;, finalKey, version, mode);</span>
+<span class="fc" id="L290">    }</span>
+
+    /**
+     * 保存空值占位（防缓存穿透）
+     *
+     * @param cacheKey 缓存键
+     */
+    public void putNullCache(String cacheKey) {
+<span class="fc" id="L298">        String redisKey = REDIS_KEY_PREFIX + cacheKey;</span>
+
+        // L1 写入空值占位
+<span class="fc" id="L301">        caffeineCache.put(cacheKey, NULL_PLACEHOLDER);</span>
+
+        // L2 Redis 写入空值占位（短过期）
+<span class="fc" id="L304">        stringRedisTemplate.opsForValue().set(redisKey, NULL_PLACEHOLDER, Duration.ofSeconds(REDIS_NULL_SECONDS));</span>
+
+<span class="fc" id="L306">        log.debug(&quot;空值占位写入：{}&quot;, cacheKey);</span>
+<span class="fc" id="L307">    }</span>
+
+    /**
+     * 仅保存到 L1 缓存（用于数据库缓存已存在的场景）
+     */
+    public void putToMemoryCache(String cacheKey, String targetText) {
+<span class="fc" id="L313">        caffeineCache.put(cacheKey, targetText);</span>
+<span class="fc" id="L314">    }</span>
+
+    // ==================== 术语反向索引 ====================
+
+    /**
+     * 从 sourceText 中提取长度 &gt;= 3 的单词，维护反向索引 Set。
+     * Redis key: glossary:cache_keys:{word_lowercase} -&gt; Set of cacheKeys
+     * TTL: 24 小时
+     */
+    void buildReverseIndex(String cacheKey, String sourceText) {
+<span class="fc bfc" id="L324" title="All 4 branches covered.">        if (sourceText == null || sourceText.isBlank()) {</span>
+<span class="fc" id="L325">            return;</span>
+        }
+
+<span class="fc" id="L328">        Set&lt;String&gt; uniqueWords = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L329">        Matcher matcher = WORD_EXTRACT_PATTERN.matcher(sourceText);</span>
+<span class="fc bfc" id="L330" title="All 2 branches covered.">        while (matcher.find()) {</span>
+<span class="fc" id="L331">            uniqueWords.add(matcher.group().toLowerCase());</span>
+        }
+
+<span class="fc bfc" id="L334" title="All 2 branches covered.">        for (String word : uniqueWords) {</span>
+<span class="fc" id="L335">            String indexKey = GLOSSARY_CACHE_KEYS_PREFIX + word;</span>
+<span class="fc" id="L336">            stringRedisTemplate.opsForSet().add(indexKey, cacheKey);</span>
+<span class="fc" id="L337">            stringRedisTemplate.expire(indexKey, Duration.ofSeconds(GLOSSARY_INDEX_TTL_SECONDS));</span>
+<span class="fc" id="L338">        }</span>
+
+<span class="fc bfc" id="L340" title="All 2 branches covered.">        if (!uniqueWords.isEmpty()) {</span>
+<span class="fc" id="L341">            log.debug(&quot;反向索引已更新: cacheKey={}, 词条数={}&quot;, cacheKey, uniqueWords.size());</span>
+        }
+<span class="fc" id="L343">    }</span>
+
+    /**
+     * 当术语发生变化时，使所有包含该词的缓存失效。
+     * 用于 glossary term 变更时的细粒度缓存失效。
+     *
+     * @param sourceWord 发生变化的原词（如 &quot;Apple&quot;）
+     */
+    public void invalidateKeysForTerm(String sourceWord) {
+<span class="fc bfc" id="L352" title="All 4 branches covered.">        if (sourceWord == null || sourceWord.isBlank()) {</span>
+<span class="fc" id="L353">            return;</span>
+        }
+
+<span class="fc" id="L356">        String lowerWord = sourceWord.toLowerCase();</span>
+<span class="fc" id="L357">        String indexKey = GLOSSARY_CACHE_KEYS_PREFIX + lowerWord;</span>
+
+        // 1. 获取所有受影响的 cache keys
+<span class="fc" id="L360">        Set&lt;String&gt; cacheKeys = stringRedisTemplate.opsForSet().members(indexKey);</span>
+<span class="pc bpc" id="L361" title="1 of 4 branches missed.">        if (cacheKeys == null || cacheKeys.isEmpty()) {</span>
+<span class="fc" id="L362">            log.debug(&quot;术语反向索引无匹配: word={}&quot;, lowerWord);</span>
+<span class="fc" id="L363">            return;</span>
+        }
+
+<span class="fc" id="L366">        log.info(&quot;开始术语细粒度失效: word={}, 影响 {} 个缓存键&quot;, lowerWord, cacheKeys.size());</span>
+
+        // 2. 清空本地 Caffeine L1 缓存中对应的 key
+<span class="fc bfc" id="L369" title="All 2 branches covered.">        for (String key : cacheKeys) {</span>
+<span class="fc" id="L370">            caffeineCache.invalidate(key);</span>
+<span class="fc" id="L371">        }</span>
+
+        // 3. 删除 L2 Redis 中的缓存 key
+        try {
+<span class="fc" id="L375">            String[] redisKeys = cacheKeys.stream()</span>
+<span class="fc" id="L376">                    .map(k -&gt; REDIS_KEY_PREFIX + k)</span>
+<span class="fc" id="L377">                    .toArray(String[]::new);</span>
+<span class="pc bpc" id="L378" title="1 of 2 branches missed.">            if (redisKeys.length &gt; 0) {</span>
+<span class="fc" id="L379">                long deleted = stringRedisTemplate.delete(java.util.List.of(redisKeys));</span>
+<span class="fc" id="L380">                log.info(&quot;L2 Redis 删除 {} 个术语相关缓存键&quot;, deleted);</span>
+            }
+<span class="fc" id="L382">        } catch (Exception e) {</span>
+<span class="fc" id="L383">            log.warn(&quot;L2 Redis 术语缓存删除失败: word={}, error={}&quot;, lowerWord, e.getMessage());</span>
+<span class="fc" id="L384">        }</span>
+
+        // 4. 删除 L3 数据库中的缓存记录
+        try {
+<span class="fc bfc" id="L388" title="All 2 branches covered.">            for (String key : cacheKeys) {</span>
+<span class="fc" id="L389">                translationCacheMapper.delete(</span>
+                        new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper&lt;TranslationCache&gt;()
+<span class="fc" id="L391">                                .eq(&quot;cache_key&quot;, key)</span>
+                );
+<span class="fc" id="L393">            }</span>
+<span class="fc" id="L394">            log.info(&quot;L3 数据库删除 {} 个术语相关记录&quot;, cacheKeys.size());</span>
+<span class="nc" id="L395">        } catch (Exception e) {</span>
+<span class="nc" id="L396">            log.warn(&quot;L3 数据库术语缓存删除失败: word={}, error={}&quot;, lowerWord, e.getMessage());</span>
+<span class="fc" id="L397">        }</span>
+
+        // 5. 清理反向索引 Set 条目
+<span class="fc" id="L400">        stringRedisTemplate.delete(indexKey);</span>
+
+<span class="fc" id="L402">        log.info(&quot;术语细粒度失效完成: word={}&quot;, lowerWord);</span>
+<span class="fc" id="L403">    }</span>
+
+    // ==================== 异步数据库写入 ====================
+
+    /**
+     * 异步保存缓存到数据库（使用虚拟线程，带重试机制）
+     */
+    private void saveToDatabaseAsync(String cacheKey, String sourceText, String targetText,
+                                      String sourceLang, String targetLang, String engine, String version) {
+<span class="fc" id="L412">        Thread.startVirtualThread(() -&gt; {</span>
+<span class="fc" id="L413">            int maxRetries = 2;</span>
+<span class="fc bfc" id="L414" title="All 2 branches covered.">            for (int attempt = 0; attempt &lt;= maxRetries; attempt++) {</span>
+                try {
+<span class="fc" id="L416">                    TranslationCache cache = new TranslationCache();</span>
+<span class="fc" id="L417">                    cache.setCacheKey(cacheKey);</span>
+<span class="fc" id="L418">                    cache.setSourceText(sourceText);</span>
+<span class="fc" id="L419">                    cache.setTargetText(targetText);</span>
+<span class="fc" id="L420">                    cache.setSourceLang(sourceLang);</span>
+<span class="fc" id="L421">                    cache.setTargetLang(targetLang);</span>
+<span class="fc" id="L422">                    cache.setEngine(engine);</span>
+<span class="fc" id="L423">                    cache.setVersion(Integer.parseInt(version));</span>
+                    // 24 小时 + 随机抖动（0~4 小时），防雪崩
+<span class="fc" id="L425">                    long jitterHours = jitter(DB_JITTER_HOURS);</span>
+<span class="fc" id="L426">                    cache.setExpireTime(LocalDateTime.now().plusHours(DATABASE_CACHE_EXPIRY_HOURS + jitterHours));</span>
+
+<span class="fc" id="L428">                    translationCacheMapper.insertCache(cache);</span>
+<span class="fc" id="L429">                    log.debug(&quot;L3 数据库缓存保存成功：{}&quot;, cacheKey);</span>
+<span class="fc" id="L430">                    break;</span>
+<span class="fc" id="L431">                } catch (Exception e) {</span>
+<span class="fc bfc" id="L432" title="All 2 branches covered.">                    if (attempt == maxRetries) {</span>
+<span class="fc" id="L433">                        log.warn(&quot;L3 数据库缓存保存失败（重试 {} 次后放弃）：{} - {}&quot;, maxRetries, cacheKey, e.getMessage());</span>
+                    } else {
+                        try {
+<span class="fc" id="L436">                            Thread.sleep(500L * (attempt + 1));</span>
+<span class="fc" id="L437">                        } catch (InterruptedException ie) {</span>
+<span class="fc" id="L438">                            Thread.currentThread().interrupt();</span>
+<span class="fc" id="L439">                            break;</span>
+<span class="fc" id="L440">                        }</span>
+                    }
+                }
+            }
+<span class="fc" id="L444">        });</span>
+<span class="fc" id="L445">    }</span>
+
+    // ==================== 延迟双删 ====================
+
+    /**
+     * 延迟双删：在数据变更时保证缓存一致性
+     *
+     * 流程：
+     * 1. 前置删除：清空 L1 + L2 对应语言对的缓存
+     * 2. 版本号 bump：Redis INCR + 发布 pub/sub 事件
+     * 3. 延迟 2 秒后通过 ScheduledExecutorService 调度后置删除
+     * 4. 后置删除：再次清空 L2 Redis（版本前缀匹配）+ L3 过期版本记录
+     *
+     * 注：使用 ScheduledExecutorService 替代 Thread.sleep，避免容器重启/调度导致后置删除丢失。
+     * 即使后置删除未执行，版本号机制已保证旧 key 不可达，仅占用少量内存直到 TTL 自然淘汰。
+     *
+     * @param sourceLang 源语言
+     * @param targetLang 目标语言
+     */
+    public void delayedDoubleDelete(String sourceLang, String targetLang) {
+        try {
+            // Step 1: 前置删除 — 清空本地 L1 缓存
+<span class="nc" id="L467">            log.info(&quot;延迟双删 [前置删除]: sourceLang={}, targetLang={}&quot;, sourceLang, targetLang);</span>
+<span class="nc" id="L468">            clearLocalCache();</span>
+
+            // Step 2: 版本号 bump + 发布 pub/sub 事件（其他实例收到后会清空 L1）
+<span class="nc" id="L471">            String newVersion = cacheVersionService.bumpVersionAndPublish(sourceLang, targetLang);</span>
+
+            // Step 3-5: 通过 ScheduledExecutorService 调度后置删除，避免 Thread.sleep 不可靠
+<span class="nc" id="L474">            delayedCleanupExecutor.schedule(() -&gt; {</span>
+                try {
+                    // 后置删除 — 清空 L2 Redis 中旧版本的所有 key
+<span class="nc" id="L477">                    String oldVersion = String.valueOf(Integer.parseInt(newVersion) - 1);</span>
+<span class="nc" id="L478">                    deleteRedisByOldVersion(oldVersion);</span>
+
+                    // 删除 L3 数据库中旧版本的记录
+<span class="nc" id="L481">                    deleteDbCacheByOldVersion(Integer.parseInt(newVersion));</span>
+
+<span class="nc" id="L483">                    log.info(&quot;延迟双删完成: sourceLang={}, targetLang={}, newVersion={}&quot;, sourceLang, targetLang, newVersion);</span>
+<span class="nc" id="L484">                } catch (Exception e) {</span>
+<span class="nc" id="L485">                    log.warn(&quot;延迟双删 [后置删除] 失败: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L486">                }</span>
+<span class="nc" id="L487">            }, 2, TimeUnit.SECONDS);</span>
+<span class="nc" id="L488">        } catch (Exception e) {</span>
+<span class="nc" id="L489">            log.error(&quot;延迟双删异常: sourceLang={}, targetLang={}, error={}&quot;, sourceLang, targetLang, e.getMessage(), e);</span>
+<span class="nc" id="L490">        }</span>
+<span class="nc" id="L491">    }</span>
+
+    /**
+     * 删除 Redis 中旧版本的所有缓存 key
+     */
+    private void deleteRedisByOldVersion(String oldVersion) {
+<span class="nc" id="L497">        String pattern = REDIS_KEY_PREFIX + &quot;v&quot; + oldVersion + &quot;:*&quot;;</span>
+<span class="nc" id="L498">        var keys = stringRedisTemplate.keys(pattern);</span>
+<span class="nc bnc" id="L499" title="All 4 branches missed.">        if (keys != null &amp;&amp; !keys.isEmpty()) {</span>
+<span class="nc" id="L500">            long deleted = stringRedisTemplate.delete(keys);</span>
+<span class="nc" id="L501">            log.info(&quot;延迟双删 [L2] 删除旧版本 Redis key: version={}, 删除 {} 条&quot;, oldVersion, deleted);</span>
+        }
+<span class="nc" id="L503">    }</span>
+
+    /**
+     * 删除数据库中旧版本的所有缓存记录
+     */
+    private void deleteDbCacheByOldVersion(int currentVersion) {
+<span class="nc" id="L509">        int deleted = translationCacheMapper.delete(</span>
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper&lt;TranslationCache&gt;()
+<span class="nc" id="L511">                        .lt(&quot;version&quot;, currentVersion)</span>
+        );
+<span class="nc" id="L513">        log.info(&quot;延迟双删 [L3] 删除旧版本 DB 记录: currentVersion={}, 删除 {} 条&quot;, currentVersion, deleted);</span>
+<span class="nc" id="L514">    }</span>
+
+    // ==================== 本地缓存清空（供 CacheVersionService 调用） ====================
+
+    /**
+     * 清空本地 Caffeine 缓存，供 pub/sub 事件处理使用
+     */
+    public void clearLocalCache() {
+<span class="fc" id="L522">        long size = caffeineCache.estimatedSize();</span>
+<span class="fc" id="L523">        caffeineCache.invalidateAll();</span>
+<span class="fc" id="L524">        log.debug(&quot;本地 Caffeine 缓存已清空，原条目数: {}&quot;, size);</span>
+<span class="fc" id="L525">    }</span>
+
+    // ==================== 辅助方法 ====================
+
+    /**
+     * 生成随机抖动值，范围为 [0, max)
+     * 用于防止缓存雪崩
+     */
+    private long jitter(long maxSeconds) {
+<span class="fc" id="L534">        return ThreadLocalRandom.current().nextLong(maxSeconds);</span>
+    }
+
+    /**
+     * 检查缓存是否存在（不返回值）
+     */
+    public boolean hasCache(String cacheKey) {
+<span class="fc bfc" id="L541" title="All 2 branches covered.">        return getCache(cacheKey) != null;</span>
+    }
+
+    /**
+     * 获取缓存命中率统计
+     */
+    public Map&lt;String, Object&gt; getCacheStats() {
+<span class="fc" id="L548">        long total = l1HitCount.get() + l2HitCount.get() + cacheMissCount.get();</span>
+<span class="fc bfc" id="L549" title="All 2 branches covered.">        double hitRate = total &gt; 0 ? (double) (l1HitCount.get() + l2HitCount.get()) / total * 100 : 0;</span>
+
+<span class="fc" id="L551">        return Map.of(</span>
+<span class="fc" id="L552">                &quot;l1Hits&quot;, l1HitCount.get(),</span>
+<span class="fc" id="L553">                &quot;l2Hits&quot;, l2HitCount.get(),</span>
+<span class="fc" id="L554">                &quot;nullHits&quot;, nullHitCount.get(),</span>
+<span class="fc" id="L555">                &quot;misses&quot;, cacheMissCount.get(),</span>
+<span class="fc" id="L556">                &quot;hitRate&quot;, String.format(&quot;%.2f%%&quot;, hitRate),</span>
+<span class="fc" id="L557">                &quot;totalRequests&quot;, total,</span>
+<span class="fc" id="L558">                &quot;caffeineStats&quot;, caffeineCache.stats().toString()</span>
+        );
+    }
+
+    /**
+     * 清理所有缓存（调试用）
+     */
+    public void clearAllCache() {
+<span class="fc" id="L566">        caffeineCache.invalidateAll();</span>
+<span class="fc" id="L567">        log.info(&quot;L1 Caffeine 缓存已清空&quot;);</span>
+
+        try {
+<span class="fc" id="L570">            stringRedisTemplate.delete(</span>
+<span class="fc" id="L571">                    stringRedisTemplate.keys(REDIS_KEY_PREFIX + &quot;*&quot;)</span>
+            );
+<span class="fc" id="L573">            log.info(&quot;L2 Redis 缓存已清空（前缀：{}）&quot;, REDIS_KEY_PREFIX);</span>
+<span class="nc" id="L574">        } catch (Exception e) {</span>
+<span class="nc" id="L575">            log.warn(&quot;L2 Redis 缓存清空失败：{}&quot;, e.getMessage());</span>
+<span class="fc" id="L576">        }</span>
+
+        try {
+<span class="fc" id="L579">            int deleted = translationCacheMapper.delete(</span>
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper&lt;TranslationCache&gt;()
+            );
+<span class="fc" id="L582">            log.info(&quot;L3 数据库缓存已清空，删除 {} 条记录&quot;, deleted);</span>
+<span class="nc" id="L583">        } catch (Exception e) {</span>
+<span class="nc" id="L584">            log.warn(&quot;L3 数据库缓存清空失败：{}&quot;, e.getMessage());</span>
+<span class="fc" id="L585">        }</span>
+
+        // 同时清空版本号
+        try {
+<span class="fc" id="L589">            var versionKeys = stringRedisTemplate.keys(&quot;translator:cache_version:*&quot;);</span>
+<span class="pc bpc" id="L590" title="2 of 4 branches missed.">            if (versionKeys != null &amp;&amp; !versionKeys.isEmpty()) {</span>
+<span class="nc" id="L591">                stringRedisTemplate.delete(versionKeys);</span>
+<span class="nc" id="L592">                log.info(&quot;缓存版本号已清空&quot;);</span>
+            }
+<span class="nc" id="L594">        } catch (Exception e) {</span>
+<span class="nc" id="L595">            log.warn(&quot;缓存版本号清空失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L596">        }</span>
+<span class="fc" id="L597">    }</span>
+
+    /**
+     * 清理过期缓存
+     * 定期调用此方法清理数据库中的过期缓存
+     */
+    public void cleanupExpiredCache() {
+        try {
+<span class="fc" id="L605">            int deleted = translationCacheMapper.delete(</span>
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper&lt;TranslationCache&gt;()
+<span class="fc" id="L607">                            .lt(&quot;expire_time&quot;, LocalDateTime.now())</span>
+            );
+<span class="fc" id="L609">            log.info(&quot;清理过期数据库缓存记录：{} 条&quot;, deleted);</span>
+<span class="fc" id="L610">        } catch (Exception e) {</span>
+<span class="fc" id="L611">            log.error(&quot;清理过期数据库缓存失败：{}&quot;, e.getMessage());</span>
+<span class="fc" id="L612">        }</span>
+<span class="fc" id="L613">    }</span>
+
+    /**
+     * 预热缓存 - 批量加载热门翻译到 L1
+     */
+    public void warmupCache(Iterable&lt;String&gt; cacheKeys) {
+<span class="fc" id="L619">        int count = 0;</span>
+<span class="fc bfc" id="L620" title="All 2 branches covered.">        for (String cacheKey : cacheKeys) {</span>
+<span class="fc" id="L621">            TranslationCache dbCache = queryDatabaseCache(cacheKey);</span>
+<span class="fc bfc" id="L622" title="All 2 branches covered.">            if (dbCache != null) {</span>
+<span class="fc" id="L623">                String value = dbCache.getTargetText();</span>
+<span class="fc" id="L624">                caffeineCache.put(cacheKey, value);</span>
+                // 同时回写 L2
+<span class="fc" id="L626">                String redisKey = REDIS_KEY_PREFIX + cacheKey;</span>
+<span class="fc" id="L627">                stringRedisTemplate.opsForValue().setIfAbsent(</span>
+                        redisKey,
+                        value,
+<span class="fc" id="L630">                        Duration.ofSeconds(REDIS_CACHE_SECONDS + jitter(REDIS_JITTER_SECONDS))</span>
+                );
+<span class="fc" id="L632">                count++;</span>
+            }
+<span class="fc" id="L634">        }</span>
+<span class="fc" id="L635">        log.info(&quot;缓存预热完成：加载 {} 条记录到 L1+L2&quot;, count);</span>
+<span class="fc" id="L636">    }</span>
+
+    /**
+     * 应用关闭时清理缓存资源
+     */
+    @PreDestroy
+    public void shutdown() {
+<span class="nc" id="L643">        log.info(&quot;翻译缓存服务关闭，清理 Caffeine 缓存...&quot;);</span>
+<span class="nc" id="L644">        caffeineCache.invalidateAll();</span>
+<span class="nc" id="L645">        log.info(&quot;翻译缓存服务关闭，关闭调度线程池...&quot;);</span>
+<span class="nc" id="L646">        delayedCleanupExecutor.shutdown();</span>
+        try {
+<span class="nc bnc" id="L648" title="All 2 branches missed.">            if (!delayedCleanupExecutor.awaitTermination(5, TimeUnit.SECONDS)) {</span>
+<span class="nc" id="L649">                delayedCleanupExecutor.shutdownNow();</span>
+            }
+<span class="nc" id="L651">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L652">            delayedCleanupExecutor.shutdownNow();</span>
+<span class="nc" id="L653">            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L654">        }</span>
+<span class="nc" id="L655">        log.info(&quot;翻译缓存服务已关闭&quot;);</span>
+<span class="nc" id="L656">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

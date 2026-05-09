@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CollabEventPublisher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">CollabEventPublisher.java</span></div><h1>CollabEventPublisher.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yumu.noveltranslator.util.SseEmitterUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * 协作事件发布器
+ *
+ * 将协作相关的事件写入 Redis Stream，供 SSE 重放机制消费。
+ * 所有方法都应在事务提交后调用，确保数据库写入先于事件发布。
+ */
+@Component
+<span class="fc" id="L20">@RequiredArgsConstructor</span>
+<span class="fc" id="L21">@Slf4j</span>
+public class CollabEventPublisher {
+
+    private final SseEmitterUtil sseEmitterUtil;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * 发布章节状态变更事件
+     *
+     * @param projectId 项目ID
+     * @param chapterId 章节ID
+     * @param userId    操作用户ID
+     * @param action    操作类型: &quot;updated&quot;, &quot;submitted&quot;, &quot;assigned&quot;
+     */
+    public void publishChapterUpdate(Long projectId, Long chapterId, String userId, String action) {
+<span class="fc" id="L36">        Map&lt;String, Object&gt; payload = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L37">        payload.put(&quot;chapterId&quot;, chapterId);</span>
+<span class="fc" id="L38">        payload.put(&quot;userId&quot;, userId);</span>
+<span class="fc" id="L39">        payload.put(&quot;action&quot;, action);</span>
+
+        String json;
+        try {
+<span class="fc" id="L43">            json = objectMapper.writeValueAsString(payload);</span>
+<span class="nc" id="L44">        } catch (JsonProcessingException e) {</span>
+<span class="nc" id="L45">            log.error(&quot;序列化章节事件失败: projectId={}, chapterId={}&quot;, projectId, chapterId, e);</span>
+<span class="nc" id="L46">            return;</span>
+<span class="fc" id="L47">        }</span>
+
+<span class="fc" id="L49">        sseEmitterUtil.publishCollabEvent(String.valueOf(projectId), &quot;chapter.&quot; + action, json);</span>
+<span class="fc" id="L50">    }</span>
+
+    /**
+     * 发布章节评论事件
+     *
+     * @param projectId     项目ID
+     * @param chapterTaskId 章节任务ID
+     * @param userId        评论用户ID
+     * @param content       评论内容
+     */
+    public void publishCommentAdded(Long projectId, Long chapterTaskId, Long userId, String content) {
+<span class="fc" id="L61">        Map&lt;String, Object&gt; payload = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L62">        payload.put(&quot;chapterTaskId&quot;, chapterTaskId);</span>
+<span class="fc" id="L63">        payload.put(&quot;userId&quot;, userId);</span>
+<span class="fc" id="L64">        payload.put(&quot;content&quot;, content);</span>
+
+        String json;
+        try {
+<span class="fc" id="L68">            json = objectMapper.writeValueAsString(payload);</span>
+<span class="nc" id="L69">        } catch (JsonProcessingException e) {</span>
+<span class="nc" id="L70">            log.error(&quot;序列化评论事件失败: projectId={}, chapterTaskId={}&quot;, projectId, chapterTaskId, e);</span>
+<span class="nc" id="L71">            return;</span>
+<span class="fc" id="L72">        }</span>
+
+<span class="fc" id="L74">        sseEmitterUtil.publishCollabEvent(String.valueOf(projectId), &quot;comment.added&quot;, json);</span>
+<span class="fc" id="L75">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

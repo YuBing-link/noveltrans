@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChapterTaskController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.in.rest.collab</a> &gt; <span class="el_source">ChapterTaskController.java</span></div><h1>ChapterTaskController.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.in.rest.collab;
+
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.collab.ChapterTaskResponse;
+import com.yumu.noveltranslator.port.dto.collab.AssignChapterRequest;
+import com.yumu.noveltranslator.port.dto.collab.SubmitChapterRequest;
+import com.yumu.noveltranslator.port.dto.collab.ReviewChapterRequest;
+import com.yumu.noveltranslator.enums.ProjectMemberRole;
+import com.yumu.noveltranslator.adapter.in.security.annotation.RequireProjectAccess;
+import com.yumu.noveltranslator.port.in.ChapterTaskPort;
+import com.yumu.noveltranslator.util.SecurityUtil;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
+
+
+import java.util.List;
+
+/**
+ * 章节任务管理 Controller
+ */
+@RestController
+@RequestMapping(&quot;/v1/collab&quot;)
+<span class="fc" id="L26">@RequiredArgsConstructor</span>
+<span class="fc" id="L27">@Slf4j</span>
+public class ChapterTaskController {
+
+    private final ChapterTaskPort chapterTaskPort;
+
+    @PutMapping(&quot;/chapters/{chapterId}/assign&quot;)
+    public Result&lt;ChapterTaskResponse&gt; assignChapter(@PathVariable Long chapterId,
+                                                       @Valid @RequestBody AssignChapterRequest request) {
+<span class="fc" id="L35">        Long assignerId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L36">        ChapterTaskResponse chapter = chapterTaskPort.assignChapter(chapterId, request.getAssigneeId(), assignerId);</span>
+<span class="fc" id="L37">        return Result.ok(chapter);</span>
+    }
+
+    @PutMapping(&quot;/chapters/{chapterId}/submit&quot;)
+    public Result&lt;ChapterTaskResponse&gt; submitChapter(@PathVariable Long chapterId,
+                                                       @Valid @RequestBody SubmitChapterRequest request) {
+<span class="fc" id="L43">        ChapterTaskResponse chapter = chapterTaskPort.submitChapter(chapterId, request.getTranslatedText());</span>
+<span class="fc" id="L44">        return Result.ok(chapter);</span>
+    }
+
+    @PutMapping(&quot;/chapters/{chapterId}/review&quot;)
+    public Result&lt;ChapterTaskResponse&gt; reviewChapter(@PathVariable Long chapterId,
+                                                       @Valid @RequestBody ReviewChapterRequest request) {
+<span class="fc" id="L50">        Long reviewerId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L51">        ChapterTaskResponse chapter = chapterTaskPort.reviewChapter(chapterId, request.getApproved(), request.getComment(), reviewerId);</span>
+<span class="fc" id="L52">        return Result.ok(chapter);</span>
+    }
+
+    @GetMapping(&quot;/chapters/{chapterId}&quot;)
+    public Result&lt;ChapterTaskResponse&gt; getChapter(@PathVariable Long chapterId) {
+<span class="fc" id="L57">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L58">        ChapterTaskResponse chapter = chapterTaskPort.getChapterById(chapterId, userId);</span>
+<span class="fc" id="L59">        return Result.ok(chapter);</span>
+    }
+
+    @GetMapping(&quot;/chapters/my&quot;)
+    public Result&lt;PageResponse&lt;ChapterTaskResponse&gt;&gt; listMyChapters(
+            @RequestParam(required = false, defaultValue = &quot;1&quot;) Integer page,
+            @RequestParam(required = false, defaultValue = &quot;20&quot;) Integer pageSize) {
+<span class="fc" id="L66">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L67">        PageResponse&lt;ChapterTaskResponse&gt; chapters = chapterTaskPort.listByAssigneeId(userId, page, pageSize);</span>
+<span class="fc" id="L68">        return Result.ok(chapters);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

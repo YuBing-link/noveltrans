@@ -287,6 +287,20 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                        <configuration>
+                            <!-- 默认输出到 target/site/jacoco -->
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>coverage-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.basedir}/docs/coverage</outputDirectory>
+                            <title>NovelTrans 测试覆盖率报告</title>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

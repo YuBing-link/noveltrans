@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DraftProjectRecoveryTask.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.task</a> &gt; <span class="el_source">DraftProjectRecoveryTask.java</span></div><h1>DraftProjectRecoveryTask.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.task;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.yumu.noveltranslator.adapter.out.persistence.converter.CollabConverter;
+import com.yumu.noveltranslator.adapter.out.persistence.entity.CollabProject;
+import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabChapterTaskMapper;
+import com.yumu.noveltranslator.adapter.out.persistence.mapper.CollabProjectMapper;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * 恢复停滞在 DRAFT 状态的协作项目。
+ * 每 5 分钟运行一次，检测 DRAFT 状态超过阈值的项目：
+ * - 如果已有章节：说明异步插入已完成但激活失败，将其转为 ACTIVE
+ * - 如果无章节：说明异步任务未执行或失败，记录为陈旧项目
+ */
+@Component
+<span class="fc" id="L25">@RequiredArgsConstructor</span>
+<span class="fc" id="L26">@Slf4j</span>
+public class DraftProjectRecoveryTask {
+
+    /**
+     * DRAFT 项目被视为停滞的时间阈值（分钟）
+     */
+    private static final int STALE_THRESHOLD_MINUTES = 10;
+
+    private final CollabProjectMapper collabProjectMapper;
+    private final CollabChapterTaskMapper collabChapterTaskMapper;
+    private final CollabStateMachine collabStateMachine;
+
+    @Scheduled(fixedRate = 300_000)
+    public void recoverStaleDraftProjects() {
+<span class="fc" id="L40">        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(STALE_THRESHOLD_MINUTES);</span>
+
+        // 查询 DRAFT 状态且创建时间早于阈值的项目
+<span class="fc" id="L43">        List&lt;CollabProject&gt; staleDrafts = collabProjectMapper.selectList(</span>
+                new QueryWrapper&lt;CollabProject&gt;()
+<span class="fc" id="L45">                        .eq(&quot;status&quot;, CollabProjectStatus.DRAFT.getValue())</span>
+<span class="fc" id="L46">                        .eq(&quot;deleted&quot;, 0)</span>
+<span class="fc" id="L47">                        .lt(&quot;create_time&quot;, cutoff)</span>
+        );
+
+<span class="fc bfc" id="L50" title="All 2 branches covered.">        if (staleDrafts.isEmpty()) {</span>
+<span class="fc" id="L51">            return;</span>
+        }
+
+<span class="fc" id="L54">        log.info(&quot;发现 {} 个停滞的 DRAFT 项目，开始恢复&quot;, staleDrafts.size());</span>
+
+<span class="fc bfc" id="L56" title="All 2 branches covered.">        for (CollabProject entity : staleDrafts) {</span>
+            try {
+<span class="fc" id="L58">                recoverSingleProject(entity);</span>
+<span class="nc" id="L59">            } catch (Exception e) {</span>
+<span class="nc" id="L60">                log.error(&quot;恢复项目失败: projectId={}, error={}&quot;, entity.getId(), e.getMessage(), e);</span>
+<span class="fc" id="L61">            }</span>
+<span class="fc" id="L62">        }</span>
+<span class="fc" id="L63">    }</span>
+
+    private void recoverSingleProject(CollabProject entity) {
+<span class="fc" id="L66">        Long projectId = entity.getId();</span>
+
+        // 检查该项目是否已有章节
+<span class="fc" id="L69">        int chapterCount = collabChapterTaskMapper.countByProjectId(projectId);</span>
+
+<span class="fc bfc" id="L71" title="All 2 branches covered.">        if (chapterCount &gt; 0) {</span>
+            // 有章节存在：异步任务可能已完成但激活失败
+<span class="fc" id="L73">            transitionToActive(entity);</span>
+        } else {
+            // 无章节：异步任务未执行或完全失败
+<span class="fc" id="L76">            logStaleProject(entity);</span>
+        }
+<span class="fc" id="L78">    }</span>
+
+    private void transitionToActive(CollabProject entity) {
+<span class="fc" id="L81">        Long projectId = entity.getId();</span>
+        try {
+<span class="fc" id="L83">            com.yumu.noveltranslator.domain.model.CollabProject model = CollabConverter.toProjectModel(entity);</span>
+<span class="fc" id="L84">            collabStateMachine.transitionProject(model, CollabProjectStatus.ACTIVE);</span>
+<span class="fc" id="L85">            collabProjectMapper.updateById(entity);</span>
+<span class="fc" id="L86">            log.info(&quot;恢复停滞项目（有章节）: projectId={}, chapters exist, transitioned to ACTIVE&quot;, projectId);</span>
+<span class="nc" id="L87">        } catch (IllegalStateException e) {</span>
+            // 状态转移不合法（如已是 ACTIVE），跳过
+<span class="nc" id="L89">            log.warn(&quot;无法转换项目状态: projectId={}, reason={}&quot;, projectId, e.getMessage());</span>
+<span class="fc" id="L90">        }</span>
+<span class="fc" id="L91">    }</span>
+
+    private void logStaleProject(CollabProject entity) {
+<span class="fc" id="L94">        Long projectId = entity.getId();</span>
+<span class="fc" id="L95">        log.warn(&quot;发现陈旧 DRAFT 项目（无章节插入）: projectId={}, name={}, ownerId={}, createTime={}. &quot;</span>
+                + &quot;可能原因：异步章节拆分任务未执行或事件发布失败。&quot;
+                + &quot;保持 DRAFT 状态，等待人工介入。&quot;,
+<span class="fc" id="L98">                projectId, entity.getName(), entity.getOwnerId(), entity.getCreateTime());</span>
+<span class="fc" id="L99">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

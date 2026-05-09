@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>JwtUtils.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.util</a> &gt; <span class="el_source">JwtUtils.java</span></div><h1>JwtUtils.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.util;
+
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.JWTVerifier;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+@Component
+<span class="fc" id="L15">public class JwtUtils {</span>
+
+    private String secret;
+    private Long expireTime;
+
+    @Value(&quot;${jwt.secret}&quot;)
+    public void setSecret(String secret) {
+<span class="fc" id="L22">        this.secret = secret;</span>
+<span class="fc" id="L23">    }</span>
+
+    @Value(&quot;${jwt.expiration:2592000000}&quot;) // 默认 30 天 (单位毫秒)
+    public void setExpireTime(Long expireTime) {
+<span class="fc" id="L27">        this.expireTime = expireTime;</span>
+<span class="fc" id="L28">    }</span>
+
+    /**
+     * 生成 Token
+     * @param userId   用户 ID
+     * @param email   用户邮箱
+     * @param tenantId 租户 ID
+     * @return String
+     */
+    public String createToken(Long userId, String email, Long tenantId) {
+<span class="fc" id="L38">        Date date = new Date(System.currentTimeMillis() + expireTime);</span>
+<span class="fc" id="L39">        Algorithm algorithm = Algorithm.HMAC256(secret);</span>
+
+<span class="fc" id="L41">        return JWT.create()</span>
+<span class="fc" id="L42">                .withClaim(&quot;userId&quot;, userId)</span>
+<span class="fc" id="L43">                .withClaim(&quot;email&quot;, email)</span>
+<span class="fc" id="L44">                .withClaim(&quot;tenantId&quot;, tenantId)</span>
+<span class="fc" id="L45">                .withIssuedAt(new Date())</span>
+<span class="fc" id="L46">                .withExpiresAt(date)</span>
+<span class="fc" id="L47">                .sign(algorithm);</span>
+    }
+
+    /**
+     * 生成 Token（向后兼容，使用 userId 作为 tenantId）
+     */
+    public String createToken(Long userId, String email) {
+<span class="fc" id="L54">        return createToken(userId, email, userId);</span>
+    }
+
+    /**
+     * 校验并解码 Token
+     * @param token 客户端传来的 Token
+     * @return DecodedJWT 如果验证失败会抛出异常
+     */
+    public DecodedJWT verifyToken(String token) {
+<span class="fc" id="L63">        Algorithm algorithm = Algorithm.HMAC256(secret);</span>
+<span class="fc" id="L64">        JWTVerifier verifier = JWT.require(algorithm).build();</span>
+<span class="fc" id="L65">        return verifier.verify(token);</span>
+    }
+
+    /**
+     * 获取 Token 中的用户信息
+     */
+    public Map&lt;String, String&gt; getUserInfoFromToken(String token) {
+<span class="fc" id="L72">        DecodedJWT jwt = verifyToken(token);</span>
+<span class="fc" id="L73">        Map&lt;String, String&gt; info = new HashMap&lt;&gt;(2);</span>
+<span class="fc" id="L74">        info.put(&quot;userId&quot;, jwt.getClaim(&quot;userId&quot;).asLong().toString());</span>
+<span class="fc" id="L75">        info.put(&quot;email&quot;, jwt.getClaim(&quot;email&quot;).asString());</span>
+<span class="fc" id="L76">        return info;</span>
+    }
+
+    /**
+     * 从 Token 中获取用户 ID
+     */
+    public Long getUserIdFromToken(String token) {
+<span class="fc" id="L83">        DecodedJWT jwt = verifyToken(token);</span>
+<span class="fc" id="L84">        return jwt.getClaim(&quot;userId&quot;).asLong();</span>
+    }
+
+    /**
+     * 从 Token 中获取用户邮箱
+     */
+    public String getEmailFromToken(String token) {
+<span class="fc" id="L91">        DecodedJWT jwt = verifyToken(token);</span>
+<span class="fc" id="L92">        return jwt.getClaim(&quot;email&quot;).asString();</span>
+    }
+
+    /**
+     * 从 Token 中获取租户 ID
+     */
+    public Long getTenantIdFromToken(String token) {
+<span class="nc" id="L99">        DecodedJWT jwt = verifyToken(token);</span>
+<span class="nc" id="L100">        return jwt.getClaim(&quot;tenantId&quot;).asLong();</span>
+    }
+
+    /**
+     * 从 Token 中获取过期时间
+     */
+    public java.time.LocalDateTime getExpiresAtFromToken(String token) {
+<span class="nc" id="L107">        DecodedJWT jwt = verifyToken(token);</span>
+<span class="nc" id="L108">        Date expiresAt = jwt.getExpiresAt();</span>
+<span class="nc" id="L109">        return expiresAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

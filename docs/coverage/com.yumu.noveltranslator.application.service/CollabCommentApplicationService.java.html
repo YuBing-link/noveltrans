@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CollabCommentApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">CollabCommentApplicationService.java</span></div><h1>CollabCommentApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.yumu.noveltranslator.port.dto.collab.CommentResponse;
+import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
+import com.yumu.noveltranslator.domain.model.CollabComment;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 协作评论应用服务
+ */
+@Service
+<span class="fc" id="L28">@Slf4j</span>
+<span class="fc" id="L29">@RequiredArgsConstructor</span>
+public class CollabCommentApplicationService implements com.yumu.noveltranslator.port.in.CollabCommentPort {
+
+    private final CollaborationRepositoryPort collabPort;
+    private final UserRepositoryPort userPort;
+
+    /**
+     * 创建评论
+     */
+    public CommentResponse createComment(Long chapterTaskId, Long userId, CreateCommentRequest request) {
+<span class="fc" id="L39">        var task = collabPort.findChapterTaskById(chapterTaskId);</span>
+<span class="fc bfc" id="L40" title="All 2 branches covered.">        if (task.isEmpty()) {</span>
+<span class="fc" id="L41">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;章节不存在: &quot; + chapterTaskId);</span>
+        }
+<span class="fc" id="L43">        var member = collabPort.findMemberByProjectAndUser(task.get().getProjectId(), userId);</span>
+<span class="fc bfc" id="L44" title="All 2 branches covered.">        if (member == null) {</span>
+<span class="fc" id="L45">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权访问该项目&quot;);</span>
+        }
+
+        // 如果是回复，验证父评论是否存在
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        if (request.getParentId() != null) {</span>
+<span class="fc" id="L50">            var parent = collabPort.findCommentById(request.getParentId());</span>
+<span class="pc bpc" id="L51" title="1 of 4 branches missed.">            if (parent.isEmpty() || !parent.get().getChapterTaskId().equals(chapterTaskId)) {</span>
+<span class="fc" id="L52">                throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;父评论不存在&quot;);</span>
+            }
+        }
+
+<span class="fc" id="L56">        CollabComment comment = new CollabComment();</span>
+<span class="fc" id="L57">        comment.setChapterTaskId(chapterTaskId);</span>
+<span class="fc" id="L58">        comment.setUserId(userId);</span>
+<span class="fc" id="L59">        comment.setSourceText(request.getSourceText());</span>
+<span class="fc" id="L60">        comment.setTargetText(request.getTargetText());</span>
+<span class="fc" id="L61">        comment.setContent(request.getContent());</span>
+<span class="fc" id="L62">        comment.setParentId(request.getParentId());</span>
+<span class="fc" id="L63">        comment.setResolved(false);</span>
+<span class="fc" id="L64">        collabPort.saveComment(comment);</span>
+
+<span class="fc" id="L66">        log.info(&quot;创建评论: chapterTaskId={}, userId={}, parentId={}&quot;, chapterTaskId, userId, request.getParentId());</span>
+<span class="fc" id="L67">        return toCommentResponse(comment, Map.of());</span>
+    }
+
+    /**
+     * 获取章节评论列表（分页，树形结构）
+     */
+    public PageResult&lt;CommentResponse&gt; getCommentsByChapterPage(Long chapterTaskId, Long userId, int page, int size) {
+<span class="fc" id="L74">        var task = collabPort.findChapterTaskById(chapterTaskId);</span>
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">        if (task.isEmpty()) {</span>
+<span class="nc" id="L76">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;章节不存在: &quot; + chapterTaskId);</span>
+        }
+<span class="fc" id="L78">        var member = collabPort.findMemberByProjectAndUser(task.get().getProjectId(), userId);</span>
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        if (member == null) {</span>
+<span class="fc" id="L80">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权访问该项目&quot;);</span>
+        }
+
+        // 分页查询根评论
+<span class="fc" id="L84">        var rootPage = collabPort.findCommentsByChapterTaskIdPaged(chapterTaskId, page, size);</span>
+
+        // 批量加载回复和用户，避免 N+1
+<span class="fc" id="L87">        Set&lt;Long&gt; userIds = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L88">        Map&lt;Long, List&lt;CollabComment&gt;&gt; repliesByRoot = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">        for (CollabComment root : rootPage.getRecords()) {</span>
+<span class="fc" id="L90">            userIds.add(root.getUserId());</span>
+<span class="fc" id="L91">            List&lt;CollabComment&gt; replies = collabPort.findRepliesByParentId(root.getId());</span>
+<span class="fc" id="L92">            repliesByRoot.put(root.getId(), replies);</span>
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">            for (CollabComment reply : replies) {</span>
+<span class="nc" id="L94">                userIds.add(reply.getUserId());</span>
+<span class="nc" id="L95">            }</span>
+<span class="fc" id="L96">        }</span>
+
+<span class="fc" id="L98">        Map&lt;Long, User&gt; userMap = new HashMap&lt;&gt;();</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">        if (!userIds.isEmpty()) {</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">            for (Long uid : userIds) {</span>
+<span class="fc" id="L101">                userPort.findById(uid).ifPresent(u -&gt; userMap.put(uid, u));</span>
+<span class="fc" id="L102">            }</span>
+        }
+
+<span class="fc" id="L105">        List&lt;CommentResponse&gt; responses = rootPage.getRecords().stream()</span>
+<span class="fc" id="L106">                .map(root -&gt; {</span>
+<span class="fc" id="L107">                    CommentResponse resp = toCommentResponse(root, userMap);</span>
+<span class="fc" id="L108">                    List&lt;CommentResponse&gt; replyResponses = repliesByRoot.getOrDefault(root.getId(), List.of()).stream()</span>
+<span class="pc" id="L109">                            .map(reply -&gt; toCommentResponse(reply, userMap))</span>
+<span class="fc" id="L110">                            .collect(Collectors.toList());</span>
+<span class="fc" id="L111">                    resp.setReplies(replyResponses);</span>
+<span class="fc" id="L112">                    return resp;</span>
+                })
+<span class="fc" id="L114">                .collect(Collectors.toList());</span>
+
+<span class="fc" id="L116">        PageResult&lt;CommentResponse&gt; resultPage = new PageResult&lt;&gt;(responses, rootPage.getTotal(), (long) page, (long) size);</span>
+<span class="fc" id="L117">        return resultPage;</span>
+    }
+
+    /**
+     * 标记评论已解决
+     */
+    public void resolveComment(Long commentId, Long userId) {
+<span class="fc" id="L124">        CollabComment comment = collabPort.findCommentById(commentId).orElse(null);</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">        if (comment == null) {</span>
+<span class="fc" id="L126">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;评论不存在&quot;);</span>
+        }
+<span class="fc" id="L128">        var task = collabPort.findChapterTaskById(comment.getChapterTaskId());</span>
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">        if (task.isEmpty()) {</span>
+<span class="nc" id="L130">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;章节不存在&quot;);</span>
+        }
+<span class="fc" id="L132">        var member = collabPort.findMemberByProjectAndUser(task.get().getProjectId(), userId);</span>
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if (member == null) {</span>
+<span class="nc" id="L134">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权访问该项目&quot;);</span>
+        }
+<span class="fc" id="L136">        comment.setResolved(true);</span>
+<span class="fc" id="L137">        collabPort.updateComment(comment);</span>
+<span class="fc" id="L138">    }</span>
+
+    /**
+     * 删除评论
+     */
+    public void deleteComment(Long commentId, Long userId) {
+<span class="fc" id="L144">        CollabComment comment = collabPort.findCommentById(commentId).orElse(null);</span>
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (comment == null) {</span>
+<span class="fc" id="L146">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;评论不存在&quot;);</span>
+        }
+<span class="fc" id="L148">        var task = collabPort.findChapterTaskById(comment.getChapterTaskId());</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">        if (task.isEmpty()) {</span>
+<span class="nc" id="L150">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;章节不存在&quot;);</span>
+        }
+<span class="fc" id="L152">        var member = collabPort.findMemberByProjectAndUser(task.get().getProjectId(), userId);</span>
+<span class="pc bpc" id="L153" title="1 of 2 branches missed.">        if (member == null) {</span>
+<span class="nc" id="L154">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权访问该项目&quot;);</span>
+        }
+        // 仅创建者可以删除
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        if (!comment.getUserId().equals(userId)) {</span>
+<span class="fc" id="L158">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权删除他人评论&quot;);</span>
+        }
+<span class="fc" id="L160">        collabPort.deleteComment(commentId);</span>
+<span class="fc" id="L161">    }</span>
+
+    private CommentResponse toCommentResponse(CollabComment comment, Map&lt;Long, User&gt; userMap) {
+<span class="fc" id="L164">        CommentResponse resp = new CommentResponse();</span>
+<span class="fc" id="L165">        resp.setId(comment.getId());</span>
+<span class="fc" id="L166">        resp.setUserId(comment.getUserId());</span>
+<span class="fc" id="L167">        resp.setSourceText(comment.getSourceText());</span>
+<span class="fc" id="L168">        resp.setTargetText(comment.getTargetText());</span>
+<span class="fc" id="L169">        resp.setContent(comment.getContent());</span>
+<span class="fc" id="L170">        resp.setResolved(comment.getResolved());</span>
+<span class="fc" id="L171">        resp.setCreateTime(comment.getCreateTime());</span>
+
+<span class="fc" id="L173">        User user = userMap.get(comment.getUserId());</span>
+<span class="fc bfc" id="L174" title="All 2 branches covered.">        if (user != null) {</span>
+<span class="fc" id="L175">            resp.setUsername(user.getUsername());</span>
+<span class="fc" id="L176">            resp.setAvatar(user.getAvatar());</span>
+        }
+<span class="fc" id="L178">        resp.setReplies(new ArrayList&lt;&gt;());</span>
+<span class="fc" id="L179">        return resp;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

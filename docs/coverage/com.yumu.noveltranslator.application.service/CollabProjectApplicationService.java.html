@@ -1,0 +1,642 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CollabProjectApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">CollabProjectApplicationService.java</span></div><h1>CollabProjectApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.yumu.noveltranslator.config.tenant.TenantContext;
+import com.yumu.noveltranslator.port.dto.collab.CollabProjectResponse;
+import com.yumu.noveltranslator.port.dto.collab.CreateCollabProjectRequest;
+import com.yumu.noveltranslator.port.dto.collab.InviteMemberRequest;
+import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.in.CollabPort;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabInviteCode;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.CollabProjectMember;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.enums.ChapterTaskStatus;
+import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.enums.ProjectMemberRole;
+import com.yumu.noveltranslator.enums.TranslationStatus;
+import com.yumu.noveltranslator.domain.event.ChapterSplitEvent;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.domain.service.MultiAgentTranslationService;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+/**
+ * 协作项目管理服务
+ */
+@Service
+<span class="fc" id="L53">@Slf4j</span>
+<span class="fc" id="L54">@RequiredArgsConstructor</span>
+public class CollabProjectApplicationService implements com.yumu.noveltranslator.port.in.CollabPort {
+
+    private final CollaborationRepositoryPort collabPort;
+    private final DocumentRepositoryPort documentPort;
+    private final UserRepositoryPort userPort;
+    private final CollabStateMachine collabStateMachine;
+    private final MultiAgentTranslationService multiAgentTranslationService;
+    private final ApplicationEventPublisher eventPublisher;
+
+    /**
+     * 创建协作项目，创建者自动成为 OWNER
+     */
+    @Transactional
+    public CollabProjectResponse createProject(CreateCollabProjectRequest request, Long userId) {
+<span class="fc" id="L69">        CollabProject project = new CollabProject();</span>
+<span class="fc" id="L70">        project.setName(request.getName());</span>
+<span class="fc" id="L71">        project.setDescription(request.getDescription());</span>
+<span class="fc" id="L72">        project.setOwnerId(userId);</span>
+<span class="fc" id="L73">        project.setSourceLang(request.getSourceLang());</span>
+<span class="fc" id="L74">        project.setTargetLang(request.getTargetLang());</span>
+<span class="fc" id="L75">        project.setStatus(CollabProjectStatus.DRAFT.getValue());</span>
+<span class="fc" id="L76">        project.setProgress(0);</span>
+<span class="fc" id="L77">        collabPort.saveProject(project);</span>
+
+        // 创建者自动成为 OWNER
+<span class="fc" id="L80">        CollabProjectMember owner = new CollabProjectMember();</span>
+<span class="fc" id="L81">        owner.setProjectId(project.getId());</span>
+<span class="fc" id="L82">        owner.setUserId(userId);</span>
+<span class="fc" id="L83">        owner.setRole(ProjectMemberRole.OWNER.getValue());</span>
+<span class="fc" id="L84">        owner.setInviteStatus(&quot;ACTIVE&quot;);</span>
+<span class="fc" id="L85">        owner.setJoinedTime(LocalDateTime.now());</span>
+<span class="fc" id="L86">        collabPort.saveMember(owner);</span>
+
+<span class="fc" id="L88">        log.info(&quot;创建协作项目: projectId={}, name={}, ownerId={}&quot;, project.getId(), project.getName(), userId);</span>
+<span class="fc" id="L89">        return toProjectResponse(project);</span>
+    }
+
+    /**
+     * 从上传文档创建协作项目（团队模式）
+     */
+    @Transactional
+    public CollabPort.TeamProjectCreateResult createProjectFromDocument(Long userId, Long documentId, String documentName,
+                                                              String filePath, String fileType,
+                                                              String sourceLang, String targetLang) {
+        String content;
+        try {
+<span class="fc" id="L101">            content = Files.readString(Paths.get(filePath), java.nio.charset.StandardCharsets.UTF_8);</span>
+<span class="nc" id="L102">        } catch (IOException e) {</span>
+<span class="nc" id="L103">            throw new BusinessException(ErrorCodeEnum.SYSTEM_ERROR, &quot;读取文档失败: &quot; + e.getMessage());</span>
+<span class="fc" id="L104">        }</span>
+
+<span class="pc bpc" id="L106" title="2 of 4 branches missed.">        if (content == null || content.trim().isEmpty()) {</span>
+<span class="nc" id="L107">            throw new BusinessException(ErrorCodeEnum.PARAMETER_ERROR, &quot;文档内容为空&quot;);</span>
+        }
+
+<span class="fc" id="L110">        List&lt;String&gt; chapters = splitIntoChapters(content);</span>
+
+<span class="fc" id="L112">        return doCreateProject(userId, documentId, documentName, chapters, sourceLang, targetLang);</span>
+    }
+
+    private CollabPort.TeamProjectCreateResult doCreateProject(Long userId, Long documentId, String documentName,
+                                                     List&lt;String&gt; chapters, String sourceLang, String targetLang) {
+<span class="fc" id="L117">        CollabProject project = createProjectAndOwner(userId, documentId, documentName, sourceLang, targetLang);</span>
+
+<span class="fc" id="L119">        log.info(&quot;团队模式创建项目（窄事务）: projectId={}, docName={}, chapters={}, 将异步插入&quot;,</span>
+<span class="fc" id="L120">                project.getId(), documentName, chapters.size());</span>
+
+        // 更新文档状态为处理中
+<span class="fc" id="L123">        documentPort.findById(documentId).ifPresent(doc -&gt; {</span>
+<span class="fc" id="L124">            doc.setStatus(TranslationStatus.PROCESSING.getValue());</span>
+<span class="fc" id="L125">            doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L126">            documentPort.update(doc);</span>
+<span class="fc" id="L127">        });</span>
+
+<span class="fc" id="L129">        eventPublisher.publishEvent(new ChapterSplitEvent(</span>
+<span class="fc" id="L130">                project.getId(), userId, documentId, documentName,</span>
+                chapters, sourceLang, targetLang));
+
+<span class="fc" id="L133">        return new CollabPort.TeamProjectCreateResult(project.getId(), documentName, chapters.size());</span>
+    }
+
+    /**
+     * 窄事务：仅创建项目和 OWNER 成员
+     */
+    @Transactional
+    protected CollabProject createProjectAndOwner(Long userId, Long documentId, String documentName,
+                                                    String sourceLang, String targetLang) {
+<span class="fc" id="L142">        CollabProject project = new CollabProject();</span>
+<span class="fc" id="L143">        project.setName(documentName);</span>
+<span class="fc" id="L144">        project.setDescription(&quot;团队模式自动创建&quot;);</span>
+<span class="fc" id="L145">        project.setOwnerId(userId);</span>
+<span class="fc" id="L146">        project.setDocumentId(documentId);</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">        project.setSourceLang(sourceLang != null ? sourceLang : &quot;auto&quot;);</span>
+<span class="fc" id="L148">        project.setTargetLang(targetLang);</span>
+<span class="fc" id="L149">        project.setStatus(CollabProjectStatus.DRAFT.getValue());</span>
+<span class="fc" id="L150">        project.setProgress(0);</span>
+<span class="fc" id="L151">        collabPort.saveProject(project);</span>
+
+<span class="fc" id="L153">        CollabProjectMember owner = new CollabProjectMember();</span>
+<span class="fc" id="L154">        owner.setProjectId(project.getId());</span>
+<span class="fc" id="L155">        owner.setUserId(userId);</span>
+<span class="fc" id="L156">        owner.setRole(ProjectMemberRole.OWNER.getValue());</span>
+<span class="fc" id="L157">        owner.setInviteStatus(&quot;ACTIVE&quot;);</span>
+<span class="fc" id="L158">        owner.setJoinedTime(LocalDateTime.now());</span>
+<span class="fc" id="L159">        collabPort.saveMember(owner);</span>
+
+<span class="fc" id="L161">        return project;</span>
+    }
+
+    /**
+     * 将文档章节添加到已有协作项目
+     */
+    @Transactional
+    public int addChaptersToProject(Long userId, Long projectId, Document document) {
+<span class="nc" id="L169">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if (project == null) {</span>
+<span class="nc" id="L171">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;项目不存在: &quot; + projectId);</span>
+        }
+
+        // 权限校验
+<span class="nc" id="L175">        var member = collabPort.findMemberByProjectAndUser(projectId, userId);</span>
+<span class="nc bnc" id="L176" title="All 4 branches missed.">        if (member == null &amp;&amp; !project.getOwnerId().equals(userId)) {</span>
+<span class="nc" id="L177">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权向该项目添加章节&quot;);</span>
+        }
+
+        String content;
+        try {
+<span class="nc" id="L182">            content = Files.readString(Paths.get(document.getPath()), java.nio.charset.StandardCharsets.UTF_8);</span>
+<span class="nc" id="L183">        } catch (IOException e) {</span>
+<span class="nc" id="L184">            throw new BusinessException(ErrorCodeEnum.SYSTEM_ERROR, &quot;读取文档失败: &quot; + e.getMessage());</span>
+<span class="nc" id="L185">        }</span>
+
+<span class="nc bnc" id="L187" title="All 4 branches missed.">        if (content == null || content.trim().isEmpty()) {</span>
+<span class="nc" id="L188">            throw new BusinessException(ErrorCodeEnum.PARAMETER_ERROR, &quot;文档内容为空&quot;);</span>
+        }
+
+<span class="nc" id="L191">        List&lt;String&gt; chapters = splitIntoChapters(content);</span>
+
+<span class="nc" id="L193">        return doAddChaptersToProject(project, document, chapters);</span>
+    }
+
+    @Transactional
+    private int doAddChaptersToProject(CollabProject project, Document document, List&lt;String&gt; chapters) {
+<span class="nc" id="L198">        Long projectId = project.getId();</span>
+
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        if (project.getDocumentId() == null) {</span>
+<span class="nc" id="L201">            project.setDocumentId(document.getId());</span>
+<span class="nc" id="L202">            collabPort.updateProject(project);</span>
+        }
+
+<span class="nc" id="L205">        List&lt;CollabChapterTask&gt; existingChapters = collabPort.findChapterTasksByProjectId(projectId);</span>
+<span class="nc" id="L206">        int nextChapterNumber = existingChapters.stream()</span>
+<span class="nc" id="L207">                .mapToInt(CollabChapterTask::getChapterNumber)</span>
+<span class="nc" id="L208">                .max()</span>
+<span class="nc" id="L209">                .orElse(0) + 1;</span>
+
+<span class="nc bnc" id="L211" title="All 2 branches missed.">        for (String chapterText : chapters) {</span>
+<span class="nc" id="L212">            CollabChapterTask chapter = new CollabChapterTask();</span>
+<span class="nc" id="L213">            chapter.setProjectId(projectId);</span>
+<span class="nc" id="L214">            chapter.setChapterNumber(nextChapterNumber++);</span>
+<span class="nc" id="L215">            chapter.setTitle(&quot;第 &quot; + chapter.getChapterNumber() + &quot; 章&quot;);</span>
+<span class="nc" id="L216">            chapter.setSourceText(chapterText);</span>
+<span class="nc" id="L217">            chapter.setTargetText(null);</span>
+<span class="nc" id="L218">            chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());</span>
+<span class="nc" id="L219">            chapter.setProgress(0);</span>
+<span class="nc" id="L220">            chapter.setSourceWordCount(chapterText.length());</span>
+<span class="nc" id="L221">            collabPort.saveChapterTask(chapter);</span>
+<span class="nc" id="L222">        }</span>
+
+<span class="nc" id="L224">        document.setStatus(TranslationStatus.PROCESSING.getValue());</span>
+<span class="nc" id="L225">        document.setUpdateTime(java.time.LocalDateTime.now());</span>
+<span class="nc" id="L226">        documentPort.update(document);</span>
+
+<span class="nc" id="L228">        log.info(&quot;添加章节到项目: projectId={}, docName={}, chapters={}&quot;, projectId, document.getName(), chapters.size());</span>
+<span class="nc" id="L229">        return chapters.size();</span>
+    }
+
+    /**
+     * 启动多 Agent 翻译
+     */
+    public void startMultiAgentTranslation(Long projectId) {
+<span class="fc" id="L236">        multiAgentTranslationService.startMultiAgentTranslation(projectId);</span>
+<span class="fc" id="L237">    }</span>
+
+    /**
+     * 智能章节分割
+     */
+    private List&lt;String&gt; splitIntoChapters(String content) {
+<span class="fc" id="L243">        String[] lines = content.split(&quot;\n&quot;);</span>
+<span class="fc" id="L244">        List&lt;String&gt; chapters = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L245">        StringBuilder currentChapter = new StringBuilder();</span>
+<span class="fc" id="L246">        boolean hasChapterTitle = false;</span>
+
+<span class="fc" id="L248">        java.util.regex.Pattern chapterPattern = java.util.regex.Pattern.compile(</span>
+                &quot;^\\s*(?:\\*\\*?)?\\s*(?:&quot; +
+                        &quot;(?:第\\s*[零一二三四五六七八九十百千\\d]+\\s*(?:章|节|回|卷|篇))&quot; +
+                        &quot;|(?:chapter\\s+[ivxlcdm\\d]+\\s*[:：]?\\s*.*)&quot; +
+                        &quot;|(?:ch\\.?\\s*\\d+)&quot; +
+                        &quot;|(?:part\\s+[ivxlcdm\\d]+\\s*[:：]?\\s*.*)&quot; +
+                        &quot;|(?:(?:[一二三四五六七八九十]+)、)&quot; +
+                        &quot;)&quot;,
+                java.util.regex.Pattern.CASE_INSENSITIVE
+        );
+
+<span class="fc bfc" id="L259" title="All 2 branches covered.">        for (String line : lines) {</span>
+<span class="fc" id="L260">            String trimmed = line.trim();</span>
+
+<span class="fc bfc" id="L262" title="All 2 branches covered.">            if (chapterPattern.matcher(trimmed).find()) {</span>
+<span class="fc bfc" id="L263" title="All 2 branches covered.">                if (currentChapter.length() &gt; 0) {</span>
+<span class="fc" id="L264">                    String chapterText = currentChapter.toString().trim();</span>
+<span class="pc bpc" id="L265" title="1 of 2 branches missed.">                    if (!chapterText.isEmpty()) {</span>
+<span class="fc" id="L266">                        chapters.add(chapterText);</span>
+                    }
+<span class="fc" id="L268">                    currentChapter = new StringBuilder();</span>
+                }
+<span class="fc" id="L270">                hasChapterTitle = true;</span>
+<span class="fc" id="L271">                currentChapter.append(trimmed).append(&quot;\n&quot;);</span>
+            } else {
+<span class="fc" id="L273">                currentChapter.append(line).append(&quot;\n&quot;);</span>
+            }
+        }
+
+<span class="pc bpc" id="L277" title="1 of 2 branches missed.">        if (currentChapter.length() &gt; 0) {</span>
+<span class="fc" id="L278">            String chapterText = currentChapter.toString().trim();</span>
+<span class="pc bpc" id="L279" title="1 of 2 branches missed.">            if (!chapterText.isEmpty()) {</span>
+<span class="fc" id="L280">                chapters.add(chapterText);</span>
+            }
+        }
+
+<span class="fc bfc" id="L284" title="All 2 branches covered.">        if (!hasChapterTitle) {</span>
+<span class="fc" id="L285">            chapters.clear();</span>
+<span class="fc" id="L286">            String[] paragraphs = content.split(&quot;\n+&quot;);</span>
+<span class="fc" id="L287">            StringBuilder current = new StringBuilder();</span>
+<span class="fc" id="L288">            int maxCharsPerChapter = 2000;</span>
+
+<span class="fc bfc" id="L290" title="All 2 branches covered.">            for (String p : paragraphs) {</span>
+<span class="fc" id="L291">                String pTrimmed = p.trim();</span>
+<span class="pc bpc" id="L292" title="1 of 2 branches missed.">                if (pTrimmed.isEmpty()) continue;</span>
+<span class="pc bpc" id="L293" title="3 of 4 branches missed.">                if (current.length() + pTrimmed.length() &gt; maxCharsPerChapter &amp;&amp; current.length() &gt; 0) {</span>
+<span class="nc" id="L294">                    chapters.add(current.toString().trim());</span>
+<span class="nc" id="L295">                    current = new StringBuilder();</span>
+                }
+<span class="fc" id="L297">                current.append(pTrimmed).append(&quot;\n&quot;);</span>
+            }
+<span class="pc bpc" id="L299" title="1 of 2 branches missed.">            if (current.length() &gt; 0) {</span>
+<span class="fc" id="L300">                chapters.add(current.toString().trim());</span>
+            }
+        }
+
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">        if (chapters.isEmpty()) {</span>
+<span class="nc" id="L305">            chapters.add(content.trim());</span>
+        }
+
+<span class="fc" id="L308">        log.debug(&quot;章节分割: 检测到章节标题={}, 分割出 {} 章&quot;, hasChapterTitle, chapters.size());</span>
+<span class="fc" id="L309">        return chapters;</span>
+    }
+
+    /**
+     * 获取项目详情
+     */
+    public CollabProjectResponse getProjectById(Long projectId) {
+<span class="fc" id="L316">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L317" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L318">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;项目不存在: &quot; + projectId);</span>
+        }
+<span class="fc" id="L320">        return toProjectResponse(project);</span>
+    }
+
+    /**
+     * 获取用户参与的项目列表
+     */
+    public PageResponse&lt;CollabProjectResponse&gt; listByUserId(Long userId, int page, int pageSize) {
+        try {
+<span class="fc" id="L328">            TenantContext.setBypassTenant(true);</span>
+<span class="fc" id="L329">            List&lt;CollabProject&gt; allProjects = collabPort.findProjectsByMemberUserId(userId);</span>
+<span class="fc" id="L330">            long total = allProjects.size();</span>
+<span class="fc" id="L331">            int fromIndex = Math.min((page - 1) * pageSize, (int) total);</span>
+<span class="fc" id="L332">            int toIndex = Math.min(fromIndex + pageSize, (int) total);</span>
+<span class="fc bfc" id="L333" title="All 2 branches covered.">            List&lt;CollabProject&gt; pagedProjects = fromIndex &lt; total</span>
+<span class="fc" id="L334">                    ? allProjects.subList(fromIndex, toIndex)</span>
+<span class="fc" id="L335">                    : List.of();</span>
+<span class="fc" id="L336">            Map&lt;Long, User&gt; userMap = batchLoadOwnerUsers(pagedProjects);</span>
+<span class="fc" id="L337">            List&lt;CollabProjectResponse&gt; responseList = pagedProjects.stream()</span>
+<span class="fc" id="L338">                    .map(p -&gt; toProjectResponse(p, userMap))</span>
+<span class="fc" id="L339">                    .collect(Collectors.toList());</span>
+<span class="fc" id="L340">            return PageResponse.of(page, pageSize, total, responseList);</span>
+        } finally {
+<span class="fc" id="L342">            TenantContext.setBypassTenant(false);</span>
+        }
+    }
+
+    /**
+     * 更新项目信息
+     */
+    @Transactional
+    public CollabProjectResponse updateProject(Long projectId, CreateCollabProjectRequest request, Long userId) {
+<span class="fc" id="L351">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L352" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L353">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;项目不存在: &quot; + projectId);</span>
+        }
+
+<span class="fc" id="L356">        project.setName(request.getName());</span>
+<span class="fc" id="L357">        project.setDescription(request.getDescription());</span>
+<span class="fc" id="L358">        project.setSourceLang(request.getSourceLang());</span>
+<span class="fc" id="L359">        project.setTargetLang(request.getTargetLang());</span>
+<span class="fc" id="L360">        collabPort.updateProject(project);</span>
+
+<span class="fc" id="L362">        return toProjectResponse(project);</span>
+    }
+
+    /**
+     * 变更项目状态
+     */
+    @Transactional
+    public void changeProjectStatus(Long projectId, CollabProjectStatus targetStatus, Long userId) {
+<span class="fc" id="L370">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L371" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L372">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;项目不存在: &quot; + projectId);</span>
+        }
+
+<span class="fc" id="L375">        CollabProjectStatus current = CollabProjectStatus.fromValue(project.getStatus());</span>
+<span class="fc" id="L376">        collabStateMachine.transitionProject(project, targetStatus);</span>
+<span class="fc bfc" id="L377" title="All 2 branches covered.">        if (targetStatus == CollabProjectStatus.COMPLETED) {</span>
+<span class="fc" id="L378">            project.setProgress(100);</span>
+        }
+<span class="fc" id="L380">        collabPort.updateProject(project);</span>
+
+<span class="fc" id="L382">        log.info(&quot;项目状态变更: projectId={}, {} -&gt; {}&quot;, projectId, current, targetStatus);</span>
+<span class="fc" id="L383">    }</span>
+
+    /**
+     * 生成项目邀请码
+     */
+    @Transactional
+    public CollabPort.InviteCodeResult generateInviteCode(Long projectId, Long operatorId) {
+<span class="fc" id="L390">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L391" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L392">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;项目不存在: &quot; + projectId);</span>
+        }
+
+<span class="fc" id="L395">        String code = generateRandomInviteCode();</span>
+<span class="fc" id="L396">        LocalDateTime expiresAt = LocalDateTime.now().plusHours(72);</span>
+
+<span class="fc" id="L398">        CollabInviteCode inviteCode = new CollabInviteCode();</span>
+<span class="fc" id="L399">        inviteCode.setProjectId(projectId);</span>
+<span class="fc" id="L400">        inviteCode.setCode(code);</span>
+<span class="fc" id="L401">        inviteCode.setExpiresAt(expiresAt);</span>
+<span class="fc" id="L402">        inviteCode.setUsed(0);</span>
+<span class="fc" id="L403">        collabPort.saveInviteCode(inviteCode);</span>
+
+<span class="fc" id="L405">        log.info(&quot;生成邀请码: projectId={}, code={}, expiresAt={}&quot;, projectId, code, expiresAt);</span>
+<span class="fc" id="L406">        return new CollabPort.InviteCodeResult(code, expiresAt);</span>
+    }
+
+    private String generateRandomInviteCode() {
+<span class="fc" id="L410">        String chars = &quot;ABCDEFGHJKLMNPQRSTUVWXYZ23456789&quot;;</span>
+<span class="fc" id="L411">        java.security.SecureRandom random = new java.security.SecureRandom();</span>
+<span class="fc" id="L412">        StringBuilder code = new StringBuilder(8);</span>
+<span class="fc bfc" id="L413" title="All 2 branches covered.">        for (int i = 0; i &lt; 8; i++) {</span>
+<span class="fc" id="L414">            code.append(chars.charAt(random.nextInt(chars.length())));</span>
+        }
+<span class="fc bfc" id="L416" title="All 2 branches covered.">        if (collabPort.findInviteCodeByCode(code.toString()) != null) {</span>
+<span class="fc" id="L417">            return generateRandomInviteCode();</span>
+        }
+<span class="fc" id="L419">        return code.toString();</span>
+    }
+
+    /**
+     * 邀请成员
+     */
+    @Transactional
+    public ProjectMemberResponse inviteMember(Long projectId, InviteMemberRequest request, Long inviterId) {
+<span class="fc" id="L427">        User user = userPort.findByEmail(request.getEmail()).orElse(null);</span>
+<span class="fc bfc" id="L428" title="All 2 branches covered.">        if (user == null) {</span>
+<span class="fc" id="L429">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;用户不存在: &quot; + request.getEmail());</span>
+        }
+
+<span class="fc" id="L432">        var existing = collabPort.findMemberByProjectAndUser(projectId, user.getId());</span>
+<span class="fc bfc" id="L433" title="All 2 branches covered.">        if (existing != null) {</span>
+<span class="fc" id="L434">            throw new BusinessException(ErrorCodeEnum.INVALID_STATE, &quot;该用户已是项目成员&quot;);</span>
+        }
+
+<span class="fc" id="L437">        String inviteCode = UUID.randomUUID().toString().replace(&quot;-&quot;, &quot;&quot;).substring(0, 16);</span>
+
+<span class="fc" id="L439">        CollabProjectMember member = new CollabProjectMember();</span>
+<span class="fc" id="L440">        member.setProjectId(projectId);</span>
+<span class="fc" id="L441">        member.setUserId(user.getId());</span>
+<span class="fc" id="L442">        member.setRole(request.getRole().getValue());</span>
+<span class="fc" id="L443">        member.setInviteCode(inviteCode);</span>
+<span class="fc" id="L444">        member.setInviteStatus(&quot;INVITED&quot;);</span>
+<span class="fc" id="L445">        collabPort.saveMember(member);</span>
+
+<span class="fc" id="L447">        log.info(&quot;邀请成员: projectId={}, email={}, role={}&quot;, projectId, request.getEmail(), request.getRole());</span>
+<span class="fc" id="L448">        return toMemberResponse(member, user);</span>
+    }
+
+    /**
+     * 通过邀请码加入项目
+     */
+    @Transactional
+    public ProjectMemberResponse joinByInviteCode(String inviteCode, Long userId) {
+<span class="fc" id="L456">        CollabInviteCode codeRecord = collabPort.findValidInviteCode(inviteCode);</span>
+<span class="fc bfc" id="L457" title="All 2 branches covered.">        if (codeRecord == null) {</span>
+<span class="fc" id="L458">            CollabInviteCode anyCode = collabPort.findInviteCodeByCode(inviteCode);</span>
+<span class="fc bfc" id="L459" title="All 2 branches covered.">            if (anyCode == null) {</span>
+<span class="fc" id="L460">                throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;邀请码无效&quot;);</span>
+            }
+<span class="fc bfc" id="L462" title="All 2 branches covered.">            if (anyCode.getUsed() == 1) {</span>
+<span class="fc" id="L463">                throw new BusinessException(ErrorCodeEnum.INVALID_STATE, &quot;邀请码已被使用&quot;);</span>
+            }
+<span class="pc bpc" id="L465" title="1 of 2 branches missed.">            if (anyCode.getExpiresAt().isBefore(LocalDateTime.now())) {</span>
+<span class="fc" id="L466">                throw new BusinessException(ErrorCodeEnum.INVALID_STATE, &quot;邀请码已过期&quot;);</span>
+            }
+<span class="nc" id="L468">            throw new BusinessException(ErrorCodeEnum.INVALID_STATE, &quot;邀请码不可用&quot;);</span>
+        }
+
+<span class="fc" id="L471">        collabPort.markInviteCodeAsUsed(codeRecord.getId());</span>
+
+        try {
+<span class="fc" id="L474">            TenantContext.setBypassTenant(true);</span>
+
+<span class="fc" id="L476">            CollabProject project = collabPort.findProjectById(codeRecord.getProjectId()).orElse(null);</span>
+<span class="pc bpc" id="L477" title="1 of 2 branches missed.">            if (project == null) {</span>
+<span class="nc" id="L478">                throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;关联项目不存在&quot;);</span>
+            }
+<span class="fc bfc" id="L480" title="All 2 branches covered.">            if (!CollabProjectStatus.ACTIVE.getValue().equals(project.getStatus())) {</span>
+<span class="fc" id="L481">                throw new BusinessException(ErrorCodeEnum.INVALID_STATE, &quot;项目当前不可加入&quot;);</span>
+            }
+
+<span class="fc" id="L484">            var existing = collabPort.findMemberByProjectAndUser(codeRecord.getProjectId(), userId);</span>
+<span class="fc bfc" id="L485" title="All 2 branches covered.">            if (existing != null) {</span>
+<span class="fc" id="L486">                throw new BusinessException(ErrorCodeEnum.INVALID_STATE, &quot;您已是该项目成员&quot;);</span>
+            }
+
+<span class="fc" id="L489">            CollabProjectMember member = new CollabProjectMember();</span>
+<span class="fc" id="L490">            member.setProjectId(codeRecord.getProjectId());</span>
+<span class="fc" id="L491">            member.setUserId(userId);</span>
+<span class="fc" id="L492">            member.setRole(ProjectMemberRole.TRANSLATOR.getValue());</span>
+<span class="fc" id="L493">            member.setInviteCode(inviteCode);</span>
+<span class="fc" id="L494">            member.setInviteStatus(&quot;ACTIVE&quot;);</span>
+<span class="fc" id="L495">            member.setJoinedTime(LocalDateTime.now());</span>
+<span class="fc" id="L496">            member.setTenantId(project.getTenantId());</span>
+<span class="fc" id="L497">            collabPort.saveMember(member);</span>
+
+<span class="fc" id="L499">            User user = userPort.findById(userId).orElse(null);</span>
+<span class="fc" id="L500">            log.info(&quot;加入项目: userId={}, projectId={}, inviteCode={}&quot;, userId, codeRecord.getProjectId(), inviteCode);</span>
+<span class="fc" id="L501">            return toMemberResponse(member, user);</span>
+        } finally {
+<span class="fc" id="L503">            TenantContext.setBypassTenant(false);</span>
+        }
+    }
+
+    /**
+     * 获取项目成员列表（分页）
+     */
+    public PageResponse&lt;ProjectMemberResponse&gt; getMembers(Long projectId, int page, int pageSize) {
+        List&lt;CollabProjectMember&gt; allMembers;
+        try {
+<span class="fc" id="L513">            TenantContext.setBypassTenant(true);</span>
+<span class="fc" id="L514">            allMembers = collabPort.findMembersByProjectId(projectId);</span>
+        } finally {
+<span class="fc" id="L516">            TenantContext.setBypassTenant(false);</span>
+        }
+<span class="fc" id="L518">        long total = allMembers.size();</span>
+<span class="fc" id="L519">        int fromIndex = Math.min((page - 1) * pageSize, (int) total);</span>
+<span class="fc" id="L520">        int toIndex = Math.min(fromIndex + pageSize, (int) total);</span>
+<span class="fc bfc" id="L521" title="All 2 branches covered.">        List&lt;CollabProjectMember&gt; pagedMembers = fromIndex &lt; total</span>
+<span class="fc" id="L522">                ? allMembers.subList(fromIndex, toIndex)</span>
+<span class="fc" id="L523">                : List.of();</span>
+
+<span class="fc" id="L525">        Set&lt;Long&gt; userIds = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L526" title="All 2 branches covered.">        for (CollabProjectMember m : pagedMembers) {</span>
+<span class="pc bpc" id="L527" title="1 of 2 branches missed.">            if (m.getUserId() != null) userIds.add(m.getUserId());</span>
+<span class="fc" id="L528">        }</span>
+<span class="fc" id="L529">        Map&lt;Long, User&gt; userMap = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L530" title="All 2 branches covered.">        for (Long uid : userIds) {</span>
+<span class="fc" id="L531">            userPort.findById(uid).ifPresent(u -&gt; userMap.put(uid, u));</span>
+<span class="fc" id="L532">        }</span>
+
+<span class="fc" id="L534">        List&lt;ProjectMemberResponse&gt; responseList = pagedMembers.stream()</span>
+<span class="fc" id="L535">                .map(m -&gt; toMemberResponse(m, userMap.get(m.getUserId())))</span>
+<span class="fc" id="L536">                .collect(Collectors.toList());</span>
+<span class="fc" id="L537">        return PageResponse.of(page, pageSize, total, responseList);</span>
+    }
+
+    /**
+     * 移除成员
+     */
+    @Transactional
+    public void removeMember(Long projectId, Long memberId, Long operatorId) {
+<span class="fc" id="L545">        var member = collabPort.findMemberById(memberId).orElse(null);</span>
+<span class="fc bfc" id="L546" title="All 4 branches covered.">        if (member == null || !member.getProjectId().equals(projectId)) {</span>
+<span class="fc" id="L547">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;成员不存在&quot;);</span>
+        }
+
+<span class="fc bfc" id="L550" title="All 2 branches covered.">        if (ProjectMemberRole.OWNER.getValue().equals(member.getRole())) {</span>
+<span class="fc" id="L551">            throw new BusinessException(ErrorCodeEnum.INVALID_STATE, &quot;所有者不能直接移除，需先转让项目&quot;);</span>
+        }
+
+<span class="fc" id="L554">        member.setInviteStatus(&quot;REMOVED&quot;);</span>
+<span class="fc" id="L555">        collabPort.updateMember(member);</span>
+<span class="fc" id="L556">    }</span>
+
+    /**
+     * 删除项目
+     */
+    @Transactional
+    public void deleteProject(Long projectId, Long userId) {
+<span class="fc" id="L563">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L564" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L565">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;项目不存在&quot;);</span>
+        }
+<span class="fc bfc" id="L567" title="All 2 branches covered.">        if (!project.getOwnerId().equals(userId)) {</span>
+<span class="fc" id="L568">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;只有项目所有者可以删除项目&quot;);</span>
+        }
+
+        // 级联逻辑删除：评论 → 章节 → 成员 → 项目
+<span class="fc" id="L572">        List&lt;CollabChapterTask&gt; chapters = collabPort.findChapterTasksByProjectId(projectId);</span>
+<span class="fc bfc" id="L573" title="All 2 branches covered.">        for (CollabChapterTask chapter : chapters) {</span>
+<span class="fc" id="L574">            collabPort.deleteCommentsByChapterTaskId(chapter.getId());</span>
+<span class="fc" id="L575">        }</span>
+<span class="fc" id="L576">        collabPort.deleteChapterTasksByProjectId(projectId);</span>
+<span class="fc" id="L577">        collabPort.deleteMembersByProjectId(projectId);</span>
+<span class="fc" id="L578">        collabPort.deleteProject(projectId);</span>
+
+<span class="fc" id="L580">        log.info(&quot;删除协作项目: projectId={}, name={}, ownerId={}&quot;, projectId, project.getName(), userId);</span>
+<span class="fc" id="L581">    }</span>
+
+    private CollabProjectResponse toProjectResponse(CollabProject project) {
+<span class="fc" id="L584">        return toProjectResponse(project, Map.of());</span>
+    }
+
+    private CollabProjectResponse toProjectResponse(CollabProject project, Map&lt;Long, User&gt; userMap) {
+<span class="fc" id="L588">        CollabProjectResponse resp = new CollabProjectResponse();</span>
+<span class="fc" id="L589">        resp.setId(project.getId());</span>
+<span class="fc" id="L590">        resp.setName(project.getName());</span>
+<span class="fc" id="L591">        resp.setDescription(project.getDescription());</span>
+<span class="fc" id="L592">        resp.setOwnerId(project.getOwnerId());</span>
+<span class="fc" id="L593">        resp.setSourceLang(project.getSourceLang());</span>
+<span class="fc" id="L594">        resp.setTargetLang(project.getTargetLang());</span>
+<span class="fc" id="L595">        resp.setStatus(project.getStatus());</span>
+<span class="fc" id="L596">        resp.setProgress(project.getProgress());</span>
+<span class="fc" id="L597">        resp.setCreateTime(project.getCreateTime());</span>
+<span class="fc" id="L598">        resp.setUpdateTime(project.getUpdateTime());</span>
+
+<span class="fc" id="L600">        User owner = userMap.get(project.getOwnerId());</span>
+<span class="fc bfc" id="L601" title="All 2 branches covered.">        if (owner == null) {</span>
+<span class="fc" id="L602">            owner = userPort.findById(project.getOwnerId()).orElse(null);</span>
+        }
+<span class="fc bfc" id="L604" title="All 2 branches covered.">        if (owner != null) {</span>
+<span class="fc" id="L605">            resp.setOwnerName(owner.getUsername());</span>
+        }
+
+<span class="fc" id="L608">        int memberCount = collabPort.countMembersByProjectId(project.getId());</span>
+<span class="fc" id="L609">        resp.setMemberCount(memberCount);</span>
+
+<span class="fc" id="L611">        return resp;</span>
+    }
+
+    private Map&lt;Long, User&gt; batchLoadOwnerUsers(List&lt;CollabProject&gt; projects) {
+<span class="fc" id="L615">        Set&lt;Long&gt; userIds = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L616" title="All 2 branches covered.">        for (CollabProject p : projects) {</span>
+<span class="fc bfc" id="L617" title="All 2 branches covered.">            if (p.getOwnerId() != null) userIds.add(p.getOwnerId());</span>
+<span class="fc" id="L618">        }</span>
+<span class="fc" id="L619">        Map&lt;Long, User&gt; userMap = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L620" title="All 2 branches covered.">        for (Long uid : userIds) {</span>
+<span class="fc" id="L621">            userPort.findById(uid).ifPresent(u -&gt; userMap.put(uid, u));</span>
+<span class="fc" id="L622">        }</span>
+<span class="fc" id="L623">        return userMap;</span>
+    }
+
+    private ProjectMemberResponse toMemberResponse(CollabProjectMember member, User user) {
+<span class="fc" id="L627">        ProjectMemberResponse resp = new ProjectMemberResponse();</span>
+<span class="fc" id="L628">        resp.setId(member.getId());</span>
+<span class="fc" id="L629">        resp.setUserId(member.getUserId());</span>
+<span class="fc" id="L630">        resp.setRole(member.getRole());</span>
+<span class="fc" id="L631">        resp.setInviteStatus(member.getInviteStatus());</span>
+<span class="fc" id="L632">        resp.setJoinedTime(member.getJoinedTime());</span>
+<span class="pc bpc" id="L633" title="1 of 2 branches missed.">        if (user != null) {</span>
+<span class="fc" id="L634">            resp.setUsername(user.getUsername());</span>
+<span class="fc" id="L635">            resp.setEmail(user.getEmail());</span>
+<span class="fc" id="L636">            resp.setAvatar(user.getAvatar());</span>
+        }
+<span class="fc" id="L638">        return resp;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

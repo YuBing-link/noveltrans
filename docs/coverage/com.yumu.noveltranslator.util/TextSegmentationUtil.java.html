@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TextSegmentationUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.util</a> &gt; <span class="el_source">TextSegmentationUtil.java</span></div><h1>TextSegmentationUtil.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.util;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 文本分段工具类
+ * 将长文本拆分为符合字符限制的片段，支持按句子、段落边界分割
+ */
+<span class="nc" id="L10">public class TextSegmentationUtil {</span>
+
+    /** 每段最大字符数（统一限制，不再按引擎区分） */
+    private static final int DEFAULT_MAX_CHARS_PER_SEGMENT = 2000;
+
+    // 句子结束标点符号（中英文）
+    private static final String SENTENCE_ENDINGS = &quot;.!?。！？…\n\r&quot;;
+
+    /**
+     * 根据指定的翻译引擎分割文本
+     *
+     * @param text 待分割的文本
+     * @param engineName 翻译引擎名称（如 &quot;google&quot;, &quot;deepl&quot;, &quot;mymemory&quot;, &quot;baidu&quot;, &quot;libre&quot;, &quot;youdao&quot;）
+     * @return 分割后的文本片段列表
+     */
+    public static List&lt;String&gt; segmentByTextEngine(String text, String engineName) {
+<span class="pc bpc" id="L26" title="2 of 4 branches missed.">        if (text == null || text.isEmpty()) {</span>
+<span class="nc" id="L27">            return new ArrayList&lt;&gt;();</span>
+        }
+
+<span class="fc" id="L30">        return segmentText(text, DEFAULT_MAX_CHARS_PER_SEGMENT);</span>
+    }
+
+    /**
+     * 按指定字符数限制分割文本
+     * 优先在句子边界处分割，其次在段落边界处分割，最后按字符数硬分割
+     *
+     * @param text 待分割的文本
+     * @param maxChars 每段最大字符数
+     * @return 分割后的文本片段列表
+     */
+    public static List&lt;String&gt; segmentText(String text, int maxChars) {
+<span class="pc bpc" id="L42" title="1 of 6 branches missed.">        if (text == null || text.isEmpty() || maxChars &lt;= 0) {</span>
+<span class="fc" id="L43">            return new ArrayList&lt;&gt;();</span>
+        }
+
+<span class="fc" id="L46">        List&lt;String&gt; segments = new ArrayList&lt;&gt;();</span>
+
+        // 如果文本长度不超过限制，直接返回
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        if (text.length() &lt;= maxChars) {</span>
+<span class="fc" id="L50">            segments.add(text);</span>
+<span class="fc" id="L51">            return segments;</span>
+        }
+
+<span class="fc" id="L54">        int startPos = 0;</span>
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">        while (startPos &lt; text.length()) {</span>
+<span class="fc" id="L56">            int endPos = Math.min(startPos + maxChars, text.length());</span>
+
+            // 如果到达文本末尾，添加最后一段
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">            if (startPos &gt;= text.length()) {</span>
+<span class="nc" id="L60">                break;</span>
+            }
+
+            // 如果当前段已经很短（接近或等于最大限制），直接截取
+<span class="fc bfc" id="L64" title="All 2 branches covered.">            if (endPos - startPos &lt; maxChars) {</span>
+<span class="fc" id="L65">                segments.add(text.substring(startPos));</span>
+<span class="fc" id="L66">                break;</span>
+            }
+
+            // 尝试在句子边界处分割
+<span class="fc" id="L70">            int sentenceBreak = findSentenceBreak(text, startPos, endPos);</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">            if (sentenceBreak &gt; startPos) {</span>
+<span class="fc" id="L72">                segments.add(text.substring(startPos, sentenceBreak));</span>
+<span class="fc" id="L73">                startPos = sentenceBreak;</span>
+<span class="fc" id="L74">                continue;</span>
+            }
+
+            // 尝试在段落边界处分割
+<span class="fc" id="L78">            int paragraphBreak = findParagraphBreak(text, startPos, endPos);</span>
+<span class="pc bpc" id="L79" title="1 of 2 branches missed.">            if (paragraphBreak &gt; startPos) {</span>
+<span class="nc" id="L80">                segments.add(text.substring(startPos, paragraphBreak));</span>
+<span class="nc" id="L81">                startPos = paragraphBreak;</span>
+<span class="nc" id="L82">                continue;</span>
+            }
+
+            // 按单词边界分割，避免在单词中间切断
+<span class="fc" id="L86">            int wordBreak = findWordBreak(text, startPos, endPos);</span>
+<span class="pc bpc" id="L87" title="1 of 2 branches missed.">            if (wordBreak &gt; startPos) {</span>
+<span class="nc" id="L88">                segments.add(text.substring(startPos, wordBreak));</span>
+<span class="nc" id="L89">                startPos = wordBreak;</span>
+<span class="nc" id="L90">                continue;</span>
+            }
+
+            // 如果以上都找不到合适的分割点，则强制按字符数分割
+<span class="fc" id="L94">            segments.add(text.substring(startPos, endPos));</span>
+<span class="fc" id="L95">            startPos = endPos;</span>
+<span class="fc" id="L96">        }</span>
+
+<span class="fc" id="L98">        return segments;</span>
+    }
+
+    /**
+     * 查找句子边界分割点
+     * 优化：避免重复创建 Pattern 和 Matcher，直接遍历字符查找
+     */
+    private static int findSentenceBreak(String text, int startPos, int endPos) {
+        // 从后往前找句子结束符，优先在最靠近 endPos 的位置分割
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        for (int i = endPos - 1; i &gt;= startPos; i--) {</span>
+<span class="fc" id="L108">            char c = text.charAt(i);</span>
+<span class="fc bfc" id="L109" title="All 2 branches covered.">            if (isSentenceEnding(c)) {</span>
+                // 返回句子结束符之后的位置，保留换行符在当前段末尾
+<span class="fc" id="L111">                return i + 1;</span>
+            }
+        }
+<span class="fc" id="L114">        return -1; // 未找到合适的分割点</span>
+    }
+
+    /**
+     * 判断字符是否为句子结束符
+     */
+    private static boolean isSentenceEnding(char c) {
+<span class="fc bfc" id="L121" title="All 2 branches covered.">        return SENTENCE_ENDINGS.indexOf(c) &gt;= 0;</span>
+    }
+
+    /**
+     * 查找段落边界分割点
+     */
+    private static int findParagraphBreak(String text, int startPos, int endPos) {
+        // 查找换行符作为段落边界
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        for (int i = endPos - 1; i &gt;= startPos; i--) {</span>
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">            if (text.charAt(i) == '\n') {</span>
+                // 返回换行符之后的位置，保留换行在当前段末尾
+<span class="nc" id="L132">                return i + 1;</span>
+            }
+        }
+<span class="fc" id="L135">        return -1; // 未找到合适的分割点</span>
+    }
+
+    /**
+     * 查找单词边界分割点
+     */
+    private static int findWordBreak(String text, int startPos, int endPos) {
+        // 从后往前找空格，避免在单词中间分割
+<span class="fc bfc" id="L143" title="All 2 branches covered.">        for (int i = endPos - 1; i &gt;= startPos; i--) {</span>
+<span class="pc bpc" id="L144" title="1 of 2 branches missed.">            if (Character.isWhitespace(text.charAt(i))) {</span>
+<span class="nc" id="L145">                return i + 1; // 返回空格后位置，这样不会把单词分开</span>
+            }
+        }
+<span class="fc" id="L148">        return -1; // 未找到合适的分割点</span>
+    }
+
+    /**
+     * 获取指定引擎的最大字符数
+     *
+     * @param engineName 翻译引擎名称
+     * @return 最大字符数限制
+     */
+    public static int getMaxCharsForEngine(String engineName) {
+<span class="fc" id="L158">        return DEFAULT_MAX_CHARS_PER_SEGMENT;</span>
+    }
+
+    /**
+     * 计算文本的分段数量（预估）
+     *
+     * @param text 文本内容
+     * @param engineName 翻译引擎名称
+     * @return 预计分段数量
+     */
+    public static int estimateSegmentsCount(String text, String engineName) {
+<span class="fc bfc" id="L169" title="All 4 branches covered.">        if (text == null || text.isEmpty()) {</span>
+<span class="fc" id="L170">            return 0;</span>
+        }
+
+<span class="fc" id="L173">        int maxChars = getMaxCharsForEngine(engineName);</span>
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">        if (maxChars &lt;= 0) {</span>
+<span class="nc" id="L175">            return 1; // 如果没有限制，当作一段</span>
+        }
+
+<span class="fc" id="L178">        int baseCount = (int) Math.ceil((double) text.length() / maxChars);</span>
+
+        // 考虑智能分割可能减少段落数量
+<span class="fc" id="L181">        List&lt;String&gt; segments = segmentByTextEngine(text, engineName);</span>
+<span class="fc" id="L182">        return Math.min(baseCount, segments.size());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EngineAliasRegistry.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.util</a> &gt; <span class="el_source">EngineAliasRegistry.java</span></div><h1>EngineAliasRegistry.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.util;
+
+import com.yumu.noveltranslator.enums.TranslationMode;
+
+import java.util.Map;
+
+/**
+ * 前端引擎别名注册表
+ *
+ * &lt;p&gt;将前端传入的引擎名称（如 google、ai、fast、deepl 等）归一化为翻译质量档位（FAST/EXPERT/TEAM）。&lt;/p&gt;
+ */
+public class EngineAliasRegistry {
+
+<span class="fc" id="L14">    private static final Map&lt;String, TranslationMode&gt; ALIAS_TO_MODE = Map.ofEntries(</span>
+<span class="fc" id="L15">            Map.entry(&quot;google&quot;, TranslationMode.FAST),</span>
+<span class="fc" id="L16">            Map.entry(&quot;mtran&quot;, TranslationMode.FAST),</span>
+<span class="fc" id="L17">            Map.entry(&quot;fast&quot;, TranslationMode.FAST),</span>
+<span class="fc" id="L18">            Map.entry(&quot;libre&quot;, TranslationMode.FAST),</span>
+<span class="fc" id="L19">            Map.entry(&quot;youdao&quot;, TranslationMode.FAST),</span>
+<span class="fc" id="L20">            Map.entry(&quot;baidu&quot;, TranslationMode.FAST),</span>
+<span class="fc" id="L21">            Map.entry(&quot;mymemory&quot;, TranslationMode.FAST),</span>
+<span class="fc" id="L22">            Map.entry(&quot;ai&quot;, TranslationMode.EXPERT),</span>
+<span class="fc" id="L23">            Map.entry(&quot;openai&quot;, TranslationMode.EXPERT),</span>
+<span class="fc" id="L24">            Map.entry(&quot;deepl&quot;, TranslationMode.EXPERT),</span>
+<span class="fc" id="L25">            Map.entry(&quot;deepseek&quot;, TranslationMode.EXPERT),</span>
+<span class="fc" id="L26">            Map.entry(&quot;ai-team&quot;, TranslationMode.TEAM),</span>
+<span class="fc" id="L27">            Map.entry(&quot;team&quot;, TranslationMode.TEAM)</span>
+    );
+
+<span class="fc" id="L30">    private static final TranslationMode DEFAULT_MODE = TranslationMode.FAST;</span>
+
+    private EngineAliasRegistry() {
+    }
+
+    public static TranslationMode normalizeToMode(String engineName) {
+<span class="pc bpc" id="L36" title="1 of 4 branches missed.">        if (engineName == null || engineName.isBlank()) {</span>
+<span class="fc" id="L37">            return DEFAULT_MODE;</span>
+        }
+<span class="fc" id="L39">        return ALIAS_TO_MODE.getOrDefault(engineName.trim().toLowerCase(), DEFAULT_MODE);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

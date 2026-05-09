@@ -1,0 +1,930 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SubscriptionApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">SubscriptionApplicationService.java</span></div><h1>SubscriptionApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.stripe.model.Event;
+import com.yumu.noveltranslator.domain.model.StripeCustomer;
+import com.yumu.noveltranslator.domain.model.StripeSubscription;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.domain.model.UserPlanHistory;
+import com.yumu.noveltranslator.enums.BillingCycle;
+import com.yumu.noveltranslator.enums.SubscriptionPlan;
+import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionRequest;
+import com.yumu.noveltranslator.port.dto.subscription.CheckoutSessionResponse;
+import com.yumu.noveltranslator.port.dto.subscription.PaymentVerificationResponse;
+import com.yumu.noveltranslator.port.dto.subscription.PortalSessionResponse;
+import com.yumu.noveltranslator.port.dto.subscription.SubscriptionStatusResponse;
+import com.yumu.noveltranslator.port.out.BillingRepositoryPort;
+import com.yumu.noveltranslator.port.out.PaymentPort;
+import com.yumu.noveltranslator.port.out.TokenRevocationPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.out.payment.CustomerInfo;
+import com.yumu.noveltranslator.port.out.payment.PaymentSessionInfo;
+import com.yumu.noveltranslator.port.out.payment.SubscriptionInfo;
+import com.yumu.noveltranslator.port.out.payment.SubscriptionUpdateRequest;
+import com.yumu.noveltranslator.properties.StripeProperties;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * 订阅应用服务
+ *
+ * &lt;p&gt;事务边界原则：Stripe HTTP 调用在事务外执行（通过 PaymentPort），DB 操作通过 TransactionTemplate 编程式事务执行。
+ */
+<span class="fc" id="L45">@Slf4j</span>
+@Service
+public class SubscriptionApplicationService implements com.yumu.noveltranslator.port.in.SubscriptionPort {
+
+    private final StripeProperties stripeProperties;
+    private final BillingRepositoryPort billingPort;
+    private final UserRepositoryPort userRepositoryPort;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final TokenRevocationPort tokenRevocationPort;
+    private final PaymentPort paymentPort;
+    private final PlatformTransactionManager transactionManager;
+
+    private final TransactionTemplate tx;
+
+    public SubscriptionApplicationService(StripeProperties stripeProperties,
+                               BillingRepositoryPort billingPort,
+                               UserRepositoryPort userRepositoryPort,
+                               StringRedisTemplate stringRedisTemplate,
+                               TokenRevocationPort tokenRevocationPort,
+                               PaymentPort paymentPort,
+<span class="fc" id="L65">                               PlatformTransactionManager transactionManager) {</span>
+<span class="fc" id="L66">        this.stripeProperties = stripeProperties;</span>
+<span class="fc" id="L67">        this.billingPort = billingPort;</span>
+<span class="fc" id="L68">        this.userRepositoryPort = userRepositoryPort;</span>
+<span class="fc" id="L69">        this.stringRedisTemplate = stringRedisTemplate;</span>
+<span class="fc" id="L70">        this.tokenRevocationPort = tokenRevocationPort;</span>
+<span class="fc" id="L71">        this.paymentPort = paymentPort;</span>
+<span class="fc" id="L72">        this.transactionManager = transactionManager;</span>
+
+<span class="fc" id="L74">        TransactionDefinition def = new TransactionDefinition() {</span>
+<span class="fc" id="L75">            @Override public int getPropagationBehavior() { return TransactionDefinition.PROPAGATION_REQUIRED; }</span>
+<span class="fc" id="L76">            @Override public int getIsolationLevel() { return TransactionDefinition.ISOLATION_DEFAULT; }</span>
+<span class="fc" id="L77">            @Override public int getTimeout() { return 30; }</span>
+<span class="fc" id="L78">            @Override public boolean isReadOnly() { return false; }</span>
+<span class="fc" id="L79">            @Override public String getName() { return &quot;subscription-tx&quot;; }</span>
+        };
+<span class="fc" id="L81">        this.tx = new TransactionTemplate(transactionManager, def);</span>
+<span class="fc" id="L82">    }</span>
+
+    // ==================== 用户端 API ====================
+
+    /**
+     * 验证 Checkout Session 支付结果（前端回调时主动查询）
+     */
+    public PaymentVerificationResponse verifyCheckoutSession(String sessionId, Long userId) {
+<span class="fc bfc" id="L90" title="All 4 branches covered.">        if (sessionId == null || sessionId.isBlank()) {</span>
+<span class="fc" id="L91">            return new PaymentVerificationResponse(false, sessionId, null, null, &quot;缺少 session_id 参数&quot;);</span>
+        }
+
+        try {
+<span class="fc" id="L95">            PaymentSessionInfo session = paymentPort.retrieveCheckoutSession(sessionId);</span>
+
+<span class="fc" id="L97">            String metadataUserId = Optional.ofNullable(session.metadata())</span>
+<span class="fc" id="L98">                .map(m -&gt; m.get(&quot;userId&quot;))</span>
+<span class="fc" id="L99">                .orElse(null);</span>
+<span class="pc bpc" id="L100" title="1 of 4 branches missed.">            if (metadataUserId == null || !metadataUserId.equals(String.valueOf(userId))) {</span>
+<span class="fc" id="L101">                return new PaymentVerificationResponse(false, sessionId, null, null, &quot;支付会话不属于当前用户&quot;);</span>
+            }
+
+<span class="fc" id="L104">            String paymentStatus = session.paymentStatus();</span>
+<span class="fc" id="L105">            String plan = Optional.ofNullable(session.metadata())</span>
+<span class="fc" id="L106">                .map(m -&gt; m.get(&quot;plan&quot;))</span>
+<span class="fc" id="L107">                .orElse(null);</span>
+
+<span class="fc bfc" id="L109" title="All 2 branches covered.">            if (&quot;paid&quot;.equals(paymentStatus)) {</span>
+<span class="fc" id="L110">                StripeSubscription sub = Optional.ofNullable(session.subscriptionId())</span>
+<span class="fc" id="L111">                    .map(billingPort::findSubscriptionByStripeId)</span>
+<span class="fc" id="L112">                    .orElse(null);</span>
+
+<span class="fc bfc" id="L114" title="All 2 branches covered.">                if (sub != null) {</span>
+<span class="fc" id="L115">                    return new PaymentVerificationResponse(true, sessionId, plan, sub.getStatus(), &quot;支付成功，订阅已激活&quot;);</span>
+                }
+<span class="fc" id="L117">                return new PaymentVerificationResponse(true, sessionId, plan, &quot;pending&quot;, &quot;支付已确认，订阅正在激活中&quot;);</span>
+<span class="fc bfc" id="L118" title="All 2 branches covered.">            } else if (&quot;unpaid&quot;.equals(paymentStatus)) {</span>
+<span class="fc" id="L119">                return new PaymentVerificationResponse(false, sessionId, plan, &quot;unpaid&quot;, &quot;支付尚未完成&quot;);</span>
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">            } else if (&quot;no_payment_required&quot;.equals(paymentStatus)) {</span>
+<span class="fc" id="L121">                return new PaymentVerificationResponse(false, sessionId, plan, &quot;no_payment_required&quot;, &quot;无需支付&quot;);</span>
+            }
+
+<span class="nc" id="L124">            return new PaymentVerificationResponse(false, sessionId, plan, paymentStatus, &quot;支付状态: &quot; + paymentStatus);</span>
+<span class="fc" id="L125">        } catch (Exception e) {</span>
+<span class="fc" id="L126">            log.error(&quot;Failed to verify checkout session {}: {}&quot;, sessionId, e.getMessage(), e);</span>
+<span class="fc" id="L127">            return new PaymentVerificationResponse(false, sessionId, null, null, &quot;无法验证支付状态&quot;);</span>
+        }
+    }
+
+    /**
+     * 创建订阅支付会话
+     */
+    public CheckoutSessionResponse createCheckoutSession(Long userId, CheckoutSessionRequest request) {
+<span class="fc" id="L135">        SubscriptionPlan plan = validatePlan(request.getPlan());</span>
+<span class="fc" id="L136">        BillingCycle billingCycle = validateBillingCycle(request.getBillingCycle());</span>
+<span class="fc" id="L137">        String priceId = getPriceId(plan, billingCycle);</span>
+
+        // 1. Stripe HTTP 调用在事务外
+<span class="fc" id="L140">        StripeCustomer customer = getOrCreateCustomer(userId);</span>
+<span class="fc" id="L141">        StripeSubscription existingSub = billingPort.findActiveSubscriptionByUserId(userId);</span>
+
+        // 2. 已有活跃订阅 → 升级现有订阅
+<span class="fc bfc" id="L144" title="All 2 branches covered.">        if (existingSub != null) {</span>
+<span class="fc" id="L145">            return upgradeSubscription(userId, existingSub, priceId, plan, billingCycle);</span>
+        }
+
+        // 3. 无活跃订阅 → 创建新 Checkout Session
+        try {
+<span class="fc" id="L150">            String url = paymentPort.createCheckoutSession(</span>
+<span class="fc" id="L151">                customer.getStripeCustomerId(), priceId,</span>
+<span class="fc" id="L152">                stripeProperties.getSuccessUrl(), stripeProperties.getCancelUrl());</span>
+<span class="fc" id="L153">            return new CheckoutSessionResponse(url);</span>
+<span class="nc" id="L154">        } catch (Exception e) {</span>
+<span class="nc" id="L155">            log.error(&quot;Failed to create Stripe Checkout Session for user {}: {}&quot;, userId, e.getMessage(), e);</span>
+<span class="nc" id="L156">            throw new RuntimeException(&quot;创建支付会话失败&quot;, e);</span>
+        }
+    }
+
+    /**
+     * 升级现有订阅
+     */
+    private CheckoutSessionResponse upgradeSubscription(Long userId,
+                                                         StripeSubscription existingSub,
+                                                         String newPriceId,
+                                                         SubscriptionPlan newPlan,
+                                                         BillingCycle billingCycle) {
+        // Stripe HTTP 调用在事务外
+<span class="fc" id="L169">        SubscriptionUpdateRequest request = new SubscriptionUpdateRequest(</span>
+<span class="fc" id="L170">            existingSub.getStripeSubscriptionId(), newPriceId, null);</span>
+
+        SubscriptionInfo updated;
+        try {
+            // Retrieve to get the item ID
+<span class="fc" id="L175">            SubscriptionInfo subInfo = paymentPort.retrieveSubscription(existingSub.getStripeSubscriptionId());</span>
+<span class="fc" id="L176">            String oldItemId = subInfo.firstItemId();</span>
+<span class="pc bpc" id="L177" title="1 of 2 branches missed.">            if (oldItemId == null) {</span>
+<span class="nc" id="L178">                throw new IllegalStateException(&quot;Subscription &quot; + existingSub.getStripeSubscriptionId() + &quot; has no items&quot;);</span>
+            }
+
+<span class="fc" id="L181">            updated = paymentPort.updateSubscription(existingSub.getStripeSubscriptionId(),</span>
+                new SubscriptionUpdateRequest(oldItemId, newPriceId, null));
+<span class="nc" id="L183">        } catch (Exception e) {</span>
+<span class="nc" id="L184">            log.error(&quot;Failed to upgrade subscription for user {}: {}&quot;, userId, e.getMessage(), e);</span>
+<span class="nc" id="L185">            throw new RuntimeException(&quot;升级订阅失败&quot;, e);</span>
+<span class="fc" id="L186">        }</span>
+
+        // DB 操作在编程式事务内
+<span class="fc" id="L189">        tx.execute(status -&gt; {</span>
+<span class="fc" id="L190">            doUpgradeSubscription(existingSub, updated, newPriceId, newPlan, billingCycle);</span>
+<span class="fc" id="L191">            return null;</span>
+        });
+
+<span class="fc" id="L194">        return new CheckoutSessionResponse(null, true);</span>
+    }
+
+    /**
+     * 获取当前订阅状态
+     */
+    public SubscriptionStatusResponse getSubscriptionStatus(Long userId) {
+<span class="fc" id="L201">        var subscriptions = billingPort.findSubscriptionsByUserId(userId);</span>
+<span class="fc bfc" id="L202" title="All 2 branches covered.">        StripeSubscription sub = subscriptions.isEmpty() ? null : subscriptions.get(0);</span>
+
+<span class="fc bfc" id="L204" title="All 2 branches covered.">        if (sub == null) {</span>
+<span class="fc" id="L205">            return new SubscriptionStatusResponse(&quot;FREE&quot;, &quot;none&quot;, null, false);</span>
+        }
+
+<span class="fc" id="L208">        return new SubscriptionStatusResponse(</span>
+<span class="fc" id="L209">            sub.getPlan(),</span>
+<span class="fc" id="L210">            sub.getStatus(),</span>
+<span class="fc" id="L211">            sub.getCurrentPeriodEnd(),</span>
+<span class="fc" id="L212">            Boolean.TRUE.equals(sub.getCancelAtPeriodEnd())</span>
+        );
+    }
+
+    /**
+     * 取消订阅（在周期结束时取消）
+     */
+    public SubscriptionStatusResponse cancelSubscription(Long userId) {
+<span class="fc" id="L220">        StripeSubscription sub = billingPort.findActiveSubscriptionByUserId(userId);</span>
+
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        if (sub == null) {</span>
+<span class="fc" id="L223">            throw new RuntimeException(&quot;没有可取消的活跃订阅&quot;);</span>
+        }
+
+        // Stripe HTTP 调用在事务外
+        try {
+<span class="fc" id="L228">            paymentPort.updateSubscription(sub.getStripeSubscriptionId(),</span>
+<span class="fc" id="L229">                new SubscriptionUpdateRequest(null, null, true));</span>
+<span class="fc" id="L230">        } catch (Exception e) {</span>
+<span class="fc" id="L231">            log.error(&quot;Failed to cancel Stripe subscription {}: {}&quot;, sub.getStripeSubscriptionId(), e.getMessage(), e);</span>
+<span class="fc" id="L232">            throw new RuntimeException(&quot;取消订阅失败&quot;, e);</span>
+<span class="fc" id="L233">        }</span>
+
+        // DB 操作在编程式事务内
+<span class="fc" id="L236">        return tx.execute(status -&gt; doCancelSubscription(sub));</span>
+    }
+
+    /**
+     * 创建 Portal Session（账单管理跳转）
+     */
+    public PortalSessionResponse createPortalSession(Long userId) {
+<span class="fc" id="L243">        StripeCustomer customer = billingPort.findCustomerByUserIdAndNotDeleted(userId);</span>
+
+<span class="fc bfc" id="L245" title="All 2 branches covered.">        if (customer == null) {</span>
+<span class="fc" id="L246">            throw new RuntimeException(&quot;未找到 Stripe 客户&quot;);</span>
+        }
+
+<span class="fc" id="L249">        String url = paymentPort.createBillingPortalSession(customer.getStripeCustomerId(), stripeProperties.getCancelUrl());</span>
+<span class="fc" id="L250">        return new PortalSessionResponse(url);</span>
+    }
+
+    // ==================== Webhook 事件处理 ====================
+
+    public void handleCheckoutSessionCompleted(Event event) {
+<span class="fc" id="L256">        SessionInfo session = deserializeSessionInfo(event, &quot;checkout.session.completed&quot;);</span>
+<span class="fc bfc" id="L257" title="All 2 branches covered.">        if (session == null) {</span>
+<span class="fc" id="L258">            throw new IllegalStateException(&quot;Failed to deserialize checkout.session.completed event: &quot; + event.getId());</span>
+        }
+
+<span class="fc" id="L261">        Map&lt;String, String&gt; metadata = session.metadata();</span>
+<span class="pc bpc" id="L262" title="1 of 2 branches missed.">        String userIdStr = metadata != null ? metadata.get(&quot;userId&quot;) : null;</span>
+<span class="pc bpc" id="L263" title="1 of 2 branches missed.">        String planStr = metadata != null ? metadata.get(&quot;plan&quot;) : null;</span>
+<span class="pc bpc" id="L264" title="1 of 2 branches missed.">        String billingCycleStr = metadata != null ? metadata.get(&quot;billingCycle&quot;) : null;</span>
+
+<span class="pc bpc" id="L266" title="1 of 4 branches missed.">        if (userIdStr == null || planStr == null) {</span>
+<span class="fc" id="L267">            throw new IllegalStateException(&quot;Missing required metadata in session &quot; + session.id() + &quot;: userId=&quot; + userIdStr + &quot;, plan=&quot; + planStr);</span>
+        }
+
+<span class="fc" id="L270">        Long userId = Long.parseLong(userIdStr);</span>
+<span class="fc" id="L271">        SubscriptionPlan plan = validatePlan(planStr);</span>
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">        BillingCycle billingCycle = BillingCycle.fromValue(billingCycleStr != null ? billingCycleStr : &quot;monthly&quot;);</span>
+
+<span class="fc" id="L274">        String subscriptionId = session.subscriptionId();</span>
+<span class="fc bfc" id="L275" title="All 2 branches covered.">        if (subscriptionId == null) {</span>
+<span class="fc" id="L276">            throw new IllegalStateException(&quot;No subscription in session &quot; + session.id());</span>
+        }
+
+        // Stripe HTTP 调用在事务外
+        SubscriptionInfo stripeSub;
+        StripeCustomer customer;
+        try {
+<span class="fc" id="L283">            stripeSub = paymentPort.retrieveSubscription(subscriptionId);</span>
+<span class="fc" id="L284">            customer = getOrCreateCustomer(userId);</span>
+<span class="fc" id="L285">        } catch (Exception e) {</span>
+<span class="fc" id="L286">            log.error(&quot;checkout.session.completed: Stripe API error for session {}: {}&quot;, session.id(), e.getMessage(), e);</span>
+<span class="fc" id="L287">            throw new RuntimeException(&quot;Stripe API call failed for session &quot; + session.id(), e);</span>
+<span class="fc" id="L288">        }</span>
+
+        // DB 操作在编程式事务内
+<span class="fc" id="L291">        tx.execute(status -&gt; {</span>
+<span class="fc" id="L292">            doHandleCheckoutSessionCompleted(event, userId, plan, billingCycle, subscriptionId, stripeSub, customer);</span>
+<span class="fc" id="L293">            return null;</span>
+        });
+<span class="fc" id="L295">    }</span>
+
+    public void handleSubscriptionUpdated(Event event) {
+<span class="fc" id="L298">        SubscriptionInfo stripeSub = deserializeSubscriptionInfo(event, &quot;subscription.updated&quot;);</span>
+<span class="fc bfc" id="L299" title="All 2 branches covered.">        if (stripeSub == null) {</span>
+<span class="fc" id="L300">            throw new IllegalStateException(&quot;Failed to deserialize subscription.updated event: &quot; + event.getId());</span>
+        }
+
+<span class="fc" id="L303">        String subscriptionId = stripeSub.id();</span>
+<span class="fc" id="L304">        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+
+<span class="pc bpc" id="L306" title="1 of 2 branches missed.">        if (subRecord == null) {</span>
+<span class="fc" id="L307">            log.warn(&quot;subscription.updated: no local record for subscription {}&quot;, subscriptionId);</span>
+<span class="fc" id="L308">            return;</span>
+        }
+
+<span class="nc" id="L311">        tx.execute(status -&gt; {</span>
+<span class="nc" id="L312">            long eventCreated = event.getCreated();</span>
+<span class="nc" id="L313">            int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), stripeSub.status(), eventCreated);</span>
+
+<span class="nc bnc" id="L315" title="All 2 branches missed.">            if (rows == 0) {</span>
+<span class="nc" id="L316">                log.info(&quot;subscription.updated: already processed event {}, skipping&quot;, event.getId());</span>
+<span class="nc" id="L317">                return null;</span>
+            }
+
+            // 更新时间字段
+<span class="nc" id="L321">            LocalDateTime newPeriodStart = toLocalDateTime(stripeSub.currentPeriodStart());</span>
+<span class="nc" id="L322">            LocalDateTime newPeriodEnd = toLocalDateTime(stripeSub.currentPeriodEnd());</span>
+<span class="nc" id="L323">            LocalDateTime newCanceledAt = toLocalDateTime(stripeSub.canceledAt());</span>
+<span class="nc bnc" id="L324" title="All 6 branches missed.">            if (newPeriodStart != null || newPeriodEnd != null || newCanceledAt != null) {</span>
+<span class="nc" id="L325">                billingPort.updateSubscriptionFields(subRecord.getId(), newPeriodStart, newPeriodEnd, newCanceledAt);</span>
+            }
+
+            // 同步 userLevel（通过 afterCommit 保证 Redis 在 DB 提交后写入）
+<span class="nc" id="L329">            scheduleAfterCommit(() -&gt; syncUserLevelAfterStatusChange(subRecord, stripeSub.status(), event));</span>
+<span class="nc" id="L330">            return null;</span>
+        });
+<span class="nc" id="L332">    }</span>
+
+    public void handleSubscriptionDeleted(Event event) {
+<span class="fc" id="L335">        SubscriptionInfo stripeSub = deserializeSubscriptionInfo(event, &quot;subscription.deleted&quot;);</span>
+<span class="fc bfc" id="L336" title="All 2 branches covered.">        if (stripeSub == null) {</span>
+<span class="fc" id="L337">            throw new IllegalStateException(&quot;Failed to deserialize subscription.deleted event: &quot; + event.getId());</span>
+        }
+
+<span class="fc" id="L340">        String subscriptionId = stripeSub.id();</span>
+<span class="fc" id="L341">        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+
+<span class="pc bpc" id="L343" title="1 of 2 branches missed.">        if (subRecord == null) {</span>
+<span class="fc" id="L344">            throw new IllegalStateException(&quot;subscription.deleted: no local record for subscription &quot; + subscriptionId);</span>
+        }
+
+<span class="nc" id="L347">        tx.execute(status -&gt; {</span>
+<span class="nc" id="L348">            long eventCreated = event.getCreated();</span>
+<span class="nc" id="L349">            int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), &quot;canceled&quot;, eventCreated);</span>
+
+<span class="nc bnc" id="L351" title="All 2 branches missed.">            if (rows == 0) {</span>
+<span class="nc" id="L352">                log.info(&quot;subscription.deleted: already processed event {}, skipping&quot;, event.getId());</span>
+<span class="nc" id="L353">                return null;</span>
+            }
+
+<span class="nc" id="L356">            scheduleAfterCommit(() -&gt; updateUserLevel(subRecord.getUserId(), &quot;FREE&quot;, &quot;subscription.deleted&quot;, event.getId()));</span>
+<span class="nc" id="L357">            return null;</span>
+        });
+<span class="nc" id="L359">    }</span>
+
+    public void handleSubscriptionResumed(Event event) {
+<span class="fc" id="L362">        SubscriptionInfo stripeSub = deserializeSubscriptionInfo(event, &quot;subscription.resumed&quot;);</span>
+<span class="fc bfc" id="L363" title="All 2 branches covered.">        if (stripeSub == null) {</span>
+<span class="fc" id="L364">            throw new IllegalStateException(&quot;Failed to deserialize subscription.resumed event: &quot; + event.getId());</span>
+        }
+
+<span class="fc" id="L367">        String subscriptionId = stripeSub.id();</span>
+<span class="fc" id="L368">        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+
+<span class="pc bpc" id="L370" title="1 of 2 branches missed.">        if (subRecord == null) {</span>
+<span class="fc" id="L371">            throw new IllegalStateException(&quot;subscription.resumed: no local record for subscription &quot; + subscriptionId);</span>
+        }
+
+<span class="nc" id="L374">        tx.execute(status -&gt; {</span>
+<span class="nc" id="L375">            long eventCreated = event.getCreated();</span>
+<span class="nc" id="L376">            int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), stripeSub.status(), eventCreated);</span>
+
+<span class="nc bnc" id="L378" title="All 2 branches missed.">            if (rows == 0) {</span>
+<span class="nc" id="L379">                log.info(&quot;subscription.resumed: already processed event {}, skipping&quot;, event.getId());</span>
+            }
+<span class="nc" id="L381">            return null;</span>
+        });
+<span class="nc" id="L383">    }</span>
+
+    public void handleInvoicePaymentFailed(Event event) {
+<span class="fc" id="L386">        com.stripe.model.Invoice invoice = deserializeStripeObject(event, com.stripe.model.Invoice.class, &quot;invoice.payment_failed&quot;);</span>
+<span class="fc bfc" id="L387" title="All 2 branches covered.">        if (invoice == null) {</span>
+<span class="fc" id="L388">            throw new IllegalStateException(&quot;Failed to deserialize invoice.payment_failed event: &quot; + event.getId());</span>
+        }
+
+<span class="fc" id="L391">        String subscriptionId = invoice.getSubscription();</span>
+<span class="fc bfc" id="L392" title="All 2 branches covered.">        if (subscriptionId == null) {</span>
+<span class="fc" id="L393">            log.warn(&quot;invoice.payment_failed: no subscription in invoice {}&quot;, event.getId());</span>
+<span class="fc" id="L394">            return;</span>
+        }
+
+<span class="fc" id="L397">        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+
+<span class="pc bpc" id="L399" title="1 of 2 branches missed.">        if (subRecord != null) {</span>
+<span class="nc" id="L400">            tx.execute(status -&gt; {</span>
+<span class="nc" id="L401">                long eventCreated = event.getCreated();</span>
+<span class="nc" id="L402">                int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), &quot;past_due&quot;, eventCreated);</span>
+
+<span class="nc bnc" id="L404" title="All 2 branches missed.">                if (rows == 0) {</span>
+<span class="nc" id="L405">                    log.info(&quot;invoice.payment_failed: already processed event {}, skipping&quot;, event.getId());</span>
+                } else {
+<span class="nc" id="L407">                    log.warn(&quot;invoice.payment_failed: subscription {} marked past_due (grace period applies)&quot;, subscriptionId);</span>
+                }
+<span class="nc" id="L409">                return null;</span>
+            });
+        } else {
+<span class="fc" id="L412">            log.warn(&quot;invoice.payment_failed: no local record for subscription {}&quot;, subscriptionId);</span>
+        }
+<span class="fc" id="L414">    }</span>
+
+    public void handleInvoicePaymentSucceeded(Event event) {
+<span class="fc" id="L417">        com.stripe.model.Invoice invoice = deserializeStripeObject(event, com.stripe.model.Invoice.class, &quot;invoice.payment_succeeded&quot;);</span>
+<span class="fc bfc" id="L418" title="All 2 branches covered.">        if (invoice == null) {</span>
+<span class="fc" id="L419">            throw new IllegalStateException(&quot;Failed to deserialize invoice.payment_succeeded event: &quot; + event.getId());</span>
+        }
+
+<span class="fc" id="L422">        String subscriptionId = invoice.getSubscription();</span>
+<span class="fc bfc" id="L423" title="All 2 branches covered.">        if (subscriptionId == null) {</span>
+<span class="fc" id="L424">            log.info(&quot;invoice.payment_succeeded: no subscription in invoice {}, skipping&quot;, event.getId());</span>
+<span class="fc" id="L425">            return;</span>
+        }
+
+<span class="fc" id="L428">        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+
+        // 已有记录且状态已是 active/trialing → 已由 checkout.session.completed 处理
+<span class="fc bfc" id="L431" title="All 2 branches covered.">        if (subRecord != null</span>
+<span class="pc bpc" id="L432" title="1 of 4 branches missed.">            &amp;&amp; (&quot;active&quot;.equals(subRecord.getStatus()) || &quot;trialing&quot;.equals(subRecord.getStatus()))) {</span>
+<span class="fc" id="L433">            log.info(&quot;invoice.payment_succeeded: subscription {} already active, skipping (handled by checkout.session.completed)&quot;,</span>
+                subscriptionId);
+<span class="fc" id="L435">            return;</span>
+        }
+
+        // 已有记录但状态不是 active → 用原子更新激活
+<span class="pc bpc" id="L439" title="1 of 2 branches missed.">        if (subRecord != null) {</span>
+<span class="nc" id="L440">            tx.execute(status -&gt; {</span>
+<span class="nc" id="L441">                doActivateSubscriptionFromInvoice(event, subRecord);</span>
+<span class="nc" id="L442">                return null;</span>
+            });
+<span class="nc" id="L444">            return;</span>
+        }
+
+        // 无本地记录 → 从孤立发票创建订阅（Stripe HTTP 在事务外，DB 在事务内）
+<span class="fc" id="L448">        createSubscriptionFromOrphanedInvoice(event, invoice, subscriptionId);</span>
+<span class="fc" id="L449">    }</span>
+
+    /**
+     * 从孤立发票创建订阅记录（Stripe HTTP 调用在事务外）
+     */
+    private void createSubscriptionFromOrphanedInvoice(Event event,
+                                                        com.stripe.model.Invoice invoice,
+                                                        String subscriptionId) {
+<span class="pc bpc" id="L457" title="1 of 2 branches missed.">        String userIdStr = invoice.getMetadata() != null ? invoice.getMetadata().get(&quot;userId&quot;) : null;</span>
+<span class="fc bfc" id="L458" title="All 2 branches covered.">        if (userIdStr == null) {</span>
+<span class="fc" id="L459">            throw new IllegalStateException(&quot;invoice.payment_succeeded: orphaned invoice &quot; + event.getId()</span>
+                + &quot; has no userId in metadata, cannot create subscription&quot;);
+        }
+
+<span class="fc" id="L463">        Long userId = Long.parseLong(userIdStr);</span>
+
+        StripeCustomer customer;
+        SubscriptionInfo stripeSub;
+        try {
+<span class="fc" id="L468">            customer = getOrCreateCustomer(userId);</span>
+<span class="fc" id="L469">            stripeSub = paymentPort.retrieveSubscription(subscriptionId);</span>
+<span class="fc" id="L470">        } catch (Exception e) {</span>
+<span class="fc" id="L471">            log.error(&quot;invoice.payment_succeeded: Stripe API error for orphaned invoice {}: {}&quot;,</span>
+<span class="fc" id="L472">                event.getId(), e.getMessage(), e);</span>
+<span class="fc" id="L473">            throw new RuntimeException(&quot;Stripe API call failed for orphaned invoice &quot; + event.getId(), e);</span>
+<span class="fc" id="L474">        }</span>
+
+<span class="fc" id="L476">        tx.execute(status -&gt; {</span>
+<span class="fc" id="L477">            doCreateSubscriptionFromOrphanedInvoice(event, userId, subscriptionId, stripeSub, customer, invoice);</span>
+<span class="fc" id="L478">            return null;</span>
+        });
+<span class="fc" id="L480">    }</span>
+
+    // ==================== 窄事务 DB 操作方法（由 TransactionTemplate 包裹） ====================
+
+    void doHandleCheckoutSessionCompleted(Event event, Long userId, SubscriptionPlan plan,
+                                           BillingCycle billingCycle, String subscriptionId,
+                                           SubscriptionInfo stripeSub, StripeCustomer customer) {
+<span class="fc" id="L487">        StripeSubscription subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+
+<span class="pc bpc" id="L489" title="1 of 4 branches missed.">        if (subRecord != null &amp;&amp; event.getId().equals(subRecord.getLastWebhookEventId())) {</span>
+<span class="nc" id="L490">            log.info(&quot;checkout.session.completed: already processed event {}, skipping&quot;, event.getId());</span>
+<span class="nc" id="L491">            return;</span>
+        }
+
+<span class="fc bfc" id="L494" title="All 2 branches covered.">        if (subRecord == null) {</span>
+<span class="fc" id="L495">            subRecord = new StripeSubscription();</span>
+<span class="fc" id="L496">            subRecord.setUserId(userId);</span>
+<span class="fc" id="L497">            subRecord.setStripeCustomerId(customer.getStripeCustomerId());</span>
+<span class="fc" id="L498">            subRecord.setStripeSubscriptionId(subscriptionId);</span>
+<span class="fc" id="L499">            subRecord.setPlan(plan.getValue());</span>
+<span class="fc" id="L500">            subRecord.setBillingCycle(billingCycle.getValue());</span>
+
+<span class="fc" id="L502">            subRecord.setStripePriceId(stripeSub.priceId());</span>
+<span class="fc" id="L503">            subRecord.setStatus(stripeSub.status());</span>
+<span class="fc" id="L504">            subRecord.setCancelAtPeriodEnd(stripeSub.cancelAtPeriodEnd());</span>
+<span class="fc" id="L505">            subRecord.setCurrentPeriodStart(toLocalDateTime(stripeSub.currentPeriodStart()));</span>
+<span class="fc" id="L506">            subRecord.setCurrentPeriodEnd(toLocalDateTime(stripeSub.currentPeriodEnd()));</span>
+<span class="fc" id="L507">            subRecord.setLastWebhookEventId(event.getId());</span>
+<span class="fc" id="L508">            subRecord.setLastEventCreated(event.getCreated());</span>
+
+<span class="fc" id="L510">            boolean insertSucceeded = false;</span>
+            try {
+<span class="fc" id="L512">                billingPort.saveSubscription(subRecord);</span>
+<span class="fc" id="L513">                insertSucceeded = true;</span>
+<span class="nc" id="L514">            } catch (DuplicateKeyException e) {</span>
+<span class="nc" id="L515">                subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+<span class="nc bnc" id="L516" title="All 2 branches missed.">                if (subRecord == null) {</span>
+<span class="nc" id="L517">                    throw new IllegalStateException(&quot;DuplicateKeyException but re-query returned null for subscriptionId &quot; + subscriptionId, e);</span>
+                }
+<span class="nc" id="L519">                log.info(&quot;checkout.session.completed: duplicate insert caught, re-queried existing record for subscriptionId {}&quot;, subscriptionId);</span>
+<span class="fc" id="L520">            }</span>
+
+<span class="pc bpc" id="L522" title="1 of 2 branches missed.">            if (!insertSucceeded) {</span>
+<span class="nc" id="L523">                int claimed = billingPort.claimWebhookEvent(subRecord.getId(), event.getId());</span>
+<span class="nc bnc" id="L524" title="All 2 branches missed.">                if (claimed == 0) {</span>
+<span class="nc" id="L525">                    log.info(&quot;checkout.session.completed: event {} already claimed by concurrent thread, skipping&quot;, event.getId());</span>
+<span class="nc" id="L526">                    return;</span>
+                }
+            }
+
+<span class="fc" id="L530">            log.info(&quot;Created subscription record for user {}, plan {}, subscriptionId {}&quot;, userId, plan, subscriptionId);</span>
+<span class="fc" id="L531">        } else {</span>
+<span class="fc" id="L532">            int claimed = billingPort.claimWebhookEvent(subRecord.getId(), event.getId());</span>
+<span class="pc bpc" id="L533" title="1 of 2 branches missed.">            if (claimed == 0) {</span>
+<span class="fc" id="L534">                log.info(&quot;checkout.session.completed: event {} already claimed by concurrent thread for existing record, skipping&quot;, event.getId());</span>
+<span class="fc" id="L535">                return;</span>
+            }
+        }
+
+<span class="fc" id="L539">        scheduleAfterCommit(() -&gt; updateUserLevel(userId, plan.getValue(), &quot;checkout.session.completed&quot;, event.getId()));</span>
+<span class="fc" id="L540">    }</span>
+
+    void doUpgradeSubscription(StripeSubscription existingSub,
+                                SubscriptionInfo updated,
+                                String newPriceId,
+                                SubscriptionPlan newPlan,
+                                BillingCycle billingCycle) {
+<span class="fc" id="L547">        String oldPlan = existingSub.getPlan();</span>
+<span class="fc" id="L548">        existingSub.setPlan(newPlan.getValue());</span>
+<span class="fc" id="L549">        existingSub.setBillingCycle(billingCycle.getValue());</span>
+<span class="fc" id="L550">        existingSub.setStripePriceId(updated.priceId());</span>
+<span class="fc" id="L551">        existingSub.setStatus(updated.status());</span>
+<span class="fc" id="L552">        existingSub.setCancelAtPeriodEnd(updated.cancelAtPeriodEnd());</span>
+<span class="fc" id="L553">        existingSub.setCurrentPeriodStart(toLocalDateTime(updated.currentPeriodStart()));</span>
+<span class="fc" id="L554">        existingSub.setCurrentPeriodEnd(toLocalDateTime(updated.currentPeriodEnd()));</span>
+<span class="fc" id="L555">        existingSub.setLastOperationSource(&quot;upgrade_&quot; + System.currentTimeMillis());</span>
+<span class="fc" id="L556">        billingPort.updateSubscription(existingSub);</span>
+
+<span class="fc" id="L558">        scheduleAfterCommit(() -&gt; updateUserLevel(</span>
+<span class="fc" id="L559">            existingSub.getUserId(), newPlan.getValue(), &quot;subscription_upgrade&quot;));</span>
+
+<span class="fc" id="L561">        log.info(&quot;Upgraded subscription {} for user {}: {} -&gt; {}, priceId {}&quot;,</span>
+<span class="fc" id="L562">            existingSub.getStripeSubscriptionId(), existingSub.getUserId(),</span>
+            oldPlan, newPlan, newPriceId);
+<span class="fc" id="L564">    }</span>
+
+    SubscriptionStatusResponse doCancelSubscription(StripeSubscription sub) {
+<span class="fc" id="L567">        sub.setCancelAtPeriodEnd(true);</span>
+<span class="fc" id="L568">        sub.setCanceledAt(LocalDateTime.now(ZoneId.of(&quot;UTC&quot;)));</span>
+<span class="fc" id="L569">        sub.setLastOperationSource(&quot;manual_cancel_&quot; + System.currentTimeMillis());</span>
+<span class="fc" id="L570">        billingPort.updateSubscription(sub);</span>
+
+<span class="fc" id="L572">        return new SubscriptionStatusResponse(</span>
+<span class="fc" id="L573">            sub.getPlan(),</span>
+<span class="fc" id="L574">            sub.getStatus(),</span>
+<span class="fc" id="L575">            sub.getCurrentPeriodEnd(),</span>
+<span class="fc" id="L576">            true</span>
+        );
+    }
+
+    void doActivateSubscriptionFromInvoice(Event event, StripeSubscription subRecord) {
+<span class="nc" id="L581">        long eventCreated = event.getCreated();</span>
+<span class="nc" id="L582">        int rows = billingPort.atomicUpdateSubscription(subRecord.getId(), event.getId(), &quot;active&quot;, eventCreated);</span>
+
+<span class="nc bnc" id="L584" title="All 2 branches missed.">        if (rows == 0) {</span>
+<span class="nc" id="L585">            log.info(&quot;invoice.payment_succeeded: already processed event {}, skipping&quot;, event.getId());</span>
+<span class="nc" id="L586">            return;</span>
+        }
+
+<span class="nc" id="L589">        scheduleAfterCommit(() -&gt; updateUserLevel(</span>
+<span class="nc" id="L590">            subRecord.getUserId(), subRecord.getPlan(),</span>
+<span class="nc" id="L591">            &quot;invoice.payment_succeeded -&gt; fallback activate&quot;, event.getId()));</span>
+
+<span class="nc" id="L593">        log.info(&quot;invoice.payment_succeeded: fallback activated subscription {} for user {}&quot;,</span>
+<span class="nc" id="L594">            subRecord.getStripeSubscriptionId(), subRecord.getUserId());</span>
+<span class="nc" id="L595">    }</span>
+
+    void doCreateSubscriptionFromOrphanedInvoice(Event event, Long userId,
+                                                  String subscriptionId,
+                                                  SubscriptionInfo stripeSub,
+                                                  StripeCustomer customer,
+                                                  com.stripe.model.Invoice invoice) {
+        // 双重检查：并发情况下可能已被 checkout.session.completed 创建
+<span class="fc" id="L603">        StripeSubscription existing = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+<span class="pc bpc" id="L604" title="1 of 2 branches missed.">        if (existing != null</span>
+<span class="nc bnc" id="L605" title="All 4 branches missed.">            &amp;&amp; (&quot;active&quot;.equals(existing.getStatus()) || &quot;trialing&quot;.equals(existing.getStatus()))) {</span>
+<span class="nc" id="L606">            log.info(&quot;invoice.payment_succeeded: orphaned path race, subscription {} already active, skipping&quot;,</span>
+                subscriptionId);
+<span class="nc" id="L608">            return;</span>
+        }
+
+<span class="fc" id="L611">        StripeSubscription subRecord = new StripeSubscription();</span>
+<span class="fc" id="L612">        subRecord.setUserId(userId);</span>
+<span class="fc" id="L613">        subRecord.setStripeCustomerId(customer.getStripeCustomerId());</span>
+<span class="fc" id="L614">        subRecord.setStripeSubscriptionId(subscriptionId);</span>
+<span class="fc" id="L615">        subRecord.setLastWebhookEventId(event.getId());</span>
+<span class="fc" id="L616">        subRecord.setLastEventCreated(event.getCreated());</span>
+
+<span class="fc" id="L618">        subRecord.setStripePriceId(stripeSub.priceId());</span>
+<span class="fc" id="L619">        subRecord.setStatus(stripeSub.status());</span>
+<span class="fc" id="L620">        subRecord.setCancelAtPeriodEnd(stripeSub.cancelAtPeriodEnd());</span>
+<span class="fc" id="L621">        subRecord.setCurrentPeriodStart(toLocalDateTime(stripeSub.currentPeriodStart()));</span>
+<span class="fc" id="L622">        subRecord.setCurrentPeriodEnd(toLocalDateTime(stripeSub.currentPeriodEnd()));</span>
+
+        // 从 Stripe Subscription metadata 或 invoice metadata 推断 plan
+<span class="fc" id="L625">        String planStr = null;</span>
+        // Try to get metadata from the original event object
+        try {
+<span class="fc" id="L628">            var deserializer = event.getDataObjectDeserializer();</span>
+<span class="fc" id="L629">            var obj = deserializer.getObject().orElse(null);</span>
+<span class="pc bpc" id="L630" title="3 of 4 branches missed.">            if (obj instanceof com.stripe.model.Subscription s &amp;&amp; s.getMetadata() != null) {</span>
+<span class="nc" id="L631">                planStr = s.getMetadata().get(&quot;plan&quot;);</span>
+            }
+<span class="pc" id="L633">        } catch (Exception ignored) {}</span>
+
+<span class="pc bpc" id="L635" title="2 of 4 branches missed.">        if (planStr == null &amp;&amp; invoice.getMetadata() != null) {</span>
+<span class="fc" id="L636">            planStr = invoice.getMetadata().get(&quot;plan&quot;);</span>
+        }
+<span class="fc bfc" id="L638" title="All 2 branches covered.">        if (planStr == null) {</span>
+<span class="fc" id="L639">            planStr = &quot;PRO&quot;;</span>
+<span class="fc" id="L640">            log.warn(&quot;invoice.payment_succeeded: orphaned invoice {} has no plan metadata, defaulting to PRO&quot;, event.getId());</span>
+        }
+<span class="fc" id="L642">        subRecord.setPlan(planStr);</span>
+
+<span class="fc" id="L644">        String billingCycleStr = &quot;monthly&quot;;</span>
+        try {
+<span class="fc" id="L646">            var deserializer = event.getDataObjectDeserializer();</span>
+<span class="fc" id="L647">            var obj = deserializer.getObject().orElse(null);</span>
+<span class="pc bpc" id="L648" title="3 of 4 branches missed.">            if (obj instanceof com.stripe.model.Subscription s &amp;&amp; s.getMetadata() != null) {</span>
+<span class="nc" id="L649">                billingCycleStr = s.getMetadata().getOrDefault(&quot;billingCycle&quot;, &quot;monthly&quot;);</span>
+            }
+<span class="pc" id="L651">        } catch (Exception ignored) {}</span>
+<span class="pc bpc" id="L652" title="1 of 4 branches missed.">        if (invoice.getMetadata() != null &amp;&amp; invoice.getMetadata().containsKey(&quot;billingCycle&quot;)) {</span>
+<span class="fc" id="L653">            billingCycleStr = invoice.getMetadata().get(&quot;billingCycle&quot;);</span>
+        }
+<span class="fc" id="L655">        subRecord.setBillingCycle(billingCycleStr);</span>
+
+<span class="fc" id="L657">        boolean insertSucceeded = false;</span>
+        try {
+<span class="fc" id="L659">            billingPort.saveSubscription(subRecord);</span>
+<span class="fc" id="L660">            insertSucceeded = true;</span>
+<span class="nc" id="L661">        } catch (DuplicateKeyException e) {</span>
+<span class="nc" id="L662">            subRecord = billingPort.findSubscriptionByStripeId(subscriptionId);</span>
+<span class="nc bnc" id="L663" title="All 2 branches missed.">            if (subRecord == null) {</span>
+<span class="nc" id="L664">                throw new IllegalStateException(&quot;DuplicateKeyException but re-query returned null for subscriptionId &quot; + subscriptionId, e);</span>
+            }
+<span class="fc" id="L666">        }</span>
+
+        // Capture final reference for lambda
+<span class="fc" id="L669">        final StripeSubscription savedRecord = subRecord;</span>
+
+<span class="pc bpc" id="L671" title="1 of 2 branches missed.">        if (!insertSucceeded) {</span>
+<span class="nc" id="L672">            int claimed = billingPort.claimWebhookEvent(savedRecord.getId(), event.getId());</span>
+<span class="nc bnc" id="L673" title="All 2 branches missed.">            if (claimed == 0) {</span>
+<span class="nc" id="L674">                log.info(&quot;invoice.payment_succeeded: event {} already claimed by concurrent thread, skipping&quot;, event.getId());</span>
+<span class="nc" id="L675">                return;</span>
+            }
+        }
+
+<span class="fc" id="L679">        scheduleAfterCommit(() -&gt; updateUserLevel(</span>
+<span class="fc" id="L680">            userId, savedRecord.getPlan(), &quot;invoice.payment_succeeded -&gt; orphaned create&quot;, event.getId()));</span>
+<span class="fc" id="L681">    }</span>
+
+    // ==================== 内部工具方法 ====================
+
+    /**
+     * 泛型反序列化：提取 Stripe 对象，减少重复代码
+     */
+    private &lt;T&gt; T deserializeStripeObject(Event event, Class&lt;T&gt; clazz, String eventType) {
+        try {
+<span class="fc" id="L690">            var deserializer = event.getDataObjectDeserializer();</span>
+            @SuppressWarnings(&quot;unchecked&quot;)
+<span class="fc" id="L692">            T obj = (T) deserializer.getObject().orElse(null);</span>
+<span class="fc bfc" id="L693" title="All 2 branches covered.">            if (obj == null) {</span>
+<span class="fc" id="L694">                obj = clazz.cast(deserializer.deserializeUnsafe());</span>
+<span class="pc bpc" id="L695" title="1 of 2 branches missed.">                if (obj == null) {</span>
+<span class="fc" id="L696">                    log.warn(&quot;{}: failed to deserialize event object&quot;, eventType);</span>
+<span class="fc" id="L697">                    return null;</span>
+                }
+            }
+<span class="fc" id="L700">            return obj;</span>
+<span class="nc" id="L701">        } catch (Exception e) {</span>
+<span class="nc" id="L702">            log.error(&quot;{}: deserialization error&quot;, eventType, e);</span>
+<span class="nc" id="L703">            return null;</span>
+        }
+    }
+
+    /**
+     * 内部 record：从事件反序列化的 session 信息
+     */
+<span class="fc" id="L710">    record SessionInfo(String id, String subscriptionId, Map&lt;String, String&gt; metadata) {}</span>
+
+    private SessionInfo deserializeSessionInfo(Event event, String eventType) {
+        try {
+<span class="fc" id="L714">            var deserializer = event.getDataObjectDeserializer();</span>
+<span class="fc" id="L715">            var obj = deserializer.getObject().orElse(null);</span>
+<span class="fc bfc" id="L716" title="All 2 branches covered.">            if (obj == null) {</span>
+<span class="fc" id="L717">                obj = deserializer.deserializeUnsafe();</span>
+            }
+<span class="fc bfc" id="L719" title="All 2 branches covered.">            if (obj instanceof com.stripe.model.checkout.Session session) {</span>
+<span class="fc" id="L720">                return new SessionInfo(session.getId(), session.getSubscription(), session.getMetadata());</span>
+            }
+<span class="fc" id="L722">            log.warn(&quot;{}: failed to deserialize event object&quot;, eventType);</span>
+<span class="fc" id="L723">            return null;</span>
+<span class="nc" id="L724">        } catch (Exception e) {</span>
+<span class="nc" id="L725">            log.error(&quot;{}: deserialization error&quot;, eventType, e);</span>
+<span class="nc" id="L726">            return null;</span>
+        }
+    }
+
+    private SubscriptionInfo deserializeSubscriptionInfo(Event event, String eventType) {
+        try {
+<span class="fc" id="L732">            var deserializer = event.getDataObjectDeserializer();</span>
+<span class="fc" id="L733">            var obj = deserializer.getObject().orElse(null);</span>
+<span class="fc bfc" id="L734" title="All 2 branches covered.">            if (obj == null) {</span>
+<span class="fc" id="L735">                obj = deserializer.deserializeUnsafe();</span>
+            }
+<span class="fc bfc" id="L737" title="All 2 branches covered.">            if (obj instanceof com.stripe.model.Subscription sub) {</span>
+<span class="fc" id="L738">                String firstItemId = Optional.ofNullable(sub.getItems())</span>
+<span class="pc" id="L739">                    .map(items -&gt; items.getData())</span>
+<span class="pc bnc" id="L740" title="All 2 branches missed.">                    .filter(list -&gt; !list.isEmpty())</span>
+<span class="pc" id="L741">                    .map(list -&gt; list.get(0).getId())</span>
+<span class="fc" id="L742">                    .orElse(null);</span>
+<span class="fc" id="L743">                String priceId = Optional.ofNullable(sub.getItems())</span>
+<span class="pc" id="L744">                    .map(items -&gt; items.getData())</span>
+<span class="pc bnc" id="L745" title="All 2 branches missed.">                    .filter(list -&gt; !list.isEmpty())</span>
+<span class="pc" id="L746">                    .map(list -&gt; list.get(0))</span>
+<span class="pc" id="L747">                    .map(item -&gt; item.getPrice())</span>
+<span class="pc bnc" id="L748" title="All 2 branches missed.">                    .filter(price -&gt; price != null)</span>
+<span class="pc" id="L749">                    .map(price -&gt; price.getId())</span>
+<span class="fc" id="L750">                    .orElse(null);</span>
+<span class="fc" id="L751">                return new SubscriptionInfo(</span>
+<span class="fc" id="L752">                    sub.getId(), sub.getStatus(),</span>
+<span class="fc" id="L753">                    sub.getCurrentPeriodStart(), sub.getCurrentPeriodEnd(),</span>
+<span class="fc" id="L754">                    sub.getCancelAtPeriodEnd(), firstItemId, priceId, sub.getCanceledAt());</span>
+            }
+<span class="fc" id="L756">            log.warn(&quot;{}: failed to deserialize event object&quot;, eventType);</span>
+<span class="fc" id="L757">            return null;</span>
+<span class="nc" id="L758">        } catch (Exception e) {</span>
+<span class="nc" id="L759">            log.error(&quot;{}: deserialization error&quot;, eventType, e);</span>
+<span class="nc" id="L760">            return null;</span>
+        }
+    }
+
+    private StripeCustomer getOrCreateCustomer(Long userId) {
+<span class="fc" id="L765">        StripeCustomer existing = billingPort.findCustomerByUserIdAndNotDeleted(userId);</span>
+
+<span class="fc bfc" id="L767" title="All 2 branches covered.">        if (existing != null) {</span>
+<span class="fc" id="L768">            return existing;</span>
+        }
+
+<span class="fc" id="L771">        User user = userRepositoryPort.findById(userId).orElse(null);</span>
+<span class="pc bpc" id="L772" title="1 of 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L773">            throw new RuntimeException(&quot;用户不存在，userId=&quot; + userId);</span>
+        }
+
+        try {
+<span class="fc" id="L777">            CustomerInfo customer = paymentPort.createCustomer(user.getEmail());</span>
+<span class="fc" id="L778">            StripeCustomer newCustomer = new StripeCustomer();</span>
+<span class="fc" id="L779">            newCustomer.setUserId(userId);</span>
+<span class="fc" id="L780">            newCustomer.setStripeCustomerId(customer.id());</span>
+<span class="fc" id="L781">            billingPort.saveCustomer(newCustomer);</span>
+
+<span class="fc" id="L783">            log.info(&quot;Created Stripe Customer for user {}: {}&quot;, userId, customer.id());</span>
+<span class="fc" id="L784">            return newCustomer;</span>
+<span class="nc" id="L785">        } catch (Exception e) {</span>
+<span class="nc" id="L786">            log.error(&quot;Failed to create Stripe Customer for user {}: {}&quot;, userId, e.getMessage(), e);</span>
+<span class="nc" id="L787">            throw new RuntimeException(&quot;创建 Stripe 客户失败&quot;, e);</span>
+        }
+    }
+
+    private String getPriceId(SubscriptionPlan plan, BillingCycle billingCycle) {
+<span class="fc" id="L792">        Map&lt;String, StripeProperties.PlanPrices&gt; prices = stripeProperties.getPrices();</span>
+<span class="fc bfc" id="L793" title="All 2 branches covered.">        if (prices == null) {</span>
+<span class="fc" id="L794">            throw new RuntimeException(&quot;Stripe prices not configured&quot;);</span>
+        }
+
+<span class="fc" id="L797">        StripeProperties.PlanPrices planPrices = prices.get(plan.getValue().toLowerCase());</span>
+<span class="fc bfc" id="L798" title="All 2 branches covered.">        if (planPrices == null) {</span>
+<span class="fc" id="L799">            throw new RuntimeException(&quot;No Stripe prices configured for plan: &quot; + plan);</span>
+        }
+
+<span class="fc bfc" id="L802" title="All 2 branches covered.">        String priceId = switch (billingCycle) {</span>
+<span class="fc" id="L803">            case MONTHLY -&gt; planPrices.getMonthlyPriceId();</span>
+<span class="fc" id="L804">            case YEARLY -&gt; planPrices.getYearlyPriceId();</span>
+        };
+
+<span class="pc bpc" id="L807" title="1 of 4 branches missed.">        if (priceId == null || priceId.isBlank()) {</span>
+<span class="fc" id="L808">            throw new RuntimeException(&quot;No price configured for &quot; + plan + &quot; &quot; + billingCycle);</span>
+        }
+
+<span class="fc" id="L811">        return priceId;</span>
+    }
+
+    private SubscriptionPlan validatePlan(String plan) {
+        try {
+<span class="fc" id="L816">            return SubscriptionPlan.fromValue(plan);</span>
+<span class="fc" id="L817">        } catch (IllegalArgumentException e) {</span>
+<span class="fc" id="L818">            String validValues = String.join(&quot;, &quot;, SubscriptionPlan.VALUES);</span>
+<span class="fc" id="L819">            throw new IllegalArgumentException(&quot;无效的套餐类型: &quot; + plan + &quot;，可选值: &quot; + validValues);</span>
+        }
+    }
+
+    private BillingCycle validateBillingCycle(String billingCycle) {
+        try {
+<span class="fc" id="L825">            return BillingCycle.fromValue(billingCycle);</span>
+<span class="fc" id="L826">        } catch (IllegalArgumentException e) {</span>
+<span class="fc" id="L827">            String validValues = String.join(&quot;, &quot;, BillingCycle.VALUES);</span>
+<span class="fc" id="L828">            throw new IllegalArgumentException(&quot;无效的计费周期: &quot; + billingCycle + &quot;，可选值: &quot; + validValues);</span>
+        }
+    }
+
+    /**
+     * 将 Stripe epoch 秒数转换为 UTC LocalDateTime
+     */
+    private LocalDateTime toLocalDateTime(Long epochSeconds) {
+<span class="fc bfc" id="L836" title="All 2 branches covered.">        if (epochSeconds == null) {</span>
+<span class="fc" id="L837">            return null;</span>
+        }
+<span class="fc" id="L839">        return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.of(&quot;UTC&quot;));</span>
+    }
+
+    /**
+     * 注册在事务提交后执行的回调，用于 Redis 幂等标记等非事务操作。
+     */
+    private void scheduleAfterCommit(Runnable action) {
+<span class="pc bpc" id="L846" title="1 of 2 branches missed.">        if (TransactionSynchronizationManager.isSynchronizationActive()) {</span>
+<span class="nc" id="L847">            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {</span>
+                @Override
+                public void afterCommit() {
+<span class="nc" id="L850">                    action.run();</span>
+<span class="nc" id="L851">                }</span>
+            });
+        } else {
+<span class="fc" id="L854">            action.run();</span>
+        }
+<span class="fc" id="L856">    }</span>
+
+    /**
+     * 基于 Redis SETNX 的事件级幂等检查
+     */
+    private boolean markEventProcessed(String eventId) {
+<span class="fc" id="L862">        String key = &quot;webhook:event_processed:&quot; + eventId;</span>
+<span class="fc" id="L863">        Boolean success = stringRedisTemplate.opsForValue().setIfAbsent(key, &quot;1&quot;, java.time.Duration.ofHours(24));</span>
+<span class="fc" id="L864">        return Boolean.TRUE.equals(success);</span>
+    }
+
+    /**
+     * 同步用户等级（状态变更后调用）
+     */
+    private void syncUserLevelAfterStatusChange(StripeSubscription subRecord, String newStatus, Event event) {
+        String targetLevel;
+<span class="nc bnc" id="L872" title="All 4 branches missed.">        if (&quot;active&quot;.equals(newStatus) || &quot;trialing&quot;.equals(newStatus)) {</span>
+<span class="nc" id="L873">            targetLevel = subRecord.getPlan();</span>
+<span class="nc bnc" id="L874" title="All 2 branches missed.">        } else if (&quot;past_due&quot;.equals(newStatus)) {</span>
+<span class="nc" id="L875">            log.warn(&quot;subscription {}: past_due, not downgrading yet (grace period)&quot;, subRecord.getStripeSubscriptionId());</span>
+<span class="nc" id="L876">            return;</span>
+<span class="nc bnc" id="L877" title="All 4 branches missed.">        } else if (&quot;canceled&quot;.equals(newStatus) || &quot;unpaid&quot;.equals(newStatus)) {</span>
+<span class="nc" id="L878">            targetLevel = &quot;FREE&quot;;</span>
+<span class="nc bnc" id="L879" title="All 2 branches missed.">        } else if (&quot;paused&quot;.equals(newStatus)) {</span>
+<span class="nc" id="L880">            log.info(&quot;subscription {}: paused, keeping userLevel unchanged&quot;, subRecord.getStripeSubscriptionId());</span>
+<span class="nc" id="L881">            return;</span>
+        } else {
+<span class="nc" id="L883">            log.info(&quot;subscription {}: unknown status {}, keeping userLevel unchanged&quot;, subRecord.getStripeSubscriptionId(), newStatus);</span>
+<span class="nc" id="L884">            return;</span>
+        }
+
+<span class="nc" id="L887">        scheduleAfterCommit(() -&gt; updateUserLevel(subRecord.getUserId(), targetLevel,</span>
+<span class="nc" id="L888">            &quot;subscription.updated -&gt; &quot; + newStatus, event.getId()));</span>
+<span class="nc" id="L889">    }</span>
+
+    private void updateUserLevel(Long userId, String newLevel, String reason, String eventId) {
+<span class="pc bpc" id="L892" title="2 of 4 branches missed.">        if (eventId != null &amp;&amp; !markEventProcessed(eventId)) {</span>
+<span class="nc" id="L893">            log.info(&quot;updateUserLevel: event {} already processed, skipping&quot;, eventId);</span>
+<span class="nc" id="L894">            return;</span>
+        }
+
+<span class="fc" id="L897">        updateUserLevel(userId, newLevel, reason);</span>
+<span class="fc" id="L898">    }</span>
+
+    private void updateUserLevel(Long userId, String newLevel, String reason) {
+<span class="fc" id="L901">        User user = userRepositoryPort.findById(userId).orElse(null);</span>
+<span class="pc bpc" id="L902" title="1 of 2 branches missed.">        if (user == null) {</span>
+<span class="nc" id="L903">            log.error(&quot;Cannot update userLevel: user {} not found&quot;, userId);</span>
+<span class="nc" id="L904">            return;</span>
+        }
+
+<span class="fc" id="L907">        String oldLevel = user.getUserLevel();</span>
+<span class="pc bpc" id="L908" title="1 of 2 branches missed.">        if (newLevel.equals(oldLevel)) {</span>
+<span class="nc" id="L909">            return;</span>
+        }
+
+<span class="fc" id="L912">        user.setUserLevel(newLevel);</span>
+<span class="fc" id="L913">        userRepositoryPort.update(user);</span>
+
+<span class="fc" id="L915">        UserPlanHistory history = new UserPlanHistory();</span>
+<span class="fc" id="L916">        history.setUserId(userId);</span>
+<span class="pc bpc" id="L917" title="1 of 2 branches missed.">        history.setOldPlan(oldLevel != null ? oldLevel : &quot;UNKNOWN&quot;);</span>
+<span class="fc" id="L918">        history.setNewPlan(newLevel);</span>
+<span class="fc" id="L919">        history.setNote(reason);</span>
+<span class="fc" id="L920">        userRepositoryPort.savePlanHistory(history);</span>
+
+<span class="fc" id="L922">        log.info(&quot;User {} level changed: {} -&gt; {} (reason: {})&quot;, userId, oldLevel, newLevel, reason);</span>
+
+        // 降级到 FREE 时：通过端口吊销令牌
+<span class="pc bpc" id="L925" title="3 of 4 branches missed.">        if (&quot;FREE&quot;.equals(newLevel) &amp;&amp; !&quot;FREE&quot;.equals(oldLevel)) {</span>
+<span class="nc" id="L926">            tokenRevocationPort.revokeAllTokens(userId, user.getEmail(), &quot;subscription_downgrade: &quot; + reason);</span>
+        }
+<span class="fc" id="L928">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

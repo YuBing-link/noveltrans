@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WebApiKeyController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.in.rest.web</a> &gt; <span class="el_source">WebApiKeyController.java</span></div><h1>WebApiKeyController.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.in.rest.web;
+
+import com.yumu.noveltranslator.domain.model.ApiKey;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.entity.ApiKeyResponse;
+import com.yumu.noveltranslator.port.dto.entity.CreateApiKeyRequest;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.port.in.ApiKeyPort;
+import com.yumu.noveltranslator.util.SecurityUtil;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Web API Key 管理接口
+ * 路径前缀: /user/api-keys
+ */
+@RestController
+@RequestMapping(&quot;/user/api-keys&quot;)
+<span class="fc" id="L25">@RequiredArgsConstructor</span>
+public class WebApiKeyController {
+
+    private final ApiKeyPort apiKeyPort;
+
+    /**
+     * 生成 API Key
+     * POST /user/api-keys
+     */
+    @PostMapping
+    public Result&lt;Map&lt;String, Object&gt;&gt; createApiKey(@Valid @RequestBody CreateApiKeyRequest request) {
+<span class="fc" id="L36">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L37">        ApiKey apiKey = apiKeyPort.createApiKey(userId, request.getName());</span>
+
+<span class="fc" id="L39">        return Result.ok(Map.of(</span>
+<span class="fc" id="L40">            &quot;id&quot;, apiKey.getId(),</span>
+<span class="fc" id="L41">            &quot;apiKey&quot;, apiKey.getApiKey(),</span>
+<span class="fc" id="L42">            &quot;name&quot;, apiKey.getName(),</span>
+<span class="fc" id="L43">            &quot;isActive&quot;, true,</span>
+<span class="fc" id="L44">            &quot;createdAt&quot;, apiKey.getCreatedAt()</span>
+        ));
+    }
+
+    /**
+     * 获取 API Key 列表
+     * GET /user/api-keys
+     */
+    @GetMapping
+    public Result&lt;PageResponse&lt;ApiKeyResponse&gt;&gt; getApiKeys(
+            @RequestParam(required = false, defaultValue = &quot;1&quot;) Integer page,
+            @RequestParam(required = false, defaultValue = &quot;20&quot;) Integer pageSize) {
+<span class="fc" id="L56">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L57">        PageResponse&lt;ApiKey&gt; result = apiKeyPort.listApiKeys(userId, page, pageSize);</span>
+<span class="fc" id="L58">        List&lt;ApiKeyResponse&gt; responses = result.getList().stream().map(k -&gt; {</span>
+<span class="fc" id="L59">            ApiKeyResponse r = new ApiKeyResponse();</span>
+<span class="fc" id="L60">            r.setId(k.getId());</span>
+<span class="fc" id="L61">            r.setName(k.getName());</span>
+<span class="fc" id="L62">            r.setApiKey(SecurityUtil.maskApiKey(k.getApiKey()));</span>
+<span class="fc" id="L63">            r.setActive(k.getActive());</span>
+<span class="fc" id="L64">            r.setLastUsedAt(k.getLastUsedAt());</span>
+<span class="fc" id="L65">            r.setTotalUsage(k.getTotalUsage());</span>
+<span class="fc" id="L66">            r.setCreatedAt(k.getCreatedAt());</span>
+<span class="fc" id="L67">            return r;</span>
+<span class="fc" id="L68">        }).collect(Collectors.toList());</span>
+<span class="fc" id="L69">        return Result.ok(PageResponse.of(page, pageSize, result.getTotal(), responses));</span>
+    }
+
+    /**
+     * 禁用/删除 API Key
+     * DELETE /user/api-keys/{id}
+     */
+    @DeleteMapping(&quot;/{id}&quot;)
+    public Result deleteApiKey(@PathVariable Long id) {
+<span class="fc" id="L78">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L79">        boolean success = apiKeyPort.deleteApiKey(id, userId);</span>
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        if (!success) {</span>
+<span class="fc" id="L81">            return Result.error(ErrorCodeEnum.NOT_FOUND, &quot;API Key 不存在&quot;);</span>
+        }
+<span class="fc" id="L83">        return Result.ok(null);</span>
+    }
+
+    /**
+     * 重置 API Key
+     * POST /user/api-keys/{id}/reset
+     */
+    @PostMapping(&quot;/{id}/reset&quot;)
+    public Result&lt;Map&lt;String, Object&gt;&gt; resetApiKey(@PathVariable Long id) {
+<span class="fc" id="L92">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L93">        ApiKey key = apiKeyPort.resetApiKey(id, userId);</span>
+<span class="fc bfc" id="L94" title="All 2 branches covered.">        if (key == null) {</span>
+<span class="fc" id="L95">            return Result.error(ErrorCodeEnum.NOT_FOUND, &quot;API Key 不存在&quot;);</span>
+        }
+<span class="fc" id="L97">        return Result.ok(Map.of(&quot;id&quot;, key.getId(), &quot;apiKey&quot;, key.getApiKey()));</span>
+    }
+
+    /**
+     * 查看 API Key 真实值（不掩码）
+     * GET /user/api-keys/{id}/reveal
+     */
+    @GetMapping(&quot;/{id}/reveal&quot;)
+    public Result&lt;Map&lt;String, Object&gt;&gt; revealApiKey(@PathVariable Long id) {
+<span class="nc" id="L106">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="nc" id="L107">        ApiKey key = apiKeyPort.revealApiKey(id, userId);</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        if (key == null) {</span>
+<span class="nc" id="L109">            return Result.error(ErrorCodeEnum.NOT_FOUND, &quot;API Key 不存在&quot;);</span>
+        }
+<span class="nc" id="L111">        return Result.ok(Map.of(&quot;id&quot;, key.getId(), &quot;apiKey&quot;, key.getApiKey()));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

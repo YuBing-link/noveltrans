@@ -1,0 +1,594 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EntityConsistencyService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">EntityConsistencyService.java</span></div><h1>EntityConsistencyService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
+import com.yumu.noveltranslator.port.dto.translation.EntityExtractionResponse;
+import com.yumu.noveltranslator.port.dto.translation.EntityTranslationResponse;
+import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.port.dto.translation.EntityMapping;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.domain.model.UserPreference;
+import com.yumu.noveltranslator.port.out.EntityCachePort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 实体一致性翻译服务
+ * 核心流程：提取实体 → 翻译实体 → 构建占位符映射 → 替换原文 → 翻译 → 还原占位符
+ */
+@Service
+<span class="fc" id="L35">@RequiredArgsConstructor</span>
+<span class="fc" id="L36">@Slf4j</span>
+public class EntityConsistencyService {
+
+    /** 文本超过此字符数才启用实体一致性 */
+    private static final int MIN_TEXT_LENGTH = 500;
+
+    /** 文本超过此字符数时分段提取实体 */
+    private static final int SEGMENT_EXTRACTION_THRESHOLD = 5000;
+    /** 分段提取的目标段大小（字符数） */
+    private static final int ENTITY_SEGMENT_SIZE = 3000;
+
+    /** 禁用代理的 ProxySelector，确保内部 Docker 服务直连 */
+<span class="fc" id="L48">    private static final java.net.ProxySelector NO_PROXY_SELECTOR = new java.net.ProxySelector() {</span>
+        @Override
+        public java.util.List&lt;java.net.Proxy&gt; select(java.net.URI uri) {
+<span class="fc" id="L51">            return java.util.List.of(java.net.Proxy.NO_PROXY);</span>
+        }
+        @Override
+<span class="nc" id="L54">        public void connectFailed(java.net.URI uri, java.net.SocketAddress sa, java.io.IOException ioe) {}</span>
+    };
+
+<span class="fc" id="L57">    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()</span>
+<span class="fc" id="L58">            .connectTimeout(Duration.ofSeconds(5))</span>
+<span class="fc" id="L59">            .proxy(NO_PROXY_SELECTOR)</span>
+<span class="fc" id="L60">            .build();</span>
+
+    @Value(&quot;${translation.python.url:http://llm-engine:8000/translate}&quot;)
+    private String pythonTranslateUrl;
+
+    @Value(&quot;${translation.python.api-key:}&quot;)
+    private String pythonApiKey;
+
+    private final EntityCachePort entityCachePort;
+    private final GlossaryRepositoryPort glossaryPort;
+    private final UserRepositoryPort userPort;
+
+    /**
+     * 判断是否需要启用实体一致性
+     */
+    public boolean shouldUseConsistency(String text) {
+<span class="fc bfc" id="L76" title="All 4 branches covered.">        return text != null &amp;&amp; text.length() &gt;= MIN_TEXT_LENGTH;</span>
+    }
+
+    /**
+     * 带实体一致性的翻译入口
+     */
+    public ConsistencyTranslationResult translateWithConsistency(
+            String sourceText, String targetLang, String engine,
+            Long userId, String documentId) {
+
+<span class="fc" id="L86">        ConsistencyTranslationResult result = new ConsistencyTranslationResult();</span>
+<span class="fc" id="L87">        result.setConsistencyApplied(false);</span>
+
+        try {
+            // 1. 先从文档缓存获取已有的实体映射
+<span class="fc" id="L91">            Map&lt;String, String&gt; cachedEntities = entityCachePort.getEntityMap(userId, documentId);</span>
+
+            // 2. 分段提取实体（长文本自动分段）
+<span class="fc" id="L94">            List&lt;String&gt; extractedEntities = extractEntitiesSegmented(sourceText, targetLang);</span>
+
+            // 3. 合并术语库：如果用户启用了术语库，提取术语库中的译法
+<span class="fc" id="L97">            Map&lt;String, String&gt; glossaryTerms = loadGlossaryTerms(userId, sourceText);</span>
+<span class="fc bfc" id="L98" title="All 2 branches covered.">            if (!glossaryTerms.isEmpty()) {</span>
+<span class="fc" id="L99">                log.info(&quot;术语库匹配到 {} 个实体译法: {}&quot;, glossaryTerms.size(), glossaryTerms.keySet());</span>
+            }
+
+<span class="pc bpc" id="L102" title="1 of 4 branches missed.">            if (extractedEntities.isEmpty() &amp;&amp; glossaryTerms.isEmpty()) {</span>
+<span class="fc" id="L103">                log.info(&quot;未提取到实体且术语库无匹配，使用常规翻译&quot;);</span>
+<span class="fc" id="L104">                return result;</span>
+            }
+<span class="fc" id="L106">            log.info(&quot;提取到 {} 个实体: {}&quot;, extractedEntities.size(), extractedEntities);</span>
+
+            // 4. 过滤掉缓存中已有的实体，只翻译新增的
+            // 术语库中已有的实体不需要 LLM 翻译
+<span class="fc" id="L110">            Set&lt;String&gt; glossaryKeys = glossaryTerms.keySet();</span>
+<span class="fc" id="L111">            List&lt;String&gt; newEntities = extractedEntities.stream()</span>
+<span class="pc bnc" id="L112" title="All 4 branches missed.">                    .filter(e -&gt; !cachedEntities.containsKey(e) &amp;&amp; !glossaryKeys.contains(e))</span>
+<span class="fc" id="L113">                    .toList();</span>
+
+            // 构建完整映射：缓存 + 术语库（优先级最高）
+<span class="fc" id="L116">            Map&lt;String, String&gt; allTranslations = new LinkedHashMap&lt;&gt;(cachedEntities);</span>
+<span class="fc" id="L117">            allTranslations.putAll(glossaryTerms);  // 术语库覆盖缓存中的同名实体</span>
+
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">            if (!newEntities.isEmpty()) {</span>
+                // 5. 翻译新增实体
+<span class="nc" id="L121">                Map&lt;String, String&gt; newTranslations = translateEntities(newEntities, targetLang);</span>
+<span class="nc" id="L122">                allTranslations.putAll(newTranslations);</span>
+<span class="nc" id="L123">                log.info(&quot;翻译了 {} 个新增实体&quot;, newTranslations.size());</span>
+            }
+
+            // 6. 去重 + 处理嵌套实体（保留最长匹配）
+<span class="fc" id="L127">            Map&lt;String, String&gt; dedupedMap = deduplicateEntities(allTranslations, sourceText);</span>
+
+            // 7. 构建占位符映射
+<span class="fc" id="L130">            EntityMappingContext context = buildMapping(dedupedMap);</span>
+
+            // 8. 原文中替换实体为占位符
+<span class="fc" id="L133">            String textWithPlaceholders = replaceEntitiesWithPlaceholders(sourceText, context);</span>
+
+            // 9. 调用翻译（带占位符保护）
+<span class="nc" id="L136">            String translatedWithPlaceholders = translateWithPlaceholders(</span>
+                    textWithPlaceholders, targetLang, engine);
+
+<span class="nc bnc" id="L139" title="All 4 branches missed.">            if (translatedWithPlaceholders == null || translatedWithPlaceholders.isBlank()) {</span>
+<span class="nc" id="L140">                log.error(&quot;带占位符翻译返回为空&quot;);</span>
+<span class="nc" id="L141">                return result;</span>
+            }
+
+            // 10. 译文中将占位符替换为翻译后的实体名
+<span class="nc" id="L145">            String finalTranslated = restorePlaceholders(translatedWithPlaceholders, context);</span>
+
+            // 11. 合并到文档缓存（不包含术语库，术语库始终来自 DB）
+<span class="nc" id="L148">            Map&lt;String, String&gt; nonGlossaryMap = new LinkedHashMap&lt;&gt;(dedupedMap);</span>
+<span class="nc" id="L149">            glossaryKeys.forEach(nonGlossaryMap::remove);</span>
+<span class="nc" id="L150">            entityCachePort.mergeEntityMap(userId, documentId, nonGlossaryMap);</span>
+
+            // 构建返回结果
+<span class="nc" id="L153">            result.setTranslatedText(finalTranslated);</span>
+<span class="nc" id="L154">            result.setMappings(context.mappings);</span>
+<span class="nc" id="L155">            result.setOriginalWithPlaceholders(textWithPlaceholders);</span>
+<span class="nc" id="L156">            result.setConsistencyApplied(true);</span>
+
+<span class="nc" id="L158">            log.info(&quot;实体一致性翻译完成: 实体数={}, 原文长度={}, 译文长度={}&quot;,</span>
+<span class="nc" id="L159">                    context.mappings.size(), sourceText.length(), finalTranslated.length());</span>
+
+<span class="nc" id="L161">            return result;</span>
+
+<span class="fc" id="L163">        } catch (Exception e) {</span>
+<span class="fc" id="L164">            log.error(&quot;实体一致性翻译失败: {}，降级为常规翻译&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L165">            return result;</span>
+        }
+    }
+
+    // ==================== 文本分段与分段实体提取 ====================
+
+    /**
+     * 将长文本按段落边界切分为多个片段，用于分段实体提取
+     *
+     * 规则：
+     * - 文本 &lt;= SEGMENT_EXTRACTION_THRESHOLD (5000) 字：不分段，返回单片段
+     * - 文本 &gt; 5000 字：按 ENTITY_SEGMENT_SIZE (3000) 字分段
+     * - 切分点在段落边界（\n\n）或句子边界（。！？\n）
+     * - 不破坏原有文字完整性
+     *
+     * @param text 原文
+     * @return 分段后的文本列表
+     */
+    public List&lt;String&gt; splitTextForEntityExtraction(String text) {
+<span class="fc bfc" id="L184" title="All 4 branches covered.">        if (text == null || text.length() &lt;= SEGMENT_EXTRACTION_THRESHOLD) {</span>
+<span class="fc bfc" id="L185" title="All 2 branches covered.">            return List.of(text != null ? text : &quot;&quot;);</span>
+        }
+
+<span class="fc" id="L188">        List&lt;String&gt; segments = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L189">        String[] paragraphs = text.split(&quot;(?&lt;=\n\n)&quot;);  // 保留分隔符</span>
+<span class="fc" id="L190">        StringBuilder current = new StringBuilder();</span>
+
+<span class="fc bfc" id="L192" title="All 2 branches covered.">        for (String para : paragraphs) {</span>
+<span class="fc bfc" id="L193" title="All 4 branches covered.">            if (current.length() + para.length() &gt; ENTITY_SEGMENT_SIZE &amp;&amp; current.length() &gt; 0) {</span>
+                // 当前段已满，检查是否能在句子边界切分
+<span class="fc" id="L195">                String segment = current.toString();</span>
+<span class="pc bpc" id="L196" title="1 of 2 branches missed.">                if (segment.length() &gt; ENTITY_SEGMENT_SIZE * 1.5) {</span>
+                    // 如果当前段远超目标大小，尝试在句子边界回退切分
+<span class="nc" id="L198">                    segments.addAll(splitAtSentenceBoundary(segment));</span>
+                } else {
+<span class="fc" id="L200">                    segments.add(segment);</span>
+                }
+<span class="fc" id="L202">                current = new StringBuilder();</span>
+            }
+<span class="fc" id="L204">            current.append(para);</span>
+        }
+
+        // 处理剩余内容
+<span class="pc bpc" id="L208" title="1 of 2 branches missed.">        if (current.length() &gt; 0) {</span>
+<span class="fc" id="L209">            String remaining = current.toString();</span>
+<span class="fc bfc" id="L210" title="All 2 branches covered.">            if (remaining.length() &gt; ENTITY_SEGMENT_SIZE * 1.5) {</span>
+<span class="fc" id="L211">                segments.addAll(splitAtSentenceBoundary(remaining));</span>
+            } else {
+<span class="fc" id="L213">                segments.add(remaining);</span>
+            }
+        }
+
+        // 如果分段后只剩一个空段，返回原文
+<span class="pc bpc" id="L218" title="1 of 2 branches missed.">        if (segments.isEmpty()) {</span>
+<span class="nc" id="L219">            return List.of(text);</span>
+        }
+
+<span class="fc" id="L222">        log.info(&quot;文本分段: 原文{}字, 分为{}段&quot;, text.length(), segments.size());</span>
+<span class="fc" id="L223">        return segments;</span>
+    }
+
+    /**
+     * 在句子边界切分超长片段
+     * 句子边界：。！？\n
+     */
+    private List&lt;String&gt; splitAtSentenceBoundary(String text) {
+<span class="fc" id="L231">        List&lt;String&gt; parts = new ArrayList&lt;&gt;();</span>
+        // 按句子边界切分
+<span class="fc" id="L233">        String[] sentences = text.split(&quot;(?&lt;=[。！？\n])&quot;);</span>
+<span class="fc" id="L234">        StringBuilder current = new StringBuilder();</span>
+
+<span class="fc bfc" id="L236" title="All 2 branches covered.">        for (String sentence : sentences) {</span>
+<span class="fc bfc" id="L237" title="All 4 branches covered.">            if (current.length() + sentence.length() &gt; ENTITY_SEGMENT_SIZE &amp;&amp; current.length() &gt; 0) {</span>
+<span class="fc" id="L238">                parts.add(current.toString());</span>
+<span class="fc" id="L239">                current = new StringBuilder();</span>
+            }
+<span class="fc" id="L241">            current.append(sentence);</span>
+        }
+
+<span class="pc bpc" id="L244" title="1 of 2 branches missed.">        if (current.length() &gt; 0) {</span>
+<span class="fc" id="L245">            parts.add(current.toString());</span>
+        }
+
+<span class="pc bpc" id="L248" title="1 of 2 branches missed.">        return parts.isEmpty() ? List.of(text) : parts;</span>
+    }
+
+    /**
+     * 分段提取实体（适用于长文本）
+     *
+     * 逻辑：
+     * 1. 先调用 splitTextForEntityExtraction 分段
+     * 2. 对每个分段调用 Python /extract-entities
+     * 3. 合并所有分段的实体结果（去重）
+     *
+     * @param text       原文
+     * @param targetLang 目标语言
+     * @return 去重后的实体列表
+     */
+    public List&lt;String&gt; extractEntitiesSegmented(String text, String targetLang) {
+<span class="fc" id="L264">        List&lt;String&gt; segments = splitTextForEntityExtraction(text);</span>
+
+<span class="fc bfc" id="L266" title="All 2 branches covered.">        if (segments.size() == 1) {</span>
+            // 不分段，直接提取
+            try {
+<span class="fc" id="L269">                return extractEntities(segments.get(0), targetLang);</span>
+<span class="nc" id="L270">            } catch (Exception e) {</span>
+<span class="nc" id="L271">                log.warn(&quot;实体提取失败: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L272">                return Collections.emptyList();</span>
+            }
+        }
+
+<span class="fc" id="L276">        Set&lt;String&gt; allEntities = new LinkedHashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L277" title="All 2 branches covered.">        for (int i = 0; i &lt; segments.size(); i++) {</span>
+            try {
+<span class="fc" id="L279">                List&lt;String&gt; segmentEntities = extractEntities(segments.get(i), targetLang);</span>
+<span class="fc" id="L280">                allEntities.addAll(segmentEntities);</span>
+<span class="fc" id="L281">                log.debug(&quot;实体提取: 第{}/{}段, 提取{}个实体&quot;, i + 1, segments.size(), segmentEntities.size());</span>
+<span class="nc" id="L282">            } catch (Exception e) {</span>
+<span class="nc" id="L283">                log.warn(&quot;实体提取: 第{}/{}段失败: {}&quot;, i + 1, segments.size(), e.getMessage());</span>
+<span class="fc" id="L284">            }</span>
+        }
+
+<span class="fc" id="L287">        List&lt;String&gt; result = new ArrayList&lt;&gt;(allEntities);</span>
+<span class="fc" id="L288">        log.info(&quot;分段实体提取完成: 原文{}字, {}段, 共{}个实体&quot;, text.length(), segments.size(), result.size());</span>
+<span class="fc" id="L289">        return result;</span>
+    }
+
+    // ==================== 原有方法 ====================
+
+    /**
+     * 调用 Python /extract-entities 提取实体（公开方法，供外部调用）
+     */
+    public List&lt;String&gt; extractEntities(String text, String targetLang) throws Exception {
+<span class="fc" id="L298">        String baseUrl = pythonTranslateUrl.replace(&quot;/translate&quot;, &quot;&quot;);</span>
+<span class="fc" id="L299">        String url = baseUrl + &quot;/extract-entities&quot;;</span>
+
+<span class="fc" id="L301">        Map&lt;String, Object&gt; body = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L302">        body.put(&quot;text&quot;, text);</span>
+<span class="fc" id="L303">        body.put(&quot;source_lang&quot;, &quot;auto&quot;);</span>
+<span class="fc" id="L304">        body.put(&quot;target_lang&quot;, targetLang);</span>
+
+<span class="fc" id="L306">        String jsonBody = JSON.toJSONString(body);</span>
+<span class="fc" id="L307">        var reqBuilder = HttpRequest.newBuilder()</span>
+<span class="fc" id="L308">                .uri(URI.create(url))</span>
+<span class="fc" id="L309">                .header(&quot;Content-Type&quot;, &quot;application/json; charset=UTF-8&quot;)</span>
+<span class="fc" id="L310">                .timeout(Duration.ofSeconds(30))</span>
+<span class="fc" id="L311">                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));</span>
+<span class="pc bpc" id="L312" title="3 of 4 branches missed.">        if (pythonApiKey != null &amp;&amp; !pythonApiKey.isEmpty()) {</span>
+<span class="nc" id="L313">            reqBuilder.header(&quot;X-Service-Key&quot;, pythonApiKey);</span>
+        }
+<span class="fc" id="L315">        HttpRequest request = reqBuilder.build();</span>
+
+        HttpResponse&lt;String&gt; response;
+        try {
+<span class="nc" id="L319">            response = sendWithRetry(request, 2);</span>
+<span class="fc" id="L320">        } catch (Exception e) {</span>
+<span class="fc" id="L321">            log.warn(&quot;实体提取失败，跳过一致性处理: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L322">            return Collections.emptyList();</span>
+<span class="nc" id="L323">        }</span>
+<span class="nc" id="L324">        String responseBody = response.body();</span>
+<span class="nc bnc" id="L325" title="All 4 branches missed.">        if (responseBody == null || responseBody.isBlank()) {</span>
+<span class="nc" id="L326">            log.warn(&quot;Python服务返回空响应体, status={}, 跳过实体提取&quot;, response.statusCode());</span>
+<span class="nc" id="L327">            return Collections.emptyList();</span>
+        }
+
+        try {
+<span class="nc" id="L331">            EntityExtractionResponse result = JSON.parseObject(responseBody, EntityExtractionResponse.class);</span>
+<span class="nc bnc" id="L332" title="All 2 branches missed.">            return result.getEntities() != null ? result.getEntities() : Collections.emptyList();</span>
+<span class="nc" id="L333">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">            log.error(&quot;实体提取 JSON 解析失败: 响应前200字符={}&quot;, responseBody.length() &gt; 200 ? responseBody.substring(0, 200) : responseBody);</span>
+<span class="nc" id="L335">            throw e;</span>
+        }
+    }
+
+    /**
+     * 调用 Python /translate-entities 批量翻译实体（公开方法，供外部调用）
+     */
+    public Map&lt;String, String&gt; translateEntities(List&lt;String&gt; entities, String targetLang) throws Exception {
+<span class="fc" id="L343">        String baseUrl = pythonTranslateUrl.replace(&quot;/translate&quot;, &quot;&quot;);</span>
+<span class="fc" id="L344">        String url = baseUrl + &quot;/translate-entities&quot;;</span>
+
+<span class="fc" id="L346">        Map&lt;String, Object&gt; body = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L347">        body.put(&quot;entities&quot;, entities);</span>
+<span class="fc" id="L348">        body.put(&quot;source_lang&quot;, &quot;auto&quot;);</span>
+<span class="fc" id="L349">        body.put(&quot;target_lang&quot;, targetLang);</span>
+
+<span class="fc" id="L351">        String jsonBody = JSON.toJSONString(body);</span>
+<span class="fc" id="L352">        var reqBuilder = HttpRequest.newBuilder()</span>
+<span class="fc" id="L353">                .uri(URI.create(url))</span>
+<span class="fc" id="L354">                .header(&quot;Content-Type&quot;, &quot;application/json; charset=UTF-8&quot;)</span>
+<span class="fc" id="L355">                .timeout(Duration.ofSeconds(30))</span>
+<span class="fc" id="L356">                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));</span>
+<span class="pc bpc" id="L357" title="3 of 4 branches missed.">        if (pythonApiKey != null &amp;&amp; !pythonApiKey.isEmpty()) {</span>
+<span class="nc" id="L358">            reqBuilder.header(&quot;X-Service-Key&quot;, pythonApiKey);</span>
+        }
+<span class="fc" id="L360">        HttpRequest request = reqBuilder.build();</span>
+
+<span class="nc" id="L362">        HttpResponse&lt;String&gt; response = sendWithRetry(request, 2);</span>
+<span class="nc" id="L363">        String responseBody = response.body();</span>
+<span class="nc bnc" id="L364" title="All 4 branches missed.">        if (responseBody == null || responseBody.isBlank()) {</span>
+<span class="nc" id="L365">            throw new RuntimeException(&quot;Python服务返回空响应体, status=&quot; + response.statusCode());</span>
+        }
+
+        try {
+<span class="nc" id="L369">            EntityTranslationResponse result = JSON.parseObject(responseBody, EntityTranslationResponse.class);</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            return result.getTranslations() != null ? result.getTranslations() : Collections.emptyMap();</span>
+<span class="nc" id="L371">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L372" title="All 2 branches missed.">            log.error(&quot;实体翻译 JSON 解析失败: 响应前200字符={}&quot;, responseBody.length() &gt; 200 ? responseBody.substring(0, 200) : responseBody);</span>
+<span class="nc" id="L373">            throw e;</span>
+        }
+    }
+
+    /**
+     * 调用 Python /translate-with-placeholders 翻译带占位符的文本
+     */
+    private String translateWithPlaceholders(String text, String targetLang, String engine) throws Exception {
+<span class="fc" id="L381">        String baseUrl = pythonTranslateUrl.replace(&quot;/translate&quot;, &quot;&quot;);</span>
+<span class="fc" id="L382">        String url = baseUrl + &quot;/translate-with-placeholders&quot;;</span>
+<span class="fc" id="L383">        log.info(&quot;[一致性翻译] URL={}, text length={}&quot;, url, text.length());</span>
+
+<span class="fc" id="L385">        Map&lt;String, Object&gt; body = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L386">        body.put(&quot;text&quot;, text);</span>
+<span class="fc" id="L387">        body.put(&quot;target_lang&quot;, targetLang);</span>
+<span class="pc bpc" id="L388" title="1 of 2 branches missed.">        body.put(&quot;engine&quot;, engine != null ? engine : &quot;openai&quot;);</span>
+<span class="fc" id="L389">        body.put(&quot;fallback&quot;, true);</span>
+
+<span class="fc" id="L391">        String jsonBody = JSON.toJSONString(body);</span>
+<span class="fc" id="L392">        HttpRequest request = HttpRequest.newBuilder()</span>
+<span class="fc" id="L393">                .uri(URI.create(url))</span>
+<span class="fc" id="L394">                .header(&quot;Content-Type&quot;, &quot;application/json; charset=UTF-8&quot;)</span>
+<span class="fc" id="L395">                .timeout(Duration.ofSeconds(60))</span>
+<span class="fc" id="L396">                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))</span>
+<span class="fc" id="L397">                .build();</span>
+
+<span class="fc" id="L399">        log.info(&quot;[一致性翻译] 发送请求到 {}&quot;, request.uri());</span>
+<span class="nc" id="L400">        HttpResponse&lt;String&gt; response = sendWithRetry(request, 2);</span>
+<span class="nc" id="L401">        String responseBody = response.body();</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        log.info(&quot;[一致性翻译] 响应: status={}, body length={}&quot;, response.statusCode(), responseBody != null ? responseBody.length() : 0);</span>
+
+<span class="nc bnc" id="L404" title="All 4 branches missed.">        if (responseBody == null || responseBody.isBlank()) {</span>
+<span class="nc" id="L405">            throw new RuntimeException(&quot;Python服务返回空响应体, status=&quot; + response.statusCode());</span>
+        }
+
+        try {
+<span class="nc" id="L409">            JSONObject json = JSON.parseObject(responseBody);</span>
+<span class="nc" id="L410">            return json.getString(&quot;data&quot;);</span>
+<span class="nc" id="L411">        } catch (Exception e) {</span>
+<span class="nc bnc" id="L412" title="All 2 branches missed.">            log.error(&quot;占位符翻译 JSON 解析失败: 响应前200字符={}&quot;, responseBody.length() &gt; 200 ? responseBody.substring(0, 200) : responseBody);</span>
+<span class="nc" id="L413">            throw e;</span>
+        }
+    }
+
+    /**
+     * 去重 + 处理嵌套实体（保留最长匹配）
+     */
+    private Map&lt;String, String&gt; deduplicateEntities(Map&lt;String, String&gt; translations, String sourceText) {
+        // 按实体长度降序排序
+<span class="fc" id="L422">        List&lt;Map.Entry&lt;String, String&gt;&gt; sorted = new ArrayList&lt;&gt;(translations.entrySet());</span>
+<span class="fc" id="L423">        sorted.sort((a, b) -&gt; Integer.compare(b.getKey().length(), a.getKey().length()));</span>
+
+<span class="fc" id="L425">        Map&lt;String, String&gt; deduped = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L426" title="All 2 branches covered.">        for (Map.Entry&lt;String, String&gt; entry : sorted) {</span>
+<span class="fc" id="L427">            String entity = entry.getKey();</span>
+            // 检查该实体是否被已添加的更长实体包含
+<span class="fc" id="L429">            boolean isSubEntity = false;</span>
+<span class="fc bfc" id="L430" title="All 2 branches covered.">            for (String existing : deduped.keySet()) {</span>
+<span class="pc bpc" id="L431" title="1 of 4 branches missed.">                if (existing.contains(entity) &amp;&amp; existing.length() &gt; entity.length()) {</span>
+<span class="fc" id="L432">                    isSubEntity = true;</span>
+<span class="fc" id="L433">                    break;</span>
+                }
+<span class="fc" id="L435">            }</span>
+<span class="fc bfc" id="L436" title="All 4 branches covered.">            if (!isSubEntity &amp;&amp; sourceText.contains(entity)) {</span>
+<span class="fc" id="L437">                deduped.put(entity, entry.getValue());</span>
+            }
+<span class="fc" id="L439">        }</span>
+
+<span class="fc" id="L441">        return deduped;</span>
+    }
+
+    /**
+     * 构建占位符映射上下文（公开方法，供外部调用）
+     * 使用 __ENT_&lt;hash&gt;__ 格式占位符，避免 [{N}] 与原文内容碰撞
+     */
+    public EntityMappingContext buildMapping(Map&lt;String, String&gt; entityTranslations) {
+<span class="fc" id="L449">        List&lt;EntityMapping&gt; mappings = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L450">        Map&lt;String, String&gt; entityToPlaceholder = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L451">        int index = 1;</span>
+
+<span class="fc bfc" id="L453" title="All 2 branches covered.">        for (Map.Entry&lt;String, String&gt; entry : entityTranslations.entrySet()) {</span>
+<span class="fc" id="L454">            String placeholder = generatePlaceholder(entry.getKey(), entry.getValue(), index);</span>
+<span class="fc" id="L455">            EntityMapping mapping = EntityMapping.builder()</span>
+<span class="fc" id="L456">                    .sourceText(entry.getKey())</span>
+<span class="fc" id="L457">                    .translatedText(entry.getValue())</span>
+<span class="fc" id="L458">                    .placeholder(placeholder)</span>
+<span class="fc" id="L459">                    .index(index)</span>
+<span class="fc" id="L460">                    .build();</span>
+<span class="fc" id="L461">            mappings.add(mapping);</span>
+<span class="fc" id="L462">            entityToPlaceholder.put(entry.getKey(), placeholder);</span>
+<span class="fc" id="L463">            index++;</span>
+<span class="fc" id="L464">        }</span>
+
+<span class="fc" id="L466">        return new EntityMappingContext(mappings, entityToPlaceholder);</span>
+    }
+
+    /**
+     * 生成确定性占位符：__ENT_&lt;8-char-hash&gt;__
+     * 相同原文+译文始终生成相同占位符，便于调试和日志追踪。
+     */
+    private String generatePlaceholder(String source, String translated, int fallbackIndex) {
+        try {
+<span class="fc" id="L475">            MessageDigest md = MessageDigest.getInstance(&quot;SHA-256&quot;);</span>
+<span class="fc" id="L476">            byte[] hash = md.digest((source + &quot;:&quot; + translated).getBytes(StandardCharsets.UTF_8));</span>
+<span class="fc" id="L477">            StringBuilder hex = new StringBuilder(8);</span>
+<span class="fc bfc" id="L478" title="All 2 branches covered.">            for (int i = 0; i &lt; 4; i++) {</span>
+<span class="fc" id="L479">                hex.append(String.format(&quot;%02x&quot;, hash[i]));</span>
+            }
+<span class="fc" id="L481">            return &quot;__ENT_&quot; + hex + &quot;__&quot;;</span>
+<span class="nc" id="L482">        } catch (Exception e) {</span>
+            // SHA-256 不可用时回退到序号格式（极不可能）
+<span class="nc" id="L484">            return &quot;__ENT_IDX_&quot; + fallbackIndex + &quot;__&quot;;</span>
+        }
+    }
+
+    /**
+     * 原文中替换实体为占位符（公开方法，供外部调用）
+     * 注意：按实体长度降序替换，避免短实体先替换导致长实体无法匹配
+     */
+    public String replaceEntitiesWithPlaceholders(String text, EntityMappingContext context) {
+<span class="fc" id="L493">        String result = text;</span>
+        // 按实体长度降序
+<span class="fc" id="L495">        List&lt;String&gt; sortedEntities = context.entityToPlaceholder.keySet().stream()</span>
+<span class="fc" id="L496">                .sorted((a, b) -&gt; Integer.compare(b.length(), a.length()))</span>
+<span class="fc" id="L497">                .toList();</span>
+
+<span class="fc bfc" id="L499" title="All 2 branches covered.">        for (String entity : sortedEntities) {</span>
+<span class="fc" id="L500">            String placeholder = context.entityToPlaceholder.get(entity);</span>
+            // 使用 String.replace 替换所有出现
+<span class="fc" id="L502">            result = result.replace(entity, placeholder);</span>
+<span class="fc" id="L503">        }</span>
+
+<span class="fc" id="L505">        return result;</span>
+    }
+
+    /**
+     * 加载用户术语库中在原文中出现的实体译法
+     * 术语库优先级高于 LLM 自动翻译
+     */
+    private Map&lt;String, String&gt; loadGlossaryTerms(Long userId, String sourceText) {
+<span class="fc" id="L513">        Map&lt;String, String&gt; terms = new LinkedHashMap&lt;&gt;();</span>
+
+        // 检查用户是否启用了术语库
+        try {
+<span class="fc" id="L517">            UserPreference pref = userPort.findPreferenceByUserId(userId).orElse(null);</span>
+<span class="fc bfc" id="L518" title="All 4 branches covered.">            if (pref == null || !Boolean.TRUE.equals(pref.getEnableGlossary())) {</span>
+<span class="fc" id="L519">                log.debug(&quot;用户未启用术语库或偏好不存在&quot;);</span>
+<span class="fc" id="L520">                return terms;</span>
+            }
+<span class="fc" id="L522">        } catch (Exception e) {</span>
+<span class="fc" id="L523">            log.warn(&quot;查询用户偏好失败，术语库注入跳过: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L524">            return terms;</span>
+<span class="fc" id="L525">        }</span>
+
+        // 查询用户的所有术语条目
+        try {
+<span class="fc" id="L529">            List&lt;Glossary&gt; allTerms = glossaryPort.findActiveGlossaryByUserId(userId);</span>
+
+            // 只在原文中实际出现的术语
+<span class="fc bfc" id="L532" title="All 2 branches covered.">            for (Glossary term : allTerms) {</span>
+<span class="pc bpc" id="L533" title="1 of 4 branches missed.">                if (term.getSourceWord() != null &amp;&amp; sourceText.contains(term.getSourceWord())) {</span>
+<span class="fc" id="L534">                    terms.put(term.getSourceWord(), term.getTargetWord());</span>
+                }
+<span class="fc" id="L536">            }</span>
+<span class="fc" id="L537">        } catch (Exception e) {</span>
+<span class="fc" id="L538">            log.warn(&quot;查询术语库失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L539">        }</span>
+
+<span class="fc" id="L541">        return terms;</span>
+    }
+
+    /**
+     * 译文中将占位符替换为翻译后的实体名（公开方法，供外部调用）
+     * 占位符格式为 __ENT_&lt;hash&gt;__，LLM 几乎不可能破坏此格式
+     */
+    public String restorePlaceholders(String text, EntityMappingContext context) {
+<span class="fc" id="L549">        String result = text;</span>
+<span class="fc bfc" id="L550" title="All 2 branches covered.">        for (EntityMapping mapping : context.mappings) {</span>
+<span class="fc" id="L551">            String placeholder = mapping.getPlaceholder();</span>
+<span class="fc bfc" id="L552" title="All 2 branches covered.">            if (result.contains(placeholder)) {</span>
+<span class="fc" id="L553">                result = result.replace(placeholder, mapping.getTranslatedText());</span>
+            } else {
+<span class="fc" id="L555">                log.warn(&quot;占位符还原失败: 未找到 {} (原文={}) 在译文中&quot;, placeholder, mapping.getSourceText());</span>
+            }
+<span class="fc" id="L557">        }</span>
+<span class="fc" id="L558">        return result;</span>
+    }
+
+    /**
+     * 带重试的 HTTP 请求发送
+     */
+    private HttpResponse&lt;String&gt; sendWithRetry(HttpRequest request, int maxRetries) throws Exception {
+<span class="fc" id="L565">        HttpResponse&lt;String&gt; response = null;</span>
+<span class="fc bfc" id="L566" title="All 2 branches covered.">        for (int i = 0; i &lt;= maxRetries; i++) {</span>
+            try {
+<span class="nc" id="L568">                response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());</span>
+<span class="nc bnc" id="L569" title="All 2 branches missed.">                if (response.statusCode() == 200) {</span>
+<span class="nc" id="L570">                    return response;</span>
+                }
+<span class="nc" id="L572">                log.warn(&quot;HTTP 请求失败 (尝试 {}/{}): status={}&quot;, i + 1, maxRetries + 1, response.statusCode());</span>
+<span class="fc" id="L573">            } catch (Exception e) {</span>
+<span class="fc" id="L574">                log.warn(&quot;HTTP 请求异常 (尝试 {}/{}): {}&quot;, i + 1, maxRetries + 1, e.getMessage());</span>
+<span class="nc" id="L575">            }</span>
+<span class="fc bfc" id="L576" title="All 2 branches covered.">            if (i &lt; maxRetries) {</span>
+<span class="fc" id="L577">                Thread.sleep(1000L * (i + 1));</span>
+            }
+        }
+<span class="pc bpc" id="L580" title="1 of 2 branches missed.">        if (response != null) {</span>
+<span class="nc" id="L581">            return response;</span>
+        }
+<span class="fc" id="L583">        throw new RuntimeException(&quot;HTTP 请求重试 &quot; + maxRetries + &quot; 次后仍失败&quot;);</span>
+    }
+
+    /**
+     * 占位符映射上下文（公开静态类，供外部使用）
+     */
+<span class="fc" id="L589">    public record EntityMappingContext(</span>
+            List&lt;EntityMapping&gt; mappings,
+            Map&lt;String, String&gt; entityToPlaceholder
+    ) {}
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

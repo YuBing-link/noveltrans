@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>StripeWebhookController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.in.webhook</a> &gt; <span class="el_source">StripeWebhookController.java</span></div><h1>StripeWebhookController.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.in.webhook;
+
+import com.stripe.exception.SignatureVerificationException;
+import com.stripe.model.Event;
+import com.stripe.net.Webhook;
+import com.yumu.noveltranslator.config.tenant.TenantContext;
+import com.yumu.noveltranslator.port.in.SubscriptionPort;
+import com.yumu.noveltranslator.port.in.WebhookPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Stripe Webhook 接收端点
+ * 接收 Stripe 的订阅状态变更通知，异步处理数据库更新。
+ */
+<span class="fc" id="L19">@Slf4j</span>
+@RestController
+@RequestMapping(&quot;/webhook&quot;)
+<span class="fc" id="L22">@RequiredArgsConstructor</span>
+public class StripeWebhookController implements WebhookPort {
+
+    private final SubscriptionPort subscriptionPort;
+    private final com.yumu.noveltranslator.properties.StripeProperties stripeProperties;
+    private final UserRepositoryPort userRepositoryPort;
+
+    @PostMapping(&quot;/stripe&quot;)
+    public String handleStripeWebhook(HttpServletRequest request, @RequestBody String payload) {
+<span class="fc" id="L31">        String sigHeader = request.getHeader(&quot;Stripe-Signature&quot;);</span>
+
+        // 1. 验证签名
+        Event event;
+        try {
+<span class="nc" id="L36">            event = Webhook.constructEvent(payload, sigHeader, stripeProperties.getWebhookSecret());</span>
+<span class="fc" id="L37">        } catch (SignatureVerificationException e) {</span>
+<span class="fc" id="L38">            log.error(&quot;Stripe webhook signature verification failed&quot;, e);</span>
+<span class="fc" id="L39">            throw new RuntimeException(&quot;Invalid webhook signature&quot;, e);</span>
+<span class="nc" id="L40">        }</span>
+
+<span class="nc" id="L42">        return processEvent(event);</span>
+    }
+
+    /**
+     * 处理 Stripe 事件（提取为独立方法以便测试）
+     */
+    public String processEvent(Event event) {
+<span class="fc" id="L49">        log.info(&quot;Received Stripe webhook event: {}&quot;, event.getType());</span>
+
+        // 1. 获取 userId 并设置租户上下文
+<span class="fc" id="L52">        Long userId = extractUserId(event);</span>
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        if (userId != null) {</span>
+<span class="fc" id="L54">            var user = userRepositoryPort.findById(userId).orElse(null);</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">            if (user != null) {</span>
+<span class="fc" id="L56">                TenantContext.setTenantIdOrDefault(user.getTenantId());</span>
+            }
+        }
+
+        try {
+            // 2. 根据事件类型分发处理
+<span class="fc" id="L62">            dispatchEvent(event);</span>
+<span class="fc" id="L63">            return &quot;{}&quot;;</span>
+        } finally {
+<span class="fc" id="L65">            TenantContext.clear();</span>
+        }
+    }
+
+    /**
+     * 根据事件类型分发到对应的处理方法
+     * 包可见性，仅供同包测试使用
+     */
+    void dispatchEvent(Event event) {
+<span class="fc bfc" id="L74" title="All 8 branches covered.">        switch (event.getType()) {</span>
+            case &quot;checkout.session.completed&quot; -&gt;
+<span class="fc" id="L76">                subscriptionPort.handleCheckoutSessionCompleted(event);</span>
+
+            case &quot;customer.subscription.created&quot; -&gt; {
+                // 忽略，避免与 checkout.session.completed 重复处理
+<span class="fc" id="L80">                log.info(&quot;Ignoring customer.subscription.created event (handled by checkout.session.completed)&quot;);</span>
+<span class="fc" id="L81">            }</span>
+
+            case &quot;customer.subscription.updated&quot; -&gt;
+<span class="fc" id="L84">                subscriptionPort.handleSubscriptionUpdated(event);</span>
+
+            case &quot;customer.subscription.deleted&quot; -&gt;
+<span class="fc" id="L87">                subscriptionPort.handleSubscriptionDeleted(event);</span>
+
+            case &quot;customer.subscription.resumed&quot; -&gt;
+<span class="fc" id="L90">                subscriptionPort.handleSubscriptionResumed(event);</span>
+
+            case &quot;invoice.payment_succeeded&quot; -&gt;
+<span class="fc" id="L93">                subscriptionPort.handleInvoicePaymentSucceeded(event);</span>
+
+            case &quot;invoice.payment_failed&quot; -&gt;
+<span class="fc" id="L96">                subscriptionPort.handleInvoicePaymentFailed(event);</span>
+
+            default -&gt;
+<span class="fc" id="L99">                log.info(&quot;Unhandled Stripe event type: {}&quot;, event.getType());</span>
+        }
+<span class="fc" id="L101">    }</span>
+
+    /**
+     * 从事件中提取 userId
+     */
+    private Long extractUserId(Event event) {
+        // 优先从 subscription/session 对象的 metadata 获取
+        try {
+<span class="fc" id="L109">            var deserializer = event.getDataObjectDeserializer();</span>
+<span class="fc" id="L110">            var obj = deserializer.getObject().orElse(null);</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">            if (obj == null) {</span>
+<span class="fc" id="L112">                obj = deserializer.deserializeUnsafe();</span>
+            }
+<span class="fc bfc" id="L114" title="All 2 branches covered.">            if (obj instanceof com.stripe.model.Subscription sub) {</span>
+<span class="pc bpc" id="L115" title="1 of 4 branches missed.">                if (sub.getMetadata() != null &amp;&amp; sub.getMetadata().containsKey(&quot;userId&quot;)) {</span>
+<span class="fc" id="L116">                    return Long.parseLong(sub.getMetadata().get(&quot;userId&quot;));</span>
+                }
+<span class="fc bfc" id="L118" title="All 2 branches covered.">            } else if (obj instanceof com.stripe.model.checkout.Session session) {</span>
+<span class="pc bpc" id="L119" title="1 of 4 branches missed.">                if (session.getMetadata() != null &amp;&amp; session.getMetadata().containsKey(&quot;userId&quot;)) {</span>
+<span class="fc" id="L120">                    return Long.parseLong(session.getMetadata().get(&quot;userId&quot;));</span>
+                }
+<span class="fc bfc" id="L122" title="All 2 branches covered.">            } else if (obj instanceof com.stripe.model.Invoice invoice) {</span>
+<span class="pc bpc" id="L123" title="2 of 4 branches missed.">                if (invoice.getMetadata() != null &amp;&amp; invoice.getMetadata().containsKey(&quot;userId&quot;)) {</span>
+<span class="fc" id="L124">                    return Long.parseLong(invoice.getMetadata().get(&quot;userId&quot;));</span>
+                }
+            }
+<span class="fc" id="L127">        } catch (Exception e) {</span>
+<span class="fc" id="L128">            log.warn(&quot;Failed to extract userId from event object&quot;, e);</span>
+<span class="fc" id="L129">        }</span>
+
+<span class="fc" id="L131">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

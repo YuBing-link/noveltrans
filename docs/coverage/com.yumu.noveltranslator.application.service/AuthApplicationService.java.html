@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AuthApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">AuthApplicationService.java</span></div><h1>AuthApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.auth.LoginRequest;
+import com.yumu.noveltranslator.port.dto.auth.RegisterRequest;
+import com.yumu.noveltranslator.port.dto.auth.RefreshTokenRequest;
+import com.yumu.noveltranslator.port.dto.auth.ChangePasswordRequest;
+import com.yumu.noveltranslator.port.dto.auth.ResetPasswordRequest;
+import com.yumu.noveltranslator.domain.model.Tenant;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.port.out.EmailPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserDetailsFactoryPort;
+import com.yumu.noveltranslator.util.JwtUtils;
+import com.yumu.noveltranslator.util.PasswordUtil;
+import com.yumu.noveltranslator.domain.service.VerificationCodeService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Pattern;
+
+/**
+ * 用户认证应用服务：登录、注册、验证码、密码管理
+ */
+@Service
+<span class="fc" id="L35">@RequiredArgsConstructor</span>
+public class AuthApplicationService implements UserDetailsService, com.yumu.noveltranslator.port.in.AuthPort {
+
+    private final UserRepositoryPort userRepositoryPort;
+    private final JwtUtils jwtUtils;
+    private final EmailPort emailPort;
+    private final UserDetailsFactoryPort userDetailsFactoryPort;
+    private final VerificationCodeService verificationCodeService;
+
+    @Override
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+<span class="fc" id="L46">        User user = userRepositoryPort.findByEmail(email).orElse(null);</span>
+<span class="fc bfc" id="L47" title="All 2 branches covered.">        if (user == null) {</span>
+<span class="fc" id="L48">            throw new UsernameNotFoundException(&quot;用户不存在：&quot; + email);</span>
+        }
+<span class="fc" id="L50">        return userDetailsFactoryPort.createUserDetails(user);</span>
+    }
+
+    public Result&lt;User&gt; login(LoginRequest req) {
+<span class="pc bpc" id="L54" title="1 of 4 branches missed.">        if (req.getEmail() == null || !isValidEmail(req.getEmail().trim())) {</span>
+<span class="fc" id="L55">            return Result.error(ErrorCodeEnum.USER_EMAIL_INVALID.getCode(),</span>
+<span class="fc" id="L56">                              ErrorCodeEnum.USER_EMAIL_INVALID.getMessage());</span>
+        }
+<span class="pc bpc" id="L58" title="1 of 4 branches missed.">        if (req.getPassword() == null || req.getPassword().trim().isEmpty()) {</span>
+<span class="fc" id="L59">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR.getCode(),</span>
+                              &quot;密码不能为空&quot;);
+        }
+
+        try {
+<span class="fc" id="L64">            User user = userRepositoryPort.findByEmail(req.getEmail().trim()).orElse(null);</span>
+
+<span class="fc bfc" id="L66" title="All 2 branches covered.">            if (user != null) {</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">                if (PasswordUtil.verifyPassword(req.getPassword(), user.getPassword())) {</span>
+<span class="fc" id="L68">                    String token = jwtUtils.createToken(user.getId(), user.getEmail(), user.getTenantId());</span>
+
+<span class="fc" id="L70">                    User userInfo = new User();</span>
+<span class="fc" id="L71">                    userInfo.setId(user.getId());</span>
+<span class="fc" id="L72">                    userInfo.setEmail(user.getEmail());</span>
+<span class="fc" id="L73">                    userInfo.setUsername(user.getUsername());</span>
+<span class="fc" id="L74">                    userInfo.setAvatar(user.getAvatar());</span>
+<span class="fc" id="L75">                    userInfo.setUserLevel(user.getUserLevel());</span>
+<span class="fc" id="L76">                    userInfo.setCreateTime(user.getCreateTime());</span>
+
+<span class="fc" id="L78">                    return Result.okWithToken(userInfo, token);</span>
+                } else {
+<span class="fc" id="L80">                    return Result.error(ErrorCodeEnum.USER_PASSWORD_ERROR.getCode(),</span>
+<span class="fc" id="L81">                                      ErrorCodeEnum.USER_PASSWORD_ERROR.getMessage());</span>
+                }
+            } else {
+<span class="fc" id="L84">                return Result.error(ErrorCodeEnum.USER_NOT_FOUND.getCode(),</span>
+<span class="fc" id="L85">                                  ErrorCodeEnum.USER_NOT_FOUND.getMessage());</span>
+            }
+<span class="fc" id="L87">        } catch (Exception e) {</span>
+<span class="fc" id="L88">            return Result.error(ErrorCodeEnum.SYSTEM_ERROR.getCode(),</span>
+<span class="fc" id="L89">                              &quot;登录失败：&quot; + e.getMessage());</span>
+        }
+    }
+
+    /**
+     * 发送注册验证码
+     */
+    public Result sendVerificationCode(String email) {
+<span class="pc bpc" id="L97" title="1 of 4 branches missed.">        if (email == null || !isValidEmail(email.trim())) {</span>
+<span class="fc" id="L98">            return Result.error(ErrorCodeEnum.USER_EMAIL_INVALID.getCode(),</span>
+<span class="fc" id="L99">                              ErrorCodeEnum.USER_EMAIL_INVALID.getMessage());</span>
+        }
+
+<span class="fc" id="L102">        User existingUser = userRepositoryPort.findByEmail(email.trim()).orElse(null);</span>
+<span class="fc bfc" id="L103" title="All 2 branches covered.">        if (existingUser != null) {</span>
+<span class="fc" id="L104">            return Result.error(ErrorCodeEnum.USER_EMAIL_EXISTS.getCode(),</span>
+<span class="fc" id="L105">                              ErrorCodeEnum.USER_EMAIL_EXISTS.getMessage());</span>
+        }
+
+<span class="fc" id="L108">        String code = verificationCodeService.generateAndStore(email.trim());</span>
+<span class="fc" id="L109">        emailPort.sendVerificationCode(email.trim(), code);</span>
+<span class="fc" id="L110">        return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());</span>
+    }
+
+    /**
+     * 发送重置密码验证码
+     */
+    public Result sendResetCode(String email) {
+<span class="pc bpc" id="L117" title="1 of 4 branches missed.">        if (email == null || !isValidEmail(email.trim())) {</span>
+<span class="fc" id="L118">            return Result.error(ErrorCodeEnum.USER_EMAIL_INVALID.getCode(),</span>
+<span class="fc" id="L119">                              ErrorCodeEnum.USER_EMAIL_INVALID.getMessage());</span>
+        }
+
+<span class="fc" id="L122">        User existingUser = userRepositoryPort.findByEmail(email.trim()).orElse(null);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        if (existingUser == null) {</span>
+<span class="fc" id="L124">            return Result.error(ErrorCodeEnum.USER_NOT_FOUND.getCode(),</span>
+<span class="fc" id="L125">                              ErrorCodeEnum.USER_NOT_FOUND.getMessage());</span>
+        }
+
+<span class="fc" id="L128">        String code = verificationCodeService.generateAndStore(email.trim());</span>
+<span class="fc" id="L129">        emailPort.sendVerificationCode(email.trim(), code);</span>
+<span class="fc" id="L130">        return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());</span>
+    }
+
+    @Transactional
+    public Result&lt;User&gt; register(RegisterRequest req) {
+<span class="fc" id="L135">        String email = req.getEmail();</span>
+<span class="fc" id="L136">        String code = req.getCode();</span>
+<span class="fc" id="L137">        String password = req.getPassword();</span>
+
+<span class="pc bpc" id="L139" title="1 of 4 branches missed.">        if (email == null || !isValidEmail(email.trim())) {</span>
+<span class="fc" id="L140">            return Result.error(ErrorCodeEnum.USER_EMAIL_INVALID.getCode(),</span>
+<span class="fc" id="L141">                              ErrorCodeEnum.USER_EMAIL_INVALID.getMessage());</span>
+        }
+<span class="pc bpc" id="L143" title="1 of 4 branches missed.">        if (code == null || code.trim().isEmpty()) {</span>
+<span class="fc" id="L144">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR.getCode(),</span>
+                              &quot;验证码不能为空&quot;);
+        }
+<span class="pc bpc" id="L147" title="1 of 4 branches missed.">        if (password == null || password.length() &lt; 6) {</span>
+<span class="fc" id="L148">            return Result.error(ErrorCodeEnum.USER_PASSWORD_TOO_SHORT.getCode(),</span>
+<span class="fc" id="L149">                              ErrorCodeEnum.USER_PASSWORD_TOO_SHORT.getMessage());</span>
+        }
+
+<span class="fc bfc" id="L152" title="All 2 branches covered.">        if (!verificationCodeService.verifyCode(email.trim(), code)) {</span>
+<span class="fc" id="L153">            return Result.error(ErrorCodeEnum.USER_VERIFICATION_CODE_ERROR.getCode(),</span>
+<span class="fc" id="L154">                              ErrorCodeEnum.USER_VERIFICATION_CODE_ERROR.getMessage());</span>
+        }
+
+<span class="fc" id="L157">        User existingUser = userRepositoryPort.findByEmail(email.trim()).orElse(null);</span>
+<span class="fc bfc" id="L158" title="All 2 branches covered.">        if (existingUser != null) {</span>
+<span class="fc" id="L159">            return Result.error(ErrorCodeEnum.USER_EMAIL_EXISTS.getCode(),</span>
+<span class="fc" id="L160">                              ErrorCodeEnum.USER_EMAIL_EXISTS.getMessage());</span>
+        }
+
+<span class="fc" id="L163">        User newUser = new User();</span>
+<span class="fc" id="L164">        newUser.setEmail(email.trim());</span>
+<span class="fc" id="L165">        newUser.setPassword(PasswordUtil.hashPassword(password));</span>
+<span class="fc" id="L166">        newUser.setUserLevel(&quot;free&quot;);</span>
+<span class="fc" id="L167">        newUser.setUsername(req.getUsername());</span>
+<span class="fc" id="L168">        newUser.setAvatar(req.getAvatar());</span>
+
+        try {
+            // 创建租户
+<span class="fc" id="L172">            Tenant tenant = new Tenant();</span>
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">            tenant.setName(req.getUsername() != null ? req.getUsername() + &quot; 的租户&quot; : &quot;Tenant-&quot; + System.currentTimeMillis());</span>
+<span class="fc" id="L174">            tenant.setStatus(&quot;ACTIVE&quot;);</span>
+<span class="fc" id="L175">            tenant.setMaxUsers(1);</span>
+<span class="fc" id="L176">            userRepositoryPort.saveTenant(tenant);</span>
+
+<span class="fc" id="L178">            newUser.setTenantId(tenant.getId());</span>
+
+<span class="fc" id="L180">            userRepositoryPort.save(newUser);</span>
+
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">            if (newUser.getId() != null) {</span>
+<span class="fc" id="L183">                User registeredUser = new User();</span>
+<span class="fc" id="L184">                registeredUser.setId(newUser.getId());</span>
+<span class="fc" id="L185">                registeredUser.setEmail(newUser.getEmail());</span>
+<span class="fc" id="L186">                registeredUser.setUsername(newUser.getUsername());</span>
+<span class="fc" id="L187">                registeredUser.setAvatar(newUser.getAvatar());</span>
+<span class="fc" id="L188">                registeredUser.setUserLevel(newUser.getUserLevel());</span>
+<span class="fc" id="L189">                registeredUser.setCreateTime(newUser.getCreateTime());</span>
+
+<span class="fc" id="L191">                return Result.ok(registeredUser, ErrorCodeEnum.SUCCESS.getCode());</span>
+            } else {
+<span class="nc" id="L193">                return Result.error(ErrorCodeEnum.SYSTEM_ERROR.getCode(),</span>
+                                  &quot;注册失败&quot;);
+            }
+<span class="nc" id="L196">        } catch (Exception e) {</span>
+<span class="nc" id="L197">            return Result.error(ErrorCodeEnum.SYSTEM_ERROR.getCode(),</span>
+<span class="nc" id="L198">                              &quot;注册过程中发生错误：&quot; + e.getMessage());</span>
+        }
+    }
+
+    /**
+     * 刷新令牌
+     */
+    public Result refreshToken(RefreshTokenRequest request) {
+<span class="pc bpc" id="L206" title="1 of 4 branches missed.">        if (request.getRefreshToken() == null || request.getRefreshToken().trim().isEmpty()) {</span>
+<span class="fc" id="L207">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR.getCode(), &quot;刷新令牌不能为空&quot;);</span>
+        }
+
+        try {
+<span class="fc" id="L211">            var decoded = jwtUtils.verifyToken(request.getRefreshToken());</span>
+<span class="fc" id="L212">            Long userId = decoded.getClaim(&quot;userId&quot;).asLong();</span>
+<span class="fc" id="L213">            String email = decoded.getClaim(&quot;email&quot;).asString();</span>
+<span class="fc" id="L214">            Long tenantId = decoded.getClaim(&quot;tenantId&quot;).asLong();</span>
+
+            // Fallback: old tokens without tenantId
+<span class="pc bpc" id="L217" title="1 of 2 branches missed.">            if (tenantId == null) {</span>
+<span class="fc" id="L218">                User user = userRepositoryPort.findByEmail(email).orElse(null);</span>
+<span class="pc bpc" id="L219" title="1 of 2 branches missed.">                if (user != null) {</span>
+<span class="nc" id="L220">                    tenantId = user.getTenantId();</span>
+                }
+            }
+
+<span class="fc" id="L224">            String newToken = jwtUtils.createToken(userId, email, tenantId);</span>
+
+<span class="fc" id="L226">            return Result.okWithToken(null, newToken);</span>
+<span class="fc" id="L227">        } catch (Exception e) {</span>
+<span class="fc" id="L228">            return Result.error(ErrorCodeEnum.TOKEN_INVALID.getCode(), &quot;刷新令牌无效或已过期&quot;);</span>
+        }
+    }
+
+    /**
+     * 修改密码
+     */
+    public Result changePassword(Long userId, ChangePasswordRequest request) {
+<span class="pc bpc" id="L236" title="2 of 4 branches missed.">        if (request.getOldPassword() == null || request.getNewPassword() == null) {</span>
+<span class="nc" id="L237">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR.getCode(), &quot;密码不能为空&quot;);</span>
+        }
+
+<span class="fc bfc" id="L240" title="All 2 branches covered.">        if (request.getNewPassword().length() &lt; 6) {</span>
+<span class="fc" id="L241">            return Result.error(ErrorCodeEnum.USER_PASSWORD_TOO_SHORT.getCode(),</span>
+<span class="fc" id="L242">                    ErrorCodeEnum.USER_PASSWORD_TOO_SHORT.getMessage());</span>
+        }
+
+        try {
+<span class="fc" id="L246">            User user = userRepositoryPort.findById(userId).orElse(null);</span>
+<span class="fc bfc" id="L247" title="All 2 branches covered.">            if (user == null) {</span>
+<span class="fc" id="L248">                return Result.error(ErrorCodeEnum.USER_NOT_FOUND.getCode(), &quot;用户不存在&quot;);</span>
+            }
+
+<span class="fc bfc" id="L251" title="All 2 branches covered.">            if (!PasswordUtil.verifyPassword(request.getOldPassword(), user.getPassword())) {</span>
+<span class="fc" id="L252">                return Result.error(ErrorCodeEnum.USER_PASSWORD_ERROR.getCode(), &quot;原密码错误&quot;);</span>
+            }
+
+<span class="fc" id="L255">            user.setPassword(PasswordUtil.hashPassword(request.getNewPassword()));</span>
+<span class="fc" id="L256">            userRepositoryPort.update(user);</span>
+
+<span class="fc" id="L258">            return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());</span>
+<span class="nc" id="L259">        } catch (Exception e) {</span>
+<span class="nc" id="L260">            return Result.error(ErrorCodeEnum.SYSTEM_ERROR.getCode(), &quot;修改密码失败：&quot; + e.getMessage());</span>
+        }
+    }
+
+    /**
+     * 重置密码
+     */
+    @Transactional
+    public Result resetPassword(ResetPasswordRequest request) {
+<span class="pc bpc" id="L269" title="1 of 4 branches missed.">        if (request.getEmail() == null || !isValidEmail(request.getEmail().trim())) {</span>
+<span class="fc" id="L270">            return Result.error(ErrorCodeEnum.USER_EMAIL_INVALID.getCode(),</span>
+<span class="fc" id="L271">                    ErrorCodeEnum.USER_EMAIL_INVALID.getMessage());</span>
+        }
+
+<span class="pc bpc" id="L274" title="1 of 4 branches missed.">        if (request.getCode() == null || request.getCode().trim().isEmpty()) {</span>
+<span class="fc" id="L275">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR.getCode(), &quot;验证码不能为空&quot;);</span>
+        }
+
+<span class="pc bpc" id="L278" title="1 of 4 branches missed.">        if (request.getNewPassword() == null || request.getNewPassword().length() &lt; 6) {</span>
+<span class="fc" id="L279">            return Result.error(ErrorCodeEnum.USER_PASSWORD_TOO_SHORT.getCode(),</span>
+<span class="fc" id="L280">                    ErrorCodeEnum.USER_PASSWORD_TOO_SHORT.getMessage());</span>
+        }
+
+<span class="fc bfc" id="L283" title="All 2 branches covered.">        if (!verificationCodeService.verifyCode(request.getEmail().trim(), request.getCode())) {</span>
+<span class="fc" id="L284">            return Result.error(ErrorCodeEnum.USER_VERIFICATION_CODE_ERROR.getCode(),</span>
+<span class="fc" id="L285">                    ErrorCodeEnum.USER_VERIFICATION_CODE_ERROR.getMessage());</span>
+        }
+
+        try {
+<span class="fc" id="L289">            User user = userRepositoryPort.findByEmail(request.getEmail().trim()).orElse(null);</span>
+<span class="pc bpc" id="L290" title="1 of 2 branches missed.">            if (user == null) {</span>
+<span class="nc" id="L291">                return Result.error(ErrorCodeEnum.USER_NOT_FOUND.getCode(), &quot;用户不存在&quot;);</span>
+            }
+
+<span class="fc" id="L294">            user.setPassword(PasswordUtil.hashPassword(request.getNewPassword()));</span>
+<span class="fc" id="L295">            userRepositoryPort.update(user);</span>
+
+<span class="fc" id="L297">            return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());</span>
+<span class="nc" id="L298">        } catch (Exception e) {</span>
+<span class="nc" id="L299">            return Result.error(ErrorCodeEnum.SYSTEM_ERROR.getCode(), &quot;重置密码失败：&quot; + e.getMessage());</span>
+        }
+    }
+
+    /**
+     * 退出登录
+     */
+    @Transactional
+    public Result logout(Long userId, String refreshToken, String jwt) {
+<span class="fc bfc" id="L308" title="All 2 branches covered.">        if (refreshToken != null) {</span>
+            try {
+                // 清理 device token
+<span class="fc" id="L311">                userRepositoryPort.removeDeviceToken(refreshToken);</span>
+<span class="nc" id="L312">            } catch (Exception e) {</span>
+                // 忽略 token 解析失败
+<span class="fc" id="L314">            }</span>
+        }
+
+        // 将 JWT 加入黑名单，使其立即失效
+<span class="pc bpc" id="L318" title="1 of 4 branches missed.">        if (jwt != null &amp;&amp; !jwt.isEmpty()) {</span>
+            try {
+<span class="fc" id="L320">                String email = jwtUtils.getEmailFromToken(jwt);</span>
+<span class="fc" id="L321">                LocalDateTime expiresAt = jwtUtils.getExpiresAtFromToken(jwt);</span>
+<span class="fc" id="L322">                userRepositoryPort.blacklistToken(jwt, email, &quot;logout&quot;, expiresAt);</span>
+<span class="nc" id="L323">            } catch (Exception e) {</span>
+                // 忽略 token 解析失败
+<span class="fc" id="L325">            }</span>
+        }
+
+<span class="fc" id="L328">        return Result.ok(null, ErrorCodeEnum.SUCCESS.getCode());</span>
+    }
+
+    /**
+     * 验证邮箱格式
+     */
+    private boolean isValidEmail(String email) {
+<span class="pc bpc" id="L335" title="1 of 2 branches missed.">        if (!StringUtils.hasText(email)) {</span>
+<span class="nc" id="L336">            return false;</span>
+        }
+<span class="fc" id="L338">        String emailRegex = &quot;^[a-zA-Z0-9_+&amp;*-]+(?:\\.[a-zA-Z0-9_+&amp;*-]+)*@&quot; +</span>
+                           &quot;(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$&quot;;
+<span class="fc" id="L340">        return Pattern.matches(emailRegex, email);</span>
+    }
+
+    @Override
+    public Optional&lt;User&gt; getUserById(Long userId) {
+<span class="nc" id="L345">        return userRepositoryPort.findById(userId);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

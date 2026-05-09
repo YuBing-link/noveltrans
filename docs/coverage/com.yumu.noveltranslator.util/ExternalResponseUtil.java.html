@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ExternalResponseUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.util</a> &gt; <span class="el_source">ExternalResponseUtil.java</span></div><h1>ExternalResponseUtil.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.util;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+<span class="nc" id="L17">public class ExternalResponseUtil {</span>
+<span class="fc" id="L18">    private static final ObjectMapper MAPPER = new ObjectMapper();</span>
+
+    /**
+     * 从原始后端JSON响应中提取主要翻译文本。
+     * 后端格式通常为：
+     * {“code”：200，“data”：“&lt;h1&gt;...&lt;/h1&gt;”，“engine”：“google”,...}
+     * 该方法尝试共用键（data、translatedContent、translation）和
+     * 在解析失败时，会退回返回原始的原始字符串。
+     */
+    /**
+     * 从原始后端 JSON 响应中提取主要翻译文本
+     * 支持的格式：
+     * 1. 标准格式：{&quot;success&quot;: true, &quot;engine&quot;: &quot;google&quot;, &quot;translatedContent&quot;: &quot;{...}&quot;}
+     * 2. 通用格式：{&quot;code&quot;: 200, &quot;data&quot;: &quot;&lt;h1&gt;...&lt;/h1&gt;&quot;, &quot;engine&quot;: &quot;google&quot;,...}
+     *
+     * @param rawJson 原始 JSON 响应
+     * @return 翻译文本，如果失败返回 null
+     */
+    public static String extractDataField(String rawJson) {
+<span class="fc bfc" id="L37" title="All 2 branches covered.">        if (rawJson == null) return null;</span>
+        try {
+<span class="fc" id="L39">            JsonNode root = MAPPER.readTree(rawJson);</span>
+<span class="pc bpc" id="L40" title="1 of 2 branches missed.">            if (root == null) return null;</span>
+
+            // 1. 优先提取 translatedContent 字段（标准格式）
+<span class="fc bfc" id="L43" title="All 2 branches covered.">            if (root.has(&quot;translatedContent&quot;)) {</span>
+<span class="fc" id="L44">                JsonNode translatedContent = root.get(&quot;translatedContent&quot;);</span>
+<span class="fc bfc" id="L45" title="All 2 branches covered.">                if (translatedContent.isTextual()) {</span>
+<span class="fc" id="L46">                    return translatedContent.asText();</span>
+                }
+<span class="fc" id="L48">                return translatedContent.toString();</span>
+            }
+
+            // 2. 验证状态码（仅对有 code 字段的格式）
+<span class="fc" id="L52">            StatusCodeResult statusResult = validateStatusCode(root);</span>
+<span class="fc bfc" id="L53" title="All 2 branches covered.">            if (!statusResult.isValid()) {</span>
+                // 状态码不是 200，返回 null 表示失败
+<span class="fc" id="L55">                return null;</span>
+            }
+
+            // 3. 提取 data 字段
+<span class="fc bfc" id="L59" title="All 2 branches covered.">            if (root.has(&quot;data&quot;)) {</span>
+<span class="fc" id="L60">                JsonNode data = root.get(&quot;data&quot;);</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">                if (data.isTextual()) return data.asText();</span>
+<span class="fc" id="L62">                return data.toString();</span>
+            }
+
+            // 4. 如果找不到已知键，尝试返回文本形式
+<span class="fc bfc" id="L66" title="All 2 branches covered.">            if (root.isTextual()) return root.asText();</span>
+
+            // 5. 返回原始 JSON 作为兜底
+<span class="fc" id="L69">            return rawJson;</span>
+<span class="fc" id="L70">        } catch (Exception e) {</span>
+            // 解析失败——返回 null 表示失败
+<span class="fc" id="L72">            return null;</span>
+        }
+    }
+
+    /**
+     * 验证响应状态码
+     * @param root JSON 根节点
+     * @return 状态码验证结果
+     */
+    public static StatusCodeResult validateStatusCode(JsonNode root) {
+<span class="fc bfc" id="L82" title="All 2 branches covered.">        if (root.has(&quot;code&quot;)) {</span>
+<span class="fc" id="L83">            JsonNode code = root.get(&quot;code&quot;);</span>
+<span class="fc" id="L84">            int statusCode = code.asInt();</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">            return new StatusCodeResult(statusCode == 200, statusCode);</span>
+        }
+        // 没有 code 字段时，假设响应有效（兼容旧格式）
+<span class="fc" id="L88">        return new StatusCodeResult(true, 200);</span>
+    }
+
+    /**
+     * 状态码验证结果类
+     */
+    public static class StatusCodeResult {
+        private final boolean valid;
+        private final int statusCode;
+
+<span class="fc" id="L98">        public StatusCodeResult(boolean valid, int statusCode) {</span>
+<span class="fc" id="L99">            this.valid = valid;</span>
+<span class="fc" id="L100">            this.statusCode = statusCode;</span>
+<span class="fc" id="L101">        }</span>
+
+        public boolean isValid() {
+<span class="fc" id="L104">            return valid;</span>
+        }
+
+        public int getStatusCode() {
+<span class="fc" id="L108">            return statusCode;</span>
+        }
+    }
+
+    public static List&lt;String&gt; processingReader(String content){
+<span class="fc" id="L113">        Document document = Jsoup.parse(content);</span>
+<span class="fc" id="L114">        List&lt;String&gt; orderedText = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L115">        traverseAllTags(document, orderedText);</span>
+<span class="fc" id="L116">        return orderedText;</span>
+    }
+
+    private static void traverseAllTags(Node parentNode, List&lt;String&gt; resultList) {
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        for (Node childNode : parentNode.childNodes()) {</span>
+<span class="fc" id="L121">                String tagContent = childNode.outerHtml();</span>
+<span class="fc" id="L122">                resultList.add(tagContent);</span>
+<span class="fc" id="L123">                traverseAllTags(childNode, resultList);</span>
+<span class="fc" id="L124">        }</span>
+<span class="fc" id="L125">    }</span>
+
+
+    /**
+     * 统一错误响应格式：
+     * {
+     *   &quot;success&quot;: false,
+     *   &quot;error&quot;: &quot;Error message description&quot;,
+     *   &quot;code&quot;: &quot;ERROR_CODE&quot;,
+     *   &quot;details&quot;: { ... }
+     * }
+     */
+    public static String buildErrorResponse(String error, String code, Map&lt;String, Object&gt; details) {
+        try {
+<span class="fc" id="L139">            ObjectNode root = MAPPER.createObjectNode();</span>
+<span class="fc" id="L140">            root.put(&quot;success&quot;, false);</span>
+<span class="fc" id="L141">            root.put(&quot;error&quot;, error);</span>
+<span class="fc" id="L142">            root.put(&quot;code&quot;, code);</span>
+<span class="fc" id="L143">            ObjectNode detailsNode = root.putObject(&quot;details&quot;);</span>
+<span class="fc bfc" id="L144" title="All 2 branches covered.">            if (details != null) {</span>
+<span class="fc" id="L145">                details.forEach((k, v) -&gt; detailsNode.putPOJO(k, v));</span>
+            }
+<span class="fc" id="L147">            return MAPPER.writeValueAsString(root);</span>
+<span class="nc" id="L148">        } catch (Exception e) {</span>
+            // 最后兜底，构造极简错误字符串
+<span class="nc" id="L150">            return String.format(&quot;{\&quot;success\&quot;:false,\&quot;error\&quot;:\&quot;%s\&quot;,\&quot;code\&quot;:\&quot;%s\&quot;}&quot;, &quot;Serialization failure&quot;, &quot;FATAL_ERROR&quot;);</span>
+        }
+    }
+
+    /**
+     * 使用枚举构建错误响应
+     */
+    public static String buildErrorResponse(ErrorCodeEnum errorCodeEnum, Map&lt;String, Object&gt; details) {
+<span class="fc" id="L158">        return buildErrorResponse(errorCodeEnum.getMessage(), errorCodeEnum.getCode(), details);</span>
+    }
+
+    /**
+     * 构建翻译文件路径（在扩展名前插入 _translated）
+     * @param originalPath 原始文件路径
+     * @return 翻译后的文件路径
+     */
+    public static String buildTranslatedPath(String originalPath) {
+<span class="fc bfc" id="L167" title="All 2 branches covered.">        if (originalPath == null) return null;</span>
+<span class="fc" id="L168">        int lastDot = originalPath.lastIndexOf('.');</span>
+<span class="fc bfc" id="L169" title="All 2 branches covered.">        if (lastDot &gt; 0) {</span>
+<span class="fc" id="L170">            return originalPath.substring(0, lastDot) + &quot;_translated&quot; + originalPath.substring(lastDot);</span>
+        }
+<span class="fc" id="L172">        return originalPath + &quot;_translated&quot;;</span>
+    }
+
+    /**
+     * 使用枚举构建简单错误响应
+     */
+    public static String buildSimpleErrorResponse(ErrorCodeEnum errorCodeEnum) {
+<span class="fc" id="L179">        return buildErrorResponse(errorCodeEnum.getMessage(), errorCodeEnum.getCode(), null);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

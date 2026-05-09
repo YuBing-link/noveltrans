@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SseEmitterUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.util</a> &gt; <span class="el_source">SseEmitterUtil.java</span></div><h1>SseEmitterUtil.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.util;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * SSE 发射器工具类。
+ * 提供静态方法用于基本的 SSE 操作，同时作为 Spring Bean 提供 Redis Stream 支持以实现事件重放。
+ */
+@Component
+public class SseEmitterUtil {
+
+<span class="fc" id="L25">    private static final Logger log = LoggerFactory.getLogger(SseEmitterUtil.class);</span>
+    private static final long DEFAULT_TIMEOUT_MS = 300_000L; // 5 分钟，对齐 application.yaml
+<span class="fc" id="L27">    private static final int MAX_ACTIVE_SSE = Integer.getInteger(&quot;noveltrans.max.sse&quot;, 100);</span>
+
+    /**
+     * Emitter 注册表：key=唯一ID，value=可取消的 future
+     */
+<span class="fc" id="L32">    private static final Map&lt;String, CompletableFuture&lt;Void&gt;&gt; EMITTER_REGISTRY = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="fc" id="L33">    private static final AtomicInteger ACTIVE_COUNT = new AtomicInteger(0);</span>
+
+    private final StringRedisTemplate stringRedisTemplate;
+
+<span class="fc" id="L37">    public SseEmitterUtil(StringRedisTemplate stringRedisTemplate) {</span>
+<span class="fc" id="L38">        this.stringRedisTemplate = stringRedisTemplate;</span>
+<span class="fc" id="L39">    }</span>
+
+    // ==================== 静态方法（保持向后兼容） ====================
+
+    /**
+     * 注册 emitter，返回唯一 ID（用于心跳循环）
+     * @throws IllegalStateException 如果超过最大连接数
+     */
+    public static String registerEmitter(SseEmitter emitter) {
+<span class="fc" id="L48">        int count = ACTIVE_COUNT.get();</span>
+<span class="pc bpc" id="L49" title="1 of 2 branches missed.">        if (count &gt;= MAX_ACTIVE_SSE) {</span>
+<span class="nc" id="L50">            throw new IllegalStateException(&quot;SSE 连接数已达上限: &quot; + MAX_ACTIVE_SSE);</span>
+        }
+
+<span class="fc" id="L53">        String emitterId = UUID.randomUUID().toString();</span>
+<span class="fc" id="L54">        CompletableFuture&lt;Void&gt; cancellationSignal = new CompletableFuture&lt;&gt;();</span>
+<span class="fc" id="L55">        EMITTER_REGISTRY.put(emitterId, cancellationSignal);</span>
+<span class="fc" id="L56">        ACTIVE_COUNT.incrementAndGet();</span>
+
+<span class="fc" id="L58">        emitter.onCompletion(() -&gt; {</span>
+<span class="nc" id="L59">            unregisterEmitter(emitterId);</span>
+<span class="nc" id="L60">        });</span>
+<span class="fc" id="L61">        emitter.onTimeout(() -&gt; {</span>
+<span class="nc" id="L62">            unregisterEmitter(emitterId);</span>
+<span class="nc" id="L63">            emitter.complete();</span>
+<span class="nc" id="L64">        });</span>
+<span class="fc" id="L65">        emitter.onError((ex) -&gt; {</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">            if (ex != null) {</span>
+<span class="nc" id="L67">                String msg = ex.getMessage();</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">                if (msg != null &amp;&amp;</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">                    !(msg.contains(&quot;aborted&quot;) ||</span>
+<span class="nc bnc" id="L70" title="All 2 branches missed.">                      msg.contains(&quot;中止&quot;) ||</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">                      msg.contains(&quot;reset&quot;) ||</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">                      msg.contains(&quot;broken pipe&quot;) ||</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">                      msg.contains(&quot;client abort&quot;))) {</span>
+<span class="nc" id="L74">                    log.warn(&quot;SSE emitter error: {}&quot;, msg);</span>
+                }
+            }
+<span class="nc" id="L77">            unregisterEmitter(emitterId);</span>
+<span class="nc" id="L78">            emitter.complete();</span>
+<span class="nc" id="L79">        });</span>
+
+<span class="fc" id="L81">        return emitterId;</span>
+    }
+
+    /**
+     * 检查 emitter 是否仍然活跃（心跳循环用）
+     */
+    public static boolean isEmitterActive(String emitterId) {
+<span class="fc" id="L88">        CompletableFuture&lt;Void&gt; future = EMITTER_REGISTRY.get(emitterId);</span>
+<span class="pc bpc" id="L89" title="2 of 6 branches missed.">        return future != null &amp;&amp; !future.isCancelled() &amp;&amp; !future.isDone();</span>
+    }
+
+    /**
+     * 注销 emitter（内部调用）
+     */
+    private static void unregisterEmitter(String emitterId) {
+<span class="nc" id="L96">        CompletableFuture&lt;Void&gt; future = EMITTER_REGISTRY.remove(emitterId);</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        if (future != null) {</span>
+<span class="nc" id="L98">            future.complete(null);</span>
+        }
+<span class="nc" id="L100">        ACTIVE_COUNT.decrementAndGet();</span>
+<span class="nc" id="L101">    }</span>
+
+    /**
+     * 获取当前活跃的 SSE 连接数（监控用）
+     */
+    public static int getActiveCount() {
+<span class="fc" id="L107">        return ACTIVE_COUNT.get();</span>
+    }
+
+    /**
+     * 创建 SSE emitter（简单版，不注册到注册表）
+     * 适用于不需要心跳管理的场景
+     */
+    public static SseEmitter createSseEmitter(Long timeout) {
+<span class="fc bfc" id="L115" title="All 2 branches covered.">        SseEmitter emitter = new SseEmitter(timeout != null ? timeout : DEFAULT_TIMEOUT_MS);</span>
+<span class="pc" id="L116">        emitter.onCompletion(() -&gt; {});</span>
+<span class="fc" id="L117">        emitter.onTimeout(emitter::complete);</span>
+<span class="fc" id="L118">        emitter.onError((ex) -&gt; {</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">            if (ex != null) {</span>
+<span class="nc" id="L120">                String msg = ex.getMessage();</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">                if (msg != null &amp;&amp;</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">                    !(msg.contains(&quot;aborted&quot;) ||</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">                      msg.contains(&quot;中止&quot;) ||</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">                      msg.contains(&quot;reset&quot;) ||</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">                      msg.contains(&quot;broken pipe&quot;) ||</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">                      msg.contains(&quot;client abort&quot;))) {</span>
+<span class="nc" id="L127">                    log.warn(&quot;SSE emitter error: {}&quot;, msg);</span>
+                }
+            }
+<span class="nc" id="L130">            emitter.complete();</span>
+<span class="nc" id="L131">        });</span>
+<span class="fc" id="L132">        return emitter;</span>
+    }
+
+    public static void sendError(SseEmitter emitter, String msg) {
+        try {
+<span class="fc" id="L137">            emitter.send(SseEmitter.event().data(&quot;ERROR: &quot; + msg));</span>
+<span class="pc" id="L138">        } catch (Exception ignored) {}</span>
+<span class="fc" id="L139">    }</span>
+
+    public static void sendDone(SseEmitter emitter) {
+        try {
+<span class="fc" id="L143">            emitter.send(SseEmitter.event().data(&quot;[DONE]&quot;));</span>
+<span class="pc" id="L144">        } catch (Exception ignored) {}</span>
+<span class="fc" id="L145">    }</span>
+
+    public static void sendData(SseEmitter emitter, String data) {
+        try {
+<span class="fc" id="L149">            emitter.send(SseEmitter.event().data(data));</span>
+<span class="pc" id="L150">        } catch (Exception ignored) {}</span>
+<span class="fc" id="L151">    }</span>
+
+    /**
+     * 发送心跳事件，防止长翻译过程中 SSE 连接因超时而断开。
+     * 使用 SSE comment 格式（冒号前缀），前端会自动忽略此类注释行。
+     */
+    public static void sendHeartbeat(SseEmitter emitter) {
+        try {
+<span class="fc" id="L159">            emitter.send(SseEmitter.event().comment(&quot;heartbeat&quot;));</span>
+<span class="fc" id="L160">        } catch (Exception ignored) {}</span>
+<span class="fc" id="L161">    }</span>
+
+    public static void complete(SseEmitter emitter) {
+<span class="fc" id="L164">        emitter.complete();</span>
+<span class="fc" id="L165">    }</span>
+
+    public static void completeWithError(SseEmitter emitter, Exception ex) {
+<span class="fc" id="L168">        emitter.completeWithError(ex);</span>
+<span class="fc" id="L169">    }</span>
+
+    // ==================== 实例方法（Redis Stream 支持） ====================
+
+    /**
+     * XADD Lua 脚本：向 Redis Stream 添加事件，带 MAXLEN 限制防止无限增长
+     */
+    private static final String XADD_LUA =
+            &quot;redis.call('XADD', KEYS[1], 'MAXLEN', '~', '10000', '*', 'event', ARGV[1]); return 'OK'&quot;;
+
+<span class="fc" id="L179">    private static final DefaultRedisScript&lt;String&gt; XADD_SCRIPT =</span>
+            new DefaultRedisScript&lt;&gt;(XADD_LUA, String.class);
+
+    /**
+     * XRANGE Lua 脚本：从 Redis Stream 获取 lastEventId 之后的所有事件
+     */
+    private static final String XRANGE_LUA =
+            &quot;local results = redis.call('XRANGE', KEYS[1], '(' .. ARGV[1], '+'); &quot; +
+            &quot;local out = {}; &quot; +
+            &quot;for i = 1, #results, 1 do &quot; +
+            &quot;  out[i] = results[i][2][2]; &quot; +
+            &quot;end; &quot; +
+            &quot;return out&quot;;
+
+<span class="fc" id="L193">    private static final DefaultRedisScript&lt;List&gt; XRANGE_SCRIPT =</span>
+            new DefaultRedisScript&lt;&gt;(XRANGE_LUA, List.class);
+
+    /**
+     * 发布协作事件到 Redis Stream，支持断线重连后补发。
+     *
+     * @param projectId 项目ID
+     * @param eventType 事件类型（如 chapter.updated, comment.added）
+     * @param payload   事件载荷（JSON 字符串）
+     * @return 生成的事件 ID
+     */
+    public String publishCollabEvent(String projectId, String eventType, String payload) {
+<span class="fc" id="L205">        String streamKey = &quot;collab:events:&quot; + projectId;</span>
+<span class="fc" id="L206">        String eventId = UUID.randomUUID().toString();</span>
+<span class="fc" id="L207">        long timestamp = System.currentTimeMillis();</span>
+
+<span class="fc" id="L209">        String eventJson = String.format(</span>
+                &quot;{\&quot;eventId\&quot;:\&quot;%s\&quot;,\&quot;type\&quot;:\&quot;%s\&quot;,\&quot;payload\&quot;:%s,\&quot;timestamp\&quot;:%d}&quot;,
+<span class="fc" id="L211">                eventId, eventType, payload, timestamp);</span>
+
+<span class="fc" id="L213">        stringRedisTemplate.execute(XADD_SCRIPT, List.of(streamKey), eventJson);</span>
+
+<span class="fc" id="L215">        log.debug(&quot;发布协作事件: projectId={}, type={}, eventId={}&quot;, projectId, eventType, eventId);</span>
+<span class="fc" id="L216">        return eventId;</span>
+    }
+
+    /**
+     * 从 Redis Stream 重放指定项目自 lastEventId 之后的遗漏事件。
+     *
+     * @param projectId   项目ID
+     * @param lastEventId 上次收到的事件 ID（Redis Stream 条目 ID），为 null 时不重放
+     * @param emitter     SSE emitter，用于发送事件
+     */
+    public void replayMissedEvents(String projectId, String lastEventId, SseEmitter emitter) {
+<span class="fc bfc" id="L227" title="All 4 branches covered.">        if (lastEventId == null || lastEventId.isBlank()) {</span>
+<span class="fc" id="L228">            log.debug(&quot;无 lastEventId，跳过事件重放: projectId={}&quot;, projectId);</span>
+<span class="fc" id="L229">            return;</span>
+        }
+
+<span class="fc" id="L232">        String streamKey = &quot;collab:events:&quot; + projectId;</span>
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="fc" id="L234">        List&lt;String&gt; events = (List&lt;String&gt;) stringRedisTemplate.execute(XRANGE_SCRIPT, List.of(streamKey), lastEventId);</span>
+
+<span class="pc bpc" id="L236" title="1 of 4 branches missed.">        if (events == null || events.isEmpty()) {</span>
+<span class="fc" id="L237">            log.debug(&quot;无遗漏事件需要重放: projectId={}, lastEventId={}&quot;, projectId, lastEventId);</span>
+<span class="fc" id="L238">            return;</span>
+        }
+
+<span class="fc" id="L241">        int sent = 0;</span>
+<span class="fc bfc" id="L242" title="All 2 branches covered.">        for (String eventJson : events) {</span>
+<span class="pc bpc" id="L243" title="2 of 4 branches missed.">            if (eventJson == null || eventJson.isEmpty()) {</span>
+<span class="nc" id="L244">                continue;</span>
+            }
+            try {
+<span class="fc" id="L247">                emitter.send(SseEmitter.event()</span>
+<span class="fc" id="L248">                        .name(&quot;replay&quot;)</span>
+<span class="fc" id="L249">                        .data(eventJson));</span>
+<span class="fc" id="L250">                sent++;</span>
+<span class="nc" id="L251">            } catch (Exception e) {</span>
+<span class="nc" id="L252">                log.warn(&quot;重放事件失败: projectId={}, error={}&quot;, projectId, e.getMessage());</span>
+<span class="nc" id="L253">                break;</span>
+<span class="fc" id="L254">            }</span>
+<span class="fc" id="L255">        }</span>
+
+<span class="fc" id="L257">        log.info(&quot;重放完成: projectId={}, sent={} events&quot;, projectId, sent);</span>
+<span class="fc" id="L258">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

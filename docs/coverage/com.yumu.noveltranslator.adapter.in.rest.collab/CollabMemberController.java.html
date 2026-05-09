@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CollabMemberController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.in.rest.collab</a> &gt; <span class="el_source">CollabMemberController.java</span></div><h1>CollabMemberController.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.in.rest.collab;
+
+import com.yumu.noveltranslator.port.dto.collab.InviteMemberRequest;
+import com.yumu.noveltranslator.port.dto.collab.ProjectMemberResponse;
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.enums.ProjectMemberRole;
+import com.yumu.noveltranslator.adapter.in.security.annotation.RequireProjectAccess;
+import com.yumu.noveltranslator.port.in.CollabPort;
+import com.yumu.noveltranslator.util.SecurityUtil;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * 协作成员管理 Controller
+ */
+@RestController
+@RequestMapping(&quot;/v1/collab&quot;)
+<span class="fc" id="L23">@RequiredArgsConstructor</span>
+<span class="fc" id="L24">@Slf4j</span>
+public class CollabMemberController {
+
+    private final CollabPort collabPort;
+
+    @PostMapping(&quot;/projects/{projectId}/invite&quot;)
+    @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
+    public Result&lt;ProjectMemberResponse&gt; inviteMember(@PathVariable Long projectId,
+                                                       @Valid @RequestBody InviteMemberRequest request) {
+<span class="fc" id="L33">        Long inviterId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L34">        ProjectMemberResponse member = collabPort.inviteMember(projectId, request, inviterId);</span>
+<span class="fc" id="L35">        return Result.ok(member);</span>
+    }
+
+    @PostMapping(&quot;/join&quot;)
+    public Result&lt;ProjectMemberResponse&gt; joinByCode(@RequestParam String inviteCode) {
+<span class="fc" id="L40">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L41">        ProjectMemberResponse member = collabPort.joinByInviteCode(inviteCode, userId);</span>
+<span class="fc" id="L42">        return Result.ok(member);</span>
+    }
+
+    @GetMapping(&quot;/projects/{projectId}/members&quot;)
+    @RequireProjectAccess
+    public Result&lt;PageResponse&lt;ProjectMemberResponse&gt;&gt; listMembers(
+            @PathVariable Long projectId,
+            @RequestParam(required = false, defaultValue = &quot;1&quot;) Integer page,
+            @RequestParam(required = false, defaultValue = &quot;20&quot;) Integer pageSize) {
+<span class="fc" id="L51">        PageResponse&lt;ProjectMemberResponse&gt; members = collabPort.getMembers(projectId, page, pageSize);</span>
+<span class="fc" id="L52">        return Result.ok(members);</span>
+    }
+
+    @DeleteMapping(&quot;/projects/{projectId}/members/{memberId}&quot;)
+    @RequireProjectAccess(roles = {ProjectMemberRole.OWNER})
+    public Result&lt;Void&gt; removeMember(@PathVariable Long projectId, @PathVariable Long memberId) {
+<span class="fc" id="L58">        Long operatorId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L59">        collabPort.removeMember(projectId, memberId, operatorId);</span>
+<span class="fc" id="L60">        return Result.ok(null);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

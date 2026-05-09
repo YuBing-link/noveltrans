@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChapterTaskApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">ChapterTaskApplicationService.java</span></div><h1>ChapterTaskApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.yumu.noveltranslator.port.dto.collab.ChapterTaskResponse;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.ChapterTaskStatus;
+import com.yumu.noveltranslator.enums.ProjectMemberRole;
+import com.yumu.noveltranslator.exception.BusinessException;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.port.dto.common.PageResult;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import com.yumu.noveltranslator.domain.service.CollabEventPublisher;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 章节任务管理应用服务
+ */
+@Service
+<span class="fc" id="L37">@Slf4j</span>
+<span class="fc" id="L38">@RequiredArgsConstructor</span>
+public class ChapterTaskApplicationService implements com.yumu.noveltranslator.port.in.ChapterTaskPort {
+
+    private final CollaborationRepositoryPort collabPort;
+    private final UserRepositoryPort userPort;
+    private final CollabStateMachine collabStateMachine;
+    private final CollabEventPublisher collabEventPublisher;
+
+    /**
+     * 创建章节
+     */
+    @Transactional
+    public ChapterTaskResponse createChapter(Long projectId, Integer chapterNumber, String title, String sourceText, Long creatorId) {
+<span class="fc" id="L51">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L52" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L53">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;项目不存在: &quot; + projectId);</span>
+        }
+
+<span class="fc" id="L56">        CollabChapterTask task = new CollabChapterTask();</span>
+<span class="fc" id="L57">        task.setProjectId(projectId);</span>
+<span class="fc" id="L58">        task.setChapterNumber(chapterNumber);</span>
+<span class="fc" id="L59">        task.setTitle(title);</span>
+<span class="fc" id="L60">        task.setSourceText(sourceText);</span>
+<span class="fc" id="L61">        task.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());</span>
+<span class="fc" id="L62">        task.setProgress(0);</span>
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        if (sourceText != null) {</span>
+<span class="fc" id="L64">            task.setSourceWordCount(sourceText.length());</span>
+        }
+<span class="fc" id="L66">        collabPort.saveChapterTask(task);</span>
+
+<span class="fc" id="L68">        log.info(&quot;创建章节: projectId={}, chapterNumber={}&quot;, projectId, chapterNumber);</span>
+<span class="fc" id="L69">        return toChapterResponse(task);</span>
+    }
+
+    /**
+     * 获取项目章节列表（分页）
+     */
+    public PageResponse&lt;ChapterTaskResponse&gt; listByProjectId(Long projectId, int page, int pageSize) {
+<span class="fc" id="L76">        PageResult&lt;CollabChapterTask&gt; resultPage = collabPort.findChapterTasksByProjectIdPaged(projectId, page, pageSize);</span>
+
+        // 批量加载关联用户，避免 N+1
+<span class="fc" id="L79">        Set&lt;Long&gt; userIds = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        for (CollabChapterTask task : resultPage.getRecords()) {</span>
+<span class="pc bpc" id="L81" title="1 of 2 branches missed.">            if (task.getAssigneeId() != null) userIds.add(task.getAssigneeId());</span>
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">            if (task.getReviewerId() != null) userIds.add(task.getReviewerId());</span>
+<span class="fc" id="L83">        }</span>
+<span class="fc" id="L84">        Map&lt;Long, User&gt; userMap = new HashMap&lt;&gt;();</span>
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">        for (Long uid : userIds) {</span>
+<span class="nc" id="L86">            userPort.findById(uid).ifPresent(u -&gt; userMap.put(uid, u));</span>
+<span class="nc" id="L87">        }</span>
+
+<span class="fc" id="L89">        List&lt;ChapterTaskResponse&gt; list = resultPage.getRecords().stream()</span>
+<span class="fc" id="L90">                .map(task -&gt; toChapterResponse(task, userMap))</span>
+<span class="fc" id="L91">                .collect(Collectors.toList());</span>
+<span class="fc" id="L92">        return PageResponse.of(page, pageSize, resultPage.getTotal(), list);</span>
+    }
+
+    /**
+     * 获取章节详情（含权限检查）
+     */
+    public ChapterTaskResponse getChapterById(Long chapterId, Long userId) {
+<span class="fc" id="L99">        CollabChapterTask task = collabPort.findChapterTaskById(chapterId).orElse(null);</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        if (task == null) {</span>
+<span class="fc" id="L101">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;章节不存在: &quot; + chapterId);</span>
+        }
+<span class="fc" id="L103">        var member = collabPort.findMemberByProjectAndUser(task.getProjectId(), userId);</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        if (member == null) {</span>
+<span class="fc" id="L105">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权访问该章节&quot;);</span>
+        }
+<span class="fc" id="L107">        return toChapterResponse(task);</span>
+    }
+
+    /**
+     * 分配译者
+     */
+    @Transactional
+    public ChapterTaskResponse assignChapter(Long chapterId, Long assigneeId, Long assignerId) {
+<span class="fc" id="L115">        CollabChapterTask task = collabPort.findChapterTaskById(chapterId).orElse(null);</span>
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">        if (task == null) {</span>
+<span class="nc" id="L117">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;章节不存在: &quot; + chapterId);</span>
+        }
+        // 权限校验：分配者必须是项目OWNER
+<span class="fc" id="L120">        var assigner = collabPort.findMemberByProjectAndUser(task.getProjectId(), assignerId);</span>
+<span class="pc bpc" id="L121" title="2 of 4 branches missed.">        if (assigner == null || !ProjectMemberRole.OWNER.getValue().equals(assigner.getRole())) {</span>
+<span class="fc" id="L122">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权分配章节，只有项目所有者可以分配&quot;);</span>
+        }
+
+<span class="nc" id="L125">        collabStateMachine.transitionChapter(task, ChapterTaskStatus.TRANSLATING);</span>
+
+<span class="nc" id="L127">        task.setAssigneeId(assigneeId);</span>
+<span class="nc" id="L128">        task.setAssignedTime(LocalDateTime.now());</span>
+<span class="nc" id="L129">        task.setProgress(0);</span>
+<span class="nc" id="L130">        collabPort.updateChapterTask(task);</span>
+
+<span class="nc" id="L132">        final Long finalProjectId = task.getProjectId();</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if (TransactionSynchronizationManager.isSynchronizationActive()) {</span>
+<span class="nc" id="L134">            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {</span>
+                @Override
+                public void afterCommit() {
+<span class="nc" id="L137">                    collabEventPublisher.publishChapterUpdate(finalProjectId, chapterId, String.valueOf(assigneeId), &quot;assigned&quot;);</span>
+<span class="nc" id="L138">                }</span>
+            });
+        }
+
+<span class="nc" id="L142">        log.info(&quot;分配章节: chapterId={}, assigneeId={}&quot;, chapterId, assigneeId);</span>
+<span class="nc" id="L143">        return toChapterResponse(task);</span>
+    }
+
+    /**
+     * 译者提交章节
+     */
+    @Transactional
+    public ChapterTaskResponse submitChapter(Long chapterId, String translatedText) {
+<span class="fc" id="L151">        CollabChapterTask task = collabPort.findChapterTaskById(chapterId).orElse(null);</span>
+<span class="fc bfc" id="L152" title="All 2 branches covered.">        if (task == null) {</span>
+<span class="fc" id="L153">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;章节不存在: &quot; + chapterId);</span>
+        }
+
+<span class="fc" id="L156">        ChapterTaskStatus current = ChapterTaskStatus.fromValue(task.getStatus());</span>
+        // 已提交状态再次提交：译者更新译文（尚未审核），允许幂等覆盖
+<span class="pc bpc" id="L158" title="1 of 2 branches missed.">        if (current == ChapterTaskStatus.SUBMITTED) {</span>
+<span class="nc" id="L159">            log.info(&quot;译者重新提交已提交的章节: chapterId={}&quot;, chapterId);</span>
+<span class="nc" id="L160">            task.setTargetText(translatedText);</span>
+<span class="nc" id="L161">            task.setSubmittedTime(LocalDateTime.now());</span>
+<span class="nc" id="L162">            task.setProgress(100);</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            if (translatedText != null) {</span>
+<span class="nc" id="L164">                task.setTargetWordCount(translatedText.length());</span>
+            }
+<span class="nc" id="L166">            collabPort.updateChapterTask(task);</span>
+<span class="nc" id="L167">            return toChapterResponse(task);</span>
+        }
+
+<span class="fc" id="L170">        collabStateMachine.transitionChapter(task, ChapterTaskStatus.SUBMITTED);</span>
+
+<span class="fc" id="L172">        task.setTargetText(translatedText);</span>
+<span class="fc" id="L173">        task.setSubmittedTime(LocalDateTime.now());</span>
+<span class="fc" id="L174">        task.setProgress(100);</span>
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">        if (translatedText != null) {</span>
+<span class="fc" id="L176">            task.setTargetWordCount(translatedText.length());</span>
+        }
+<span class="fc" id="L178">        collabPort.updateChapterTask(task);</span>
+
+<span class="fc" id="L180">        final Long finalProjectId = task.getProjectId();</span>
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">        if (TransactionSynchronizationManager.isSynchronizationActive()) {</span>
+<span class="nc" id="L182">            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {</span>
+                @Override
+                public void afterCommit() {
+<span class="nc" id="L185">                    collabEventPublisher.publishChapterUpdate(finalProjectId, chapterId, String.valueOf(task.getAssigneeId()), &quot;submitted&quot;);</span>
+<span class="nc" id="L186">                }</span>
+            });
+        }
+
+<span class="fc" id="L190">        log.info(&quot;提交章节: chapterId={}&quot;, chapterId);</span>
+<span class="fc" id="L191">        return toChapterResponse(task);</span>
+    }
+
+    /**
+     * 审校审核章节
+     */
+    @Transactional
+    public ChapterTaskResponse reviewChapter(Long chapterId, Boolean approved, String comment, Long reviewerId) {
+<span class="fc" id="L199">        CollabChapterTask task = collabPort.findChapterTaskById(chapterId).orElse(null);</span>
+<span class="fc bfc" id="L200" title="All 2 branches covered.">        if (task == null) {</span>
+<span class="fc" id="L201">            throw new BusinessException(ErrorCodeEnum.NOT_FOUND, &quot;章节不存在: &quot; + chapterId);</span>
+        }
+        // 权限校验：审核者必须是项目REVIEWER或OWNER
+<span class="fc" id="L204">        var reviewer = collabPort.findMemberByProjectAndUser(task.getProjectId(), reviewerId);</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">        if (reviewer == null) {</span>
+<span class="nc" id="L206">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权访问该项目&quot;);</span>
+        }
+<span class="pc bpc" id="L208" title="1 of 2 branches missed.">        if (!ProjectMemberRole.REVIEWER.getValue().equals(reviewer.getRole())</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">                &amp;&amp; !ProjectMemberRole.OWNER.getValue().equals(reviewer.getRole())) {</span>
+<span class="nc" id="L210">            throw new BusinessException(ErrorCodeEnum.FORBIDDEN, &quot;无权审核该章节，只有审校或项目所有者可以审核&quot;);</span>
+        }
+
+        // 先转入 REVIEWING 中间状态
+<span class="fc" id="L214">        collabStateMachine.transitionChapter(task, ChapterTaskStatus.REVIEWING);</span>
+
+<span class="fc" id="L216">        task.setReviewerId(reviewerId);</span>
+<span class="fc" id="L217">        task.setReviewComment(comment);</span>
+<span class="fc" id="L218">        task.setReviewedTime(LocalDateTime.now());</span>
+
+<span class="fc bfc" id="L220" title="All 2 branches covered.">        if (approved) {</span>
+<span class="fc" id="L221">            collabStateMachine.transitionChapter(task, ChapterTaskStatus.APPROVED);</span>
+<span class="fc" id="L222">            task.setCompletedTime(LocalDateTime.now());</span>
+<span class="fc" id="L223">            log.info(&quot;审核通过: chapterId={}&quot;, chapterId);</span>
+        } else {
+<span class="fc" id="L225">            collabStateMachine.transitionChapter(task, ChapterTaskStatus.REJECTED);</span>
+<span class="fc" id="L226">            task.setProgress(0);</span>
+<span class="fc" id="L227">            task.setSubmittedTime(null);</span>
+<span class="fc" id="L228">            log.info(&quot;审核驳回: chapterId={}, reason={}&quot;, chapterId, comment);</span>
+        }
+
+<span class="fc" id="L231">        collabPort.updateChapterTask(task);</span>
+
+        // 如果 APPROVED，自动转为 COMPLETED
+<span class="fc bfc" id="L234" title="All 2 branches covered.">        if (approved) {</span>
+<span class="fc" id="L235">            collabStateMachine.transitionChapter(task, ChapterTaskStatus.COMPLETED);</span>
+<span class="fc" id="L236">            collabPort.updateChapterTask(task);</span>
+<span class="fc" id="L237">            updateProjectProgress(task.getProjectId());</span>
+        }
+
+<span class="fc" id="L240">        final Long finalProjectId = task.getProjectId();</span>
+<span class="fc bfc" id="L241" title="All 2 branches covered.">        final String action = approved ? &quot;updated&quot; : &quot;submitted&quot;;</span>
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">        if (TransactionSynchronizationManager.isSynchronizationActive()) {</span>
+<span class="nc" id="L243">            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {</span>
+                @Override
+                public void afterCommit() {
+<span class="nc" id="L246">                    collabEventPublisher.publishChapterUpdate(finalProjectId, chapterId, String.valueOf(reviewerId), action);</span>
+<span class="nc bnc" id="L247" title="All 4 branches missed.">                    if (comment != null &amp;&amp; !comment.isBlank()) {</span>
+<span class="nc" id="L248">                        collabEventPublisher.publishCommentAdded(finalProjectId, chapterId, reviewerId, comment);</span>
+                    }
+<span class="nc" id="L250">                }</span>
+            });
+        }
+
+<span class="fc" id="L254">        return toChapterResponse(task);</span>
+    }
+
+    /**
+     * 获取用户待处理的章节列表（分页）
+     */
+    public PageResponse&lt;ChapterTaskResponse&gt; listByAssigneeId(Long assigneeId, int page, int pageSize) {
+<span class="fc" id="L261">        PageResult&lt;CollabChapterTask&gt; resultPage = collabPort.findChapterTasksByAssigneeIdPaged(</span>
+                assigneeId,
+<span class="fc" id="L263">                List.of(ChapterTaskStatus.TRANSLATING.getValue(), ChapterTaskStatus.SUBMITTED.getValue()),</span>
+                page, pageSize);
+
+<span class="fc" id="L266">        Set&lt;Long&gt; userIds = new HashSet&lt;&gt;();</span>
+<span class="fc bfc" id="L267" title="All 2 branches covered.">        for (CollabChapterTask task : resultPage.getRecords()) {</span>
+<span class="pc bpc" id="L268" title="1 of 2 branches missed.">            if (task.getAssigneeId() != null) userIds.add(task.getAssigneeId());</span>
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">            if (task.getReviewerId() != null) userIds.add(task.getReviewerId());</span>
+<span class="fc" id="L270">        }</span>
+<span class="fc" id="L271">        Map&lt;Long, User&gt; userMap = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L272" title="All 2 branches covered.">        for (Long uid : userIds) {</span>
+<span class="pc" id="L273">            userPort.findById(uid).ifPresent(u -&gt; userMap.put(uid, u));</span>
+<span class="fc" id="L274">        }</span>
+
+<span class="fc" id="L276">        List&lt;ChapterTaskResponse&gt; list = resultPage.getRecords().stream()</span>
+<span class="fc" id="L277">                .map(task -&gt; toChapterResponse(task, userMap))</span>
+<span class="fc" id="L278">                .collect(Collectors.toList());</span>
+<span class="fc" id="L279">        return PageResponse.of(page, pageSize, resultPage.getTotal(), list);</span>
+    }
+
+    /**
+     * 更新项目整体进度
+     */
+    private void updateProjectProgress(Long projectId) {
+<span class="fc" id="L286">        List&lt;CollabChapterTask&gt; tasks = collabPort.findChapterTasksByProjectId(projectId);</span>
+<span class="pc bpc" id="L287" title="1 of 2 branches missed.">        if (tasks.isEmpty()) {</span>
+<span class="nc" id="L288">            return;</span>
+        }
+
+<span class="fc" id="L291">        long completed = tasks.stream()</span>
+<span class="fc" id="L292">                .filter(t -&gt; ChapterTaskStatus.COMPLETED.getValue().equals(t.getStatus()))</span>
+<span class="fc" id="L293">                .count();</span>
+
+<span class="fc" id="L295">        int progress = (int) Math.round((double) completed / tasks.size() * 100);</span>
+
+<span class="fc" id="L297">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="pc bpc" id="L298" title="1 of 2 branches missed.">        if (project != null) {</span>
+<span class="fc" id="L299">            project.setProgress(progress);</span>
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">            if (progress == 100) {</span>
+                try {
+<span class="fc" id="L302">                    collabStateMachine.transitionProject(project, CollabProjectStatus.COMPLETED);</span>
+<span class="nc" id="L303">                } catch (IllegalStateException e) {</span>
+<span class="nc" id="L304">                    log.debug(&quot;项目无法转换为 COMPLETED 状态（当前状态不允许）: projectId={}&quot;, projectId);</span>
+<span class="fc" id="L305">                }</span>
+            }
+<span class="fc" id="L307">            collabPort.updateProject(project);</span>
+        }
+<span class="fc" id="L309">    }</span>
+
+    private ChapterTaskResponse toChapterResponse(CollabChapterTask task) {
+<span class="fc" id="L312">        return toChapterResponse(task, Map.of());</span>
+    }
+
+    private ChapterTaskResponse toChapterResponse(CollabChapterTask task, Map&lt;Long, User&gt; userMap) {
+<span class="fc" id="L316">        ChapterTaskResponse resp = new ChapterTaskResponse();</span>
+<span class="fc" id="L317">        resp.setId(task.getId());</span>
+<span class="fc" id="L318">        resp.setChapterNumber(task.getChapterNumber());</span>
+<span class="fc" id="L319">        resp.setTitle(task.getTitle());</span>
+<span class="fc" id="L320">        resp.setSourceText(task.getSourceText());</span>
+<span class="fc" id="L321">        resp.setTranslatedText(task.getTargetText());</span>
+<span class="fc" id="L322">        resp.setStatus(task.getStatus());</span>
+<span class="fc" id="L323">        resp.setProgress(task.getProgress());</span>
+<span class="fc" id="L324">        resp.setAssigneeId(task.getAssigneeId());</span>
+<span class="fc" id="L325">        resp.setReviewerId(task.getReviewerId());</span>
+<span class="fc" id="L326">        resp.setReviewComment(task.getReviewComment());</span>
+<span class="fc" id="L327">        resp.setSourceWordCount(task.getSourceWordCount());</span>
+<span class="fc" id="L328">        resp.setTargetWordCount(task.getTargetWordCount());</span>
+<span class="fc" id="L329">        resp.setAssignedTime(task.getAssignedTime());</span>
+<span class="fc" id="L330">        resp.setSubmittedTime(task.getSubmittedTime());</span>
+<span class="fc" id="L331">        resp.setReviewedTime(task.getReviewedTime());</span>
+<span class="fc" id="L332">        resp.setCompletedTime(task.getCompletedTime());</span>
+
+        // 设置译员名称
+<span class="fc bfc" id="L335" title="All 2 branches covered.">        if (task.getAssigneeId() != null) {</span>
+<span class="fc" id="L336">            User assignee = userMap.get(task.getAssigneeId());</span>
+<span class="pc bpc" id="L337" title="1 of 2 branches missed.">            if (assignee == null) {</span>
+<span class="fc" id="L338">                assignee = userPort.findById(task.getAssigneeId()).orElse(null);</span>
+            }
+<span class="pc bpc" id="L340" title="1 of 2 branches missed.">            if (assignee != null) {</span>
+<span class="nc" id="L341">                resp.setAssigneeName(assignee.getUsername());</span>
+            }
+        }
+        // 设置审校名称
+<span class="fc bfc" id="L345" title="All 2 branches covered.">        if (task.getReviewerId() != null) {</span>
+<span class="fc" id="L346">            User reviewer = userMap.get(task.getReviewerId());</span>
+<span class="pc bpc" id="L347" title="1 of 2 branches missed.">            if (reviewer == null) {</span>
+<span class="fc" id="L348">                reviewer = userPort.findById(task.getReviewerId()).orElse(null);</span>
+            }
+<span class="pc bpc" id="L350" title="1 of 2 branches missed.">            if (reviewer != null) {</span>
+<span class="nc" id="L351">                resp.setReviewerName(reviewer.getUsername());</span>
+            }
+        }
+
+<span class="fc" id="L355">        return resp;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

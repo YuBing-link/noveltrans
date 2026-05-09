@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CollabCommentController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.in.rest.collab</a> &gt; <span class="el_source">CollabCommentController.java</span></div><h1>CollabCommentController.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.in.rest.collab;
+
+import com.yumu.noveltranslator.port.dto.collab.CommentResponse;
+import com.yumu.noveltranslator.port.dto.collab.CreateCommentRequest;
+import com.yumu.noveltranslator.port.in.CollabCommentPort;
+import com.yumu.noveltranslator.util.SecurityUtil;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
+
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+
+@RestController
+@RequestMapping(&quot;/v1/collab&quot;)
+<span class="fc" id="L17">@RequiredArgsConstructor</span>
+<span class="fc" id="L18">@Slf4j</span>
+public class CollabCommentController {
+
+    private final CollabCommentPort collabCommentPort;
+
+    @PostMapping(&quot;/chapters/{chapterTaskId}/comments&quot;)
+    public Result&lt;CommentResponse&gt; createComment(@PathVariable Long chapterTaskId,
+                                                   @Valid @RequestBody CreateCommentRequest request) {
+<span class="fc" id="L26">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L27">        CommentResponse comment = collabCommentPort.createComment(chapterTaskId, userId, request);</span>
+<span class="fc" id="L28">        return Result.ok(comment);</span>
+    }
+
+    @GetMapping(&quot;/chapters/{chapterTaskId}/comments&quot;)
+    public Result&lt;PageResponse&lt;CommentResponse&gt;&gt; listComments(
+            @PathVariable Long chapterTaskId,
+            @RequestParam(defaultValue = &quot;1&quot;) int page,
+            @RequestParam(defaultValue = &quot;20&quot;) int size) {
+<span class="fc" id="L36">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L37">        com.yumu.noveltranslator.port.dto.common.PageResult&lt;CommentResponse&gt; pageResult =</span>
+<span class="fc" id="L38">            collabCommentPort.getCommentsByChapterPage(chapterTaskId, userId, page, size);</span>
+<span class="fc" id="L39">        PageResponse&lt;CommentResponse&gt; response = PageResponse.of(</span>
+<span class="fc" id="L40">            (int) pageResult.getCurrent(), (int) pageResult.getSize(), pageResult.getTotal(), pageResult.getRecords());</span>
+<span class="fc" id="L41">        return Result.ok(response);</span>
+    }
+
+    @PutMapping(&quot;/comments/{commentId}/resolve&quot;)
+    public Result&lt;Void&gt; resolveComment(@PathVariable Long commentId) {
+<span class="fc" id="L46">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L47">        collabCommentPort.resolveComment(commentId, userId);</span>
+<span class="fc" id="L48">        return Result.ok(null);</span>
+    }
+
+    @DeleteMapping(&quot;/comments/{commentId}&quot;)
+    public Result&lt;Void&gt; deleteComment(@PathVariable Long commentId) {
+<span class="fc" id="L53">        Long userId = SecurityUtil.getRequiredUserId();</span>
+<span class="fc" id="L54">        collabCommentPort.deleteComment(commentId, userId);</span>
+<span class="fc" id="L55">        return Result.ok(null);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

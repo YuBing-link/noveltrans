@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslationPostProcessingService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">TranslationPostProcessingService.java</span></div><h1>TranslationPostProcessingService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import jakarta.annotation.PreDestroy;
+
+/**
+ * 翻译后处理服务：检测译文中的残留中文并补充翻译
+ */
+@Service
+<span class="fc" id="L26">@Slf4j</span>
+<span class="fc" id="L27">public class TranslationPostProcessingService {</span>
+
+    /** 残留中文检测正则：连续 2+ 个中文字符 */
+<span class="fc" id="L30">    private static final Pattern CHINESE_PATTERN = Pattern.compile(&quot;[\u4e00-\u9fff\u3400-\u4dbf]{2,}&quot;);</span>
+
+    /** \u6b8b\u7559\u4e2d\u6587\u7edd\u5bf9\u4e0a\u9650\uff08\u5b57\u7b26\u6570\uff09\uff0c\u8d85\u8fc7\u6b64\u503c\u653e\u5f03\u540e\u5904\u7406\u4ee5\u907f\u514d\u6210\u672c\u5931\u63a7 */
+    private static final int MAX_REMEDIAL_CHARS = 500;
+
+    /** \u6b8b\u7559\u4e2d\u6587\u76f8\u5bf9\u4e0a\u9650\uff08\u5360\u8bd1\u6587\u603b\u957f\u5ea6\u7684\u767e\u5206\u6bd4\uff09\uff0c\u8d85\u8fc7\u6b64\u503c\u6807\u8bb0\u4e3a\u7ffb\u8bd1\u5931\u8d25 */
+    private static final double MAX_REMEDIAL_RATIO = 0.15;
+
+<span class="fc" id="L38">    private final HttpClient httpClient = HttpClient.newBuilder()</span>
+<span class="fc" id="L39">            .connectTimeout(Duration.ofSeconds(5))</span>
+<span class="fc" id="L40">            .build();</span>
+
+    @Value(&quot;${translation.python.url:http://llm-engine:8000/translate}&quot;)
+    private String pythonTranslateUrl;
+
+    @Value(&quot;${translation.python.api-key:}&quot;)
+    private String pythonApiKey;
+
+    /**
+     * 检测并修复译文中的残留中文
+     * @return 修复后的译文
+     */
+    public String fixUntranslatedChinese(String sourceText, String translatedText, String targetLang, String engine) {
+        // 日语、韩语、中文目标语言使用 CJK 统一表意文字，与中文共享 Unicode 范围，
+        // 后处理的中文检测会产生大量误报，直接跳过
+<span class="pc bpc" id="L55" title="2 of 6 branches missed.">        if (isJapaneseTarget(targetLang) || isKoreanTarget(targetLang) || isChineseTarget(targetLang)) {</span>
+<span class="fc" id="L56">            log.debug(&quot;[后处理] 目标语言为 {}，跳过残留中文检测（CJK 文字共享 Unicode 范围）&quot;, targetLang);</span>
+<span class="fc" id="L57">            return translatedText;</span>
+        }
+
+<span class="fc" id="L60">        var segments = detectChineseSegments(translatedText);</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        if (!segments.isEmpty()) {</span>
+<span class="fc" id="L62">            int totalChineseChars = segments.stream().mapToInt(String::length).sum();</span>
+
+            // 成本熔断：残留中文超过阈值时放弃后处理，避免 API 账单击穿
+<span class="pc bpc" id="L65" title="1 of 2 branches missed.">            if (totalChineseChars &gt; MAX_REMEDIAL_CHARS) {</span>
+<span class="nc" id="L66">                log.warn(&quot;[后处理] 残留中文 {} 字超过绝对上限({})，放弃后处理以避免成本失控&quot;, totalChineseChars, MAX_REMEDIAL_CHARS);</span>
+<span class="nc" id="L67">                return translatedText;</span>
+            }
+<span class="pc bpc" id="L69" title="2 of 4 branches missed.">            if (translatedText.length() &gt; 0 &amp;&amp; (double) totalChineseChars / translatedText.length() &gt; MAX_REMEDIAL_RATIO) {</span>
+<span class="nc" id="L70">                log.warn(&quot;[后处理] 残留中文占比 {:.1f}% 超过阈值({:.0f}%)，译文可能翻译失败，放弃后处理&quot;,</span>
+<span class="nc" id="L71">                        (double) totalChineseChars / translatedText.length() * 100, MAX_REMEDIAL_RATIO * 100);</span>
+<span class="nc" id="L72">                return translatedText;</span>
+            }
+
+<span class="fc" id="L75">            log.info(&quot;[后处理] 检测到 {} 段残留中文 (共 {} 字): {}&quot;, segments.size(), totalChineseChars, segments);</span>
+
+            try {
+<span class="nc" id="L78">                String remedied = remediateSegments(segments, targetLang, engine);</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">                if (remedied != null) {</span>
+<span class="nc" id="L80">                    translatedText = applyRemediation(translatedText, segments, remedied);</span>
+<span class="nc" id="L81">                    log.info(&quot;[后处理] 补救完成，原文长度={}, 修复后长度={}&quot;, translatedText.length(), translatedText.length());</span>
+                }
+<span class="fc" id="L83">            } catch (Exception e) {</span>
+<span class="fc" id="L84">                log.warn(&quot;[后处理] 补救失败: {}，保留原始译文&quot;, e.getMessage());</span>
+<span class="nc" id="L85">            }</span>
+        }
+
+        // 注意：在逐行翻译场景下（streamTextTranslate），行级结构由 TranslationService 处理
+        // 后处理只负责检测残留中文，不做任何结构重排
+<span class="fc" id="L90">        return translatedText;</span>
+    }
+
+    /**
+     * 检测译文中连续的中文字符段
+     * 日语目标语言使用排除法：日语使用 CJK 统一表意文字（汉字），需排除常见日语汉字
+     */
+    private List&lt;String&gt; detectChineseSegments(String text) {
+<span class="fc" id="L98">        List&lt;String&gt; segments = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L99">        Matcher matcher = CHINESE_PATTERN.matcher(text);</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        while (matcher.find()) {</span>
+<span class="fc" id="L101">            segments.add(matcher.group());</span>
+        }
+<span class="fc" id="L103">        return segments.stream().distinct().toList();</span>
+    }
+
+    /**
+     * 判断目标语言是否为日语（日语使用 CJK 统一表意文字，与中文共享 Unicode 范围）
+     */
+    private static boolean isJapaneseTarget(String targetLang) {
+<span class="pc bpc" id="L110" title="1 of 6 branches missed.">        return targetLang != null &amp;&amp; (targetLang.equalsIgnoreCase(&quot;ja&quot;) || targetLang.equalsIgnoreCase(&quot;japanese&quot;));</span>
+    }
+
+    private static boolean isKoreanTarget(String targetLang) {
+<span class="pc bpc" id="L114" title="3 of 6 branches missed.">        return targetLang != null &amp;&amp; (targetLang.equalsIgnoreCase(&quot;ko&quot;) || targetLang.equalsIgnoreCase(&quot;korean&quot;));</span>
+    }
+
+    private static boolean isChineseTarget(String targetLang) {
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">        return targetLang != null &amp;&amp; (</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">                targetLang.equalsIgnoreCase(&quot;zh&quot;) ||</span>
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">                targetLang.equalsIgnoreCase(&quot;zh-CN&quot;) ||</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">                targetLang.equalsIgnoreCase(&quot;zh-TW&quot;) ||</span>
+<span class="pc bpc" id="L122" title="1 of 2 branches missed.">                targetLang.equalsIgnoreCase(&quot;chinese&quot;));</span>
+    }
+
+    /**
+     * 日语常见独有/高频汉字（简化判断：含假名或日语特有汉字则跳过）
+     * 完整策略：如果片段中包含平假名/片假名，则视为日语而非残留中文
+     */
+<span class="fc" id="L129">    private static final Pattern JAPANESE_KANA = Pattern.compile(&quot;[぀-ゟ゠-ヿㇰ-ㇿ]&quot;);</span>
+
+    /**
+     * 判断一个片段是否应视为日语（非残留中文）
+     */
+    private boolean isJapaneseSegment(String segment, String targetLang) {
+<span class="fc bfc" id="L135" title="All 2 branches covered.">        if (!isJapaneseTarget(targetLang)) {</span>
+<span class="fc" id="L136">            return false;</span>
+        }
+        // 包含假名 → 日语
+<span class="fc bfc" id="L139" title="All 2 branches covered.">        if (JAPANESE_KANA.matcher(segment).find()) {</span>
+<span class="fc" id="L140">            return true;</span>
+        }
+        // 日语中纯汉字的片段很难区分，但结合目标语言为日语，
+        // 纯汉字片段很可能是正常的日文汉字，不应视为残留中文
+<span class="fc" id="L144">        return true;</span>
+    }
+
+    /**
+     * 调用 LLM 补充翻译残留中文段
+     */
+    private String remediateSegments(List&lt;String&gt; segments, String targetLang, String engine) throws Exception {
+<span class="fc" id="L151">        String sourceText = String.join(&quot;\n&quot;, segments);</span>
+
+<span class="fc" id="L153">        String baseUrl = pythonTranslateUrl.replace(&quot;/translate&quot;, &quot;&quot;);</span>
+<span class="fc" id="L154">        String url = baseUrl + &quot;/translate&quot;;</span>
+
+        // 只发送需要翻译的文本，不加额外指令，避免 LLM 混淆指令和待翻译文本
+<span class="fc" id="L157">        var body = new LinkedHashMap&lt;String, Object&gt;();</span>
+<span class="fc" id="L158">        body.put(&quot;text&quot;, sourceText);</span>
+<span class="fc" id="L159">        body.put(&quot;target_lang&quot;, targetLang);</span>
+<span class="pc bpc" id="L160" title="1 of 2 branches missed.">        body.put(&quot;engine&quot;, engine != null ? engine : &quot;openai&quot;);</span>
+<span class="fc" id="L161">        body.put(&quot;fallback&quot;, true);</span>
+
+<span class="fc" id="L163">        String jsonBody = JSON.toJSONString(body);</span>
+<span class="fc" id="L164">        var reqBuilder = HttpRequest.newBuilder()</span>
+<span class="fc" id="L165">                .uri(URI.create(url))</span>
+<span class="fc" id="L166">                .header(&quot;Content-Type&quot;, &quot;application/json; charset=UTF-8&quot;)</span>
+<span class="fc" id="L167">                .timeout(Duration.ofSeconds(60))</span>
+<span class="fc" id="L168">                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));</span>
+<span class="pc bpc" id="L169" title="3 of 4 branches missed.">        if (pythonApiKey != null &amp;&amp; !pythonApiKey.isEmpty()) {</span>
+<span class="nc" id="L170">            reqBuilder.header(&quot;X-Service-Key&quot;, pythonApiKey);</span>
+        }
+<span class="fc" id="L172">        HttpRequest request = reqBuilder.build();</span>
+
+<span class="nc" id="L174">        HttpResponse&lt;String&gt; response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());</span>
+<span class="nc" id="L175">        String responseBody = response.body();</span>
+<span class="nc bnc" id="L176" title="All 4 branches missed.">        if (responseBody == null || responseBody.isBlank()) {</span>
+<span class="nc" id="L177">            throw new RuntimeException(&quot;Python服务返回空响应体, status=&quot; + response.statusCode());</span>
+        }
+
+<span class="nc" id="L180">        JSONObject json = JSON.parseObject(responseBody);</span>
+<span class="nc" id="L181">        String data = json.getString(&quot;data&quot;);</span>
+<span class="nc bnc" id="L182" title="All 4 branches missed.">        if (data == null || data.isBlank()) {</span>
+<span class="nc" id="L183">            throw new RuntimeException(&quot;补救翻译返回空数据&quot;);</span>
+        }
+
+        // 过滤：如果返回结果包含 prompt 关键词（LLM 原样返回了指令文本），视为翻译失败
+<span class="nc bnc" id="L187" title="All 6 branches missed.">        if (data.contains(&quot;以下文本包含&quot;) || data.contains(&quot;未翻译的中文&quot;) || data.contains(&quot;请将它们翻译&quot;)) {</span>
+<span class="nc" id="L188">            throw new RuntimeException(&quot;补救翻译返回了指令文本，LLM 未正确翻译&quot;);</span>
+        }
+
+<span class="nc" id="L191">        return data;</span>
+    }
+
+    /**
+     * 将补救翻译结果应用到原文
+     * 关键修复：使用逐个替换，避免 String.replace() 的全局替换导致内容混乱
+     */
+    private String applyRemediation(String translatedText, List&lt;String&gt; segments, String remedied) {
+<span class="fc" id="L199">        String result = translatedText;</span>
+<span class="fc" id="L200">        String[] remediedSegments = remedied.split(&quot;\n&quot;, -1);</span>
+
+<span class="fc bfc" id="L202" title="All 2 branches covered.">        for (int i = 0; i &lt; segments.size(); i++) {</span>
+<span class="fc" id="L203">            String original = segments.get(i);</span>
+<span class="fc bfc" id="L204" title="All 2 branches covered.">            String translated = (i &lt; remediedSegments.length) ? remediedSegments[i].trim() : original;</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">            if (!translated.isBlank()) {</span>
+                // 只替换第一次出现，避免全局替换导致内容混乱
+<span class="fc" id="L207">                int idx = result.indexOf(original);</span>
+<span class="fc bfc" id="L208" title="All 2 branches covered.">                if (idx &gt;= 0) {</span>
+<span class="fc" id="L209">                    result = result.substring(0, idx) + translated + result.substring(idx + original.length());</span>
+                }
+            }
+        }
+<span class="fc" id="L213">        return result;</span>
+    }
+
+    @PreDestroy
+    public void shutdown() {
+<span class="nc" id="L218">        httpClient.close();</span>
+<span class="nc" id="L219">        log.info(&quot;TranslationPostProcessingService HTTP client closed&quot;);</span>
+<span class="nc" id="L220">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

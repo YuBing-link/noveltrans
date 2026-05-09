@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ExternalTranslationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.out.translate</a> &gt; <span class="el_source">ExternalTranslationService.java</span></div><h1>ExternalTranslationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.out.translate;
+
+import com.alibaba.fastjson2.JSONObject;
+import com.yumu.noveltranslator.exception.MTranServerUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import jakarta.annotation.Nullable;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+
+import java.net.ConnectException;
+import java.time.Duration;
+
+/**
+ * 外部翻译服务调用类
+ * 作为调用外部翻译引擎接口的中转站
+ */
+@Service
+<span class="fc" id="L22">@Slf4j</span>
+public class ExternalTranslationService {
+
+    private final WebClient webClient;
+    private final boolean mockMode;
+
+    public ExternalTranslationService(
+            @Value(&quot;${mtran.server.host:localhost}&quot;) String host,
+            @Value(&quot;${mtran.server.port:8989}&quot;) int port,
+            @Value(&quot;${mtran.server.api-key:}&quot;) @Nullable String apiKey,
+<span class="fc" id="L32">            @Value(&quot;${mtran.server.mock:false}&quot;) boolean mockMode) {</span>
+<span class="fc" id="L33">        this.mockMode = mockMode;</span>
+<span class="fc" id="L34">        var builder = WebClient.builder()</span>
+<span class="fc" id="L35">                .baseUrl(&quot;http://%s:%d&quot;.formatted(host, port))</span>
+<span class="fc" id="L36">                .defaultHeader(&quot;Content-Type&quot;, MediaType.APPLICATION_JSON_VALUE)</span>
+<span class="fc" id="L37">                .codecs(configurer -&gt; configurer.defaultCodecs().maxInMemorySize(256 * 1024));</span>
+
+        // 如果配置了 API Key，添加到请求头
+<span class="pc bpc" id="L40" title="1 of 4 branches missed.">        if (apiKey != null &amp;&amp; !apiKey.isEmpty()) {</span>
+<span class="nc" id="L41">            builder.defaultHeader(&quot;Authorization&quot;, &quot;Bearer &quot; + apiKey);</span>
+<span class="nc" id="L42">            log.info(&quot;MTranServer 认证已启用&quot;);</span>
+        }
+
+<span class="fc" id="L45">        this.webClient = builder.build();</span>
+<span class="fc bfc" id="L46" title="All 2 branches covered.">        log.info(&quot;MTranServer 模式: {}&quot;, mockMode ? &quot;MOCK（模拟响应）&quot; : &quot;REAL（直连服务）&quot;);</span>
+<span class="fc" id="L47">    }</span>
+
+    /**
+     * 调用外部翻译引擎进行翻译
+     *
+     * @param from 源语言
+     * @param to   目标语言
+     * @param text 待翻译文本
+     * @return 翻译结果
+     * @throws RuntimeException 翻译失败时抛出异常
+     */
+    @CircuitBreaker(name = &quot;mtranServer&quot;, fallbackMethod = &quot;mtranServerFallback&quot;)
+    public JSONObject translate(String from, String to, String text, boolean html) {
+        // Mock 模式：直接返回模拟响应，不发 HTTP 请求
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        if (mockMode) {</span>
+<span class="fc" id="L62">            return buildMockResponse(from, to, text, html);</span>
+        }
+
+<span class="fc" id="L65">        JSONObject requestBody = new JSONObject();</span>
+<span class="fc" id="L66">        requestBody.put(&quot;from&quot;, from);</span>
+<span class="fc" id="L67">        requestBody.put(&quot;to&quot;, to);</span>
+<span class="fc" id="L68">        requestBody.put(&quot;text&quot;, text);</span>
+<span class="fc" id="L69">        requestBody.put(&quot;html&quot;, html);</span>
+
+        try {
+            // MTranServer 偶尔响应慢，设置 15 秒超时后降级到 Python 服务
+<span class="fc" id="L73">            String responseBody = webClient.post()</span>
+<span class="fc" id="L74">                    .uri(&quot;/translate&quot;)</span>
+<span class="fc" id="L75">                    .bodyValue(requestBody)</span>
+<span class="fc" id="L76">                    .retrieve()</span>
+<span class="fc" id="L77">                    .bodyToMono(String.class)</span>
+<span class="fc" id="L78">                    .block(Duration.ofSeconds(15));</span>
+
+<span class="fc" id="L80">            return JSONObject.parseObject(responseBody);</span>
+<span class="fc" id="L81">        } catch (WebClientResponseException e) {</span>
+<span class="fc" id="L82">            log.error(&quot;外部翻译引擎调用失败，状态码：{}，响应体：{}&quot;, e.getStatusCode(), e.getResponseBodyAsString(), e);</span>
+<span class="fc" id="L83">            throw new RuntimeException(&quot;外部翻译引擎调用失败 (HTTP &quot; + e.getStatusCode() + &quot;): &quot; + e.getMessage(), e);</span>
+<span class="fc" id="L84">        } catch (Exception e) {</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">            String errorMsg = e.getMessage() != null ? e.getMessage() : &quot;未知错误&quot;;</span>
+            // 检查是否是超时错误
+<span class="pc bpc" id="L87" title="2 of 6 branches missed.">            if (errorMsg.contains(&quot;Timeout&quot;) || errorMsg.contains(&quot;timeout&quot;) || errorMsg.contains(&quot;timed out&quot;)) {</span>
+<span class="pc bpc" id="L88" title="1 of 2 branches missed.">                log.error(&quot;外部翻译引擎响应超时（&gt;15 秒），降级到 Python 服务。文本长度：{}&quot;, text != null ? text.length() : 0, e);</span>
+<span class="fc" id="L89">                throw new RuntimeException(&quot;外部翻译引擎响应超时，请检查服务性能：&quot; + e.getMessage(), e);</span>
+            }
+            // 检查是否是连接失败
+<span class="pc bpc" id="L92" title="2 of 6 branches missed.">            if (e.getCause() instanceof ConnectException || errorMsg.contains(&quot;Connection refused&quot;) || errorMsg.contains(&quot;connect timed out&quot;)) {</span>
+<span class="fc" id="L93">                log.error(&quot;外部翻译引擎连接失败，请确认服务已启动在 http://localhost:{}，错误：{}&quot;,</span>
+<span class="fc" id="L94">                         System.getProperty(&quot;mtran.server.port&quot;, &quot;8989&quot;), e.getMessage(), e);</span>
+<span class="fc" id="L95">                throw new RuntimeException(&quot;无法连接到外部翻译引擎，请确认服务已启动：&quot; + e.getMessage(), e);</span>
+            }
+<span class="pc bpc" id="L97" title="1 of 2 branches missed.">            log.error(&quot;外部翻译引擎翻译异常，待翻译文本长度：{}&quot;, text != null ? text.length() : 0, e);</span>
+<span class="fc" id="L98">            throw new RuntimeException(&quot;外部翻译引擎翻译失败：&quot; + e.getMessage(), e);</span>
+        }
+    }
+
+    /**
+     * Circuit breaker fallback for MTranServer failures.
+     */
+    private JSONObject mtranServerFallback(String from, String to, String text, boolean html, Throwable t) {
+<span class="nc" id="L106">        log.warn(&quot;MTranServer 熔断器触发: {}&quot;, t.getMessage());</span>
+<span class="nc" id="L107">        throw new MTranServerUnavailableException(&quot;MTranServer 不可用（熔断器已打开）: &quot; + t.getMessage(), t);</span>
+    }
+
+    /**
+     * 构建模拟翻译响应（用于开发/测试，不调用真实 MTranServer）
+     */
+    private JSONObject buildMockResponse(String from, String to, String text, boolean html) {
+<span class="pc bpc" id="L114" title="4 of 9 branches missed.">        String langLabel = switch (to.toLowerCase()) {</span>
+<span class="fc" id="L115">            case &quot;zh&quot;, &quot;zh-cn&quot; -&gt; &quot;简体中文&quot;;</span>
+<span class="fc" id="L116">            case &quot;zh-tw&quot; -&gt; &quot;繁體中文&quot;;</span>
+<span class="fc" id="L117">            case &quot;ja&quot; -&gt; &quot;日本語&quot;;</span>
+<span class="nc" id="L118">            case &quot;ko&quot; -&gt; &quot;한국어&quot;;</span>
+<span class="fc" id="L119">            case &quot;fr&quot; -&gt; &quot;Français&quot;;</span>
+<span class="nc" id="L120">            case &quot;de&quot; -&gt; &quot;Deutsch&quot;;</span>
+<span class="nc" id="L121">            case &quot;es&quot; -&gt; &quot;Español&quot;;</span>
+<span class="nc" id="L122">            case &quot;ru&quot; -&gt; &quot;Русский&quot;;</span>
+<span class="fc" id="L123">            default -&gt; to;</span>
+        };
+
+        String result;
+<span class="fc bfc" id="L127" title="All 2 branches covered.">        if (html) {</span>
+<span class="fc" id="L128">            result = &quot;[&quot; + langLabel + &quot;] &quot; + text;</span>
+        } else {
+<span class="fc" id="L130">            String[] lines = text.split(&quot;\n&quot;);</span>
+<span class="fc" id="L131">            StringBuilder sb = new StringBuilder();</span>
+<span class="fc bfc" id="L132" title="All 2 branches covered.">            for (int i = 0; i &lt; lines.length; i++) {</span>
+<span class="fc bfc" id="L133" title="All 2 branches covered.">                if (i &gt; 0) sb.append(&quot;\n&quot;);</span>
+<span class="fc bfc" id="L134" title="All 2 branches covered.">                sb.append(lines[i].isEmpty() ? &quot;&quot; : &quot;[&quot; + langLabel + &quot;] &quot; + lines[i]);</span>
+            }
+<span class="fc" id="L136">            result = sb.toString();</span>
+        }
+
+<span class="fc" id="L139">        JSONObject response = new JSONObject();</span>
+<span class="fc" id="L140">        response.put(&quot;result&quot;, result);</span>
+<span class="fc" id="L141">        return response;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,571 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslationApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">TranslationApplicationService.java</span></div><h1>TranslationApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.alibaba.fastjson2.JSON;
+import com.yumu.noveltranslator.port.dto.translation.SelectionTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
+import com.yumu.noveltranslator.port.dto.translation.WebpageTranslateRequest;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.enums.TranslationMode;
+import com.yumu.noveltranslator.domain.service.TranslationPipeline;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
+import com.yumu.noveltranslator.domain.service.QuotaService;
+import com.yumu.noveltranslator.domain.util.EngineAliasRegistry;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
+import com.yumu.noveltranslator.port.out.TeamTranslationPort;
+import com.yumu.noveltranslator.util.CacheKeyUtil;
+import com.yumu.noveltranslator.util.SseEmitterUtil;
+import com.yumu.noveltranslator.util.TextCleaningUtil;
+import com.yumu.noveltranslator.util.TextSegmentationUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 翻译服务类
+ * 提供三种翻译模式：选中文本翻译、阅读器翻译、网页翻译
+ *
+ * 优化特性：
+ * - 三级缓存：内存缓存 → 数据库缓存 → 翻译服务
+ * - 改进的缓存 Key：使用 MD5 避免碰撞
+ * - 全局线程池复用
+ * - 批量翻译优化
+ */
+@Service
+<span class="fc" id="L45">@RequiredArgsConstructor</span>
+<span class="fc" id="L46">@Slf4j</span>
+public class TranslationApplicationService implements com.yumu.noveltranslator.port.in.TranslatePort {
+
+    private static final String DEFAULT_TARGET_LANG = &quot;zh&quot;;
+    private static final String DEFAULT_ENGINE = &quot;auto&quot;;
+
+    /**
+     * 语言代码 → 语言名称映射（用于团队翻译 prompt）
+     * Python 侧 prompt 使用自然语言名称（如 &quot;请将以下中文文本翻译为日文&quot;）
+     */
+<span class="fc" id="L56">    private static final Map&lt;String, String&gt; LANGUAGE_NAME_MAP = Map.ofEntries(</span>
+<span class="fc" id="L57">            Map.entry(&quot;zh&quot;, &quot;中文&quot;),</span>
+<span class="fc" id="L58">            Map.entry(&quot;cn&quot;, &quot;中文&quot;),</span>
+<span class="fc" id="L59">            Map.entry(&quot;en&quot;, &quot;英文&quot;),</span>
+<span class="fc" id="L60">            Map.entry(&quot;ja&quot;, &quot;日文&quot;),</span>
+<span class="fc" id="L61">            Map.entry(&quot;jp&quot;, &quot;日文&quot;),</span>
+<span class="fc" id="L62">            Map.entry(&quot;ko&quot;, &quot;韩文&quot;),</span>
+<span class="fc" id="L63">            Map.entry(&quot;fr&quot;, &quot;法文&quot;),</span>
+<span class="fc" id="L64">            Map.entry(&quot;de&quot;, &quot;德文&quot;),</span>
+<span class="fc" id="L65">            Map.entry(&quot;es&quot;, &quot;西班牙文&quot;),</span>
+<span class="fc" id="L66">            Map.entry(&quot;pt&quot;, &quot;葡萄牙文&quot;),</span>
+<span class="fc" id="L67">            Map.entry(&quot;ru&quot;, &quot;俄文&quot;),</span>
+<span class="fc" id="L68">            Map.entry(&quot;it&quot;, &quot;意大利文&quot;),</span>
+<span class="fc" id="L69">            Map.entry(&quot;ar&quot;, &quot;阿拉伯文&quot;),</span>
+<span class="fc" id="L70">            Map.entry(&quot;th&quot;, &quot;泰文&quot;),</span>
+<span class="fc" id="L71">            Map.entry(&quot;vi&quot;, &quot;越南文&quot;)</span>
+    );
+
+    /**
+     * 将语言代码转换为自然语言名称
+     * 例如 &quot;zh&quot; → &quot;中文&quot;, &quot;ja&quot; → &quot;日文&quot;
+     */
+    private static String toLanguageName(String code) {
+<span class="nc bnc" id="L79" title="All 4 branches missed.">        if (code == null || &quot;auto&quot;.equalsIgnoreCase(code)) {</span>
+<span class="nc" id="L80">            return &quot;未知&quot;;</span>
+        }
+<span class="nc" id="L82">        return LANGUAGE_NAME_MAP.getOrDefault(code.toLowerCase(), code);</span>
+    }
+
+    // 依赖注入
+    private final TranslationClientPort translationClientPort;
+    private final TranslationCachePort cachePort;
+    private final RagTranslationApplicationService ragTranslationService;
+    private final com.yumu.noveltranslator.domain.service.EntityConsistencyService entityConsistencyService;
+    private final TranslationPostProcessingService postProcessingService;
+    private final TeamTranslationPort teamTranslationPort;
+    private final com.yumu.noveltranslator.domain.service.QuotaService quotaService;
+
+    /**
+     * 选中文本翻译
+     * @param req 翻译请求
+     * @return 翻译响应
+     */
+    public SelectionTranslateResponse selectionTranslate(Long userId, SelectionTranslationRequest req) {
+<span class="fc" id="L100">        String combined = req.getText();</span>
+<span class="fc bfc" id="L101" title="All 4 branches covered.">        if (combined == null || combined.trim().isEmpty()) {</span>
+<span class="fc" id="L102">            return new SelectionTranslateResponse(false, req.getEngine(), &quot;内容为空&quot;);</span>
+        }
+
+<span class="fc" id="L105">        TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());</span>
+<span class="pc bpc" id="L106" title="1 of 2 branches missed.">        String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();</span>
+
+        // 检查字符配额
+<span class="fc bfc" id="L109" title="All 2 branches covered.">        if (userId != null) {</span>
+<span class="fc" id="L110">            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);</span>
+<span class="fc bfc" id="L111" title="All 2 branches covered.">            if (userLevel != null) {</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">                String modeName = req.getMode() != null ? req.getMode() : &quot;fast&quot;;</span>
+<span class="fc bfc" id="L113" title="All 2 branches covered.">                if (!quotaService.tryConsumeChars(userId, userLevel, combined.length(), modeName)) {</span>
+<span class="fc" id="L114">                    return new SelectionTranslateResponse(false, mode.getName(), &quot;字符配额不足，请升级档位或等待下月重置&quot;);</span>
+                }
+            }
+        }
+
+        try {
+<span class="fc" id="L120">            TranslationPipeline pipeline = new TranslationPipeline(</span>
+                    cachePort, ragTranslationService, entityConsistencyService,
+                    translationClientPort, postProcessingService, userId, null);
+<span class="fc" id="L123">            String result = pipeline.executeFast(combined, target, mode);</span>
+<span class="pc bpc" id="L124" title="2 of 4 branches missed.">            if (result == null || result.trim().isEmpty()) {</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">                if (userId != null) {</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">                    String modeName = req.getMode() != null ? req.getMode() : &quot;fast&quot;;</span>
+<span class="nc" id="L127">                    quotaService.refundChars(userId, combined.length(), modeName);</span>
+                }
+<span class="nc" id="L129">                return new SelectionTranslateResponse(false, mode.getName(), &quot;翻译失败：返回结果为空&quot;);</span>
+            }
+            // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
+<span class="fc" id="L132">            String sanitized = TextCleaningUtil.sanitizeHtml(result);</span>
+<span class="fc" id="L133">            return new SelectionTranslateResponse(true, mode.getName(), sanitized);</span>
+<span class="fc" id="L134">        } catch (Exception e) {</span>
+<span class="fc" id="L135">            log.error(&quot;选中文本翻译失败：{}&quot;, e.getMessage(), e);</span>
+<span class="pc bpc" id="L136" title="1 of 2 branches missed.">            if (userId != null) {</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                String modeName = req.getMode() != null ? req.getMode() : &quot;fast&quot;;</span>
+<span class="nc" id="L138">                quotaService.refundChars(userId, combined.length(), modeName);</span>
+            }
+<span class="fc" id="L140">            return new SelectionTranslateResponse(false, mode.getName(), &quot;翻译失败：服务器内部错误&quot;);</span>
+        }
+    }
+
+    /**
+     * 阅读器翻译 - 支持并行翻译长文本
+     * 默认使用 MTranServer 进行翻译，html 模式启用
+     * @param req 翻译请求
+     * @return 翻译响应
+     */
+    public ReaderTranslateResponse readerTranslate(Long userId, ReaderTranslateRequest req) {
+<span class="fc" id="L151">        String content = req.getContent();</span>
+<span class="fc bfc" id="L152" title="All 4 branches covered.">        if (content == null || content.trim().isEmpty()) {</span>
+<span class="fc" id="L153">            return new ReaderTranslateResponse(false, req.getEngine(), &quot;没有收到内容&quot;);</span>
+        }
+
+<span class="fc bfc" id="L156" title="All 2 branches covered.">        String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();</span>
+<span class="fc" id="L157">        TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());</span>
+
+        // 检查字符配额
+<span class="fc bfc" id="L160" title="All 2 branches covered.">        if (userId != null) {</span>
+<span class="fc" id="L161">            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);</span>
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">            if (userLevel != null) {</span>
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">                String modeName = req.getMode() != null ? req.getMode() : &quot;fast&quot;;</span>
+<span class="fc bfc" id="L164" title="All 2 branches covered.">                if (!quotaService.tryConsumeChars(userId, userLevel, content.length(), modeName)) {</span>
+<span class="fc" id="L165">                    return new ReaderTranslateResponse(false, mode.getName(), &quot;字符配额不足，请升级档位或等待下月重置&quot;);</span>
+                }
+            }
+        }
+
+        // 文本分段
+        List&lt;String&gt; segments;
+        try {
+<span class="fc" id="L173">            segments = TextSegmentationUtil.segmentByTextEngine(content, mode.getName());</span>
+<span class="nc" id="L174">        } catch (Exception e) {</span>
+<span class="nc" id="L175">            log.error(&quot;阅读器文本分段失败：{}&quot;, e.getMessage(), e);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">            if (userId != null) {</span>
+<span class="nc bnc" id="L177" title="All 2 branches missed.">                String modeName = req.getMode() != null ? req.getMode() : &quot;fast&quot;;</span>
+<span class="nc" id="L178">                quotaService.refundChars(userId, content.length(), modeName);</span>
+            }
+<span class="nc" id="L180">            return new ReaderTranslateResponse(false, mode.getName(), &quot;文本分段失败：服务器内部错误&quot;);</span>
+<span class="fc" id="L181">        }</span>
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">        if (segments.isEmpty()) {</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            if (userId != null) {</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">                String modeName = req.getMode() != null ? req.getMode() : &quot;fast&quot;;</span>
+<span class="nc" id="L185">                quotaService.refundChars(userId, content.length(), modeName);</span>
+            }
+<span class="nc" id="L187">            return new ReaderTranslateResponse(false, mode.getName(), &quot;段落为空&quot;);</span>
+        }
+
+        // 并行翻译所有段落（复用全局线程池）
+        // 阅读器模式默认使用 MTranServer，html=true
+        try {
+<span class="fc" id="L193">            List&lt;String&gt; translatedSegments = translateSegmentsInParallel(segments, target, mode, true, userId);</span>
+<span class="fc" id="L194">            String rawResult = String.join(&quot;&quot;, translatedSegments);</span>
+<span class="fc" id="L195">            String combinedResult = TextCleaningUtil.sanitizeHtml(rawResult);</span>
+<span class="fc" id="L196">            log.info(&quot;阅读器翻译完成，原文长度：{}，译文长度：{}&quot;, content.length(), combinedResult.length());</span>
+<span class="fc" id="L197">            return new ReaderTranslateResponse(true, mode.getName(), combinedResult);</span>
+<span class="nc" id="L198">        } catch (Exception e) {</span>
+<span class="nc" id="L199">            log.error(&quot;阅读器翻译失败：{}&quot;, e.getMessage(), e);</span>
+<span class="nc bnc" id="L200" title="All 2 branches missed.">            if (userId != null) {</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">                String modeName = req.getMode() != null ? req.getMode() : &quot;fast&quot;;</span>
+<span class="nc" id="L202">                quotaService.refundChars(userId, content.length(), modeName);</span>
+            }
+<span class="nc" id="L204">            return new ReaderTranslateResponse(false, mode.getName(), &quot;翻译失败：服务器内部错误&quot;);</span>
+        }
+    }
+
+    /**
+     * 并行翻译文本段落（使用虚拟线程并发翻译）
+     *
+     * 优化策略：
+     * 1. 先尝试从缓存获取每个段落
+     * 2. 对缓存未命中的段落使用虚拟线程并发翻译
+     * 3. 翻译结果写回缓存
+     *
+     * @param segments 待翻译的文本段落
+     * @param target 目标语言
+     * @param engine 翻译引擎
+     * @param html 是否启用 HTML 翻译模式（仅对 MTranServer 有效）
+     */
+    private List&lt;String&gt; translateSegmentsInParallel(List&lt;String&gt; segments, String target, TranslationMode mode,
+                                                      boolean html, Long userId) {
+<span class="fc" id="L223">        List&lt;String&gt; results = new ArrayList&lt;&gt;(segments.size());</span>
+<span class="fc" id="L224">        List&lt;int[]&gt; indexesToTranslate = new ArrayList&lt;&gt;();</span>
+
+        // 1. 先尝试从缓存获取（分层缓存）
+<span class="fc bfc" id="L227" title="All 2 branches covered.">        for (int i = 0; i &lt; segments.size(); i++) {</span>
+<span class="fc" id="L228">            String segment = segments.get(i);</span>
+<span class="fc" id="L229">            String cacheKey = CacheKeyUtil.buildCacheKey(segment, target);</span>
+<span class="fc" id="L230">            String cached = cachePort.getCacheByMode(cacheKey, mode.getName()).orElse(null);</span>
+
+<span class="fc bfc" id="L232" title="All 2 branches covered.">            if (cached != null) {</span>
+<span class="fc" id="L233">                results.add(cached);</span>
+<span class="fc" id="L234">                log.debug(&quot;阅读器缓存命中：索引 {} mode={}&quot;, i, mode.getName());</span>
+            } else {
+<span class="fc" id="L236">                results.add(null); // 占位，稍后填充</span>
+<span class="fc" id="L237">                indexesToTranslate.add(new int[]{i});</span>
+            }
+        }
+
+        // 2. 使用 Pipeline 快速模式并发翻译缓存未命中的段落
+<span class="fc bfc" id="L242" title="All 2 branches covered.">        if (!indexesToTranslate.isEmpty()) {</span>
+<span class="fc" id="L243">            TranslationPipeline pipeline = new TranslationPipeline(</span>
+                    cachePort, ragTranslationService, entityConsistencyService,
+                    translationClientPort, postProcessingService, userId, null);
+
+<span class="fc" id="L247">            List&lt;Runnable&gt; tasks = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L248">            List&lt;String&gt; tempResults = new ArrayList&lt;&gt;(indexesToTranslate.size());</span>
+
+<span class="fc bfc" id="L250" title="All 2 branches covered.">            for (int j = 0; j &lt; indexesToTranslate.size(); j++) {</span>
+<span class="fc" id="L251">                tempResults.add(null);</span>
+            }
+
+<span class="fc bfc" id="L254" title="All 2 branches covered.">            for (int j = 0; j &lt; indexesToTranslate.size(); j++) {</span>
+<span class="fc" id="L255">                int i = indexesToTranslate.get(j)[0];</span>
+<span class="fc" id="L256">                final int index = i;</span>
+<span class="fc" id="L257">                final int taskIndex = j;</span>
+<span class="fc" id="L258">                String segment = segments.get(i);</span>
+
+<span class="fc" id="L260">                tasks.add(() -&gt; {</span>
+                    try {
+<span class="fc" id="L262">                        String translation = pipeline.executeFast(segment, target, mode, html);</span>
+<span class="pc bpc" id="L263" title="2 of 4 branches missed.">                        if (translation != null &amp;&amp; !translation.trim().isEmpty()) {</span>
+<span class="fc" id="L264">                            tempResults.set(taskIndex, translation);</span>
+                        } else {
+<span class="nc" id="L266">                            tempResults.set(taskIndex, segment);</span>
+                        }
+<span class="nc" id="L268">                    } catch (Exception e) {</span>
+<span class="nc" id="L269">                        log.error(&quot;翻译段落失败（使用原文兜底）：索引 {}, 错误：{}&quot;, index, e.getMessage());</span>
+<span class="nc" id="L270">                        tempResults.set(taskIndex, segment);</span>
+<span class="fc" id="L271">                    }</span>
+<span class="fc" id="L272">                });</span>
+            }
+
+            // 使用虚拟线程并发执行所有翻译任务
+<span class="fc" id="L276">            List&lt;Thread&gt; threads = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L277" title="All 2 branches covered.">            for (Runnable task : tasks) {</span>
+<span class="fc" id="L278">                Thread thread = Thread.startVirtualThread(task);</span>
+<span class="fc" id="L279">                threads.add(thread);</span>
+<span class="fc" id="L280">            }</span>
+
+            // 等待所有线程完成
+<span class="fc bfc" id="L283" title="All 2 branches covered.">            for (Thread thread : threads) {</span>
+                try {
+<span class="fc" id="L285">                    thread.join();</span>
+<span class="nc" id="L286">                } catch (InterruptedException e) {</span>
+<span class="nc" id="L287">                    Thread.currentThread().interrupt();</span>
+<span class="nc" id="L288">                    log.error(&quot;等待翻译线程被中断&quot;);</span>
+<span class="fc" id="L289">                }</span>
+<span class="fc" id="L290">            }</span>
+
+            // 填充翻译结果
+<span class="fc bfc" id="L293" title="All 2 branches covered.">            for (int j = 0; j &lt; indexesToTranslate.size(); j++) {</span>
+<span class="fc" id="L294">                int i = indexesToTranslate.get(j)[0];</span>
+<span class="fc" id="L295">                String translation = tempResults.get(j);</span>
+<span class="pc bpc" id="L296" title="1 of 2 branches missed.">                if (translation != null) {</span>
+<span class="fc" id="L297">                    results.set(i, translation);</span>
+                }
+            }
+        }
+
+        // 3. 清理 null 值
+<span class="fc bfc" id="L303" title="All 2 branches covered.">        for (int i = 0; i &lt; results.size(); i++) {</span>
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">            if (results.get(i) == null) {</span>
+<span class="nc" id="L305">                results.set(i, segments.get(i));</span>
+<span class="nc" id="L306">                log.warn(&quot;发现未处理的 null 值，使用原文填充：索引 {}&quot;, i);</span>
+            }
+        }
+
+<span class="fc" id="L310">        return results;</span>
+    }
+
+    /**
+     * 网页翻译流式版本 - 并发翻译（虚拟线程 + 信号量限流）
+     */
+    public SseEmitter webpageTranslateStream(Long userId, WebpageTranslateRequest req) {
+<span class="fc" id="L317">        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L); // 5 分钟超时</span>
+
+        // 计算总字符数
+<span class="fc" id="L320">        var items = req.getTextRegistry();</span>
+<span class="fc" id="L321">        int totalChars = items.stream()</span>
+<span class="fc bfc" id="L322" title="All 2 branches covered.">                .mapToInt(item -&gt; item.getOriginal() != null ? item.getOriginal().length() : 0)</span>
+<span class="fc" id="L323">                .sum();</span>
+
+        // 检查字符配额
+<span class="fc bfc" id="L326" title="All 4 branches covered.">        String quotaMode = (req.getFastMode() != null &amp;&amp; !req.getFastMode()) ? &quot;expert&quot; : &quot;fast&quot;;</span>
+
+<span class="fc bfc" id="L328" title="All 2 branches covered.">        if (userId != null) {</span>
+<span class="fc" id="L329">            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);</span>
+<span class="fc bfc" id="L330" title="All 2 branches covered.">            if (userLevel != null) {</span>
+<span class="fc bfc" id="L331" title="All 2 branches covered.">                if (!quotaService.tryConsumeChars(userId, userLevel, totalChars, quotaMode)) {</span>
+<span class="fc" id="L332">                    SseEmitterUtil.sendError(emitter, &quot;字符配额不足，请升级档位或等待下月重置&quot;);</span>
+<span class="fc" id="L333">                    SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L334">                    return emitter;</span>
+                }
+            }
+        }
+
+<span class="fc" id="L339">        Thread.startVirtualThread(() -&gt; {</span>
+            try {
+<span class="fc bfc" id="L341" title="All 2 branches covered.">                String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();</span>
+<span class="fc" id="L342">                TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());</span>
+<span class="fc" id="L343">                int totalCount = items.size();</span>
+
+<span class="fc" id="L345">                log.info(&quot;[SSE流式翻译] 开始处理，文本数量: {}, 引擎: {}, fastMode: {}&quot;, totalCount, req.getEngine(), req.getFastMode());</span>
+
+<span class="fc" id="L347">                TranslationPipeline pipeline = new TranslationPipeline(</span>
+                        cachePort, ragTranslationService, entityConsistencyService,
+                        translationClientPort, postProcessingService, userId, null);
+
+<span class="fc" id="L351">                log.info(&quot;[SSE流式翻译] Pipeline 初始化完成&quot;);</span>
+
+                // 限制并发数，避免超过 DeepSeek 限流（10 req/s）和用户级别并发限制
+<span class="fc" id="L354">                int maxConcurrency = 5;</span>
+<span class="fc" id="L355">                var semaphore = new java.util.concurrent.Semaphore(maxConcurrency);</span>
+<span class="fc" id="L356">                var barrier = new java.util.concurrent.CountDownLatch(totalCount);</span>
+
+<span class="fc bfc" id="L358" title="All 2 branches covered.">                for (WebpageTranslateRequest.TextItem item : items) {</span>
+                    // 用 final 局部变量捕获当前迭代的 item，防止 lambda 闭包在多线程环境下共享循环变量
+<span class="fc" id="L360">                    final WebpageTranslateRequest.TextItem currentItem = item;</span>
+<span class="fc" id="L361">                    Thread.startVirtualThread(() -&gt; {</span>
+                        try {
+<span class="fc" id="L363">                            semaphore.acquire();</span>
+<span class="fc bfc" id="L364" title="All 2 branches covered.">                            String id = currentItem.getId() == null ? &quot;&quot; : currentItem.getId();</span>
+<span class="fc bfc" id="L365" title="All 2 branches covered.">                            String original = currentItem.getOriginal() == null ? &quot;&quot; : currentItem.getOriginal();</span>
+<span class="fc" id="L366">                            String cleanText = TextCleaningUtil.cleanText(original);</span>
+
+                            // fastMode=true（默认）使用 MTranServer，fastMode=false（专家模式）使用 DeepSeek
+<span class="fc bfc" id="L369" title="All 4 branches covered.">                            boolean fastMode = req.getFastMode() == null || req.getFastMode();</span>
+<span class="fc bfc" id="L370" title="All 2 branches covered.">                            String extracted = pipeline.executeFast(cleanText, target, mode, !fastMode);</span>
+
+<span class="pc bpc" id="L372" title="1 of 4 branches missed.">                            if (extracted == null || extracted.trim().isEmpty()) {</span>
+<span class="fc" id="L373">                                log.warn(&quot;翻译失败，使用原文兜底：ID={}&quot;, id);</span>
+<span class="fc" id="L374">                                extracted = original;</span>
+                            }
+
+<span class="fc" id="L377">                            Map&lt;String, Object&gt; eventData = new HashMap&lt;&gt;(3);</span>
+                            // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
+<span class="fc" id="L379">                            String sanitized = TextCleaningUtil.sanitizeHtml(extracted);</span>
+<span class="fc" id="L380">                            eventData.put(&quot;textId&quot;, id);</span>
+<span class="fc" id="L381">                            eventData.put(&quot;original&quot;, original);</span>
+<span class="fc" id="L382">                            eventData.put(&quot;translation&quot;, sanitized);</span>
+<span class="fc" id="L383">                            SseEmitterUtil.sendData(emitter, JSON.toJSONString(eventData));</span>
+<span class="fc" id="L384">                        } catch (Exception e) {</span>
+<span class="fc" id="L385">                            log.error(&quot;翻译失败 - ID: {}, 错误: {}&quot;, currentItem.getId(), e.getMessage());</span>
+<span class="fc" id="L386">                            Map&lt;String, Object&gt; errorData = new HashMap&lt;&gt;(3);</span>
+<span class="fc" id="L387">                            errorData.put(&quot;textId&quot;, currentItem.getId());</span>
+<span class="pc bpc" id="L388" title="1 of 2 branches missed.">                            String orig = currentItem.getOriginal() == null ? &quot;&quot; : currentItem.getOriginal();</span>
+<span class="fc" id="L389">                            errorData.put(&quot;original&quot;, orig);</span>
+<span class="fc" id="L390">                            errorData.put(&quot;translation&quot;, TextCleaningUtil.sanitizeHtml(orig));</span>
+<span class="fc" id="L391">                            SseEmitterUtil.sendData(emitter, JSON.toJSONString(errorData));</span>
+                        } finally {
+<span class="fc" id="L393">                            semaphore.release();</span>
+<span class="fc" id="L394">                            barrier.countDown();</span>
+                        }
+<span class="fc" id="L396">                    });</span>
+<span class="fc" id="L397">                }</span>
+
+                // 心跳线程：每 30 秒发送一次心跳，使用注册表检测 emitter 是否仍然活跃
+<span class="fc" id="L400">                String emitterId = SseEmitterUtil.registerEmitter(emitter);</span>
+<span class="fc" id="L401">                Thread.startVirtualThread(() -&gt; {</span>
+<span class="pc bpc" id="L402" title="1 of 2 branches missed.">                    while (SseEmitterUtil.isEmitterActive(emitterId)) {</span>
+                        try {
+<span class="fc" id="L404">                            Thread.sleep(30_000);</span>
+<span class="nc" id="L405">                        } catch (InterruptedException e) {</span>
+<span class="nc" id="L406">                            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L407">                            break;</span>
+<span class="fc" id="L408">                        }</span>
+<span class="fc" id="L409">                        SseEmitterUtil.sendHeartbeat(emitter);</span>
+                    }
+<span class="nc" id="L411">                });</span>
+
+<span class="fc" id="L413">                log.info(&quot;[SSE流式翻译] 所有翻译线程已启动，等待完成 ({} 个文本)&quot;, totalCount);</span>
+
+                // 等待所有翻译完成
+<span class="fc" id="L416">                barrier.await();</span>
+
+<span class="fc" id="L418">                log.info(&quot;[SSE流式翻译] 所有翻译已完成，发送 [DONE] 信号&quot;);</span>
+
+<span class="fc" id="L420">                SseEmitterUtil.sendDone(emitter);</span>
+<span class="fc" id="L421">                SseEmitterUtil.complete(emitter);</span>
+
+<span class="nc" id="L423">            } catch (Exception e) {</span>
+                // 翻译失败，触发心跳停止
+<span class="nc" id="L425">                log.error(&quot;网页翻译失败：{}&quot;, e.getMessage(), e);</span>
+<span class="nc bnc" id="L426" title="All 2 branches missed.">                if (userId != null) {</span>
+<span class="nc" id="L427">                    quotaService.refundChars(userId, totalChars, quotaMode);</span>
+                }
+<span class="nc" id="L429">                SseEmitterUtil.sendError(emitter, &quot;翻译失败：服务器内部错误&quot;);</span>
+<span class="nc" id="L430">                SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L431">            }</span>
+<span class="fc" id="L432">        });</span>
+
+<span class="fc" id="L434">        return emitter;</span>
+    }
+
+    /**
+     * 文本流式翻译（SSE）— 适用于长文本的单段流式输出
+     * 按段落分段，逐段 SSE 输出
+     */
+    public SseEmitter streamTextTranslate(Long userId, SelectionTranslationRequest req) {
+<span class="fc" id="L442">        log.info(&quot;[STREAM-TRACE] Service entry: userId={}, engine={}, target={}, mode={}, textLen={}&quot;,</span>
+<span class="fc bfc" id="L443" title="All 2 branches covered.">                userId, req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);</span>
+
+<span class="fc" id="L445">        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L);</span>
+
+<span class="fc" id="L447">        String text = req.getText();</span>
+<span class="fc bfc" id="L448" title="All 4 branches covered.">        if (text == null || text.trim().isEmpty()) {</span>
+<span class="fc" id="L449">            log.info(&quot;[STREAM-TRACE] Text empty, returning error&quot;);</span>
+<span class="fc" id="L450">            SseEmitterUtil.sendError(emitter, &quot;文本不能为空&quot;);</span>
+<span class="fc" id="L451">            SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L452">            return emitter;</span>
+        }
+
+<span class="fc" id="L455">        TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());</span>
+<span class="pc bpc" id="L456" title="1 of 2 branches missed.">        String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();</span>
+<span class="pc bpc" id="L457" title="1 of 2 branches missed.">        String modeString = req.getMode() != null ? req.getMode() : &quot;fast&quot;;</span>
+<span class="fc" id="L458">        log.info(&quot;[STREAM-TRACE] Normalized: mode={}, target={}&quot;, mode.getName(), target);</span>
+
+        // 检查字符配额（从 SecurityContext 获取 userLevel）
+<span class="fc bfc" id="L461" title="All 2 branches covered.">        if (userId != null) {</span>
+<span class="fc" id="L462">            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);</span>
+<span class="pc bpc" id="L463" title="1 of 2 branches missed.">            if (userLevel != null) {</span>
+<span class="pc bpc" id="L464" title="1 of 2 branches missed.">                if (!quotaService.tryConsumeChars(userId, userLevel, text.length(), modeString)) {</span>
+<span class="fc" id="L465">                    SseEmitterUtil.sendError(emitter, &quot;字符配额不足，请升级档位或等待下月重置&quot;);</span>
+<span class="fc" id="L466">                    SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L467">                    return emitter;</span>
+                }
+            }
+        }
+
+<span class="fc" id="L472">        Thread.startVirtualThread(() -&gt; {</span>
+            try {
+<span class="fc" id="L474">                List&lt;String&gt; segments = TextSegmentationUtil.segmentByTextEngine(text, mode.getName());</span>
+<span class="pc bpc" id="L475" title="1 of 2 branches missed.">                if (segments.isEmpty()) {</span>
+<span class="nc" id="L476">                    segments = List.of(text);</span>
+                }
+
+<span class="fc" id="L479">                TranslationPipeline pipeline = new TranslationPipeline(</span>
+                        cachePort, ragTranslationService, entityConsistencyService,
+                        translationClientPort, postProcessingService, userId, null);
+
+                // 先用 \n\n+ 将全文拆分为逻辑段落
+<span class="fc" id="L484">                String[] logicalParagraphs = text.split(&quot;\n\n+&quot;);</span>
+<span class="fc" id="L485">                log.info(&quot;[STREAM-TRACE] 全文拆分为 {} 个逻辑段落, 总行数 ~{}&quot;, logicalParagraphs.length,</span>
+<span class="fc" id="L486">                        text.split(&quot;\n&quot;, -1).length);</span>
+
+<span class="fc" id="L488">                StringBuilder fullResult = new StringBuilder();</span>
+
+<span class="fc bfc" id="L490" title="All 2 branches covered.">                for (int i = 0; i &lt; logicalParagraphs.length; i++) {</span>
+<span class="fc" id="L491">                    SseEmitterUtil.sendHeartbeat(emitter);</span>
+
+<span class="fc" id="L493">                    String para = logicalParagraphs[i];</span>
+<span class="pc bpc" id="L494" title="1 of 2 branches missed.">                    if (para.isBlank()) {</span>
+<span class="nc" id="L495">                        fullResult.append(&quot;\n\n&quot;);</span>
+<span class="nc" id="L496">                        continue;</span>
+                    }
+
+                    // 段落内按 \n 逐行翻译，保持原文单行换行结构
+<span class="fc" id="L500">                    String[] lines = para.split(&quot;\n&quot;, -1);</span>
+<span class="fc" id="L501">                    StringBuilder paraResult = new StringBuilder();</span>
+
+<span class="fc" id="L503">                    log.info(&quot;[流式翻译] 段落包含 {} 行&quot;, lines.length);</span>
+
+<span class="fc bfc" id="L505" title="All 2 branches covered.">                    for (int j = 0; j &lt; lines.length; j++) {</span>
+<span class="fc" id="L506">                        String line = lines[j];</span>
+<span class="pc bpc" id="L507" title="1 of 2 branches missed.">                        if (line.isEmpty()) {</span>
+<span class="nc" id="L508">                            paraResult.append(&quot;\n&quot;);</span>
+<span class="nc" id="L509">                            continue;</span>
+                        }
+
+                        String translated;
+<span class="pc bpc" id="L513" title="1 of 2 branches missed.">                        String pipelineMode = &quot;fast&quot;.equals(modeString) ? &quot;executeFast&quot; : &quot;execute&quot;;</span>
+<span class="fc" id="L514">                        log.info(&quot;[STREAM-TRACE] Pipeline 委托: pipelineMode={}, lineLen={}, para={}, line={}&quot;,</span>
+<span class="fc" id="L515">                                pipelineMode, line.length(), i, j);</span>
+<span class="pc bpc" id="L516" title="1 of 2 branches missed.">                        if (&quot;fast&quot;.equals(modeString)) {</span>
+<span class="fc" id="L517">                            translated = pipeline.executeFast(line, target, mode);</span>
+                        } else {
+<span class="nc" id="L519">                            translated = pipeline.execute(line, target, mode);</span>
+                        }
+<span class="pc bpc" id="L521" title="1 of 2 branches missed.">                        log.info(&quot;[STREAM-TRACE] Pipeline 返回: translatedLen={}&quot;, translated != null ? translated.length() : 0);</span>
+
+<span class="pc bpc" id="L523" title="2 of 4 branches missed.">                        if (translated == null || translated.isBlank()) {</span>
+<span class="nc" id="L524">                            log.info(&quot;[STREAM-TRACE] Pipeline 返回空，使用原文兜底&quot;);</span>
+<span class="nc" id="L525">                            translated = line;</span>
+                        }
+
+<span class="fc bfc" id="L528" title="All 2 branches covered.">                        if (j &gt; 0) paraResult.append(&quot;\n&quot;);</span>
+<span class="fc" id="L529">                        paraResult.append(translated);</span>
+                    }
+
+<span class="fc" id="L532">                    log.info(&quot;[流式翻译] 段落结果行数: {} (与原文一致)&quot;, paraResult.toString().split(&quot;\n&quot;, -1).length);</span>
+
+<span class="fc bfc" id="L534" title="All 2 branches covered.">                    if (i &gt; 0) fullResult.append(&quot;\n\n&quot;);</span>
+<span class="fc" id="L535">                    fullResult.append(paraResult);</span>
+
+                    // 流式发送当前段落结果（含段间分隔符）
+                    // §NL§ = 单换行, §NL§§NL§ = 段落分隔
+<span class="fc" id="L539">                    String chunk = TextCleaningUtil.sanitizeHtml(paraResult.toString()).replace(&quot;\n&quot;, &quot;§NL§&quot;);</span>
+<span class="fc bfc" id="L540" title="All 2 branches covered.">                    if (i &gt; 0) {</span>
+<span class="fc" id="L541">                        chunk = &quot;§NL§§NL§&quot; + chunk;</span>
+                    }
+<span class="fc" id="L543">                    SseEmitterUtil.sendData(emitter, chunk);</span>
+                }
+
+<span class="fc" id="L546">                log.info(&quot;[STREAM-TRACE] 流式翻译完成, 原文长度={}, 译文长度={}&quot;, text.length(), fullResult.length());</span>
+<span class="fc" id="L547">                SseEmitterUtil.sendDone(emitter);</span>
+<span class="fc" id="L548">                SseEmitterUtil.complete(emitter);</span>
+
+<span class="nc" id="L550">            } catch (Exception e) {</span>
+<span class="nc" id="L551">                log.error(&quot;文本流式翻译失败：{}&quot;, e.getMessage(), e);</span>
+<span class="nc" id="L552">                Long currentUserId = userId;</span>
+<span class="nc bnc" id="L553" title="All 2 branches missed.">                if (currentUserId != null) {</span>
+<span class="nc" id="L554">                    quotaService.refundChars(currentUserId, text.length(), modeString);</span>
+                }
+<span class="nc" id="L556">                SseEmitterUtil.sendError(emitter, &quot;翻译失败：服务器内部错误&quot;);</span>
+<span class="nc" id="L557">                SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L558">            }</span>
+<span class="fc" id="L559">        });</span>
+
+<span class="fc" id="L561">        return emitter;</span>
+    }
+
+    /**
+     * 获取缓存统计信息
+     */
+    public Map&lt;String, Object&gt; getCacheStats() {
+<span class="fc" id="L568">        return cachePort.getCacheStats();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

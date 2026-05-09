@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TeamTranslationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.out.translate</a> &gt; <span class="el_source">TeamTranslationService.java</span></div><h1>TeamTranslationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.out.translate;
+
+import com.yumu.noveltranslator.port.dto.translation.TeamTranslateRequest;
+import com.yumu.noveltranslator.port.dto.translation.TeamTranslateResponse;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+
+import java.time.Duration;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * AI 翻译团队服务
+ * 调用 Python 侧的 /translate-team 端点，使用 AI 多角色协作进行小说章节翻译
+ */
+@Service
+<span class="fc" id="L26">@Slf4j</span>
+public class TeamTranslationService implements com.yumu.noveltranslator.port.out.TeamTranslationPort {
+
+    private final WebClient webClient;
+
+    public TeamTranslationService(
+            @Value(&quot;${translate-server.host:localhost}&quot;) String host,
+            @Value(&quot;${translate-server.port:8000}&quot;) int port,
+<span class="fc" id="L34">            @Value(&quot;${translate-server.api-key:}&quot;) String apiKey) {</span>
+<span class="fc" id="L35">        var builder = WebClient.builder()</span>
+<span class="fc" id="L36">                .baseUrl(&quot;http://%s:%d&quot;.formatted(host, port))</span>
+<span class="fc" id="L37">                .defaultHeader(&quot;Content-Type&quot;, MediaType.APPLICATION_JSON_VALUE)</span>
+<span class="fc" id="L38">                .codecs(configurer -&gt; configurer.defaultCodecs().maxInMemorySize(512 * 1024));</span>
+<span class="pc bpc" id="L39" title="1 of 4 branches missed.">        if (apiKey != null &amp;&amp; !apiKey.isEmpty()) {</span>
+<span class="fc" id="L40">            builder.defaultHeader(&quot;X-Service-Key&quot;, apiKey);</span>
+        }
+<span class="fc" id="L42">        this.webClient = builder.build();</span>
+<span class="fc" id="L43">    }</span>
+
+    /**
+     * 调用 AI 翻译团队进行章节翻译
+     *
+     * @param text         待翻译的章节原文
+     * @param novelType    小说类型
+     * @param sourceLang   源语言
+     * @param targetLang   目标语言
+     * @param glossaryTerms 术语表词条列表
+     * @return 翻译后的文本
+     */
+    @CircuitBreaker(name = &quot;teamTranslation&quot;, fallbackMethod = &quot;teamTranslationFallback&quot;)
+    public String translateChapter(String text, String novelType, String sourceLang,
+                                   String targetLang, List&lt;Glossary&gt; glossaryTerms) {
+
+<span class="fc" id="L59">        TeamTranslateRequest request = buildRequest(text, novelType, sourceLang, targetLang, glossaryTerms);</span>
+
+<span class="fc" id="L61">        log.info(&quot;调用 AI 翻译团队: sourceLang={}, targetLang={}, novelType={}, textLength={}, glossaryCount={}&quot;,</span>
+<span class="pc bpc" id="L62" title="1 of 2 branches missed.">                sourceLang, targetLang, novelType, text != null ? text.length() : 0,</span>
+<span class="fc bfc" id="L63" title="All 2 branches covered.">                glossaryTerms != null ? glossaryTerms.size() : 0);</span>
+
+        try {
+<span class="fc" id="L66">            String responseBody = webClient.post()</span>
+<span class="fc" id="L67">                    .uri(&quot;/translate-team&quot;)</span>
+<span class="fc" id="L68">                    .bodyValue(request)</span>
+<span class="fc" id="L69">                    .retrieve()</span>
+<span class="fc" id="L70">                    .bodyToMono(String.class)</span>
+<span class="fc" id="L71">                    .block(Duration.ofSeconds(300));</span>
+
+<span class="fc" id="L73">            TeamTranslateResponse response = parseResponse(responseBody);</span>
+
+<span class="fc bfc" id="L75" title="All 2 branches covered.">            if (response.getCode() != 200) {</span>
+<span class="fc" id="L76">                log.error(&quot;AI 翻译团队返回错误码: code={}&quot;, response.getCode());</span>
+<span class="fc" id="L77">                throw new RuntimeException(&quot;AI 翻译团队翻译失败，错误码: &quot; + response.getCode());</span>
+            }
+
+<span class="fc" id="L80">            log.info(&quot;AI 翻译团队调用成功: chunkCount={}, costMs={}ms&quot;,</span>
+<span class="fc" id="L81">                    response.getChunkCount(), response.getCostMs());</span>
+
+<span class="fc" id="L83">            return response.getData();</span>
+
+<span class="fc" id="L85">        } catch (WebClientResponseException e) {</span>
+<span class="fc" id="L86">            log.error(&quot;AI 翻译团队调用失败，状态码：{}，响应体：{}&quot;, e.getStatusCode(), e.getResponseBodyAsString(), e);</span>
+<span class="fc" id="L87">            throw new RuntimeException(&quot;AI 翻译团队调用失败 (HTTP &quot; + e.getStatusCode() + &quot;): &quot; + e.getMessage(), e);</span>
+<span class="fc" id="L88">        } catch (Exception e) {</span>
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">            String errorMsg = e.getMessage() != null ? e.getMessage() : &quot;未知错误&quot;;</span>
+<span class="pc bpc" id="L90" title="2 of 6 branches missed.">            if (errorMsg.contains(&quot;Timeout&quot;) || errorMsg.contains(&quot;timeout&quot;) || errorMsg.contains(&quot;timed out&quot;)) {</span>
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">                log.error(&quot;AI 翻译团队响应超时（&gt;300 秒），文本长度：{}&quot;, text != null ? text.length() : 0, e);</span>
+<span class="fc" id="L92">                throw new RuntimeException(&quot;AI 翻译团队响应超时：&quot; + e.getMessage(), e);</span>
+            }
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">            if (e.getCause() instanceof java.net.ConnectException</span>
+<span class="fc bfc" id="L95" title="All 2 branches covered.">                    || errorMsg.contains(&quot;Connection refused&quot;)</span>
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">                    || errorMsg.contains(&quot;connect timed out&quot;)) {</span>
+<span class="fc" id="L97">                log.error(&quot;AI 翻译团队连接失败，请确认服务已启动在 http://localhost:{}，错误：{}&quot;,</span>
+<span class="fc" id="L98">                        8000, e.getMessage(), e);</span>
+<span class="fc" id="L99">                throw new RuntimeException(&quot;无法连接到 AI 翻译团队服务：&quot; + e.getMessage(), e);</span>
+            }
+<span class="pc bpc" id="L101" title="1 of 2 branches missed.">            log.error(&quot;AI 翻译团队翻译异常，文本长度：{}&quot;, text != null ? text.length() : 0, e);</span>
+<span class="fc" id="L102">            throw new RuntimeException(&quot;AI 翻译团队翻译失败：&quot; + e.getMessage(), e);</span>
+        }
+    }
+
+    /**
+     * 调用 AI 翻译团队进行章节翻译（带占位符保护）
+     *
+     * @param text              待翻译的章节原文（可能包含 [{1}], [{2}] 等占位符）
+     * @param novelType         小说类型
+     * @param sourceLang        源语言
+     * @param targetLang        目标语言
+     * @param glossaryTerms     术语表词条列表
+     * @param placeholderMap    占位符 → 翻译后实体名的映射
+     * @return 翻译后的文本（占位符已还原为翻译后的实体名）
+     */
+    @CircuitBreaker(name = &quot;teamTranslation&quot;, fallbackMethod = &quot;teamTranslationFallback&quot;)
+    public String translateChapterWithPlaceholders(String text, String novelType, String sourceLang,
+                                                   String targetLang, List&lt;Glossary&gt; glossaryTerms,
+                                                   Map&lt;String, String&gt; placeholderMap) {
+
+<span class="fc" id="L122">        TeamTranslateRequest request = buildRequest(text, novelType, sourceLang, targetLang, glossaryTerms);</span>
+
+        // Attach placeholders to the request
+<span class="fc bfc" id="L125" title="All 4 branches covered.">        if (placeholderMap != null &amp;&amp; !placeholderMap.isEmpty()) {</span>
+<span class="fc" id="L126">            request.setPlaceholders(placeholderMap);</span>
+<span class="fc" id="L127">            log.info(&quot;占位符保护: 发送 {} 个占位符映射&quot;, placeholderMap.size());</span>
+        } else {
+<span class="fc" id="L129">            log.info(&quot;占位符保护: 无占位符映射&quot;);</span>
+        }
+
+<span class="fc" id="L132">        log.info(&quot;调用 AI 翻译团队(带占位符): sourceLang={}, targetLang={}, novelType={}, textLength={}, glossaryCount={}, placeholderCount={}&quot;,</span>
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">                sourceLang, targetLang, novelType, text != null ? text.length() : 0,</span>
+<span class="pc bpc" id="L134" title="1 of 2 branches missed.">                glossaryTerms != null ? glossaryTerms.size() : 0,</span>
+<span class="fc bfc" id="L135" title="All 2 branches covered.">                placeholderMap != null ? placeholderMap.size() : 0);</span>
+
+        try {
+<span class="fc" id="L138">            String responseBody = webClient.post()</span>
+<span class="fc" id="L139">                    .uri(&quot;/translate-team&quot;)</span>
+<span class="fc" id="L140">                    .bodyValue(request)</span>
+<span class="fc" id="L141">                    .retrieve()</span>
+<span class="fc" id="L142">                    .bodyToMono(String.class)</span>
+<span class="fc" id="L143">                    .block(Duration.ofSeconds(300));</span>
+
+<span class="fc" id="L145">            TeamTranslateResponse response = parseResponse(responseBody);</span>
+
+<span class="pc bpc" id="L147" title="1 of 2 branches missed.">            if (response.getCode() != 200) {</span>
+<span class="nc" id="L148">                log.error(&quot;AI 翻译团队返回错误码: code={}&quot;, response.getCode());</span>
+<span class="nc" id="L149">                throw new RuntimeException(&quot;AI 翻译团队翻译失败，错误码: &quot; + response.getCode());</span>
+            }
+
+<span class="fc" id="L152">            log.info(&quot;AI 翻译团队调用成功(带占位符): chunkCount={}, costMs={}ms&quot;,</span>
+<span class="fc" id="L153">                    response.getChunkCount(), response.getCostMs());</span>
+
+<span class="fc" id="L155">            String translatedText = response.getData();</span>
+
+            // Restore placeholders in the translated text
+<span class="fc bfc" id="L158" title="All 4 branches covered.">            if (placeholderMap != null &amp;&amp; !placeholderMap.isEmpty()) {</span>
+<span class="fc" id="L159">                translatedText = restorePlaceholdersInText(translatedText, placeholderMap);</span>
+            }
+
+<span class="fc" id="L162">            return translatedText;</span>
+
+<span class="fc" id="L164">        } catch (WebClientResponseException e) {</span>
+<span class="fc" id="L165">            log.error(&quot;AI 翻译团队调用失败，状态码：{}，响应体：{}&quot;, e.getStatusCode(), e.getResponseBodyAsString(), e);</span>
+<span class="fc" id="L166">            throw new RuntimeException(&quot;AI 翻译团队调用失败 (HTTP &quot; + e.getStatusCode() + &quot;): &quot; + e.getMessage(), e);</span>
+<span class="fc" id="L167">        } catch (Exception e) {</span>
+<span class="pc bpc" id="L168" title="1 of 2 branches missed.">            String errorMsg = e.getMessage() != null ? e.getMessage() : &quot;未知错误&quot;;</span>
+<span class="pc bpc" id="L169" title="2 of 6 branches missed.">            if (errorMsg.contains(&quot;Timeout&quot;) || errorMsg.contains(&quot;timeout&quot;) || errorMsg.contains(&quot;timed out&quot;)) {</span>
+<span class="pc bpc" id="L170" title="1 of 2 branches missed.">                log.error(&quot;AI 翻译团队响应超时（&gt;300 秒），文本长度：{}&quot;, text != null ? text.length() : 0, e);</span>
+<span class="fc" id="L171">                throw new RuntimeException(&quot;AI 翻译团队响应超时：&quot; + e.getMessage(), e);</span>
+            }
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">            if (e.getCause() instanceof java.net.ConnectException</span>
+<span class="fc bfc" id="L174" title="All 2 branches covered.">                    || errorMsg.contains(&quot;Connection refused&quot;)</span>
+<span class="pc bpc" id="L175" title="1 of 2 branches missed.">                    || errorMsg.contains(&quot;connect timed out&quot;)) {</span>
+<span class="fc" id="L176">                log.error(&quot;AI 翻译团队连接失败，请确认服务已启动在 http://localhost:{}，错误：{}&quot;,</span>
+<span class="fc" id="L177">                        8000, e.getMessage(), e);</span>
+<span class="fc" id="L178">                throw new RuntimeException(&quot;无法连接到 AI 翻译团队服务：&quot; + e.getMessage(), e);</span>
+            }
+<span class="pc bpc" id="L180" title="1 of 2 branches missed.">            log.error(&quot;AI 翻译团队翻译异常，文本长度：{}&quot;, text != null ? text.length() : 0, e);</span>
+<span class="fc" id="L181">            throw new RuntimeException(&quot;AI 翻译团队翻译失败：&quot; + e.getMessage(), e);</span>
+        }
+    }
+
+    /**
+     * 在翻译后的文本中还原占位符
+     * 按占位符字符串长度降序替换，避免 [{1}] 匹配到 [{10}] 中的部分子串
+     * 如果某个占位符在响应中未找到，会记录警告日志
+     *
+     * @param text           翻译后的文本
+     * @param placeholderMap 占位符 → 翻译后实体名的映射
+     * @return 还原占位符后的文本
+     */
+    private String restorePlaceholdersInText(String text, Map&lt;String, String&gt; placeholderMap) {
+<span class="pc bpc" id="L195" title="4 of 8 branches missed.">        if (text == null || text.isEmpty() || placeholderMap == null || placeholderMap.isEmpty()) {</span>
+<span class="nc" id="L196">            return text;</span>
+        }
+
+<span class="fc" id="L199">        String result = text;</span>
+
+        // Sort placeholders by key length descending to avoid partial matches
+<span class="fc" id="L202">        List&lt;Map.Entry&lt;String, String&gt;&gt; sortedEntries = new HashMap&lt;&gt;(placeholderMap).entrySet().stream()</span>
+<span class="fc" id="L203">                .sorted(Map.Entry.&lt;String, String&gt;comparingByKey(Comparator.comparingInt(String::length).reversed()))</span>
+<span class="fc" id="L204">                .collect(Collectors.toList());</span>
+
+<span class="fc" id="L206">        int restoredCount = 0;</span>
+<span class="fc" id="L207">        int notFoundCount = 0;</span>
+
+<span class="fc bfc" id="L209" title="All 2 branches covered.">        for (Map.Entry&lt;String, String&gt; entry : sortedEntries) {</span>
+<span class="fc" id="L210">            String placeholder = entry.getKey();</span>
+<span class="fc" id="L211">            String translatedEntity = entry.getValue();</span>
+
+<span class="fc bfc" id="L213" title="All 2 branches covered.">            if (result.contains(placeholder)) {</span>
+<span class="fc" id="L214">                result = result.replace(placeholder, translatedEntity);</span>
+<span class="fc" id="L215">                restoredCount++;</span>
+<span class="fc" id="L216">                log.debug(&quot;占位符还原: '{}' -&gt; '{}'&quot;, placeholder, translatedEntity);</span>
+            } else {
+<span class="fc" id="L218">                notFoundCount++;</span>
+<span class="fc" id="L219">                log.warn(&quot;占位符还原: 响应中未找到占位符 '{}' (映射到 '{}')，AI 可能未正确翻译该实体&quot;,</span>
+                        placeholder, translatedEntity);
+            }
+<span class="fc" id="L222">        }</span>
+
+<span class="fc" id="L224">        log.info(&quot;占位符还原完成: 总数={}, 已还原={}, 未找到={}&quot;,</span>
+<span class="fc" id="L225">                sortedEntries.size(), restoredCount, notFoundCount);</span>
+
+<span class="fc" id="L227">        return result;</span>
+    }
+
+    /**
+     * 将请求参数构建为 TeamTranslateRequest
+     */
+    private TeamTranslateRequest buildRequest(String text, String novelType, String sourceLang,
+                                              String targetLang, List&lt;Glossary&gt; glossaryTerms) {
+<span class="fc" id="L235">        TeamTranslateRequest request = new TeamTranslateRequest();</span>
+<span class="fc" id="L236">        request.setText(text);</span>
+<span class="fc" id="L237">        request.setNovelType(novelType);</span>
+<span class="fc" id="L238">        request.setSourceLang(sourceLang);</span>
+<span class="fc" id="L239">        request.setTargetLang(targetLang);</span>
+
+<span class="fc bfc" id="L241" title="All 4 branches covered.">        if (glossaryTerms != null &amp;&amp; !glossaryTerms.isEmpty()) {</span>
+<span class="fc" id="L242">            List&lt;TeamTranslateRequest.GlossaryTerm&gt; terms = glossaryTerms.stream()</span>
+<span class="fc" id="L243">                    .map(g -&gt; new TeamTranslateRequest.GlossaryTerm(</span>
+<span class="fc" id="L244">                            g.getSourceWord(),</span>
+<span class="fc" id="L245">                            g.getTargetWord(),</span>
+<span class="fc" id="L246">                            g.getRemark()))</span>
+<span class="fc" id="L247">                    .collect(Collectors.toList());</span>
+<span class="fc" id="L248">            request.setGlossaryTerms(terms);</span>
+        }
+
+<span class="fc" id="L251">        return request;</span>
+    }
+
+    /**
+     * 解析响应 JSON 为 TeamTranslateResponse
+     */
+    private TeamTranslateResponse parseResponse(String responseBody) {
+        try {
+<span class="fc" id="L259">            return com.alibaba.fastjson2.JSON.parseObject(responseBody, TeamTranslateResponse.class);</span>
+<span class="fc" id="L260">        } catch (Exception e) {</span>
+<span class="fc" id="L261">            log.error(&quot;解析 AI 翻译团队响应失败: {}&quot;, responseBody, e);</span>
+<span class="fc" id="L262">            TeamTranslateResponse fallback = new TeamTranslateResponse();</span>
+<span class="fc" id="L263">            fallback.setCode(-1);</span>
+<span class="fc" id="L264">            fallback.setData(responseBody);</span>
+<span class="fc" id="L265">            return fallback;</span>
+        }
+    }
+
+    private String teamTranslationFallback(String text, String novelType, String sourceLang,
+                                           String targetLang, List&lt;Glossary&gt; glossaryTerms, Throwable t) {
+<span class="nc" id="L271">        log.error(&quot;AI 翻译团队熔断降级: {}&quot;, t.getMessage());</span>
+<span class="nc" id="L272">        throw new RuntimeException(&quot;AI 翻译团队服务不可用（熔断器已打开）: &quot; + t.getMessage(), t);</span>
+    }
+
+    private String teamTranslationFallback(String text, String novelType, String sourceLang,
+                                           String targetLang, List&lt;Glossary&gt; glossaryTerms,
+                                           Map&lt;String, String&gt; placeholderMap, Throwable t) {
+<span class="nc" id="L278">        log.error(&quot;AI 翻译团队熔断降级(带占位符): {}&quot;, t.getMessage());</span>
+<span class="nc" id="L279">        throw new RuntimeException(&quot;AI 翻译团队服务不可用（熔断器已打开）: &quot; + t.getMessage(), t);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

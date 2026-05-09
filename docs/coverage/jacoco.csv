@@ -1,0 +1,82 @@
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.web,WebVerificationController,0,7,0,0,0,3,0,3,0,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.web,SubscriptionController,9,39,0,0,2,9,1,5,1,5
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.web,WebPlatformController,0,13,0,0,0,3,0,2,0,2
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.web,WebApiKeyController,23,136,2,4,5,33,2,8,1,6
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.web,WebHomeController,0,7,0,0,0,3,0,3,0,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.shared,SharedTranslateController,31,122,2,10,7,28,2,13,0,9
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.port.in,CollabPort.TeamProjectCreateResult,0,12,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.port.in,CollabPort.InviteCodeResult,0,9,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.port.out,VectorSearchResult,0,15,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.port.out,VectorDocument,24,0,0,0,1,0,1,0,1,0
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.util,EngineAliasRegistry,0,100,1,3,0,18,1,3,0,2
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.admin,CacheAdminController,0,16,0,0,0,4,0,3,0,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.security,UserDetailsFactoryAdapter,5,3,0,0,1,1,1,1,1,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.security,CustomUserDetails,45,89,8,8,9,20,9,14,3,12
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.webhook,StripeWebhookController,12,200,4,28,3,43,4,21,0,6
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.redis,TranslationCacheService,275,879,21,61,65,203,20,50,6,23
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.translate,TokenAwareRateLimiter,4,187,3,39,1,36,3,28,0,9
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.translate,ExternalTranslationService,37,319,11,32,8,56,12,19,1,5
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.translate,TeamTranslationService,52,685,23,55,7,123,25,25,2,9
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.translate,UserLevelThrottledTranslationClient,470,1088,37,67,80,228,34,45,4,23
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.translate,UserLevelThrottledTranslationClient.new ProxySelector() {...},1,6,0,0,1,2,1,2,1,2
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.translate,TokenAwareRateLimiter.SlidingWindowCounter,0,129,0,6,0,29,0,9,0,6
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.out.translate,ThrottledTranslationEngineAdapter,15,10,2,0,2,2,3,2,2,2
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.collab,CollabCommentController,0,70,0,0,0,17,0,6,0,6
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.collab,CollabMemberController,0,56,0,0,0,13,0,6,0,6
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.collab,ChapterTaskController,0,73,0,0,0,16,0,7,0,7
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.plugin,PluginAuthController,8,72,4,8,2,14,4,5,0,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.port.out.payment,PaymentSessionInfo,0,15,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.port.out.payment,SubscriptionInfo,0,27,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.port.out.payment,SubscriptionUpdateRequest,0,12,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.port.out.payment,CustomerInfo,0,9,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,CollabEventPublisher,38,82,0,0,6,18,0,4,0,4
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,TranslationStateMachine,0,34,0,2,0,8,0,4,0,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,EntityConsistencyService.new ProxySelector() {...},1,6,0,0,1,2,1,2,1,2
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,VerificationCodeService,100,31,8,0,22,12,9,3,5,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,EntityConsistencyService.EntityMappingContext,0,9,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,TranslationMemoryService,4,132,0,12,2,28,1,13,1,7
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,EntityConsistencyService,372,969,51,77,65,202,33,51,1,19
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,QuotaService,43,179,4,14,10,33,4,16,1,9
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,ChapterSplitAsyncListener,104,155,2,6,16,31,2,7,1,4
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,TranslationPostProcessingService,129,293,34,38,25,62,26,21,1,10
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,CollabStateMachine,0,103,0,4,0,31,0,11,0,9
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,AiGlossaryService,8,128,1,9,3,29,1,14,0,10
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,MultiAgentTranslationService,423,1037,44,104,101,227,33,64,4,19
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.domain.service,TranslationPipeline,16,1068,8,122,4,196,8,71,0,14
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,ApiKeyApplicationService,181,14,2,0,37,2,12,2,11,2
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,GlossaryApplicationService,0,104,0,10,0,21,0,13,0,8
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,SubscriptionApplicationService,650,1636,87,113,119,365,81,79,20,40
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,CacheAdminApplicationService,10,13,0,0,4,2,1,2,1,2
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,DocumentApplicationService,224,300,22,22,55,63,16,21,3,12
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,AuthApplicationService,53,654,20,68,15,142,21,35,1,11
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,CollabCommentApplicationService,46,436,8,30,7,88,9,20,1,9
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,ChapterTaskApplicationService.new TransactionSynchronization() {...},28,0,0,0,3,0,2,0,2,0
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,ChapterTaskApplicationService.new TransactionSynchronization() {...},54,0,4,0,5,0,4,0,2,0
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,ChapterTaskApplicationService.new TransactionSynchronization() {...},29,0,0,0,3,0,2,0,2,0
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,TranslationApplicationService,275,1241,53,111,59,230,41,56,1,14
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,TranslationTaskApplicationService,263,1873,46,192,57,418,38,115,1,33
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,SubscriptionApplicationService.SessionInfo,0,12,0,0,0,1,0,1,0,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,UserApplicationService,84,753,14,44,11,153,17,40,3,25
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,ChapterTaskApplicationService,167,656,28,48,31,142,27,28,2,15
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,SubscriptionApplicationService.new TransactionDefinition() {...},0,13,0,0,0,6,0,6,0,6
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,SubscriptionApplicationService.new TransactionSynchronization() {...},10,0,0,0,3,0,2,0,2,0
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,CollabProjectApplicationService,236,1396,29,83,48,279,23,63,2,28
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.application.service,RagTranslationApplicationService,44,653,13,69,15,125,14,40,2,11
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.adapter.in.rest.external,ExternalTranslateController,19,352,5,27,6,72,5,19,0,8
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.task,DraftProjectRecoveryTask,27,135,0,6,4,32,0,9,0,6
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.task,MonthlyQuotaResetTask,0,30,0,0,0,11,0,3,0,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.task,CacheCleanupTask,0,17,0,0,0,5,0,3,0,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.task,ApiKeyUsageFlushTask,33,20,0,0,9,4,3,3,3,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.exception,BusinessException,11,7,0,0,4,3,2,1,2,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.exception,MTranServerUnavailableException,9,0,0,0,4,0,2,0,2,0
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,TextCleaningUtil,5,376,4,72,2,102,5,59,1,25
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,CacheKeyUtil,8,123,1,9,3,29,2,11,1,7
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,JwtUtils,22,107,0,0,5,27,2,9,2,9
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,ExternalResponseUtil,19,205,1,27,3,50,2,23,1,10
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,PasswordUtil,3,14,0,0,1,3,1,3,1,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,SecurityUtil,2,126,3,17,0,30,3,19,0,12
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,SseEmitterUtil,112,291,36,18,38,70,27,20,6,14
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,ExternalResponseUtil.StatusCodeResult,0,15,0,0,0,6,0,3,0,3
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,OwnershipVerifier,22,3,4,0,7,1,3,1,1,1
+NovelTrans 测试覆盖率报告,com.yumu.noveltranslator.util,TextSegmentationUtil,38,203,10,34,12,48,11,20,1,8

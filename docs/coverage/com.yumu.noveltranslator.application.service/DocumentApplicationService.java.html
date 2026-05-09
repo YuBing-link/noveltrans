@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DocumentApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">DocumentApplicationService.java</span></div><h1>DocumentApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.yumu.noveltranslator.port.dto.entity.DocumentInfoResponse;
+import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.DocumentTranslationResponse;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
+import com.yumu.noveltranslator.enums.TranslationStatus;
+import com.yumu.noveltranslator.port.in.CollabPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+/**
+ * 文档管理应用服务
+ */
+@Service
+<span class="fc" id="L32">@RequiredArgsConstructor</span>
+public class DocumentApplicationService implements com.yumu.noveltranslator.port.in.DocumentPort {
+
+    @Value(&quot;${translation.upload-dir:#{systemProperties['user.home']}/novel-translator/uploads}&quot;)
+    private String uploadDir;
+
+    private final DocumentRepositoryPort documentPort;
+    private final TranslationRepositoryPort translationPort;
+    private final TranslationStateMachine stateMachine;
+    private final CollabPort collabPort;
+    private final com.yumu.noveltranslator.port.in.TranslationTaskPort translationTaskPort;
+
+    /**
+     * 上传文档
+     */
+    public Document uploadDocument(Long userId, MultipartFile file, DocumentTranslationRequest request) throws IOException {
+        // 创建上传目录
+<span class="nc" id="L49">        Path uploadPath = Paths.get(uploadDir);</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">        if (!Files.exists(uploadPath)) {</span>
+<span class="nc" id="L51">            Files.createDirectories(uploadPath);</span>
+        }
+
+        // 生成唯一文件名
+<span class="nc" id="L55">        String originalFilename = file.getOriginalFilename();</span>
+<span class="nc bnc" id="L56" title="All 4 branches missed.">        String extension = originalFilename != null &amp;&amp; originalFilename.contains(&quot;.&quot;)</span>
+<span class="nc" id="L57">                ? originalFilename.substring(originalFilename.lastIndexOf(&quot;.&quot;))</span>
+<span class="nc" id="L58">                : &quot;&quot;;</span>
+<span class="nc" id="L59">        String filename = UUID.randomUUID().toString() + extension;</span>
+<span class="nc" id="L60">        Path filePath = uploadPath.resolve(filename);</span>
+
+        // 保存文件
+<span class="nc" id="L63">        Files.copy(file.getInputStream(), filePath);</span>
+
+        // 创建文档记录
+<span class="nc" id="L66">        Document doc = new Document();</span>
+<span class="nc" id="L67">        doc.setUserId(userId);</span>
+<span class="nc" id="L68">        doc.setName(originalFilename);</span>
+<span class="nc" id="L69">        doc.setPath(filePath.toString());</span>
+<span class="nc" id="L70">        doc.setSourceLang(request.getSourceLang());</span>
+<span class="nc" id="L71">        doc.setTargetLang(request.getTargetLang());</span>
+<span class="nc" id="L72">        doc.setFileType(extension.replace(&quot;.&quot;, &quot;&quot;).toLowerCase());</span>
+<span class="nc" id="L73">        doc.setFileSize(file.getSize());</span>
+<span class="nc" id="L74">        doc.setStatus(TranslationStatus.PENDING.getValue());</span>
+<span class="nc" id="L75">        doc.setMode(request.getMode());</span>
+<span class="nc" id="L76">        doc.setCreateTime(LocalDateTime.now());</span>
+
+<span class="nc" id="L78">        documentPort.save(doc);</span>
+
+<span class="nc" id="L80">        return doc;</span>
+    }
+
+    /**
+     * 获取用户文档列表
+     */
+    public List&lt;Document&gt; getUserDocuments(Long userId, String status) {
+<span class="fc" id="L87">        List&lt;Document&gt; documents = documentPort.findByUserId(userId);</span>
+<span class="fc bfc" id="L88" title="All 4 branches covered.">        if (status != null &amp;&amp; !&quot;all&quot;.equals(status)) {</span>
+<span class="fc" id="L89">            return documents.stream()</span>
+<span class="fc" id="L90">                    .filter(doc -&gt; status.equals(doc.getStatus()))</span>
+<span class="fc" id="L91">                    .collect(Collectors.toList());</span>
+        }
+<span class="fc" id="L93">        return documents;</span>
+    }
+
+    /**
+     * 获取文档详情
+     */
+    public Document getDocumentById(Long docId, Long userId) {
+<span class="fc" id="L100">        return documentPort.findByIdAndUserId(docId, userId).orElse(null);</span>
+    }
+
+    /**
+     * 删除文档
+     */
+    public boolean deleteDocument(Long docId, Long userId) {
+<span class="fc" id="L107">        return documentPort.findByIdAndUserId(docId, userId).map(doc -&gt; {</span>
+            try {
+<span class="fc" id="L109">                Files.deleteIfExists(Paths.get(doc.getPath()));</span>
+<span class="nc" id="L110">            } catch (IOException e) {</span>
+                // 忽略文件删除失败
+<span class="fc" id="L112">            }</span>
+<span class="fc" id="L113">            documentPort.markDeleted(docId);</span>
+<span class="fc" id="L114">            return true;</span>
+<span class="fc" id="L115">        }).orElse(false);</span>
+    }
+
+    /**
+     * 重新翻译文档（仅重置状态，实际翻译由前端 SSE 触发）
+     */
+    public boolean retryTranslation(Long docId, Long userId) {
+<span class="fc" id="L122">        return documentPort.findByIdAndUserId(docId, userId).map(doc -&gt; {</span>
+<span class="fc" id="L123">            doc.setStatus(TranslationStatus.PENDING.getValue());</span>
+<span class="fc" id="L124">            doc.setErrorMessage(null);</span>
+<span class="fc" id="L125">            doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L126">            documentPort.update(doc);</span>
+            // 同时重置关联的所有翻译任务状态
+<span class="fc" id="L128">            List&lt;TranslationTask&gt; tasks = translationPort.findTasksByDocumentId(docId);</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">            for (TranslationTask task : tasks) {</span>
+<span class="fc" id="L130">                task.setStatus(&quot;pending&quot;);</span>
+<span class="fc" id="L131">                task.setErrorMessage(null);</span>
+<span class="fc" id="L132">                task.setProgress(0);</span>
+<span class="fc" id="L133">                task.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L134">                translationPort.updateTask(task);</span>
+<span class="fc" id="L135">            }</span>
+<span class="fc" id="L136">            return true;</span>
+<span class="fc" id="L137">        }).orElse(false);</span>
+    }
+
+    /**
+     * 转换 Document 为 DocumentInfoResponse
+     */
+    public DocumentInfoResponse toDocumentInfoResponse(Document doc) {
+<span class="fc bfc" id="L144" title="All 2 branches covered.">        if (doc == null) {</span>
+<span class="fc" id="L145">            return null;</span>
+        }
+<span class="fc" id="L147">        DocumentInfoResponse response = new DocumentInfoResponse();</span>
+<span class="fc" id="L148">        response.setId(doc.getId());</span>
+<span class="fc" id="L149">        response.setName(doc.getName());</span>
+<span class="fc" id="L150">        response.setFileType(doc.getFileType());</span>
+<span class="fc" id="L151">        response.setFileSize(doc.getFileSize());</span>
+<span class="fc" id="L152">        response.setSourceLang(doc.getSourceLang());</span>
+<span class="fc" id="L153">        response.setTargetLang(doc.getTargetLang());</span>
+<span class="fc" id="L154">        response.setTaskId(doc.getTaskId());</span>
+<span class="fc" id="L155">        response.setStatus(doc.getStatus());</span>
+<span class="fc" id="L156">        response.setProgress(resolveProgress(doc));</span>
+<span class="pc bpc" id="L157" title="1 of 2 branches missed.">        response.setCreateTime(doc.getCreateTime() != null</span>
+<span class="fc" id="L158">                ? doc.getCreateTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)</span>
+<span class="nc" id="L159">                : null);</span>
+<span class="fc bfc" id="L160" title="All 2 branches covered.">        response.setCompletedTime(doc.getCompletedTime() != null</span>
+<span class="fc" id="L161">                ? doc.getCompletedTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)</span>
+<span class="fc" id="L162">                : null);</span>
+<span class="fc" id="L163">        response.setErrorMessage(doc.getErrorMessage());</span>
+<span class="fc" id="L164">        return response;</span>
+    }
+
+    /**
+     * 上传文档并根据翻译模式自动启动翻译
+     * 团队模式：添加章节到协作项目或创建新项目；fast/expert 模式：创建翻译任务
+     */
+    public DocumentTranslationResponse uploadAndStartTranslation(
+            Long userId, MultipartFile file, DocumentTranslationRequest request) throws IOException {
+
+<span class="nc" id="L174">        Document doc = uploadDocument(userId, file, request);</span>
+
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        if (&quot;team&quot;.equals(request.getMode())) {</span>
+            // 团队模式：文档已通过 documentId 关联（uploadDocument 创建了 doc，但没传 projectId）
+            // 实际上团队模式需要 projectId，所以这个方法由调用方决定走哪条路
+            // 为保持接口简洁，团队模式不使用此方法，调用方直接用 uploadDocument + collabPort
+<span class="nc" id="L180">            throw new UnsupportedOperationException(&quot;团队模式请使用 uploadDocument 后手动调用 CollabPort&quot;);</span>
+        }
+
+        // fast/expert 模式：创建任务后直接异步启动翻译
+<span class="nc" id="L184">        TranslationTask task = translationTaskPort.createDocumentTask(userId, doc);</span>
+<span class="nc" id="L185">        translationTaskPort.startDocumentTranslation(task, doc);</span>
+
+<span class="nc" id="L187">        DocumentTranslationResponse response = new DocumentTranslationResponse();</span>
+<span class="nc" id="L188">        response.setTaskId(task.getTaskId());</span>
+<span class="nc" id="L189">        response.setDocumentId(doc.getId());</span>
+<span class="nc" id="L190">        response.setDocumentName(doc.getName());</span>
+<span class="nc" id="L191">        response.setStatus(task.getStatus());</span>
+<span class="nc" id="L192">        response.setProjectId(null);</span>
+<span class="nc" id="L193">        response.setMessage(&quot;文档上传成功&quot;);</span>
+
+<span class="nc" id="L195">        return response;</span>
+    }
+
+    /**
+     * 取消翻译：先尝试取消翻译任务，无任务时直接更新文档状态
+     */
+    public boolean cancelTranslation(Long docId, Long userId) {
+<span class="nc" id="L202">        TranslationTask task = translationTaskPort.getTaskByDocumentId(docId);</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">        if (task != null) {</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">            if (!task.getUserId().equals(userId)) {</span>
+<span class="nc" id="L205">                return false;</span>
+            }
+<span class="nc" id="L207">            return translationTaskPort.cancelTask(task.getTaskId(), userId);</span>
+        }
+
+        // 翻译任务不存在，直接更新文档状态
+<span class="nc" id="L211">        Document doc = documentPort.findByIdAndUserId(docId, userId).orElse(null);</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (doc == null) {</span>
+<span class="nc" id="L213">            return false;</span>
+        }
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if (!TranslationStatus.PENDING.getValue().equals(doc.getStatus())</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">                &amp;&amp; !TranslationStatus.PROCESSING.getValue().equals(doc.getStatus())) {</span>
+<span class="nc" id="L217">            return false;</span>
+        }
+<span class="nc" id="L219">        doc.setStatus(TranslationStatus.FAILED.getValue());</span>
+<span class="nc" id="L220">        doc.setErrorMessage(&quot;用户取消翻译&quot;);</span>
+<span class="nc" id="L221">        doc.setUpdateTime(java.time.LocalDateTime.now());</span>
+<span class="nc" id="L222">        documentPort.update(doc);</span>
+<span class="nc" id="L223">        return true;</span>
+    }
+
+    /**
+     * 从 Document 或关联的 TranslationTask 获取真实进度
+     */
+    private int resolveProgress(Document doc) {
+<span class="fc bfc" id="L230" title="All 2 branches covered.">        if (TranslationStatus.COMPLETED.getValue().equals(doc.getStatus())) {</span>
+<span class="fc" id="L231">            return 100;</span>
+        }
+<span class="pc bpc" id="L233" title="1 of 4 branches missed.">        if (TranslationStatus.PROCESSING.getValue().equals(doc.getStatus()) || TranslationStatus.PENDING.getValue().equals(doc.getStatus())) {</span>
+<span class="fc" id="L234">            int realProgress = getRealProgress(doc);</span>
+<span class="fc bfc" id="L235" title="All 2 branches covered.">            if (realProgress &gt; 0) {</span>
+<span class="fc" id="L236">                return realProgress;</span>
+            }
+            // 返回基于时间的平滑进度，提升用户体验
+<span class="pc bpc" id="L239" title="1 of 2 branches missed.">            if (doc.getCreateTime() != null) {</span>
+<span class="fc" id="L240">                long elapsedSeconds = java.time.Duration.between(doc.getCreateTime(), LocalDateTime.now()).getSeconds();</span>
+                // 预估 3 分钟完成，每分钟约 33%，最多到 95%
+<span class="fc" id="L242">                int estimated = Math.min(95, (int) (elapsedSeconds * 100.0 / 180.0));</span>
+<span class="fc" id="L243">                return Math.max(5, estimated); // 至少 5%</span>
+            }
+        }
+<span class="nc" id="L246">        return 0;</span>
+    }
+
+    private int getRealProgress(Document doc) {
+<span class="fc bfc" id="L250" title="All 2 branches covered.">        if (doc.getTaskId() != null) {</span>
+<span class="fc" id="L251">            return translationPort.findTaskByTaskId(doc.getTaskId())</span>
+<span class="pc bpc" id="L252" title="1 of 2 branches missed.">                    .map(task -&gt; task.getProgress() != null ? task.getProgress() : 0)</span>
+<span class="fc" id="L253">                    .orElse(0);</span>
+        }
+<span class="fc" id="L255">        return 0;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

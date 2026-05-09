@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CustomUserDetails.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.out.security</a> &gt; <span class="el_source">CustomUserDetails.java</span></div><h1>CustomUserDetails.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.out.security;
+
+import com.yumu.noveltranslator.domain.model.User;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
+import java.util.Collections;
+
+/**
+ * 实现Spring Security的UserDetails接口
+ */
+public class CustomUserDetails implements UserDetails {
+
+    private User user;
+    private final Long userId;
+    private final String email;
+    private final String userLevel;
+    private final Long tenantId;
+
+<span class="fc" id="L22">    public CustomUserDetails(User user) {</span>
+<span class="fc" id="L23">        this.user = user;</span>
+<span class="fc" id="L24">        this.userId = user.getId();</span>
+<span class="fc" id="L25">        this.email = user.getEmail();</span>
+<span class="fc" id="L26">        this.userLevel = user.getUserLevel();</span>
+<span class="fc" id="L27">        this.tenantId = user.getTenantId();</span>
+<span class="fc" id="L28">    }</span>
+
+    /**
+     * 轻量构造器（JWT 缓存命中时使用，无需加载完整 User 实体）
+     */
+<span class="nc" id="L33">    public CustomUserDetails(Long userId, String email, String userLevel, Long tenantId) {</span>
+<span class="nc" id="L34">        this.userId = userId;</span>
+<span class="nc" id="L35">        this.email = email;</span>
+<span class="nc" id="L36">        this.userLevel = userLevel;</span>
+<span class="nc" id="L37">        this.tenantId = tenantId;</span>
+<span class="nc" id="L38">    }</span>
+
+    /**
+     * 轻量构造器（无 email 场景，如 API Key 认证）
+     */
+    public CustomUserDetails(Long userId, String userLevel, Long tenantId) {
+<span class="nc" id="L44">        this(userId, null, userLevel, tenantId);</span>
+<span class="nc" id="L45">    }</span>
+
+    @Override
+    public Collection&lt;? extends GrantedAuthority&gt; getAuthorities() {
+        // 优先使用直接字段（轻量构造器路径）
+<span class="pc bpc" id="L50" title="1 of 4 branches missed.">        String level = userLevel != null ? userLevel : (user != null ? user.getUserLevel() : null);</span>
+<span class="fc bfc" id="L51" title="All 2 branches covered.">        String role = &quot;ROLE_&quot; + (level != null ? level.toUpperCase() : &quot;FREE&quot;);</span>
+<span class="fc" id="L52">        return Collections.singletonList(new SimpleGrantedAuthority(role));</span>
+    }
+
+    @Override
+    public String getPassword() {
+<span class="pc bpc" id="L57" title="1 of 2 branches missed.">        return user != null ? user.getPassword() : null; // 轻量路径下为 null</span>
+    }
+
+    @Override
+    public String getUsername() {
+<span class="pc bpc" id="L62" title="3 of 4 branches missed.">        return email != null ? email : (user != null ? user.getEmail() : &quot;user-&quot; + userId);</span>
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+<span class="fc" id="L67">        return true; // 账户未过期</span>
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+<span class="fc" id="L72">        return true; // 账户未锁定</span>
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+<span class="fc" id="L77">        return true; // 凭据未过期</span>
+    }
+
+    @Override
+    public boolean isEnabled() {
+<span class="fc" id="L82">        return true; // 账户已启用</span>
+    }
+
+    // 提供对领域模型用户的访问
+    public User getUser() {
+<span class="fc" id="L87">        return user;</span>
+    }
+
+    public Long getId() {
+<span class="fc" id="L91">        return userId;</span>
+    }
+
+    public String getEmail() {
+<span class="pc bpc" id="L95" title="3 of 4 branches missed.">        return email != null ? email : (user != null ? user.getEmail() : null);</span>
+    }
+
+    public String getUserLevel() {
+<span class="fc" id="L99">        return userLevel;</span>
+    }
+
+    public Long getTenantId() {
+<span class="nc" id="L103">        return tenantId;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

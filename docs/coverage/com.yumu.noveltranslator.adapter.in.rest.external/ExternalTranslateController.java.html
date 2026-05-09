@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ExternalTranslateController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.in.rest.external</a> &gt; <span class="el_source">ExternalTranslateController.java</span></div><h1>ExternalTranslateController.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.in.rest.external;
+
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.dto.translation.ExternalTranslateResponse;
+import com.yumu.noveltranslator.port.dto.translation.ExternalTranslateRequest;
+import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.ExternalBatchTranslateRequest;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.port.in.TranslatePort;
+import com.yumu.noveltranslator.port.in.TranslationTaskPort;
+import com.yumu.noveltranslator.util.SecurityUtil;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 外部 API 端（API Key 认证，类似 OpenAI API 调用方式）
+ * 路径前缀: /v1/external
+ * 认证方式: Authorization: Bearer nt_sk_xxxx
+ */
+@RestController
+@RequestMapping(&quot;/v1/external&quot;)
+<span class="fc" id="L37">@RequiredArgsConstructor</span>
+<span class="fc" id="L38">@Slf4j</span>
+public class ExternalTranslateController {
+
+    private final TranslatePort translatePort;
+    private final TranslationTaskPort translationTaskPort;
+
+    @Value(&quot;${translation.external.max-chars:5000}&quot;)
+    private int maxCharsPerRequest;
+
+    /**
+     * 文本翻译（类似 OpenAI /v1/chat/completions 风格）
+     * POST /v1/external/translate
+     */
+    @PostMapping(&quot;/translate&quot;)
+    public Result&lt;ExternalTranslateResponse&gt; translate(@RequestBody @Valid ExternalTranslateRequest request) {
+<span class="fc" id="L53">        Long userId = resolveUserId();</span>
+<span class="pc bpc" id="L54" title="1 of 2 branches missed.">        if (userId == null) {</span>
+<span class="nc" id="L55">            return Result.error(ErrorCodeEnum.UNAUTHORIZED, &quot;认证失败&quot;);</span>
+        }
+
+<span class="pc bpc" id="L58" title="2 of 4 branches missed.">        if (request.getText() == null || request.getText().isBlank()) {</span>
+<span class="nc" id="L59">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, &quot;文本不能为空&quot;);</span>
+        }
+
+<span class="fc bfc" id="L62" title="All 2 branches covered.">        if (request.getText().length() &gt; maxCharsPerRequest) {</span>
+<span class="fc" id="L63">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, &quot;文本超过限制（最大 &quot; + maxCharsPerRequest + &quot; 字符）&quot;);</span>
+        }
+
+        try {
+<span class="fc" id="L67">            SelectionTranslationRequest selectionReq = new SelectionTranslationRequest(</span>
+<span class="fc" id="L68">                request.getText(),</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">                request.getSourceLang() != null ? request.getSourceLang() : &quot;auto&quot;,</span>
+<span class="fc" id="L70">                request.getTargetLang(),</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">                request.getEngine() != null ? request.getEngine() : &quot;google&quot;,</span>
+<span class="fc bfc" id="L72" title="All 2 branches covered.">                request.getMode() != null ? request.getMode() : &quot;fast&quot;</span>
+            );
+
+<span class="fc" id="L75">            String result = translatePort.selectionTranslate(userId, selectionReq).getTranslation();</span>
+
+<span class="fc" id="L77">            ExternalTranslateResponse response = new ExternalTranslateResponse();</span>
+<span class="fc" id="L78">            response.setTranslatedText(result);</span>
+<span class="fc" id="L79">            response.setSourceLang(selectionReq.getSourceLang());</span>
+<span class="fc" id="L80">            response.setTargetLang(selectionReq.getTargetLang());</span>
+<span class="fc" id="L81">            response.setEngine(selectionReq.getEngine());</span>
+<span class="fc" id="L82">            response.setUsage(result.length());</span>
+
+<span class="fc" id="L84">            return Result.ok(response);</span>
+<span class="fc" id="L85">        } catch (Exception e) {</span>
+<span class="fc" id="L86">            log.error(&quot;外部 API 翻译失败&quot;, e);</span>
+<span class="fc" id="L87">            return Result.error(ErrorCodeEnum.SYSTEM_ERROR, &quot;翻译失败，请稍后重试&quot;);</span>
+        }
+    }
+
+    /**
+     * 批量文本翻译
+     * POST /v1/external/batch
+     */
+    @PostMapping(&quot;/batch&quot;)
+    public Result&lt;List&lt;ExternalTranslateResponse&gt;&gt; batchTranslate(@RequestBody @Valid ExternalBatchTranslateRequest request) {
+<span class="fc" id="L97">        Long userId = resolveUserId();</span>
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">        if (userId == null) {</span>
+<span class="nc" id="L99">            return Result.error(ErrorCodeEnum.UNAUTHORIZED, &quot;认证失败&quot;);</span>
+        }
+
+<span class="fc bfc" id="L102" title="All 4 branches covered.">        if (request.getTexts() == null || request.getTexts().isEmpty()) {</span>
+<span class="fc" id="L103">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, &quot;文本列表不能为空&quot;);</span>
+        }
+
+<span class="fc bfc" id="L106" title="All 2 branches covered.">        if (request.getTexts().size() &gt; 50) {</span>
+<span class="fc" id="L107">            return Result.error(ErrorCodeEnum.PARAMETER_ERROR, &quot;批量翻译最多支持 50 条文本&quot;);</span>
+        }
+
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        String mode = request.getMode() != null ? request.getMode() : &quot;fast&quot;;</span>
+
+        // 简单循环翻译
+<span class="fc" id="L113">        var results = request.getTexts().stream().map(text -&gt; {</span>
+            try {
+<span class="fc" id="L115">                SelectionTranslationRequest selectionReq = new SelectionTranslationRequest(</span>
+                    text,
+<span class="fc bfc" id="L117" title="All 2 branches covered.">                    request.getSourceLang() != null ? request.getSourceLang() : &quot;auto&quot;,</span>
+<span class="fc" id="L118">                    request.getTargetLang(),</span>
+<span class="fc bfc" id="L119" title="All 2 branches covered.">                    request.getEngine() != null ? request.getEngine() : &quot;google&quot;,</span>
+                    mode
+                );
+<span class="fc" id="L122">                String translated = translatePort.selectionTranslate(userId, selectionReq).getTranslation();</span>
+<span class="fc" id="L123">                ExternalTranslateResponse resp = new ExternalTranslateResponse();</span>
+<span class="fc" id="L124">                resp.setTranslatedText(translated);</span>
+<span class="fc" id="L125">                resp.setSourceLang(selectionReq.getSourceLang());</span>
+<span class="fc" id="L126">                resp.setTargetLang(selectionReq.getTargetLang());</span>
+<span class="fc" id="L127">                resp.setEngine(selectionReq.getEngine());</span>
+<span class="fc" id="L128">                resp.setUsage(translated.length());</span>
+<span class="fc" id="L129">                return resp;</span>
+<span class="fc" id="L130">            } catch (Exception e) {</span>
+<span class="fc" id="L131">                log.warn(&quot;批量翻译单条失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L132">                ExternalTranslateResponse resp = new ExternalTranslateResponse();</span>
+<span class="fc" id="L133">                resp.setError(e.getMessage());</span>
+<span class="fc" id="L134">                return resp;</span>
+            }
+<span class="fc" id="L136">        }).toList();</span>
+
+<span class="fc" id="L138">        return Result.ok(results);</span>
+    }
+
+    /**
+     * 获取可用翻译引擎列表
+     * GET /v1/external/models
+     */
+    @GetMapping(&quot;/models&quot;)
+    public Result&lt;List&lt;Map&lt;String, Object&gt;&gt;&gt; getModels() {
+<span class="fc" id="L147">        List&lt;Map&lt;String, Object&gt;&gt; models = List.of(</span>
+<span class="fc" id="L148">            Map.of(&quot;id&quot;, &quot;google&quot;, &quot;name&quot;, &quot;Google Translate&quot;, &quot;type&quot;, &quot;free&quot;, &quot;modes&quot;, List.of(&quot;fast&quot;, &quot;expert&quot;, &quot;team&quot;)),</span>
+<span class="fc" id="L149">            Map.of(&quot;id&quot;, &quot;mymemory&quot;, &quot;name&quot;, &quot;MyMemory&quot;, &quot;type&quot;, &quot;free&quot;, &quot;modes&quot;, List.of(&quot;fast&quot;, &quot;expert&quot;, &quot;team&quot;)),</span>
+<span class="fc" id="L150">            Map.of(&quot;id&quot;, &quot;libre&quot;, &quot;name&quot;, &quot;LibreTranslate&quot;, &quot;type&quot;, &quot;free&quot;, &quot;modes&quot;, List.of(&quot;fast&quot;, &quot;expert&quot;, &quot;team&quot;)),</span>
+<span class="fc" id="L151">            Map.of(&quot;id&quot;, &quot;baidu&quot;, &quot;name&quot;, &quot;Baidu Translate&quot;, &quot;type&quot;, &quot;api_key&quot;, &quot;modes&quot;, List.of(&quot;fast&quot;, &quot;expert&quot;, &quot;team&quot;)),</span>
+<span class="fc" id="L152">            Map.of(&quot;id&quot;, &quot;deepl&quot;, &quot;name&quot;, &quot;DeepL&quot;, &quot;type&quot;, &quot;api_key&quot;, &quot;modes&quot;, List.of(&quot;fast&quot;, &quot;expert&quot;, &quot;team&quot;)),</span>
+<span class="fc" id="L153">            Map.of(&quot;id&quot;, &quot;openai&quot;, &quot;name&quot;, &quot;OpenAI&quot;, &quot;type&quot;, &quot;api_key&quot;, &quot;modes&quot;, List.of(&quot;fast&quot;, &quot;expert&quot;, &quot;team&quot;))</span>
+        );
+<span class="fc" id="L155">        return Result.ok(models);</span>
+    }
+
+    /**
+     * 下载翻译结果（通过任务 ID）
+     * GET /v1/external/task/{taskId}/download
+     */
+    @GetMapping(&quot;/task/{taskId}/download&quot;)
+    public ResponseEntity&lt;byte[]&gt; downloadTranslation(@PathVariable String taskId) {
+<span class="fc" id="L164">        Long userId = resolveUserId();</span>
+<span class="pc bpc" id="L165" title="1 of 2 branches missed.">        if (userId == null) {</span>
+<span class="nc" id="L166">            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();</span>
+        }
+
+<span class="fc" id="L169">        String filePath = translationTaskPort.getDownloadPath(taskId, userId);</span>
+<span class="fc bfc" id="L170" title="All 2 branches covered.">        if (filePath == null) {</span>
+<span class="fc" id="L171">            return ResponseEntity.notFound().build();</span>
+        }
+
+        try {
+<span class="fc" id="L175">            byte[] fileContent = Files.readAllBytes(Paths.get(filePath));</span>
+<span class="fc" id="L176">            HttpHeaders headers = new HttpHeaders();</span>
+<span class="fc" id="L177">            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);</span>
+<span class="fc" id="L178">            headers.setContentDispositionFormData(&quot;attachment&quot;, &quot;translated_&quot; + taskId);</span>
+<span class="fc" id="L179">            return new ResponseEntity&lt;&gt;(fileContent, headers, HttpStatus.OK);</span>
+<span class="fc" id="L180">        } catch (IOException e) {</span>
+<span class="fc" id="L181">            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();</span>
+        }
+    }
+
+    private Long resolveUserId() {
+        // 从 SecurityContext 中获取用户 ID（通过 API Key 认证或 JWT 认证）
+        try {
+<span class="fc" id="L188">            return SecurityUtil.getRequiredUserId();</span>
+<span class="nc" id="L189">        } catch (Exception e) {</span>
+<span class="nc" id="L190">            return null;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

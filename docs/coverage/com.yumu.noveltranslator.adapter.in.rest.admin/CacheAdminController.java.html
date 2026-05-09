@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CacheAdminController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.in.rest.admin</a> &gt; <span class="el_source">CacheAdminController.java</span></div><h1>CacheAdminController.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.in.rest.admin;
+
+import com.yumu.noveltranslator.port.dto.common.Result;
+import com.yumu.noveltranslator.port.in.CacheAdminPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * 缓存管理接口（调试用，上线后应移除或加鉴权）
+ */
+@RestController
+@RequestMapping(&quot;/admin/cache&quot;)
+<span class="fc" id="L14">@RequiredArgsConstructor</span>
+<span class="fc" id="L15">@Slf4j</span>
+public class CacheAdminController {
+
+    private final CacheAdminPort cacheAdminPort;
+
+    /**
+     * 清空所有翻译缓存（L1 + L2 + L3）
+     */
+    @PostMapping(&quot;/clear&quot;)
+    public Result&lt;String&gt; clearAllCache() {
+<span class="fc" id="L25">        cacheAdminPort.clearAllTranslationCache();</span>
+<span class="fc" id="L26">        return Result.ok(&quot;缓存已清空&quot;);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

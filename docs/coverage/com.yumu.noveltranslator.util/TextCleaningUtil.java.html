@@ -1,0 +1,419 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TextCleaningUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.util</a> &gt; <span class="el_source">TextCleaningUtil.java</span></div><h1>TextCleaningUtil.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.util;
+
+import org.apache.commons.text.StringEscapeUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
+
+import java.util.regex.Pattern;
+
+/**
+ * 文本清洗工具类
+ * 提供文本清洗、格式化、规范化等功能
+ * 注意：不处理HTML标签（由Jsoup或其他工具处理）
+ * 重要：清洗后的文本保持与原文相同的展示形式，不删除标点符号、换行、空格等格式
+ * 重要：不会删除网页标签（如 &lt;div&gt;, &lt;p&gt; 等）
+ */
+<span class="nc" id="L16">public class TextCleaningUtil {</span>
+
+    // 零宽字符和特殊不可见字符（不影响显示但可能造成问题）
+    // 零宽空格 \u200B、零宽非连接符 \u200C、零宽连接符 \u200D
+    // 双向控制字符 \u200E-\u200F, \u202A-\u202E
+    // BOM和非法字符 \uFEFF, \uFFFE, \uFFFF
+<span class="fc" id="L22">    private static final Pattern SPECIAL_INVISIBLE_CHARS = Pattern.compile(</span>
+            &quot;[\\u200B\\u200C\\u200D\\u200E\\u200F\\uFEFF\\uFFFE\\uFFFF\\u202A-\\u202E]+&quot;
+    );
+
+    // 非打印控制字符（ASCII 0-31）
+    // 注意：换行符(\n)、回车符(\r)、制表符(\t)会被保留
+    // 移除的是真正有害的控制字符：\x00-\x08, \x0B, \x0C, \x0E-\x1F
+<span class="fc" id="L29">    private static final Pattern CONTROL_CHARS = Pattern.compile(</span>
+            &quot;[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]+&quot;
+    );
+
+    // 不合法的Unicode字符（代理对错误的字符）
+<span class="fc" id="L34">    private static final Pattern INVALID_UNICODE = Pattern.compile(</span>
+            &quot;[\\uD800-\\uDFFF]&quot;
+    );
+
+    // 连续的零宽空格（多个连续的零宽字符）
+<span class="fc" id="L39">    private static final Pattern MULTIPLE_ZERO_WIDTH = Pattern.compile(</span>
+            &quot;(\\u200B){2,}|(\\u200C){2,}|(\\u200D){2,}&quot;
+    );
+
+    // 用于检测不可见字符的模式（组合）
+<span class="fc" id="L44">    private static final Pattern INVISIBLE_CHARS = Pattern.compile(</span>
+            &quot;[\\p{Cntrl}\\p{Cf}]&quot;
+    );
+
+    /**
+     * 清洗文本：仅移除真正有害的不可见字符，保持原文的展示形式
+     * 保留所有标点符号、空格、换行、制表符、网页标签等格式字符
+     *
+     * @param text 待清洗的文本
+     * @return 清洗后的文本
+     */
+    public static String cleanText(String text) {
+<span class="fc bfc" id="L56" title="All 4 branches covered.">        if (text == null || text.isEmpty()) {</span>
+<span class="fc" id="L57">            return text;</span>
+        }
+
+        // 1. 移除零宽字符和特殊不可见字符
+<span class="fc" id="L61">        text = removeSpecialInvisibleChars(text);</span>
+
+        // 2. 移除非法控制字符
+<span class="fc" id="L64">        text = removeControlChars(text);</span>
+
+        // 3. 移除不合法的Unicode字符
+<span class="fc" id="L67">        text = removeInvalidUnicode(text);</span>
+
+        // 4. 移除多个连续的零宽字符
+<span class="fc" id="L70">        text = removeMultipleZeroWidthChars(text);</span>
+
+<span class="fc" id="L72">        return text;</span>
+    }
+
+    /**
+     * 移除特殊不可见字符（零宽空格、零宽连接符、BOM、双向控制字符等）
+     * 这些字符不会在页面上显示，但可能影响文本处理
+     *
+     * @param text 文本
+     * @return 处理后的文本
+     */
+    public static String removeSpecialInvisibleChars(String text) {
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L84">            return null;</span>
+        }
+<span class="fc" id="L86">        return SPECIAL_INVISIBLE_CHARS.matcher(text).replaceAll(&quot;&quot;);</span>
+    }
+
+    /**
+     * 移除非法控制字符（保留换行符、回车符、制表符）
+     * 移除的是真正有害的非打印字符（ASCII 0-8, 11, 12, 14-31）
+     *
+     * @param text 文本
+     * @return 处理后的文本
+     */
+    public static String removeControlChars(String text) {
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L98">            return null;</span>
+        }
+<span class="fc" id="L100">        return CONTROL_CHARS.matcher(text).replaceAll(&quot;&quot;);</span>
+    }
+
+    /**
+     * 移除不合法的Unicode字符（代理对错误的字符）
+     *
+     * @param text 文本
+     * @return 处理后的文本
+     */
+    public static String removeInvalidUnicode(String text) {
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L111">            return null;</span>
+        }
+<span class="fc" id="L113">        return INVALID_UNICODE.matcher(text).replaceAll(&quot;&quot;);</span>
+    }
+
+    /**
+     * 移除多个连续的零宽字符
+     *
+     * @param text 文本
+     * @return 处理后的文本
+     */
+    public static String removeMultipleZeroWidthChars(String text) {
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">        if (text == null) {</span>
+<span class="nc" id="L124">            return null;</span>
+        }
+<span class="fc" id="L126">        return MULTIPLE_ZERO_WIDTH.matcher(text).replaceAll(&quot;&quot;);</span>
+    }
+
+    /**
+     * 白名单 HTML 净化：仅允许安全的排版标签，移除所有恶意标签和属性。
+     * 使用 Jsoup Safelist，防止 LLM 返回的 &amp;lt;script&amp;gt;、&amp;lt;iframe&amp;gt; 等在前端渲染为 XSS。
+     *
+     * 允许标签: p, br, b, strong, i, em, u, s, blockquote, ul, ol, li, h1-h6, hr, pre, code, span, div
+     * 允许属性: 安全标签的 class 和 id（不含 onclick、style 等事件/样式属性）
+     *
+     * @param text 待净化的文本（可能包含任意 HTML）
+     * @return 净化后的文本（仅保留安全标签，移除所有危险内容）
+     */
+    public static String sanitizeHtml(String text) {
+<span class="fc bfc" id="L140" title="All 4 branches covered.">        if (text == null || text.isEmpty()) {</span>
+<span class="fc" id="L141">            return text;</span>
+        }
+
+<span class="fc" id="L144">        Safelist safelist = Safelist.relaxed()</span>
+<span class="fc" id="L145">                .addTags(&quot;hr&quot;)</span>
+<span class="fc" id="L146">                .removeProtocols(&quot;a&quot;, &quot;href&quot;, &quot;javascript:&quot;, &quot;vbscript:&quot;);</span>
+
+<span class="fc" id="L148">        return Jsoup.clean(text, safelist);</span>
+    }
+
+    /**
+     * 转义HTML特殊字符（&amp;amp; &amp;lt; &amp;gt; &quot; '）
+     *
+     * @param text 文本
+     * @return 转义后的文本
+     */
+    public static String escapeHtml(String text) {
+<span class="fc bfc" id="L158" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L159">            return null;</span>
+        }
+<span class="fc" id="L161">        return StringEscapeUtils.escapeHtml4(text);</span>
+    }
+
+    /**
+     * 反转义HTML实体
+     *
+     * @param text 转义后的文本
+     * @return 反转义后的文本
+     */
+    public static String unescapeHtml(String text) {
+<span class="fc bfc" id="L171" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L172">            return null;</span>
+        }
+<span class="fc" id="L174">        return StringEscapeUtils.unescapeHtml4(text);</span>
+    }
+
+    /**
+     * 转义XML特殊字符（&amp; &lt; &gt; &quot; '）
+     *
+     * @param text 文本
+     * @return 转义后的文本
+     */
+    public static String escapeXml(String text) {
+<span class="fc bfc" id="L184" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L185">            return null;</span>
+        }
+<span class="fc" id="L187">        return StringEscapeUtils.escapeXml10(text);</span>
+    }
+
+    /**
+     * 反转义XML实体
+     *
+     * @param text 转义后的文本
+     * @return 反转义后的文本
+     */
+    public static String unescapeXml(String text) {
+<span class="fc bfc" id="L197" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L198">            return null;</span>
+        }
+<span class="fc" id="L200">        return StringEscapeUtils.unescapeXml(text);</span>
+    }
+
+    /**
+     * 转义CSV特殊字符
+     *
+     * @param text 文本
+     * @return 转义后的文本
+     */
+    public static String escapeCsv(String text) {
+<span class="fc bfc" id="L210" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L211">            return null;</span>
+        }
+<span class="fc" id="L213">        return StringEscapeUtils.escapeCsv(text);</span>
+    }
+
+    /**
+     * 反转义CSV
+     *
+     * @param text 转义后的文本
+     * @return 反转义后的文本
+     */
+    public static String unescapeCsv(String text) {
+<span class="fc bfc" id="L223" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L224">            return null;</span>
+        }
+<span class="fc" id="L226">        return StringEscapeUtils.unescapeCsv(text);</span>
+    }
+
+    /**
+     * 转义Java字符串（\ \n \r \t 等）
+     *
+     * @param text 文本
+     * @return 转义后的文本
+     */
+    public static String escapeJava(String text) {
+<span class="fc bfc" id="L236" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L237">            return null;</span>
+        }
+<span class="fc" id="L239">        return StringEscapeUtils.escapeJava(text);</span>
+    }
+
+    /**
+     * 反转义Java字符串
+     *
+     * @param text 转义后的文本
+     * @return 反转义后的文本
+     */
+    public static String unescapeJava(String text) {
+<span class="fc bfc" id="L249" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L250">            return null;</span>
+        }
+<span class="fc" id="L252">        return StringEscapeUtils.unescapeJava(text);</span>
+    }
+
+    /**
+     * 转义JSON特殊字符
+     *
+     * @param text 文本
+     * @return 转义后的文本
+     */
+    public static String escapeJson(String text) {
+<span class="fc bfc" id="L262" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L263">            return null;</span>
+        }
+<span class="fc" id="L265">        return StringEscapeUtils.escapeJson(text);</span>
+    }
+
+    /**
+     * 反转义JSON
+     *
+     * @param text 转义后的文本
+     * @return 反转义后的文本
+     */
+    public static String unescapeJson(String text) {
+<span class="fc bfc" id="L275" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L276">            return null;</span>
+        }
+<span class="fc" id="L278">        return StringEscapeUtils.unescapeJson(text);</span>
+    }
+
+    /**
+     * 移除文本两端的空白字符（包括全角空格）
+     *
+     * @param text 文本
+     * @return 处理后的文本
+     */
+    public static String trimFullWidth(String text) {
+<span class="fc bfc" id="L288" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L289">            return null;</span>
+        }
+<span class="fc" id="L291">        return text.replaceAll(&quot;^[\\s\\u3000]+&quot;, &quot;&quot;).replaceAll(&quot;[\\s\\u3000]+$&quot;, &quot;&quot;);</span>
+    }
+
+    /**
+     * 将全角字符转换为半角字符
+     *
+     * @param text 文本
+     * @return 转换后的文本
+     */
+    public static String fullWidthToHalfWidth(String text) {
+<span class="fc bfc" id="L301" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L302">            return null;</span>
+        }
+
+<span class="fc" id="L305">        StringBuilder result = new StringBuilder(text.length());</span>
+<span class="fc bfc" id="L306" title="All 2 branches covered.">        for (char c : text.toCharArray()) {</span>
+<span class="fc bfc" id="L307" title="All 2 branches covered.">            if (c == '\u3000') {</span>
+                // 全角空格
+<span class="fc" id="L309">                result.append(' ');</span>
+<span class="pc bpc" id="L310" title="1 of 4 branches missed.">            } else if (c &gt;= '\uFF01' &amp;&amp; c &lt;= '\uFF5E') {</span>
+                // 全角标点和字母数字
+<span class="fc" id="L312">                result.append((char) (c - '\uFEE0'));</span>
+            } else {
+<span class="fc" id="L314">                result.append(c);</span>
+            }
+        }
+<span class="fc" id="L317">        return result.toString();</span>
+    }
+
+    /**
+     * 将半角字符转换为全角字符
+     *
+     * @param text 文本
+     * @return 转换后的文本
+     */
+    public static String halfWidthToFullWidth(String text) {
+<span class="fc bfc" id="L327" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L328">            return null;</span>
+        }
+
+<span class="fc" id="L331">        StringBuilder result = new StringBuilder(text.length());</span>
+<span class="fc bfc" id="L332" title="All 2 branches covered.">        for (char c : text.toCharArray()) {</span>
+<span class="fc bfc" id="L333" title="All 2 branches covered.">            if (c == ' ') {</span>
+                // 空格
+<span class="fc" id="L335">                result.append('\u3000');</span>
+<span class="pc bpc" id="L336" title="1 of 4 branches missed.">            } else if (c &gt;= '!' &amp;&amp; c &lt;= '~') {</span>
+                // 半角标点和字母数字
+<span class="fc" id="L338">                result.append((char) (c + '\uFEE0'));</span>
+            } else {
+<span class="fc" id="L340">                result.append(c);</span>
+            }
+        }
+<span class="fc" id="L343">        return result.toString();</span>
+    }
+
+    /**
+     * 移除BOM（Byte Order Mark）
+     *
+     * @param text 包含BOM的文本
+     * @return 移除BOM后的文本
+     */
+    public static String removeBom(String text) {
+<span class="fc bfc" id="L353" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L354">            return null;</span>
+        }
+<span class="fc bfc" id="L356" title="All 2 branches covered.">        if (text.startsWith(&quot;\uFEFF&quot;)) {</span>
+<span class="fc" id="L357">            return text.substring(1);</span>
+        }
+<span class="fc" id="L359">        return text;</span>
+    }
+
+    /**
+     * 规范化所有空白字符（包括制表符、换行符）为单个空格
+     *
+     * @param text 文本
+     * @return 处理后的文本
+     */
+    public static String normalizeAllWhitespace(String text) {
+<span class="fc bfc" id="L369" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L370">            return null;</span>
+        }
+<span class="fc" id="L372">        return text.replaceAll(&quot;\\s+&quot;, &quot; &quot;);</span>
+    }
+
+    /**
+     * 清理文本中的多余空格（保留换行）
+     *
+     * @param text 文本
+     * @return 处理后的文本
+     */
+    public static String cleanupSpaces(String text) {
+<span class="fc bfc" id="L382" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L383">            return null;</span>
+        }
+        // 行内多个空格压缩为一个
+<span class="fc" id="L386">        String result = text.replaceAll(&quot; +&quot;, &quot; &quot;);</span>
+        // 移除行首行尾空格（保留换行符）
+<span class="fc" id="L388">        result = result.replaceAll(&quot;(?m)^[ \\t]+&quot;, &quot;&quot;);</span>
+<span class="fc" id="L389">        result = result.replaceAll(&quot;(?m)[ \\t]+$&quot;, &quot;&quot;);</span>
+<span class="fc" id="L390">        return result;</span>
+    }
+
+    /**
+     * 移除文本中的制表符（\t）
+     *
+     * @param text 文本
+     * @return 处理后的文本
+     */
+    public static String removeTabs(String text) {
+<span class="fc bfc" id="L400" title="All 2 branches covered.">        if (text == null) {</span>
+<span class="fc" id="L401">            return null;</span>
+        }
+<span class="fc" id="L403">        return text.replace(&quot;\t&quot;, &quot;&quot;);</span>
+    }
+
+    /**
+     * 检查文本是否包含不可见字符
+     *
+     * @param text 文本
+     * @return true 如果包含不可见字符
+     */
+    public static boolean hasInvisibleChars(String text) {
+<span class="fc bfc" id="L413" title="All 4 branches covered.">        if (text == null || text.isEmpty()) {</span>
+<span class="fc" id="L414">            return false;</span>
+        }
+<span class="pc bpc" id="L416" title="1 of 4 branches missed.">        return INVISIBLE_CHARS.matcher(text).find() || SPECIAL_INVISIBLE_CHARS.matcher(text).find();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

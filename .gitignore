@@ -5,7 +5,8 @@
 
 # Build
 target/
-target.old/
+target-*/
+tmp-build/
 *.class
 *.jar
 
@@ -38,8 +39,8 @@ node_modules/
 web-app/node_modules/
 web-app/dist/
 
-# Test & Coverage
-coverage/
+# Test & Coverage (root-level only)
+/coverage/
 test-results/
 load-test/*-results.json
 *-results.json

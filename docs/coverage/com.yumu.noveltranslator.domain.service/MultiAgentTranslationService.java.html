@@ -1,0 +1,642 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MultiAgentTranslationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">MultiAgentTranslationService.java</span></div><h1>MultiAgentTranslationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+
+import com.yumu.noveltranslator.domain.model.AiGlossary;
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
+import com.yumu.noveltranslator.enums.ChapterTaskStatus;
+import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.TranslationMode;
+import com.yumu.noveltranslator.enums.TranslationStatus;
+import com.yumu.noveltranslator.port.out.TeamTranslationPort;
+import com.yumu.noveltranslator.domain.service.TranslationPipeline;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.util.ExternalResponseUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+
+/**
+ * 多 Agent 协作翻译服务
+ * 使用 AI 翻译团队（Agentscope 多 Agent）进行章节翻译
+ *
+ * 架构：Java = 编排器（缓存 + 实体一致性 + 占位符保护），Python = AI 翻译外包
+ * 接入能力：三级缓存 + 实体一致性 + 术语表 + 占位符保护 + 章节拼接
+ */
+@Service
+<span class="fc" id="L58">@RequiredArgsConstructor</span>
+<span class="fc" id="L59">@Slf4j</span>
+public class MultiAgentTranslationService {
+
+    private static final int MAX_CONCURRENT_AGENTS = 5;
+    private static final int MAX_RETRY_COUNT = 3;
+    private static final long RETRY_BASE_DELAY_MS = 2000;
+    private static final long RETRY_MAX_DELAY_MS = 30000;
+
+    /**
+     * 虚拟线程执行器，用于并发翻译章节（统一生命周期管理）
+     */
+<span class="fc" id="L70">    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();</span>
+
+    /**
+     * 内存映射跟踪章节重试次数（服务重启后由 init() 从 DB 恢复）
+     * 使用 AtomicInteger 保证并发安全的读-改-写
+     */
+<span class="fc" id="L76">    private final Map&lt;Long, AtomicInteger&gt; retryCounterMap = new ConcurrentHashMap&lt;&gt;();</span>
+
+    private final CollaborationRepositoryPort collabPort;
+    private final DocumentRepositoryPort documentPort;
+    private final TranslationRepositoryPort translationPort;
+    private final TeamTranslationPort teamTranslationPort;
+    private final TranslationCachePort cachePort;
+    private final EntityConsistencyService entityConsistencyService;
+    private final GlossaryRepositoryPort glossaryPort;
+    private final RagTranslationApplicationService ragTranslationService;
+    private final AiGlossaryService aiGlossaryService;
+    private final TranslationPostProcessingService postProcessingService;
+    private final CollabStateMachine collabStateMachine;
+
+    /**
+     * 启动时从数据库恢复重试计数
+     */
+    @PostConstruct
+    public void init() {
+        try {
+<span class="fc" id="L96">            List&lt;CollabChapterTask&gt; chaptersWithRetries = collabPort.findChaptersWithRetryCountGreaterThan(0);</span>
+<span class="pc bpc" id="L97" title="1 of 2 branches missed.">            for (CollabChapterTask chapter : chaptersWithRetries) {</span>
+<span class="nc" id="L98">                retryCounterMap.put(chapter.getId(), new AtomicInteger(chapter.getRetryCount()));</span>
+<span class="nc" id="L99">            }</span>
+<span class="pc bpc" id="L100" title="1 of 2 branches missed.">            if (!chaptersWithRetries.isEmpty()) {</span>
+<span class="nc" id="L101">                log.info(&quot;从数据库恢复 {} 个章节的重试计数&quot;, chaptersWithRetries.size());</span>
+            }
+<span class="nc" id="L103">        } catch (Exception e) {</span>
+<span class="nc" id="L104">            log.warn(&quot;初始化重试计数失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L105">        }</span>
+<span class="fc" id="L106">    }</span>
+
+    /**
+     * 服务关闭时优雅停止翻译线程池
+     */
+    @PreDestroy
+    public void shutdown() {
+<span class="nc" id="L113">        executor.shutdown();</span>
+        try {
+<span class="nc bnc" id="L115" title="All 2 branches missed.">            if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {</span>
+<span class="nc" id="L116">                log.warn(&quot;翻译线程池 30 秒内未关闭，强制执行 shutdownNow&quot;);</span>
+<span class="nc" id="L117">                executor.shutdownNow();</span>
+            }
+<span class="nc" id="L119">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L120">            executor.shutdownNow();</span>
+<span class="nc" id="L121">            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L122">        }</span>
+<span class="nc" id="L123">    }</span>
+
+    /**
+     * 启动多 Agent 协作翻译
+     */
+    public void startMultiAgentTranslation(Long projectId) {
+        // 恢复上次中断的翻译（TRANSLATING 状态的章节回退到 UNASSIGNED）
+<span class="fc" id="L130">        recoverStuckChapters(projectId);</span>
+
+<span class="fc" id="L132">        List&lt;CollabChapterTask&gt; chapters = collabPort.findChapterTasksByProjectIdAndStatus(</span>
+<span class="fc" id="L133">                projectId, ChapterTaskStatus.UNASSIGNED.getValue());</span>
+
+<span class="fc bfc" id="L135" title="All 2 branches covered.">        if (chapters.isEmpty()) {</span>
+<span class="fc" id="L136">            log.info(&quot;项目没有待翻译的章节: projectId={}&quot;, projectId);</span>
+<span class="fc" id="L137">            return;</span>
+        }
+
+<span class="fc" id="L140">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L141" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L142">            log.error(&quot;项目不存在: projectId={}&quot;, projectId);</span>
+<span class="fc" id="L143">            return;</span>
+        }
+
+<span class="fc" id="L146">        log.info(&quot;启动多 Agent 翻译: projectId={}, chapters={}&quot;, projectId, chapters.size());</span>
+
+        // 更新关联文档状态为处理中
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">        if (project.getDocumentId() != null) {</span>
+<span class="fc" id="L150">            Document doc = documentPort.findById(project.getDocumentId()).orElse(null);</span>
+<span class="pc bpc" id="L151" title="1 of 2 branches missed.">            if (doc != null) {</span>
+<span class="fc" id="L152">                doc.setStatus(TranslationStatus.PROCESSING.getValue());</span>
+<span class="fc" id="L153">                doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L154">                documentPort.update(doc);</span>
+            }
+        }
+
+<span class="fc" id="L158">        CountDownLatch latch = new CountDownLatch(chapters.size());</span>
+<span class="fc" id="L159">        AtomicInteger completed = new AtomicInteger(0);</span>
+<span class="fc" id="L160">        AtomicInteger failed = new AtomicInteger(0);</span>
+<span class="fc" id="L161">        Semaphore agentSemaphore = new Semaphore(MAX_CONCURRENT_AGENTS);</span>
+
+<span class="fc bfc" id="L163" title="All 2 branches covered.">        for (CollabChapterTask chapter : chapters) {</span>
+<span class="fc" id="L164">            executor.submit(() -&gt; {</span>
+                try {
+<span class="fc" id="L166">                    agentSemaphore.acquire();</span>
+                    try {
+<span class="fc" id="L168">                        boolean success = translateChapter(chapter, project);</span>
+<span class="fc bfc" id="L169" title="All 2 branches covered.">                        if (success) {</span>
+<span class="fc" id="L170">                            completed.incrementAndGet();</span>
+                        } else {
+<span class="fc" id="L172">                            failed.incrementAndGet();</span>
+                        }
+<span class="fc" id="L174">                        log.info(&quot;Agent 翻译完成章节: chapterId={}, progress={}/{}&quot;,</span>
+<span class="fc" id="L175">                                chapter.getId(), completed.get(), chapters.size());</span>
+                    } finally {
+<span class="fc" id="L177">                        agentSemaphore.release();</span>
+                    }
+<span class="nc" id="L179">                } catch (InterruptedException e) {</span>
+<span class="nc" id="L180">                    Thread.currentThread().interrupt();</span>
+<span class="nc" id="L181">                    failed.incrementAndGet();</span>
+<span class="nc" id="L182">                    log.error(&quot;翻译章节被中断: chapterId={}&quot;, chapter.getId());</span>
+<span class="nc" id="L183">                } catch (Exception e) {</span>
+<span class="nc" id="L184">                    failed.incrementAndGet();</span>
+<span class="nc" id="L185">                    log.error(&quot;Agent 翻译章节异常: chapterId={}&quot;, chapter.getId(), e);</span>
+                } finally {
+<span class="fc" id="L187">                    latch.countDown();</span>
+                }
+<span class="fc" id="L189">            });</span>
+<span class="fc" id="L190">        }</span>
+
+        // 异步等待所有 Agent 完成，完成后更新项目进度并拼接完整文档
+<span class="fc" id="L193">        executor.submit(() -&gt; {</span>
+            try {
+<span class="fc" id="L195">                latch.await();</span>
+<span class="fc" id="L196">                log.info(&quot;多 Agent 翻译全部完成: projectId={}, success={}, failed={}&quot;,</span>
+<span class="fc" id="L197">                        projectId, completed.get(), failed.get());</span>
+<span class="fc" id="L198">                updateProjectProgress(projectId);</span>
+<span class="fc" id="L199">                assembleCompleteDocument(projectId);</span>
+<span class="nc" id="L200">            } catch (InterruptedException e) {</span>
+<span class="nc" id="L201">                Thread.currentThread().interrupt();</span>
+<span class="nc" id="L202">                log.error(&quot;等待翻译完成被中断: projectId={}&quot;, projectId);</span>
+<span class="fc" id="L203">            }</span>
+<span class="fc" id="L204">        });</span>
+<span class="fc" id="L205">    }</span>
+
+    /**
+     * 单个 Agent 翻译一个章节
+     * 走 TranslationPipeline 完整管线（L1缓存→L2 RAG→L3实体一致性→L4团队翻译）
+     * 翻译完成标记为 SUBMITTED（待审校状态）
+     *
+     * @return true 翻译成功, false 翻译失败
+     */
+    private boolean translateChapter(CollabChapterTask chapter, CollabProject project) {
+<span class="fc" id="L215">        Long chapterId = chapter.getId();</span>
+<span class="fc" id="L216">        String sourceText = chapter.getSourceText();</span>
+
+<span class="pc bpc" id="L218" title="1 of 4 branches missed.">        if (sourceText == null || sourceText.trim().isEmpty()) {</span>
+<span class="fc" id="L219">            log.warn(&quot;章节内容为空，跳过: chapterId={}&quot;, chapterId);</span>
+<span class="fc" id="L220">            return false;</span>
+        }
+
+        // 更新章节状态为翻译中
+<span class="fc" id="L224">        collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.TRANSLATING);</span>
+<span class="fc" id="L225">        chapter.setAssignedTime(LocalDateTime.now());</span>
+<span class="fc" id="L226">        chapter.setProgress(50);</span>
+<span class="fc" id="L227">        collabPort.updateChapterTask(chapter);</span>
+
+<span class="fc" id="L229">        String sourceLang = project.getSourceLang();</span>
+<span class="fc" id="L230">        String targetLang = project.getTargetLang();</span>
+
+        try {
+            // 获取 userId（RAG 需要用户上下文）
+<span class="fc" id="L234">            Long userId = chapter.getAssigneeId();</span>
+<span class="fc bfc" id="L235" title="All 2 branches covered.">            if (userId == null) {</span>
+<span class="fc" id="L236">                CollabProject proj = collabPort.findProjectById(chapter.getProjectId()).orElse(null);</span>
+<span class="fc bfc" id="L237" title="All 2 branches covered.">                if (proj != null) {</span>
+<span class="fc" id="L238">                    userId = proj.getOwnerId();</span>
+                }
+            }
+
+            // 加载术语表
+<span class="fc" id="L243">            List&lt;Glossary&gt; glossaryTerms = loadGlossaryTermsForProject(userId, sourceText);</span>
+
+            // 加载 AI 术语表（仅已确认的术语，优先级低于用户术语表）
+<span class="fc" id="L246">            List&lt;AiGlossary&gt; aiGlossaryTerms = aiGlossaryService.getProjectGlossary(project.getId());</span>
+<span class="fc" id="L247">            List&lt;Glossary&gt; aiGlossaryGlossaryTerms = aiGlossaryTerms.stream()</span>
+<span class="pc" id="L248">                    .filter(t -&gt; sourceText.contains(t.getSourceWord()))</span>
+<span class="fc" id="L249">                    .map(t -&gt; {</span>
+<span class="nc" id="L250">                        Glossary g = new Glossary();</span>
+<span class="nc" id="L251">                        g.setSourceWord(t.getSourceWord());</span>
+<span class="nc" id="L252">                        g.setTargetWord(t.getTargetWord());</span>
+<span class="nc" id="L253">                        return g;</span>
+                    })
+<span class="fc" id="L255">                    .toList();</span>
+
+            // 合并：用户术语表优先，AI 术语表补充
+<span class="pc bpc" id="L258" title="1 of 2 branches missed.">            if (!aiGlossaryGlossaryTerms.isEmpty()) {</span>
+<span class="nc" id="L259">                Set&lt;String&gt; userTermKeys = glossaryTerms.stream()</span>
+<span class="nc" id="L260">                        .map(Glossary::getSourceWord)</span>
+<span class="nc" id="L261">                        .collect(Collectors.toSet());</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">                for (Glossary aiTerm : aiGlossaryGlossaryTerms) {</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">                    if (!userTermKeys.contains(aiTerm.getSourceWord())) {</span>
+<span class="nc" id="L264">                        glossaryTerms.add(aiTerm);</span>
+                    }
+<span class="nc" id="L266">                }</span>
+<span class="nc" id="L267">                log.info(&quot;AI 术语表注入: {} 个术语（过滤后）&quot;, aiGlossaryGlossaryTerms.size());</span>
+            }
+
+            // 推导小说类型
+<span class="fc" id="L271">            String novelType = deriveNovelType(project);</span>
+
+            // 构建 Pipeline 并执行完整管线（L1→L2→L3→L4=Team）
+<span class="fc" id="L274">            TranslationPipeline pipeline = new TranslationPipeline(</span>
+                    cachePort, ragTranslationService, entityConsistencyService,
+<span class="fc" id="L276">                    null, postProcessingService, teamTranslationPort, userId, chapter.getProjectId().toString(), glossaryTerms);</span>
+
+<span class="fc" id="L278">            String translated = pipeline.executeTeam(</span>
+                    sourceText, sourceLang, targetLang, TranslationMode.TEAM, novelType, glossaryTerms);
+
+<span class="pc bpc" id="L281" title="2 of 4 branches missed.">            if (translated == null || translated.trim().isEmpty()) {</span>
+<span class="nc" id="L282">                throw new RuntimeException(&quot;AI 翻译团队返回结果为空&quot;);</span>
+            }
+
+            // 维护 AI 术语表：提取实体并保存
+            try {
+<span class="fc" id="L287">                List&lt;String&gt; entities = entityConsistencyService.extractEntitiesSegmented(sourceText, targetLang);</span>
+<span class="fc bfc" id="L288" title="All 2 branches covered.">                if (!entities.isEmpty()) {</span>
+<span class="fc" id="L289">                    Map&lt;String, String&gt; entityTranslations = entityConsistencyService.translateEntities(entities, targetLang);</span>
+<span class="pc bpc" id="L290" title="1 of 2 branches missed.">                    String contextExcerpt = sourceText.length() &gt; 200 ? sourceText.substring(0, 200) : sourceText;</span>
+<span class="fc bfc" id="L291" title="All 2 branches covered.">                    for (Map.Entry&lt;String, String&gt; entry : entityTranslations.entrySet()) {</span>
+<span class="fc" id="L292">                        aiGlossaryService.addTerm(</span>
+<span class="fc" id="L293">                                project.getId(),</span>
+<span class="fc" id="L294">                                entry.getKey(),</span>
+<span class="fc" id="L295">                                entry.getValue(),</span>
+                                contextExcerpt,
+                                null,
+<span class="fc" id="L298">                                chapter.getId()</span>
+                        );
+<span class="fc" id="L300">                    }</span>
+<span class="fc" id="L301">                    log.info(&quot;AI 术语表维护完成: chapterId={}, 提取{}个实体&quot;, chapterId, entityTranslations.size());</span>
+                }
+<span class="nc" id="L303">            } catch (Exception e) {</span>
+<span class="nc" id="L304">                log.warn(&quot;AI 术语表维护失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L305">            }</span>
+
+            // 标记为 SUBMITTED（待审校）
+<span class="fc" id="L308">            applyTranslationResult(chapter, sourceText, translated, false);</span>
+
+<span class="fc" id="L310">            log.info(&quot;章节翻译完成（待审校）: chapterId={}, 原文{}字, 译文{}字&quot;,</span>
+<span class="fc" id="L311">                    chapterId, sourceText.length(), translated.length());</span>
+<span class="fc" id="L312">            return true;</span>
+
+<span class="nc" id="L314">        } catch (Exception e) {</span>
+<span class="nc" id="L315">            log.error(&quot;章节翻译异常: chapterId={}, error={}&quot;, chapterId, e.getMessage(), e);</span>
+<span class="nc" id="L316">            int retryCount = getRetryCount(chapter);</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">            if (retryCount &gt;= MAX_RETRY_COUNT) {</span>
+<span class="nc" id="L318">                log.error(&quot;章节 {} 已达到最大重试次数 {}，停止自动重试&quot;, chapterId, MAX_RETRY_COUNT);</span>
+                // 经 REVIEWING 中间状态转入 REJECTED
+<span class="nc" id="L320">                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REVIEWING);</span>
+<span class="nc" id="L321">                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REJECTED);</span>
+<span class="nc" id="L322">                chapter.setReviewComment(&quot;翻译异常（已重试 &quot; + retryCount + &quot; 次）: &quot; + e.getMessage());</span>
+            } else {
+<span class="nc" id="L324">                incrementRetryCount(chapter);</span>
+<span class="nc" id="L325">                int newRetry = retryCount + 1;</span>
+<span class="nc" id="L326">                chapter.setRetryCount(newRetry);</span>
+<span class="nc" id="L327">                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.UNASSIGNED);</span>
+<span class="nc" id="L328">                chapter.setReviewComment(&quot;翻译异常，等待重试（第 &quot; + newRetry + &quot; 次）: &quot; + e.getMessage());</span>
+                // 指数退避，避免立即重试
+<span class="nc" id="L330">                sleepWithBackoff(retryCount, e);</span>
+            }
+<span class="nc" id="L332">            collabPort.updateChapterTask(chapter);</span>
+<span class="nc" id="L333">            return false;</span>
+        }
+    }
+
+    /**
+     * 恢复上次中断的翻译：将 TRANSLATING 状态的章节回退到 UNASSIGNED
+     */
+    private void recoverStuckChapters(Long projectId) {
+<span class="fc" id="L341">        List&lt;CollabChapterTask&gt; stuckChapters = collabPort.findChapterTasksByProjectIdAndStatus(</span>
+<span class="fc" id="L342">                projectId, ChapterTaskStatus.TRANSLATING.getValue());</span>
+
+<span class="fc bfc" id="L344" title="All 2 branches covered.">        if (stuckChapters.isEmpty()) {</span>
+<span class="fc" id="L345">            return;</span>
+        }
+
+<span class="fc" id="L348">        log.info(&quot;发现 {} 个翻译中断的章节，回退到待翻译状态&quot;, stuckChapters.size());</span>
+<span class="fc bfc" id="L349" title="All 2 branches covered.">        for (CollabChapterTask chapter : stuckChapters) {</span>
+            // 检查重试次数
+<span class="fc" id="L351">            int retryCount = getRetryCount(chapter);</span>
+<span class="fc bfc" id="L352" title="All 2 branches covered.">            if (retryCount &gt;= MAX_RETRY_COUNT) {</span>
+<span class="fc" id="L353">                log.warn(&quot;章节 {} 已重试 {} 次，跳过自动翻译&quot;, chapter.getId(), retryCount);</span>
+<span class="fc" id="L354">                continue;</span>
+            }
+            // 增加重试计数并回退状态
+<span class="fc" id="L357">            incrementRetryCount(chapter);</span>
+<span class="fc" id="L358">            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.UNASSIGNED);</span>
+<span class="fc" id="L359">            chapter.setReviewComment(&quot;翻译中断，自动重试（第 &quot; + (retryCount + 2) + &quot; 次）&quot;);</span>
+<span class="fc" id="L360">            chapter.setRetryCount(retryCount + 1);</span>
+<span class="fc" id="L361">            collabPort.updateChapterTask(chapter);</span>
+<span class="fc" id="L362">            log.info(&quot;章节 {} 回退到 UNASSIGNED，准备重试&quot;, chapter.getId());</span>
+<span class="fc" id="L363">        }</span>
+<span class="fc" id="L364">    }</span>
+
+    /**
+     * 获取章节重试次数（原子读）
+     */
+    private int getRetryCount(CollabChapterTask chapter) {
+<span class="fc" id="L370">        AtomicInteger counter = retryCounterMap.get(chapter.getId());</span>
+<span class="fc bfc" id="L371" title="All 2 branches covered.">        return counter == null ? 0 : counter.get();</span>
+    }
+
+    /**
+     * 增加章节重试次数（原子递增）
+     */
+    private void incrementRetryCount(CollabChapterTask chapter) {
+<span class="fc" id="L378">        retryCounterMap.computeIfAbsent(chapter.getId(), k -&gt; new AtomicInteger(0)).incrementAndGet();</span>
+<span class="fc" id="L379">    }</span>
+
+    /**
+     * 定时清理卡在 TRANSLATING 状态的章节（每 5 分钟执行一次）
+     * 使用 CAS 单行更新保证并发安全，不依赖事务
+     */
+    @Scheduled(fixedRate = 300000)
+    public void cleanupStuckChapters() {
+<span class="fc" id="L387">        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);</span>
+<span class="fc" id="L388">        List&lt;CollabChapterTask&gt; stuckChapters = collabPort.findChapterTasksByStatusAndUpdateTimeBefore(</span>
+<span class="fc" id="L389">                ChapterTaskStatus.TRANSLATING.getValue(), cutoff);</span>
+
+<span class="pc bpc" id="L391" title="1 of 2 branches missed.">        if (stuckChapters.isEmpty()) {</span>
+<span class="fc" id="L392">            return;</span>
+        }
+
+<span class="nc" id="L395">        String expectedStatus = ChapterTaskStatus.TRANSLATING.getValue();</span>
+<span class="nc" id="L396">        log.info(&quot;定时清理: 发现 {} 个卡住超过 30 分钟的章节&quot;, stuckChapters.size());</span>
+<span class="nc bnc" id="L397" title="All 2 branches missed.">        for (CollabChapterTask chapter : stuckChapters) {</span>
+<span class="nc" id="L398">            int retryCount = getRetryCount(chapter);</span>
+<span class="nc bnc" id="L399" title="All 2 branches missed.">            if (retryCount &gt;= MAX_RETRY_COUNT) {</span>
+                // CAS 直接转到 REJECTED
+<span class="nc" id="L401">                int rows = collabPort.casRejectChapter(</span>
+<span class="nc" id="L402">                        chapter.getId(), expectedStatus, retryCount,</span>
+                        &quot;翻译超时（已重试 &quot; + retryCount + &quot; 次），自动终止&quot;);
+<span class="nc bnc" id="L404" title="All 2 branches missed.">                if (rows &gt; 0) {</span>
+<span class="nc" id="L405">                    chapter.setStatus(ChapterTaskStatus.REJECTED.getValue());</span>
+<span class="nc" id="L406">                    chapter.setRetryCount(retryCount);</span>
+<span class="nc" id="L407">                    log.info(&quot;定时清理: 章节 {} 已达到最大重试次数，标记为 REJECTED&quot;, chapter.getId());</span>
+                } else {
+<span class="nc" id="L409">                    log.debug(&quot;定时清理: 章节 {} 状态已被其他线程修改，跳过&quot;, chapter.getId());</span>
+                }
+<span class="nc" id="L411">            } else {</span>
+<span class="nc" id="L412">                incrementRetryCount(chapter);</span>
+<span class="nc" id="L413">                int newRetry = retryCount + 1;</span>
+<span class="nc" id="L414">                String comment = &quot;翻译超时，自动重试（第 &quot; + newRetry + &quot; 次）&quot;;</span>
+<span class="nc" id="L415">                int rows = collabPort.casResetChapterToUnassigned(</span>
+<span class="nc" id="L416">                        chapter.getId(), expectedStatus, newRetry, comment);</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">                if (rows &gt; 0) {</span>
+<span class="nc" id="L418">                    chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());</span>
+<span class="nc" id="L419">                    chapter.setRetryCount(newRetry);</span>
+<span class="nc" id="L420">                    chapter.setReviewComment(comment);</span>
+<span class="nc" id="L421">                    log.info(&quot;定时清理: 章节 {} 回退到 UNASSIGNED&quot;, chapter.getId());</span>
+                } else {
+                    // CAS 失败，回退内存计数避免虚高
+<span class="nc" id="L424">                    AtomicInteger counter = retryCounterMap.get(chapter.getId());</span>
+<span class="nc bnc" id="L425" title="All 4 branches missed.">                    if (counter != null &amp;&amp; counter.get() &gt; 0) {</span>
+<span class="nc" id="L426">                        counter.decrementAndGet();</span>
+                    }
+<span class="nc" id="L428">                    log.debug(&quot;定时清理: 章节 {} 状态已被其他线程修改，跳过&quot;, chapter.getId());</span>
+                }
+            }
+<span class="nc" id="L431">        }</span>
+<span class="nc" id="L432">    }</span>
+
+    /**
+     * 指数退避等待，避免重试风暴
+     */
+    private void sleepWithBackoff(int retryCount, Exception e) {
+        long delay;
+<span class="nc" id="L439">        String msg = e.getMessage();</span>
+<span class="nc bnc" id="L440" title="All 8 branches missed.">        boolean isRateLimited = msg != null &amp;&amp; (msg.contains(&quot;429&quot;) || msg.contains(&quot;rate limit&quot;) || msg.contains(&quot;Too Many Requests&quot;));</span>
+
+<span class="nc bnc" id="L442" title="All 2 branches missed.">        if (isRateLimited) {</span>
+<span class="nc" id="L443">            delay = Math.max(5000, RETRY_BASE_DELAY_MS * (1L &lt;&lt; retryCount));</span>
+        } else {
+<span class="nc" id="L445">            long baseDelay = RETRY_BASE_DELAY_MS * (1L &lt;&lt; retryCount);</span>
+<span class="nc" id="L446">            long jitter = (long) (Math.random() * baseDelay * 0.5);</span>
+<span class="nc" id="L447">            delay = baseDelay + jitter;</span>
+        }
+<span class="nc" id="L449">        delay = Math.min(delay, RETRY_MAX_DELAY_MS);</span>
+        try {
+<span class="nc" id="L451">            Thread.sleep(delay);</span>
+<span class="nc" id="L452">        } catch (InterruptedException ie) {</span>
+<span class="nc" id="L453">            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L454">        }</span>
+<span class="nc" id="L455">    }</span>
+
+    /**
+     * 加载项目所有者的术语表中在原文中出现的词条
+     */
+    private List&lt;Glossary&gt; loadGlossaryTermsForProject(Long userId, String sourceText) {
+<span class="fc bfc" id="L461" title="All 2 branches covered.">        if (userId == null) {</span>
+<span class="fc" id="L462">            return List.of();</span>
+        }
+
+        try {
+<span class="fc" id="L466">            List&lt;Glossary&gt; allTerms = glossaryPort.findActiveGlossaryByUserId(userId);</span>
+
+            // 过滤只保留在原文中出现的术语
+<span class="fc" id="L469">            return allTerms.stream()</span>
+<span class="fc bfc" id="L470" title="All 4 branches covered.">                    .filter(term -&gt; term.getSourceWord() != null &amp;&amp; sourceText.contains(term.getSourceWord()))</span>
+<span class="fc" id="L471">                    .toList();</span>
+<span class="fc" id="L472">        } catch (Exception e) {</span>
+<span class="fc" id="L473">            log.warn(&quot;加载术语表失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L474">            return List.of();</span>
+        }
+    }
+
+    /**
+     * 从项目信息推导小说类型
+     */
+    private String deriveNovelType(CollabProject project) {
+<span class="fc bfc" id="L482" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L483">            return &quot;daily&quot;;</span>
+        }
+
+<span class="fc" id="L486">        String description = project.getDescription();</span>
+<span class="fc bfc" id="L487" title="All 4 branches covered.">        if (description == null || description.isBlank()) {</span>
+<span class="fc" id="L488">            return &quot;daily&quot;;</span>
+        }
+
+        // 简单的关键词匹配推导类型
+<span class="fc" id="L492">        String lower = description.toLowerCase();</span>
+<span class="pc bpc" id="L493" title="1 of 6 branches missed.">        if (lower.contains(&quot;fantasy&quot;) || lower.contains(&quot;奇幻&quot;) || lower.contains(&quot;玄幻&quot;)) {</span>
+<span class="fc" id="L494">            return &quot;fantasy&quot;;</span>
+        }
+<span class="fc bfc" id="L496" title="All 6 branches covered.">        if (lower.contains(&quot;romance&quot;) || lower.contains(&quot;言情&quot;) || lower.contains(&quot;恋爱&quot;)) {</span>
+<span class="fc" id="L497">            return &quot;romance&quot;;</span>
+        }
+<span class="fc bfc" id="L499" title="All 4 branches covered.">        if (lower.contains(&quot;scifi&quot;) || lower.contains(&quot;科幻&quot;)) {</span>
+<span class="fc" id="L500">            return &quot;scifi&quot;;</span>
+        }
+<span class="fc bfc" id="L502" title="All 6 branches covered.">        if (lower.contains(&quot;mystery&quot;) || lower.contains(&quot;悬疑&quot;) || lower.contains(&quot;推理&quot;)) {</span>
+<span class="fc" id="L503">            return &quot;mystery&quot;;</span>
+        }
+<span class="fc bfc" id="L505" title="All 4 branches covered.">        if (lower.contains(&quot;horror&quot;) || lower.contains(&quot;恐怖&quot;)) {</span>
+<span class="fc" id="L506">            return &quot;horror&quot;;</span>
+        }
+<span class="pc bpc" id="L508" title="1 of 6 branches missed.">        if (lower.contains(&quot;daily&quot;) || lower.contains(&quot;日常&quot;) || lower.contains(&quot;生活&quot;)) {</span>
+<span class="fc" id="L509">            return &quot;daily&quot;;</span>
+        }
+
+<span class="fc" id="L512">        return &quot;daily&quot;;</span>
+    }
+
+    /**
+     * 应用翻译结果到章节实体
+     */
+    private void applyTranslationResult(CollabChapterTask chapter, String sourceText, String translated, boolean fromCache) {
+<span class="fc" id="L519">        chapter.setTargetText(translated);</span>
+<span class="fc" id="L520">        chapter.setTargetWordCount(translated.length());</span>
+<span class="fc" id="L521">        chapter.setSourceWordCount(sourceText.length());</span>
+
+<span class="fc bfc" id="L523" title="All 2 branches covered.">        if (fromCache) {</span>
+            // 缓存命中：经 SUBMITTED → REVIEWING → APPROVED → COMPLETED 完成自动审核
+<span class="fc" id="L525">            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.SUBMITTED);</span>
+<span class="fc" id="L526">            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REVIEWING);</span>
+<span class="fc" id="L527">            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.APPROVED);</span>
+<span class="fc" id="L528">            chapter.setProgress(100);</span>
+<span class="fc" id="L529">            chapter.setCompletedTime(LocalDateTime.now());</span>
+<span class="fc" id="L530">            chapter.setSubmittedTime(LocalDateTime.now());</span>
+<span class="fc" id="L531">            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.COMPLETED);</span>
+        } else {
+            // AI 新翻译：标记为 SUBMITTED（待审校）
+<span class="fc" id="L534">            collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.SUBMITTED);</span>
+<span class="fc" id="L535">            chapter.setProgress(80);</span>
+<span class="fc" id="L536">            chapter.setSubmittedTime(LocalDateTime.now());</span>
+        }
+
+<span class="fc" id="L539">        collabPort.updateChapterTask(chapter);</span>
+<span class="fc" id="L540">    }</span>
+
+    /**
+     * 更新项目整体进度
+     */
+    private void updateProjectProgress(Long projectId) {
+<span class="fc" id="L546">        List&lt;CollabChapterTask&gt; tasks = collabPort.findChapterTasksByProjectId(projectId);</span>
+<span class="fc bfc" id="L547" title="All 2 branches covered.">        if (tasks.isEmpty()) return;</span>
+
+<span class="fc" id="L549">        long completed = tasks.stream()</span>
+<span class="fc" id="L550">                .filter(t -&gt; ChapterTaskStatus.COMPLETED.getValue().equals(t.getStatus()))</span>
+<span class="fc" id="L551">                .count();</span>
+
+<span class="fc" id="L553">        int progress = (int) Math.round((double) completed / tasks.size() * 100);</span>
+
+<span class="fc" id="L555">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L556" title="All 2 branches covered.">        if (project != null) {</span>
+<span class="fc" id="L557">            project.setProgress(progress);</span>
+<span class="fc bfc" id="L558" title="All 2 branches covered.">            if (progress == 100) {</span>
+                try {
+<span class="fc" id="L560">                    collabStateMachine.transitionProject(project, CollabProjectStatus.COMPLETED);</span>
+<span class="nc" id="L561">                } catch (IllegalStateException e) {</span>
+<span class="nc" id="L562">                    log.debug(&quot;项目无法转换为 COMPLETED 状态（当前状态不允许）: projectId={}&quot;, projectId);</span>
+<span class="fc" id="L563">                }</span>
+            }
+<span class="fc" id="L565">            collabPort.updateProject(project);</span>
+        }
+<span class="fc" id="L567">    }</span>
+
+    /**
+     * 所有章节翻译完成后，按 chapterNumber 顺序拼接完整翻译文档
+     */
+    private void assembleCompleteDocument(Long projectId) {
+        // 按 chapterNumber 升序获取所有章节
+<span class="fc" id="L574">        List&lt;CollabChapterTask&gt; chapters = collabPort.findChapterTasksByProjectId(projectId);</span>
+<span class="fc bfc" id="L575" title="All 2 branches covered.">        if (chapters.isEmpty()) return;</span>
+
+<span class="fc" id="L577">        chapters.sort(Comparator.comparingInt(CollabChapterTask::getChapterNumber));</span>
+
+        // 拼接完整译文（不添加合成章节标记，保留原文结构）
+<span class="fc" id="L580">        StringBuilder fullText = new StringBuilder();</span>
+<span class="fc bfc" id="L581" title="All 2 branches covered.">        for (CollabChapterTask chapter : chapters) {</span>
+<span class="fc bfc" id="L582" title="All 4 branches covered.">            if (chapter.getTargetText() != null &amp;&amp; !chapter.getTargetText().isEmpty()) {</span>
+<span class="fc" id="L583">                fullText.append(chapter.getTargetText());</span>
+<span class="pc bpc" id="L584" title="1 of 2 branches missed.">                if (!chapter.getTargetText().endsWith(&quot;\n&quot;)) {</span>
+<span class="fc" id="L585">                    fullText.append(&quot;\n&quot;);</span>
+                }
+            }
+<span class="fc" id="L588">        }</span>
+
+<span class="fc bfc" id="L590" title="All 2 branches covered.">        if (fullText.length() == 0) return;</span>
+
+        // 通过项目关联的 documentId 直接获取 Document
+<span class="fc" id="L593">        CollabProject project = collabPort.findProjectById(projectId).orElse(null);</span>
+<span class="pc bpc" id="L594" title="1 of 4 branches missed.">        if (project == null || project.getDocumentId() == null) {</span>
+<span class="fc" id="L595">            log.warn(&quot;项目未关联 Document，无法保存完整译文: projectId={}&quot;, projectId);</span>
+<span class="fc" id="L596">            return;</span>
+        }
+
+<span class="fc" id="L599">        Document matchedDoc = documentPort.findById(project.getDocumentId()).orElse(null);</span>
+<span class="fc bfc" id="L600" title="All 2 branches covered.">        if (matchedDoc == null) {</span>
+<span class="fc" id="L601">            log.warn(&quot;关联的 Document 不存在: documentId={}&quot;, project.getDocumentId());</span>
+<span class="fc" id="L602">            return;</span>
+        }
+
+        // 保存完整翻译文档到文件
+<span class="fc" id="L606">        String translatedPath = ExternalResponseUtil.buildTranslatedPath(matchedDoc.getPath());</span>
+        try {
+<span class="fc" id="L608">            Path path = Paths.get(translatedPath);</span>
+<span class="fc" id="L609">            Files.createDirectories(path.getParent());</span>
+<span class="fc" id="L610">            Files.write(path, fullText.toString().getBytes(StandardCharsets.UTF_8));</span>
+<span class="fc" id="L611">            log.info(&quot;完整翻译文档已保存: path={}, size={} bytes&quot;, translatedPath, fullText.length());</span>
+<span class="nc" id="L612">        } catch (IOException e) {</span>
+<span class="nc" id="L613">            log.error(&quot;保存完整翻译文档失败: {}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L614">        }</span>
+
+        // 创建/更新 TranslationTask
+<span class="fc" id="L617">        TranslationTask task = translationPort.findTaskByDocumentId(matchedDoc.getId()).orElse(null);</span>
+<span class="fc bfc" id="L618" title="All 2 branches covered.">        if (task == null) {</span>
+<span class="fc" id="L619">            task = new TranslationTask();</span>
+<span class="fc" id="L620">            task.setTaskId(&quot;task_&quot; + System.currentTimeMillis() + &quot;_&quot; + projectId);</span>
+<span class="fc" id="L621">            task.setDocumentId(matchedDoc.getId());</span>
+<span class="fc" id="L622">            task.setUserId(project.getOwnerId());</span>
+<span class="fc" id="L623">            task.setSourceLang(project.getSourceLang());</span>
+<span class="fc" id="L624">            task.setTargetLang(project.getTargetLang());</span>
+<span class="fc" id="L625">            task.setType(&quot;document&quot;);</span>
+<span class="fc" id="L626">            task.setMode(&quot;team&quot;);</span>
+<span class="fc" id="L627">            task.setStatus(&quot;completed&quot;);</span>
+<span class="fc" id="L628">            translationPort.saveTask(task);</span>
+        } else {
+<span class="fc" id="L630">            task.setStatus(&quot;completed&quot;);</span>
+<span class="fc" id="L631">            translationPort.updateTask(task);</span>
+        }
+<span class="fc" id="L633">        log.info(&quot;团队模式翻译任务已更新: taskId={}, status=completed&quot;, task.getId());</span>
+
+        // 更新 Document 状态为 completed
+<span class="fc" id="L636">        matchedDoc.setStatus(&quot;completed&quot;);</span>
+<span class="fc" id="L637">        matchedDoc.setTaskId(task.getTaskId());</span>
+<span class="fc" id="L638">        documentPort.update(matchedDoc);</span>
+<span class="fc" id="L639">        log.info(&quot;团队模式文档状态已更新: documentId={}, status=completed, taskId={}&quot;, matchedDoc.getId(), task.getTaskId());</span>
+<span class="fc" id="L640">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

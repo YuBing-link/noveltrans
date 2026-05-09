@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CollabStateMachine.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">CollabStateMachine.java</span></div><h1>CollabStateMachine.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.ChapterTaskStatus;
+import org.springframework.stereotype.Component;
+
+/**
+ * 协作翻译状态机
+ * 验证项目和章节任务的状态转移是否合法，并提供驱动状态转移的方法。
+ *
+ * 状态转移应通过 {@link #transitionProject} / {@link #transitionChapter} 驱动，
+ * 而非直接调用实体的 setStatus，以确保所有转移都经过合法性校验。
+ */
+@Component
+<span class="fc" id="L17">public class CollabStateMachine {</span>
+
+    // ========== Validation-only methods (keep for backward compatibility) ==========
+
+    /**
+     * 验证项目状态转移是否合法
+     */
+    public void validateProjectTransition(CollabProjectStatus current, CollabProjectStatus target) {
+<span class="fc bfc" id="L25" title="All 2 branches covered.">        if (!current.canTransitionTo(target)) {</span>
+<span class="fc" id="L26">            throw new IllegalStateException(</span>
+                    &quot;Invalid project state transition: &quot; + current + &quot; -&gt; &quot; + target);
+        }
+<span class="fc" id="L29">    }</span>
+
+    /**
+     * 验证章节任务状态转移是否合法
+     */
+    public void validateChapterTransition(ChapterTaskStatus current, ChapterTaskStatus target) {
+<span class="fc bfc" id="L35" title="All 2 branches covered.">        if (!current.canTransitionTo(target)) {</span>
+<span class="fc" id="L36">            throw new IllegalStateException(</span>
+                    &quot;Invalid chapter task state transition: &quot; + current + &quot; -&gt; &quot; + target);
+        }
+<span class="fc" id="L39">    }</span>
+
+    /**
+     * 从字符串值验证项目状态转移
+     */
+    public void validateProjectTransition(String currentStr, String targetStr) {
+<span class="fc" id="L45">        CollabProjectStatus current = CollabProjectStatus.fromValue(currentStr);</span>
+<span class="fc" id="L46">        CollabProjectStatus target = CollabProjectStatus.fromValue(targetStr);</span>
+<span class="fc" id="L47">        validateProjectTransition(current, target);</span>
+<span class="fc" id="L48">    }</span>
+
+    /**
+     * 从字符串值验证章节状态转移
+     */
+    public void validateChapterTransition(String currentStr, String targetStr) {
+<span class="fc" id="L54">        ChapterTaskStatus current = ChapterTaskStatus.fromValue(currentStr);</span>
+<span class="fc" id="L55">        ChapterTaskStatus target = ChapterTaskStatus.fromValue(targetStr);</span>
+<span class="fc" id="L56">        validateChapterTransition(current, target);</span>
+<span class="fc" id="L57">    }</span>
+
+    // ========== Driving methods (validate + set) ==========
+
+    /**
+     * 驱动项目状态转移：先校验转移合法性，再更新项目实体的 status 字段。
+     * 这是修改 CollabProject 状态的唯一正确方式。
+     *
+     * @param project 项目实体
+     * @param targetStatus 目标状态
+     */
+    public void transitionProject(CollabProject project, CollabProjectStatus targetStatus) {
+<span class="fc" id="L69">        CollabProjectStatus current = CollabProjectStatus.fromValue(project.getStatus());</span>
+<span class="fc" id="L70">        validateProjectTransition(current, targetStatus);</span>
+<span class="fc" id="L71">        project.setStatus(targetStatus.getValue());</span>
+<span class="fc" id="L72">    }</span>
+
+    /**
+     * 驱动项目状态转移（字符串重载）。
+     */
+    public void transitionProject(CollabProject project, String targetStatusStr) {
+<span class="fc" id="L78">        CollabProjectStatus current = CollabProjectStatus.fromValue(project.getStatus());</span>
+<span class="fc" id="L79">        CollabProjectStatus target = CollabProjectStatus.fromValue(targetStatusStr);</span>
+<span class="fc" id="L80">        transitionProject(project, target);</span>
+<span class="fc" id="L81">    }</span>
+
+    /**
+     * 驱动章节任务状态转移：先校验转移合法性，再更新章节实体的 status 字段。
+     * 这是修改 CollabChapterTask 状态的唯一正确方式。
+     *
+     * @param chapter 章节任务实体
+     * @param targetStatus 目标状态
+     */
+    public void transitionChapter(CollabChapterTask chapter, ChapterTaskStatus targetStatus) {
+<span class="fc" id="L91">        ChapterTaskStatus current = ChapterTaskStatus.fromValue(chapter.getStatus());</span>
+<span class="fc" id="L92">        validateChapterTransition(current, targetStatus);</span>
+<span class="fc" id="L93">        chapter.setStatus(targetStatus.getValue());</span>
+<span class="fc" id="L94">    }</span>
+
+    /**
+     * 驱动章节任务状态转移（字符串重载）。
+     */
+    public void transitionChapter(CollabChapterTask chapter, String targetStatusStr) {
+<span class="fc" id="L100">        ChapterTaskStatus current = ChapterTaskStatus.fromValue(chapter.getStatus());</span>
+<span class="fc" id="L101">        ChapterTaskStatus target = ChapterTaskStatus.fromValue(targetStatusStr);</span>
+<span class="fc" id="L102">        transitionChapter(chapter, target);</span>
+<span class="fc" id="L103">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

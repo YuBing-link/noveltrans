@@ -1,0 +1,736 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserLevelThrottledTranslationClient.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.adapter.out.translate</a> &gt; <span class="el_source">UserLevelThrottledTranslationClient.java</span></div><h1>UserLevelThrottledTranslationClient.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.adapter.out.translate;
+
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.properties.TranslationLimitProperties;
+import com.yumu.noveltranslator.util.SecurityUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.SocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import jakarta.annotation.PreDestroy;
+
+/**
+ * 基于用户级别的限流翻译客户端
+ * 为不同用户级别提供不同的并发限制
+ * 支持基于优秀率概率的动态轮询翻译服务
+ *
+ * 轮询策略：
+ * 1. 统计每个引擎的「优秀翻译次数」（成功 + 快速响应）
+ * 2. 计算优秀率 = 优秀次数 / 总请求数
+ * 3. 根据优秀率分配请求概率
+ * 4. 计数器每分钟重置，保持时效性
+ */
+@Service
+<span class="fc" id="L47">@RequiredArgsConstructor</span>
+<span class="fc" id="L48">@Slf4j</span>
+public class UserLevelThrottledTranslationClient implements com.yumu.noveltranslator.port.out.TranslationClientPort {
+
+    // 超时配置（毫秒）
+    private static final int CONNECT_TIMEOUT_MS = 5000;    // 连接超时 5 秒
+    private static final int READ_TIMEOUT_MS = 30000;      // 读取超时 30 秒
+    private static final long SEMAPHORE_TIMEOUT_SECONDS = 30; // 信号量等待超时 30 秒
+
+    @Value(&quot;${translation.python.url:http://llm-engine:8000/translate}&quot;)
+    private String pythonTranslateUrl;
+
+    @Value(&quot;${translation.python.api-key:#{null}}&quot;)
+    private String pythonServiceApiKey;
+
+    private static final boolean ENABLE_ROUND_ROBIN_TRANSLATION = true;
+
+    // ========== 轮询配置 ==========
+
+    // 优秀翻译判定标准：响应时间 &lt;= 1000ms 视为优秀
+    private static final long EXCELLENT_RESPONSE_TIME_MS = 1000;
+
+    // 计数器重置间隔：60 秒
+    private static final long STATS_RESET_INTERVAL_SECONDS = 60;
+
+    // 最小请求数（冷启动保护，避免统计样本不足）
+    private static final int MIN_REQUESTS_FOR_STATS = 5;
+
+    // ========== 轮询计数器 ==========
+
+    // Python 服务统计
+<span class="fc" id="L78">    private final AtomicInteger pythonRequestCount = new AtomicInteger(0);</span>
+<span class="fc" id="L79">    private final AtomicInteger pythonExcellentCount = new AtomicInteger(0);</span>
+<span class="fc" id="L80">    private final AtomicLong pythonLastResetTime = new AtomicLong(System.currentTimeMillis());</span>
+
+    // MTran 服务统计
+<span class="fc" id="L83">    private final AtomicInteger mTranRequestCount = new AtomicInteger(0);</span>
+<span class="fc" id="L84">    private final AtomicInteger mTranExcellentCount = new AtomicInteger(0);</span>
+<span class="fc" id="L85">    private final AtomicLong mTranLastResetTime = new AtomicLong(System.currentTimeMillis());</span>
+
+    private final ExternalTranslationService externalTranslationService;
+    private final TranslationLimitProperties limitProperties;
+    private final TokenAwareRateLimiter tokenAwareRateLimiter;
+
+<span class="fc" id="L91">    private final ConcurrentHashMap&lt;String, Semaphore&gt; userSemaphores = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="fc" id="L92">    private final ConcurrentHashMap&lt;String, Long&gt; semaphoreLastAccessTime = new ConcurrentHashMap&lt;&gt;();</span>
+
+    /**
+     * 禁用代理的 ProxySelector，确保内部 Docker 服务直连
+     */
+<span class="fc" id="L97">    private static final ProxySelector NO_PROXY_SELECTOR = new ProxySelector() {</span>
+        @Override
+        public List&lt;Proxy&gt; select(URI uri) {
+<span class="fc" id="L100">            return List.of(Proxy.NO_PROXY);</span>
+        }
+        @Override
+        public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+            // 连接失败由上层 HttpClient 处理
+<span class="nc" id="L105">        }</span>
+    };
+
+<span class="fc" id="L108">    private final HttpClient client = HttpClient.newBuilder()</span>
+<span class="fc" id="L109">            .connectTimeout(Duration.ofMillis(CONNECT_TIMEOUT_MS))</span>
+<span class="fc" id="L110">            .executor(Executors.newVirtualThreadPerTaskExecutor())</span>
+<span class="fc" id="L111">            .proxy(NO_PROXY_SELECTOR)</span>
+<span class="fc" id="L112">            .build();</span>
+
+    /**
+     * 获取用户专属的信号量（基于 userId 隔离）
+     */
+    private Semaphore getUserSemaphore() {
+<span class="nc" id="L118">        String userId = getCurrentUserId();</span>
+<span class="nc" id="L119">        String userLevel = getCurrentUserLevel();</span>
+<span class="nc" id="L120">        return getUserSemaphore(userId, userLevel);</span>
+    }
+
+    private Semaphore getUserSemaphore(String userId, String userLevel) {
+        String finalUserId;
+        String finalUserLevel;
+
+<span class="pc bpc" id="L127" title="1 of 4 branches missed.">        if (userId == null || &quot;anonymous&quot;.equals(userId)) {</span>
+<span class="fc" id="L128">            finalUserId = &quot;anonymous&quot;;</span>
+<span class="fc" id="L129">            finalUserLevel = &quot;anonymous&quot;;</span>
+<span class="pc bpc" id="L130" title="3 of 4 branches missed.">        } else if (!userId.startsWith(&quot;user_&quot;) &amp;&amp; !userId.startsWith(&quot;anonymous&quot;)) {</span>
+<span class="nc" id="L131">            finalUserId = &quot;user_&quot; + userId;</span>
+<span class="nc" id="L132">            finalUserLevel = userLevel;</span>
+        } else {
+<span class="fc" id="L134">            finalUserId = userId;</span>
+<span class="fc" id="L135">            finalUserLevel = userLevel;</span>
+        }
+
+<span class="fc" id="L138">        semaphoreLastAccessTime.put(finalUserId, System.nanoTime());</span>
+
+<span class="fc" id="L140">        return userSemaphores.computeIfAbsent(finalUserId, uid -&gt; {</span>
+            int permits;
+<span class="fc bfc" id="L142" title="All 2 branches covered.">            if (&quot;max&quot;.equalsIgnoreCase(finalUserLevel)) {</span>
+<span class="fc" id="L143">                permits = limitProperties.getMaxConcurrencyLimit();</span>
+<span class="fc bfc" id="L144" title="All 4 branches covered.">            } else if (&quot;pro&quot;.equalsIgnoreCase(finalUserLevel) || &quot;premium&quot;.equalsIgnoreCase(finalUserLevel)) {</span>
+<span class="fc" id="L145">                permits = limitProperties.getProConcurrencyLimit();</span>
+<span class="fc bfc" id="L146" title="All 2 branches covered.">            } else if (finalUserId.equals(&quot;anonymous&quot;)) {</span>
+<span class="fc" id="L147">                permits = limitProperties.getAnonymousConcurrencyLimit();</span>
+            } else {
+<span class="fc" id="L149">                permits = limitProperties.getFreeConcurrencyLimit();</span>
+            }
+<span class="fc" id="L151">            log.info(&quot;为用户 {} (level={}) 创建信号量，permits={}&quot;, uid, finalUserLevel, permits);</span>
+<span class="fc" id="L152">            return new Semaphore(permits);</span>
+        });
+    }
+
+    /**
+     * 获取当前用户 ID（从 SecurityContext）
+     */
+    private String getCurrentUserId() {
+<span class="fc" id="L160">        return SecurityUtil.getCurrentUserIdOrAnonymous();</span>
+    }
+
+    /**
+     * 获取当前用户等级
+     */
+    private String getCurrentUserLevel() {
+<span class="fc" id="L167">        return SecurityUtil.getCurrentUserLevelOrDefault();</span>
+    }
+
+    /**
+     * 定时清理 30 分钟内未使用的信号量，防止内存泄漏
+     */
+    @Scheduled(cron = &quot;0 */30 * * * *&quot;)
+    public void cleanupIdleSemaphores() {
+<span class="fc" id="L175">        long now = System.nanoTime();</span>
+<span class="fc" id="L176">        long idleThreshold = TimeUnit.MINUTES.toNanos(30);</span>
+<span class="fc" id="L177">        int cleanedCount = 0;</span>
+
+<span class="pc bpc" id="L179" title="1 of 2 branches missed.">        for (Map.Entry&lt;String, Long&gt; entry : semaphoreLastAccessTime.entrySet()) {</span>
+<span class="nc bnc" id="L180" title="All 2 branches missed.">            if (now - entry.getValue() &gt; idleThreshold) {</span>
+<span class="nc" id="L181">                String userId = entry.getKey();</span>
+<span class="nc" id="L182">                userSemaphores.remove(userId);</span>
+<span class="nc" id="L183">                semaphoreLastAccessTime.remove(userId);</span>
+<span class="nc" id="L184">                cleanedCount++;</span>
+<span class="nc" id="L185">                log.info(&quot;清理空闲信号量：userId={}&quot;, userId);</span>
+            }
+<span class="nc" id="L187">        }</span>
+
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">        if (cleanedCount &gt; 0) {</span>
+<span class="nc" id="L190">            log.info(&quot;信号量清理完成：共清理 {} 个空闲信号量&quot;, cleanedCount);</span>
+        }
+<span class="fc" id="L192">    }</span>
+
+
+    /**
+     * 翻译请求（支持指定是否使用 MTranServer 及 html 模式）
+     * 支持引擎降级机制：远程引擎 (Python) 失败时自动降级到本地引擎 (MTranServer)
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     * @param engine 翻译引擎
+     * @param html 是否启用 HTML 翻译模式（仅对 MTranServer 有效）
+     * @return 翻译结果 JSON
+     */
+    public String translate(String text, String targetLang, String engine, boolean html) {
+<span class="fc" id="L206">        return translate(text, targetLang, engine, html, false);</span>
+    }
+
+    /**
+     * 强制走 Python 服务翻译（专家模式）
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     * @param engine 翻译引擎（如 google/deepl 等）
+     * @return 翻译结果 JSON
+     */
+    public String translateWithPython(String text, String targetLang, String engine) {
+<span class="fc" id="L218">        String userId = getCurrentUserId();</span>
+<span class="fc" id="L219">        String userLevel = getCurrentUserLevel();</span>
+<span class="fc" id="L220">        return translateWithPython(text, targetLang, engine, userId, userLevel);</span>
+    }
+
+    public String translateWithPython(String text, String targetLang, String engine, String userId, String userLevel) {
+<span class="fc" id="L224">        Semaphore userSemaphore = getUserSemaphore(userId, userLevel);</span>
+<span class="fc" id="L225">        int estimatedTokens = TokenAwareRateLimiter.estimateTokens(text);</span>
+
+<span class="fc bfc" id="L227" title="All 2 branches covered.">        if (!tokenAwareRateLimiter.tryConsume(userId, userLevel, estimatedTokens)) {</span>
+<span class="fc" id="L228">            log.warn(&quot;[TPM限流] userId={}, level={}, tokens={}, 超过 TPM 配额&quot;, userId, userLevel, estimatedTokens);</span>
+<span class="fc" id="L229">            throw new RuntimeException(&quot;翻译频率过高，请稍后重试&quot;);</span>
+        }
+
+        try {
+<span class="fc bfc" id="L233" title="All 2 branches covered.">            if (userSemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {</span>
+                try {
+<span class="nc" id="L235">                    return doTranslateRequest(text, targetLang, engine, List.of());</span>
+<span class="fc" id="L236">                } catch (Exception e) {</span>
+                    // Python 不可达，降级到 MTranServer
+<span class="fc" id="L238">                    log.warn(&quot;专家模式 Python 翻译失败，降级到 MTranServer: {}&quot;, e.getMessage());</span>
+                    try {
+<span class="fc" id="L240">                        return doExternalTranslationRequest(text, targetLang, false);</span>
+<span class="fc" id="L241">                    } catch (Exception e2) {</span>
+<span class="fc" id="L242">                        log.error(&quot;MTranServer 也失败: {}&quot;, e2.getMessage());</span>
+<span class="fc" id="L243">                        throw new RuntimeException(&quot;所有翻译引擎均失败: &quot; + e.getMessage() + &quot;; &quot; + e2.getMessage(), e2);</span>
+                    }
+                } finally {
+<span class="fc" id="L246">                    userSemaphore.release();</span>
+                }
+            } else {
+<span class="fc" id="L249">                String errorMsg = &quot;并发请求过多，请稍后重试&quot;;</span>
+<span class="fc" id="L250">                log.warn(&quot;限流：{}&quot;, errorMsg);</span>
+<span class="fc" id="L251">                throw new RuntimeException(errorMsg);</span>
+            }
+<span class="nc" id="L253">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L254">            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L255">            tokenAwareRateLimiter.refund(userId, estimatedTokens);</span>
+<span class="nc" id="L256">            throw new RuntimeException(&quot;请求被中断&quot;, e);</span>
+<span class="fc" id="L257">        } catch (Exception e) {</span>
+<span class="fc" id="L258">            tokenAwareRateLimiter.refund(userId, estimatedTokens);</span>
+<span class="fc" id="L259">            String errorMsg = &quot;翻译失败：&quot; + e.getMessage();</span>
+<span class="fc" id="L260">            log.error(&quot;Python 翻译失败：{}&quot;, errorMsg);</span>
+<span class="fc" id="L261">            throw new RuntimeException(errorMsg, e);</span>
+        }
+    }
+
+    /**
+     * 翻译请求（支持快速/专家模式）
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     * @param engine 翻译引擎
+     * @param html 是否启用 HTML 翻译模式
+     * @param fastMode 快速模式：true=大模型 30% 概率，false=大模型 70% 概率
+     * @return 翻译结果 JSON
+     */
+    public String translate(String text, String targetLang, String engine, boolean html, boolean fastMode) {
+<span class="fc" id="L276">        return translate(text, targetLang, engine, html, fastMode, List.of());</span>
+    }
+
+    /**
+     * 翻译请求（支持快速/专家模式 + 术语表）
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     * @param engine 翻译引擎
+     * @param html 是否启用 HTML 翻译模式
+     * @param fastMode 快速模式：true=大模型 30% 概率，false=大模型 70% 概率
+     * @param glossaryTerms 术语表词条
+     * @return 翻译结果 JSON
+     */
+    public String translate(String text, String targetLang, String engine, boolean html, boolean fastMode, List&lt;Glossary&gt; glossaryTerms) {
+<span class="fc" id="L291">        String userId = getCurrentUserId();</span>
+<span class="fc" id="L292">        String userLevel = getCurrentUserLevel();</span>
+<span class="fc" id="L293">        return translate(text, targetLang, engine, html, fastMode, glossaryTerms, userId, userLevel);</span>
+    }
+
+    /**
+     * 翻译请求（显式传入 userId 和 userLevel，适用于虚拟线程等 SecurityContext 不传播的场景）
+     */
+    public String translate(String text, String targetLang, String engine, boolean html, boolean fastMode, List&lt;Glossary&gt; glossaryTerms, String userId, String userLevel) {
+<span class="fc" id="L300">        Semaphore userSemaphore = getUserSemaphore(userId, userLevel);</span>
+<span class="fc" id="L301">        int estimatedTokens = TokenAwareRateLimiter.estimateTokens(text);</span>
+
+<span class="fc bfc" id="L303" title="All 2 branches covered.">        if (!tokenAwareRateLimiter.tryConsume(userId, userLevel, estimatedTokens)) {</span>
+<span class="fc" id="L304">            log.warn(&quot;[TPM限流] userId={}, level={}, tokens={}, 超过 TPM 配额&quot;, userId, userLevel, estimatedTokens);</span>
+<span class="fc" id="L305">            throw new RuntimeException(&quot;翻译频率过高，请稍后重试&quot;);</span>
+        }
+
+        try {
+            // 尝试获取许可，设定超时时间
+<span class="pc bpc" id="L310" title="1 of 2 branches missed.">            if (userSemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {</span>
+                try {
+                    // HTML 模式（阅读器）：直接使用 MTranServer
+<span class="fc bfc" id="L313" title="All 2 branches covered.">                    if (html) {</span>
+<span class="fc" id="L314">                        return doExternalTranslationRequest(text, targetLang, html);</span>
+                    }
+                    // 有术语表时强制走 Python 服务（MTranServer 不支持术语表）
+<span class="pc bpc" id="L317" title="1 of 4 branches missed.">                    if (glossaryTerms != null &amp;&amp; !glossaryTerms.isEmpty()) {</span>
+<span class="fc" id="L318">                        log.info(&quot;[术语表路由] 强制使用 Python 服务（术语表大小={}）&quot;, glossaryTerms.size());</span>
+                        try {
+<span class="nc" id="L320">                            return doTranslateRequest(text, targetLang, engine, glossaryTerms);</span>
+<span class="fc" id="L321">                        } catch (Exception e) {</span>
+                            // Python 不可达，降级到 MTranServer（无术语表）
+<span class="fc" id="L323">                            log.warn(&quot;术语表模式 Python 翻译失败，降级到 MTranServer（术语表将不生效）: {}&quot;, e.getMessage());</span>
+                            try {
+<span class="fc" id="L325">                                return doExternalTranslationRequest(text, targetLang);</span>
+<span class="nc" id="L326">                            } catch (Exception e2) {</span>
+<span class="nc" id="L327">                                log.error(&quot;MTranServer 也失败: {}&quot;, e2.getMessage());</span>
+<span class="nc" id="L328">                                throw new RuntimeException(&quot;所有翻译引擎均失败: &quot; + e.getMessage() + &quot;; &quot; + e2.getMessage(), e2);</span>
+                            }
+                        }
+                    }
+                    // 基于优秀率概率轮询（fast=30% 大模型，expert=70% 大模型）
+<span class="fc" id="L333">                    return translateWithRoundRobin(text, targetLang, engine, fastMode, glossaryTerms);</span>
+<span class="fc" id="L334">                } catch (Exception e) {</span>
+<span class="fc" id="L335">                    tokenAwareRateLimiter.refund(userId, estimatedTokens);</span>
+<span class="fc" id="L336">                    throw e;</span>
+                } finally {
+<span class="fc" id="L338">                    userSemaphore.release();</span>
+                }
+            } else {
+<span class="nc" id="L341">                String errorMsg = &quot;并发请求过多，请稍后重试&quot;;</span>
+<span class="nc" id="L342">                log.warn(&quot;限流：{}&quot;, errorMsg);</span>
+<span class="nc" id="L343">                throw new RuntimeException(errorMsg);</span>
+            }
+<span class="nc" id="L345">        } catch (InterruptedException e) {</span>
+<span class="nc" id="L346">            Thread.currentThread().interrupt();</span>
+<span class="nc" id="L347">            tokenAwareRateLimiter.refund(userId, estimatedTokens);</span>
+<span class="nc" id="L348">            String errorMsg = &quot;请求被中断&quot;;</span>
+<span class="nc" id="L349">            log.warn(&quot;中断：{}&quot;, errorMsg);</span>
+<span class="nc" id="L350">            throw new RuntimeException(errorMsg, e);</span>
+<span class="fc" id="L351">        } catch (RuntimeException e) {</span>
+<span class="fc" id="L352">            throw e;</span>
+<span class="nc" id="L353">        } catch (Exception e) {</span>
+<span class="nc" id="L354">            tokenAwareRateLimiter.refund(userId, estimatedTokens);</span>
+<span class="nc" id="L355">            String errorMsg = &quot;翻译请求失败：&quot; + e.getMessage();</span>
+<span class="nc" id="L356">            log.error(&quot;错误：{}&quot;, errorMsg);</span>
+<span class="nc" id="L357">            throw new RuntimeException(errorMsg, e);</span>
+        }
+    }
+
+    /**
+     * 基于优秀率概率的轮询翻译（支持双向降级：Python⇄MTranServer）
+     *
+     * 降级策略：
+     * 1. 轮询到 Python 服务 → Python 所有引擎失败 → 降级到 MTranServer → MTranServer 失败 → 抛出异常
+     * 2. 轮询到 MTranServer → MTranServer 失败 → 降级到 Python 服务 → Python 所有引擎失败 → 抛出异常
+     *
+     * 概率控制：
+     * - fastMode=true:  Python 大模型概率上限 30%
+     * - fastMode=false: Python 大模型概率上限 70%
+     */
+    private String translateWithRoundRobin(String text, String targetLang, String engine, boolean fastMode, List&lt;Glossary&gt; glossaryTerms) {
+        // 检查并重置过期统计
+<span class="fc" id="L374">        resetStatsIfNeeded();</span>
+
+        // 计算当前应该使用哪个服务
+<span class="fc" id="L377">        boolean usePythonService = shouldUsePythonService(fastMode);</span>
+
+<span class="fc bfc" id="L379" title="All 2 branches covered.">        if (usePythonService) {</span>
+            // 场景 1：轮询到 Python 服务
+<span class="fc" id="L381">            log.info(&quot;[轮询路由] 选择 Python 大模型（fastMode={}, pythonCount={}, mTranCount={}, textLength={}）&quot;,</span>
+<span class="fc" id="L382">                    fastMode, pythonRequestCount.get(), mTranRequestCount.get(), text.length());</span>
+            try {
+<span class="nc" id="L384">                return doTranslateRequest(text, targetLang, engine, glossaryTerms);</span>
+<span class="fc" id="L385">            } catch (Exception e) {</span>
+                // Python 服务（所有引擎）失败，降级到 MTranServer（本地引擎）
+<span class="fc" id="L387">                log.warn(&quot;Python 服务翻译失败，降级到 MTranServer: {}&quot;, e.getMessage());</span>
+                try {
+<span class="fc" id="L389">                    return doExternalTranslationRequest(text, targetLang);</span>
+<span class="fc" id="L390">                } catch (Exception e2) {</span>
+                    // MTranServer 也失败，抛出异常
+<span class="fc" id="L392">                    log.error(&quot;MTranServer 翻译也失败：{} (根本原因：{})&quot;, e2.getMessage(),</span>
+<span class="pc bpc" id="L393" title="1 of 2 branches missed.">                             e2.getCause() != null ? e2.getCause().getMessage() : &quot;未知&quot;, e2);</span>
+<span class="fc" id="L394">                    throw new RuntimeException(&quot;所有翻译引擎均失败 (Python → MTranServer): &quot; + e.getMessage() + &quot;; &quot; + e2.getMessage(), e2);</span>
+                }
+            }
+        } else {
+            // 场景 2：轮询到 MTranServer（本地引擎）
+<span class="fc" id="L399">            log.info(&quot;[轮询路由] 选择 MTranServer（fastMode={}, pythonCount={}, mTranCount={}, textLength={}）&quot;,</span>
+<span class="fc" id="L400">                    fastMode, pythonRequestCount.get(), mTranRequestCount.get(), text.length());</span>
+            try {
+<span class="fc" id="L402">                return doExternalTranslationRequest(text, targetLang);</span>
+<span class="nc" id="L403">            } catch (Exception e) {</span>
+                // MTranServer 失败，降级到 Python 服务
+<span class="nc" id="L405">                log.warn(&quot;MTranServer 翻译失败，降级到 Python 服务：{}&quot;, e.getMessage());</span>
+                try {
+<span class="nc" id="L407">                    return doTranslateRequest(text, targetLang, engine, List.of());</span>
+<span class="nc" id="L408">                } catch (Exception e2) {</span>
+                    // Python 服务（所有引擎）也失败，抛出异常
+<span class="nc" id="L410">                    log.error(&quot;Python 服务翻译也失败：{}&quot;, e2.getMessage());</span>
+<span class="nc" id="L411">                    throw new RuntimeException(&quot;所有翻译引擎均失败 (MTranServer → Python): &quot; + e.getMessage() + &quot;; &quot; + e2.getMessage(), e2);</span>
+                }
+            }
+        }
+    }
+
+    /**
+     * 带降级机制的翻译请求（非轮询模式）
+     *
+     * 降级策略：
+     * 1. 首先尝试 Python 远程引擎
+     * 2. Python 失败则降级到 MTranServer 本地引擎
+     * 3. MTranServer 也失败则抛出异常
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     * @param engine 翻译引擎
+     * @return 翻译结果 JSON
+     */
+    private String translateWithFallback(String text, String targetLang, String engine) {
+        try {
+<span class="nc" id="L432">            log.debug(&quot;尝试 Python 服务翻译 [engine={}]&quot;, engine);</span>
+<span class="nc" id="L433">            return doTranslateRequest(text, targetLang, engine, List.of());</span>
+<span class="nc" id="L434">        } catch (Exception e) {</span>
+            // Python 服务失败，降级到 MTranServer
+<span class="nc" id="L436">            log.warn(&quot;Python 服务翻译失败，降级到 MTranServer: {}&quot;, e.getMessage());</span>
+            try {
+<span class="nc" id="L438">                return doExternalTranslationRequest(text, targetLang);</span>
+<span class="nc" id="L439">            } catch (Exception e2) {</span>
+                // MTranServer 也失败，抛出异常
+<span class="nc" id="L441">                log.error(&quot;MTranServer 翻译也失败：{}&quot;, e2.getMessage());</span>
+<span class="nc" id="L442">                throw new RuntimeException(&quot;所有翻译引擎均失败: &quot; + e.getMessage() + &quot;; &quot; + e2.getMessage(), e2);</span>
+            }
+        }
+    }
+
+    /**
+     * 判断是否应该使用 Python 服务
+     * @param fastMode true=大模型 30% 概率，false=大模型 70% 概率
+     * @return true 使用 Python 服务，false 使用 MTran 服务
+     */
+    private boolean shouldUsePythonService(boolean fastMode) {
+<span class="fc" id="L453">        int pythonCount = pythonRequestCount.get();</span>
+<span class="fc" id="L454">        int mTranCount = mTranRequestCount.get();</span>
+
+        // 冷启动阶段：fast 模式优先走 MTran（快速），expert 模式交替收集样本
+<span class="fc bfc" id="L457" title="All 4 branches covered.">        if (pythonCount &lt; MIN_REQUESTS_FOR_STATS &amp;&amp; mTranCount &lt; MIN_REQUESTS_FOR_STATS) {</span>
+<span class="fc bfc" id="L458" title="All 2 branches covered.">            if (fastMode) {</span>
+                // fast 模式：优先用 MTran，第 3 次开始轮询到 Python 收集样本
+<span class="pc bpc" id="L460" title="3 of 4 branches missed.">                return (pythonCount + mTranCount) &gt;= 3 &amp;&amp; (pythonCount + mTranCount) % 2 == 0;</span>
+            }
+            // expert 模式：简单轮流收集样本
+<span class="pc bpc" id="L463" title="1 of 2 branches missed.">            return (pythonCount + mTranCount) % 2 == 0;</span>
+        }
+<span class="fc bfc" id="L465" title="All 2 branches covered.">        if (pythonCount &lt; MIN_REQUESTS_FOR_STATS) {</span>
+<span class="fc" id="L466">            return true;  // Python 样本不足，优先用它</span>
+        }
+<span class="fc bfc" id="L468" title="All 2 branches covered.">        if (mTranCount &lt; MIN_REQUESTS_FOR_STATS) {</span>
+<span class="fc" id="L469">            return false; // MTran 样本不足，优先用它</span>
+        }
+
+        // 样本充足，基于优秀率计算概率
+<span class="fc" id="L473">        int pythonExcellent = pythonExcellentCount.get();</span>
+<span class="fc" id="L474">        int mTranExcellent = mTranExcellentCount.get();</span>
+
+        // 计算优秀率
+<span class="fc" id="L477">        double pythonExcellentRate = (double) pythonExcellent / pythonCount;</span>
+<span class="fc" id="L478">        double mTranExcellentRate = (double) mTranExcellent / mTranCount;</span>
+
+        // 根据模式设置概率上限
+<span class="pc bpc" id="L481" title="1 of 2 branches missed.">        double maxPythonProbability = fastMode ? 0.3 : 0.7;</span>
+
+        // 计算 Python 被选中的概率 = Python 优秀率 / (Python 优秀率 + MTran 优秀率)
+<span class="fc" id="L484">        double totalExcellent = pythonExcellentRate + mTranExcellentRate;</span>
+<span class="pc bpc" id="L485" title="1 of 2 branches missed.">        if (totalExcellent == 0) {</span>
+            // 两者都没有优秀记录，使用默认概率
+<span class="pc bpc" id="L487" title="1 of 2 branches missed.">            return Math.random() &lt; maxPythonProbability;</span>
+        }
+
+<span class="nc" id="L490">        double pythonProbability = pythonExcellentRate / totalExcellent;</span>
+        // 限制 Python 最大概率
+<span class="nc" id="L492">        double cappedProbability = Math.min(pythonProbability, maxPythonProbability);</span>
+<span class="nc" id="L493">        double random = Math.random();</span>
+
+<span class="nc" id="L495">        log.info(&quot;[轮询统计] fastMode={} | Python: 请求={}, 优秀={}, 优秀率={:.2%} | MTran: 请求={}, 优秀={}, 优秀率={:.2%} | Python 原始概率={:.2%}, 上限={:.0%}, 限制后={:.2%}&quot;,</span>
+<span class="nc" id="L496">                 fastMode,</span>
+<span class="nc" id="L497">                 pythonCount, pythonExcellent, pythonExcellentRate,</span>
+<span class="nc" id="L498">                 mTranCount, mTranExcellent, mTranExcellentRate,</span>
+<span class="nc" id="L499">                 pythonProbability, maxPythonProbability, cappedProbability);</span>
+
+<span class="nc bnc" id="L501" title="All 2 branches missed.">        return random &lt; cappedProbability;</span>
+    }
+
+    /**
+     * 检查并重置过期的统计计数器
+     */
+    private void resetStatsIfNeeded() {
+<span class="fc" id="L508">        long now = System.currentTimeMillis();</span>
+<span class="fc" id="L509">        long resetIntervalMs = STATS_RESET_INTERVAL_SECONDS * 1000;</span>
+
+        // 使用 CAS 确保只有一个线程执行重置（避免竞态条件）
+<span class="fc" id="L512">        long pythonLastReset = pythonLastResetTime.get();</span>
+<span class="fc bfc" id="L513" title="All 2 branches covered.">        if (now - pythonLastReset &gt; resetIntervalMs</span>
+<span class="pc bpc" id="L514" title="1 of 2 branches missed.">                &amp;&amp; pythonLastResetTime.compareAndSet(pythonLastReset, now)) {</span>
+<span class="fc" id="L515">            pythonRequestCount.set(0);</span>
+<span class="fc" id="L516">            pythonExcellentCount.set(0);</span>
+<span class="fc" id="L517">            log.info(&quot;Python 服务统计计数器已重置&quot;);</span>
+        }
+
+<span class="fc" id="L520">        long mTranLastReset = mTranLastResetTime.get();</span>
+<span class="fc bfc" id="L521" title="All 2 branches covered.">        if (now - mTranLastReset &gt; resetIntervalMs</span>
+<span class="pc bpc" id="L522" title="1 of 2 branches missed.">                &amp;&amp; mTranLastResetTime.compareAndSet(mTranLastReset, now)) {</span>
+<span class="fc" id="L523">            mTranRequestCount.set(0);</span>
+<span class="fc" id="L524">            mTranExcellentCount.set(0);</span>
+<span class="fc" id="L525">            log.info(&quot;MTran 服务统计计数器已重置&quot;);</span>
+        }
+<span class="fc" id="L527">    }</span>
+
+    /**
+     * 记录翻译结果统计
+     * @param isPython true=Python 服务，false=MTran 服务
+     * @param success 是否成功
+     * @param responseTime 响应时间（毫秒）
+     */
+    private void recordStats(boolean isPython, boolean success, long responseTime) {
+<span class="fc bfc" id="L536" title="All 2 branches covered.">        if (isPython) {</span>
+<span class="fc" id="L537">            pythonRequestCount.incrementAndGet();</span>
+<span class="pc bpc" id="L538" title="3 of 4 branches missed.">            if (success &amp;&amp; responseTime &lt;= EXCELLENT_RESPONSE_TIME_MS) {</span>
+<span class="nc" id="L539">                pythonExcellentCount.incrementAndGet();</span>
+            }
+        } else {
+<span class="fc" id="L542">            mTranRequestCount.incrementAndGet();</span>
+<span class="pc bpc" id="L543" title="1 of 4 branches missed.">            if (success &amp;&amp; responseTime &lt;= EXCELLENT_RESPONSE_TIME_MS) {</span>
+<span class="fc" id="L544">                mTranExcellentCount.incrementAndGet();</span>
+            }
+        }
+<span class="fc" id="L547">    }</span>
+
+    /**
+     * 执行 HTTP 翻译请求（Python 服务）
+     */
+    private String doTranslateRequest(String text, String targetLang, String engine, List&lt;Glossary&gt; glossaryTerms) throws Exception {
+<span class="fc" id="L553">        long startTime = System.currentTimeMillis();</span>
+<span class="fc" id="L554">        boolean success = false;</span>
+        try {
+<span class="fc" id="L556">            Map&lt;String, Object&gt; bodyMap = new LinkedHashMap&lt;&gt;();</span>
+<span class="fc" id="L557">            bodyMap.put(&quot;text&quot;, text);</span>
+<span class="fc" id="L558">            bodyMap.put(&quot;target_lang&quot;, targetLang);</span>
+<span class="fc" id="L559">            bodyMap.put(&quot;engine&quot;, &quot;openai&quot;);</span>
+<span class="fc" id="L560">            bodyMap.put(&quot;fallback&quot;, true);</span>
+
+            // 注入术语表
+<span class="pc bpc" id="L563" title="1 of 4 branches missed.">            if (glossaryTerms != null &amp;&amp; !glossaryTerms.isEmpty()) {</span>
+<span class="fc" id="L564">                List&lt;Map&lt;String, String&gt;&gt; terms = glossaryTerms.stream()</span>
+<span class="pc" id="L565">                        .map(g -&gt; Map.of(&quot;source&quot;, g.getSourceWord(), &quot;target&quot;, g.getTargetWord()))</span>
+<span class="nc" id="L566">                        .toList();</span>
+<span class="nc" id="L567">                bodyMap.put(&quot;glossaryTerms&quot;, terms);</span>
+            }
+
+<span class="fc" id="L570">            String jsonBody = JSON.toJSONString(bodyMap);</span>
+<span class="nc" id="L571">            String result = doPythonServiceRequest(jsonBody, text);</span>
+<span class="nc" id="L572">            success = true;</span>
+<span class="nc" id="L573">            return result;</span>
+        } finally {
+<span class="fc" id="L575">            long costTime = System.currentTimeMillis() - startTime;</span>
+<span class="fc" id="L576">            recordStats(true, success, costTime);</span>
+        }
+    }
+
+    /**
+     * 调用 Python 翻译服务
+     */
+    private String doPythonServiceRequest(String jsonBody, String text) throws Exception {
+<span class="fc" id="L584">        log.info(&quot;[Python请求] URL={}, body length={}&quot;, pythonTranslateUrl, jsonBody.length());</span>
+<span class="fc" id="L585">        var requestBuilder = HttpRequest.newBuilder()</span>
+<span class="fc" id="L586">                .uri(URI.create(pythonTranslateUrl))</span>
+<span class="fc" id="L587">                .version(HttpClient.Version.HTTP_1_1)</span>
+<span class="fc" id="L588">                .header(&quot;Content-Type&quot;, &quot;application/json; charset=UTF-8&quot;)</span>
+<span class="fc" id="L589">                .header(&quot;Accept&quot;, &quot;application/json&quot;)</span>
+<span class="fc" id="L590">                .timeout(Duration.ofMillis(READ_TIMEOUT_MS));</span>
+
+        // 添加服务间认证 Key
+<span class="pc bpc" id="L593" title="3 of 4 branches missed.">        if (pythonServiceApiKey != null &amp;&amp; !pythonServiceApiKey.isEmpty()) {</span>
+<span class="nc" id="L594">            requestBuilder.header(&quot;X-Service-Key&quot;, pythonServiceApiKey);</span>
+        }
+
+<span class="fc" id="L597">        HttpRequest request = requestBuilder</span>
+<span class="fc" id="L598">                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))</span>
+<span class="fc" id="L599">                .build();</span>
+<span class="fc" id="L600">        log.info(&quot;[Python请求] 发送请求到 {}&quot;, request.uri());</span>
+<span class="nc" id="L601">        HttpResponse&lt;String&gt; response = client.send(request, HttpResponse.BodyHandlers.ofString());</span>
+<span class="nc" id="L602">        log.info(&quot;[Python响应] status={}, body length={}&quot;, response.statusCode(), response.body().length());</span>
+<span class="nc bnc" id="L603" title="All 2 branches missed.">        if (response.statusCode() != 200) {</span>
+<span class="nc" id="L604">            throw new Exception(&quot;HTTP 错误：&quot; + response.statusCode());</span>
+        }
+<span class="nc" id="L606">        return response.body();</span>
+    }
+
+    /**
+     * 调用 MTranService 翻译服务（默认 html=false）
+     * MTranServer 返回格式：{&quot;result&quot;: &quot;翻译内容&quot;}
+     * 包装成标准格式返回：{&quot;success&quot;: true, &quot;engine&quot;: &quot;mtran&quot;, &quot;translatedContent&quot;: &quot;翻译内容&quot;}
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     */
+    private String doExternalTranslationRequest(String text, String targetLang) {
+<span class="fc" id="L618">        return doExternalTranslationRequest(text, targetLang, false);</span>
+    }
+
+    /**
+     * 调用 MTranService 翻译服务
+     * MTranServer 返回格式：{&quot;result&quot;: &quot;翻译内容&quot;}
+     * 包装成标准格式返回：{&quot;success&quot;: true, &quot;engine&quot;: &quot;mtran&quot;, &quot;translatedContent&quot;: &quot;翻译内容&quot;}
+     *
+     * @param text 待翻译文本
+     * @param targetLang 目标语言
+     * @param html 是否启用 HTML 翻译模式
+     */
+    private String doExternalTranslationRequest(String text, String targetLang, boolean html) {
+<span class="fc" id="L631">        long startTime = System.currentTimeMillis();</span>
+<span class="fc" id="L632">        boolean success = false;</span>
+
+        try {
+<span class="fc" id="L635">            log.info(&quot;[MTran请求] targetLang={}, html={}, textLength={}&quot;, targetLang, html, text.length());</span>
+<span class="fc" id="L636">            JSONObject mtranResponse = externalTranslationService.translate(&quot;auto&quot;, targetLang, text, html);</span>
+<span class="fc" id="L637">            long costTime = System.currentTimeMillis() - startTime;</span>
+
+            // 从 MTranServer 响应中提取 result 字段
+<span class="fc" id="L640">            String translatedContent = mtranResponse.getString(&quot;result&quot;);</span>
+<span class="pc bpc" id="L641" title="1 of 4 branches missed.">            if (translatedContent == null || translatedContent.isBlank()) {</span>
+                // MTran 返回错误响应，抛出异常以触发降级到 Python
+<span class="fc" id="L643">                log.warn(&quot;[MTran异常响应] 缺少 result 字段，原始响应: {}&quot;, mtranResponse);</span>
+<span class="fc" id="L644">                throw new RuntimeException(&quot;MTran 返回异常响应: &quot; + mtranResponse);</span>
+            }
+
+            // 解码 HTML 实体编码（&amp;nbsp; &amp;amp; &amp;lt; &amp;gt; 等）
+<span class="fc" id="L648">            translatedContent = decodeHtmlEntities(translatedContent);</span>
+
+<span class="fc" id="L650">            log.info(&quot;[MTran响应] costMs={}, resultLength={}&quot;, costTime, translatedContent.length());</span>
+
+            // 包装成标准格式
+<span class="fc" id="L653">            JSONObject standardResponse = new JSONObject();</span>
+<span class="fc" id="L654">            standardResponse.put(&quot;success&quot;, true);</span>
+<span class="fc" id="L655">            standardResponse.put(&quot;engine&quot;, &quot;mtran&quot;);</span>
+<span class="fc" id="L656">            standardResponse.put(&quot;translatedContent&quot;, translatedContent);</span>
+
+<span class="fc" id="L658">            success = true;</span>
+<span class="fc" id="L659">            return standardResponse.toJSONString();</span>
+<span class="fc" id="L660">        } catch (Exception e) {</span>
+<span class="fc" id="L661">            long costTime = System.currentTimeMillis() - startTime;</span>
+<span class="fc" id="L662">            log.error(&quot;[MTran失败] costMs={}, error={}&quot;, costTime, e.getMessage(), e);</span>
+<span class="fc" id="L663">            throw e;</span>
+        } finally {
+<span class="fc" id="L665">            long costTime = System.currentTimeMillis() - startTime;</span>
+<span class="fc" id="L666">            recordStats(false, success, costTime);</span>
+
+            // 记录慢请求
+<span class="pc bpc" id="L669" title="1 of 2 branches missed.">            if (costTime &gt; 5000) {</span>
+<span class="nc" id="L670">                log.info(&quot;[慢请求] MTran 翻译耗时：{}ms, 文本长度：{}, html: {}&quot;, costTime, text.length(), html);</span>
+            }
+        }
+    }
+
+    /**
+     * 解码 HTML 实体编码
+     */
+    private String decodeHtmlEntities(String text) {
+<span class="pc bpc" id="L679" title="1 of 2 branches missed.">        if (text == null) return null;</span>
+<span class="fc" id="L680">        return text</span>
+<span class="fc" id="L681">                .replace(&quot;&amp;nbsp;&quot;, &quot; &quot;)</span>
+<span class="fc" id="L682">                .replace(&quot;&amp;nbsp;&quot;, &quot; &quot;)</span>
+<span class="fc" id="L683">                .replace(&quot;&amp;amp;&quot;, &quot;&amp;&quot;)</span>
+<span class="fc" id="L684">                .replace(&quot;&amp;lt;&quot;, &quot;&lt;&quot;)</span>
+<span class="fc" id="L685">                .replace(&quot;&amp;gt;&quot;, &quot;&gt;&quot;)</span>
+<span class="fc" id="L686">                .replace(&quot;&amp;quot;&quot;, &quot;\&quot;&quot;)</span>
+<span class="fc" id="L687">                .replace(&quot;&amp;#39;&quot;, &quot;'&quot;)</span>
+<span class="fc" id="L688">                .replace(&quot;&amp;#x27;&quot;, &quot;'&quot;)</span>
+<span class="fc" id="L689">                .replace(&quot;&amp;apos;&quot;, &quot;'&quot;)</span>
+<span class="fc" id="L690">                .replace(&quot;&amp;mdash;&quot;, &quot;—&quot;)</span>
+<span class="fc" id="L691">                .replace(&quot;&amp;ndash;&quot;, &quot;–&quot;)</span>
+<span class="fc" id="L692">                .replace(&quot;&amp;hellip;&quot;, &quot;…&quot;)</span>
+<span class="fc" id="L693">                .replace(&quot;&amp;laquo;&quot;, &quot;«&quot;)</span>
+<span class="fc" id="L694">                .replace(&quot;&amp;raquo;&quot;, &quot;»&quot;)</span>
+<span class="fc" id="L695">                .replace(&quot;&amp;copy;&quot;, &quot;©&quot;)</span>
+<span class="fc" id="L696">                .replace(&quot;&amp;reg;&quot;, &quot;®&quot;)</span>
+<span class="fc" id="L697">                .replace(&quot;&amp;trade;&quot;, &quot;™&quot;);</span>
+    }
+
+
+    /**
+     * 获取统计信息（用于监控和调试）
+     */
+    public Map&lt;String, Object&gt; getRoundRobinStats() {
+<span class="fc" id="L705">        Map&lt;String, Object&gt; stats = new LinkedHashMap&lt;&gt;();</span>
+
+<span class="fc" id="L707">        int pythonCount = pythonRequestCount.get();</span>
+<span class="fc" id="L708">        int mTranCount = mTranRequestCount.get();</span>
+
+<span class="fc" id="L710">        stats.put(&quot;python_requests&quot;, pythonCount);</span>
+<span class="fc" id="L711">        stats.put(&quot;python_excellent&quot;, pythonExcellentCount.get());</span>
+<span class="pc bpc" id="L712" title="1 of 2 branches missed.">        stats.put(&quot;python_excellent_rate&quot;, pythonCount &gt; 0</span>
+<span class="nc" id="L713">            ? String.format(&quot;%.2f%%&quot;, (double) pythonExcellentCount.get() / pythonCount * 100)</span>
+<span class="fc" id="L714">            : &quot;N/A&quot;);</span>
+
+<span class="fc" id="L716">        stats.put(&quot;mtran_requests&quot;, mTranCount);</span>
+<span class="fc" id="L717">        stats.put(&quot;mtran_excellent&quot;, mTranExcellentCount.get());</span>
+<span class="pc bpc" id="L718" title="1 of 2 branches missed.">        stats.put(&quot;mtran_excellent_rate&quot;, mTranCount &gt; 0</span>
+<span class="nc" id="L719">            ? String.format(&quot;%.2f%%&quot;, (double) mTranExcellentCount.get() / mTranCount * 100)</span>
+<span class="fc" id="L720">            : &quot;N/A&quot;);</span>
+
+<span class="fc" id="L722">        stats.put(&quot;next_reset_seconds&quot;, STATS_RESET_INTERVAL_SECONDS -</span>
+<span class="fc" id="L723">            (System.currentTimeMillis() - Math.max(pythonLastResetTime.get(), mTranLastResetTime.get())) / 1000);</span>
+
+<span class="fc" id="L725">        return stats;</span>
+    }
+
+    @PreDestroy
+    public void shutdown() {
+<span class="nc" id="L730">        client.close();</span>
+<span class="nc" id="L731">        userSemaphores.clear();</span>
+<span class="nc" id="L732">        semaphoreLastAccessTime.clear();</span>
+<span class="nc" id="L733">        log.info(&quot;UserLevelThrottledTranslationClient 已关闭&quot;);</span>
+<span class="nc" id="L734">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

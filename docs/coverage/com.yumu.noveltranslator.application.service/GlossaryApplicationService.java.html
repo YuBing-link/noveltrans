@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GlossaryApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">GlossaryApplicationService.java</span></div><h1>GlossaryApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryItemRequest;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryResponse;
+import com.yumu.noveltranslator.port.in.GlossaryPort;
+import com.yumu.noveltranslator.port.out.CacheVersionPort;
+import com.yumu.noveltranslator.port.out.TranslationCacheAdminPort;
+import com.yumu.noveltranslator.port.in.UserPort;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+<span class="fc" id="L16">@RequiredArgsConstructor</span>
+public class GlossaryApplicationService implements GlossaryPort {
+
+    private final UserPort userPort;
+    private final TranslationCacheAdminPort translationCacheAdminPort;
+    private final CacheVersionPort cacheVersionPort;
+
+    @Override
+    public GlossaryResponse createGlossaryItem(Long userId, GlossaryItemRequest request) {
+<span class="fc" id="L25">        GlossaryResponse response = userPort.createGlossaryItem(userId, request);</span>
+<span class="fc" id="L26">        translationCacheAdminPort.invalidateKeysForTerm(request.getSourceWord());</span>
+<span class="fc" id="L27">        return response;</span>
+    }
+
+    @Override
+    public GlossaryResponse updateGlossaryItem(Long userId, Long glossaryId, GlossaryItemRequest request) {
+<span class="fc" id="L32">        GlossaryResponse response = userPort.updateGlossaryItem(userId, glossaryId, request);</span>
+<span class="fc bfc" id="L33" title="All 2 branches covered.">        if (response != null) {</span>
+<span class="fc" id="L34">            translationCacheAdminPort.invalidateKeysForTerm(request.getSourceWord());</span>
+        }
+<span class="fc" id="L36">        return response;</span>
+    }
+
+    @Override
+    public boolean deleteGlossaryItem(Long userId, Long glossaryId) {
+<span class="fc" id="L41">        boolean success = userPort.deleteGlossaryItem(userId, glossaryId);</span>
+<span class="fc bfc" id="L42" title="All 2 branches covered.">        if (success) {</span>
+<span class="fc" id="L43">            cacheVersionPort.bumpAllVersions();</span>
+        }
+<span class="fc" id="L45">        return success;</span>
+    }
+
+    @Override
+    public PageResponse&lt;GlossaryResponse&gt; listGlossaries(Long userId, int page, int pageSize, String search) {
+<span class="fc" id="L50">        return userPort.getGlossaryList(userId, page, pageSize, search);</span>
+    }
+
+    @Override
+    public GlossaryResponse getGlossaryDetail(Long userId, Long glossaryId) {
+<span class="fc" id="L55">        return userPort.getGlossaryDetail(userId, glossaryId);</span>
+    }
+
+    @Override
+    public List&lt;GlossaryResponse&gt; getAllGlossaryTerms(Long userId) {
+<span class="fc" id="L60">        return userPort.getGlossaryTerms(userId);</span>
+    }
+
+    @Override
+    public int importGlossaryCsv(Long userId, List&lt;GlossaryItemRequest&gt; items) {
+<span class="fc" id="L65">        int imported = userPort.batchImportGlossaryItems(userId, items);</span>
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        for (GlossaryItemRequest item : items) {</span>
+<span class="fc bfc" id="L67" title="All 4 branches covered.">            if (item.getSourceWord() != null &amp;&amp; !item.getSourceWord().isEmpty()) {</span>
+<span class="fc" id="L68">                translationCacheAdminPort.invalidateKeysForTerm(item.getSourceWord());</span>
+            }
+<span class="fc" id="L70">        }</span>
+<span class="fc" id="L71">        return imported;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

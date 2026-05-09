@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChapterSplitAsyncListener.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">ChapterSplitAsyncListener.java</span></div><h1>ChapterSplitAsyncListener.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+
+import com.yumu.noveltranslator.domain.model.CollabChapterTask;
+import com.yumu.noveltranslator.domain.model.CollabProject;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.enums.ChapterTaskStatus;
+import com.yumu.noveltranslator.enums.CollabProjectStatus;
+import com.yumu.noveltranslator.enums.TranslationStatus;
+import com.yumu.noveltranslator.domain.event.ChapterSplitEvent;
+import com.yumu.noveltranslator.domain.service.CollabStateMachine;
+import com.yumu.noveltranslator.port.out.CollaborationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * 章节拆分异步监听器
+ * 接收 ChapterSplitEvent 事件，按批次异步插入章节，完成后激活项目。
+ */
+@Component
+<span class="fc" id="L28">@RequiredArgsConstructor</span>
+<span class="fc" id="L29">@Slf4j</span>
+public class ChapterSplitAsyncListener {
+
+    private static final int BATCH_SIZE = 50;
+
+    private final CollaborationRepositoryPort collaborationRepository;
+    private final DocumentRepositoryPort documentRepository;
+    private final CollabStateMachine collabStateMachine;
+
+    @Async(&quot;chapterSplitExecutor&quot;)
+    @EventListener
+    public void onChapterSplitEvent(ChapterSplitEvent event) {
+<span class="nc" id="L41">        Long projectId = event.getProjectId();</span>
+<span class="nc" id="L42">        List&lt;String&gt; chapters = event.getChapters();</span>
+<span class="nc" id="L43">        log.info(&quot;开始异步插入章节: projectId={}, totalChapters={}&quot;, projectId, chapters.size());</span>
+
+        try {
+<span class="nc" id="L46">            int totalBatches = (int) Math.ceil((double) chapters.size() / BATCH_SIZE);</span>
+<span class="nc bnc" id="L47" title="All 2 branches missed.">            for (int i = 0; i &lt; chapters.size(); i += BATCH_SIZE) {</span>
+<span class="nc" id="L48">                int end = Math.min(i + BATCH_SIZE, chapters.size());</span>
+<span class="nc" id="L49">                List&lt;String&gt; batch = chapters.subList(i, end);</span>
+<span class="nc" id="L50">                int batchIndex = (i / BATCH_SIZE) + 1;</span>
+<span class="nc" id="L51">                log.debug(&quot;插入章节批次: projectId={}, batch={}/{}&quot;, projectId, batchIndex, totalBatches);</span>
+<span class="nc" id="L52">                insertChapterBatch(event, batch, i);</span>
+            }
+
+            // 所有章节批次插入完成，激活项目
+<span class="nc" id="L56">            activateProject(projectId, event.getDocumentId());</span>
+<span class="nc" id="L57">            log.info(&quot;章节异步插入完成: projectId={}, totalChapters={}&quot;, projectId, chapters.size());</span>
+<span class="nc" id="L58">        } catch (Exception e) {</span>
+<span class="nc" id="L59">            log.error(&quot;章节异步插入失败: projectId={}, error={}&quot;, projectId, e.getMessage(), e);</span>
+<span class="nc" id="L60">        }</span>
+<span class="nc" id="L61">    }</span>
+
+    @Transactional
+    protected void insertChapterBatch(ChapterSplitEvent event, List&lt;String&gt; batch, int startIndex) {
+<span class="fc" id="L65">        Long projectId = event.getProjectId();</span>
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        for (int i = 0; i &lt; batch.size(); i++) {</span>
+<span class="fc" id="L67">            String chapterText = batch.get(i);</span>
+<span class="fc" id="L68">            CollabChapterTask chapter = new CollabChapterTask();</span>
+<span class="fc" id="L69">            chapter.setProjectId(projectId);</span>
+<span class="fc" id="L70">            chapter.setChapterNumber(startIndex + i + 1);</span>
+<span class="fc" id="L71">            chapter.setTitle(&quot;第 &quot; + (startIndex + i + 1) + &quot; 章&quot;);</span>
+<span class="fc" id="L72">            chapter.setSourceText(chapterText);</span>
+<span class="fc" id="L73">            chapter.setTargetText(null);</span>
+<span class="fc" id="L74">            chapter.setStatus(ChapterTaskStatus.UNASSIGNED.getValue());</span>
+<span class="fc" id="L75">            chapter.setProgress(0);</span>
+<span class="fc" id="L76">            chapter.setSourceWordCount(chapterText.length());</span>
+<span class="fc" id="L77">            collaborationRepository.saveChapterTask(chapter);</span>
+        }
+<span class="fc" id="L79">        log.debug(&quot;批次插入成功: projectId={}, batchStart={}, count={}&quot;, projectId, startIndex + 1, batch.size());</span>
+<span class="fc" id="L80">    }</span>
+
+    @Transactional
+    protected void activateProject(Long projectId, Long documentId) {
+<span class="fc" id="L84">        CollabProject project = collaborationRepository.findProjectById(projectId).orElse(null);</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        if (project == null) {</span>
+<span class="fc" id="L86">            log.error(&quot;激活项目失败: 项目不存在, projectId={}&quot;, projectId);</span>
+<span class="fc" id="L87">            return;</span>
+        }
+
+        // 通过状态机将项目从 DRAFT 转换到 ACTIVE
+<span class="fc" id="L91">        collabStateMachine.transitionProject(project, CollabProjectStatus.ACTIVE);</span>
+<span class="fc" id="L92">        project.setProgress(0);</span>
+<span class="fc" id="L93">        collaborationRepository.updateProject(project);</span>
+
+        // 更新文档状态为已完成
+<span class="fc" id="L96">        Document doc = documentRepository.findById(documentId).orElse(null);</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        if (doc != null) {</span>
+<span class="fc" id="L98">            doc.setStatus(TranslationStatus.COMPLETED.getValue());</span>
+<span class="fc" id="L99">            doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L100">            documentRepository.update(doc);</span>
+        }
+
+<span class="fc" id="L103">        log.info(&quot;项目已激活: projectId={}&quot;, projectId);</span>
+<span class="fc" id="L104">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

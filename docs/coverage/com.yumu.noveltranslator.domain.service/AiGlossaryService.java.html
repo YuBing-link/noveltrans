@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AiGlossaryService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">AiGlossaryService.java</span></div><h1>AiGlossaryService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+
+import com.yumu.noveltranslator.domain.model.AiGlossary;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+/**
+ * AI 术语表服务
+ * 负责维护每个小说项目的 AI 提取术语
+ * 支持 upsert（同一项目 + 原文术语已存在则更新译文）
+ */
+@Service
+<span class="fc" id="L17">@RequiredArgsConstructor</span>
+<span class="fc" id="L18">@Slf4j</span>
+public class AiGlossaryService {
+
+    private final GlossaryRepositoryPort glossaryPort;
+
+    /**
+     * 获取项目所有已确认的术语
+     * 如果表不存在或查询失败，返回空列表（不阻断翻译流程）
+     */
+    public List&lt;AiGlossary&gt; getProjectGlossary(Long projectId) {
+        try {
+<span class="fc" id="L29">            return glossaryPort.findAiGlossaryByProjectIdAndStatus(projectId, &quot;confirmed&quot;);</span>
+<span class="nc" id="L30">        } catch (Exception e) {</span>
+<span class="nc" id="L31">            log.warn(&quot;获取 AI 术语表失败（可能表未创建）: {}&quot;, e.getMessage());</span>
+<span class="nc" id="L32">            return List.of();</span>
+        }
+    }
+
+    /**
+     * 添加术语（upsert）
+     * 如果同一项目下 sourceWord 已存在，则更新 targetWord；否则插入新记录
+     * AI 提取的术语默认状态为 pending
+     */
+    public void addTerm(Long projectId, String sourceWord, String targetWord,
+                        String context, String entityType, Long chapterId) {
+<span class="fc" id="L43">        glossaryPort.upsertAiGlossary(projectId, sourceWord, targetWord, context, entityType, chapterId);</span>
+<span class="fc" id="L44">        log.debug(&quot;AI 术语表 upsert: projectId={}, sourceWord={}&quot;, projectId, sourceWord);</span>
+<span class="fc" id="L45">    }</span>
+
+    /**
+     * 批量添加术语
+     */
+    public void batchAddTerms(Long projectId, List&lt;AiGlossary&gt; terms) {
+<span class="fc bfc" id="L51" title="All 4 branches covered.">        if (terms == null || terms.isEmpty()) {</span>
+<span class="fc" id="L52">            return;</span>
+        }
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        for (AiGlossary term : terms) {</span>
+<span class="fc" id="L55">            term.setProjectId(projectId);</span>
+<span class="pc bpc" id="L56" title="1 of 2 branches missed.">            if (term.getStatus() == null) {</span>
+<span class="fc" id="L57">                term.setStatus(&quot;pending&quot;);</span>
+            }
+<span class="fc bfc" id="L59" title="All 2 branches covered.">            if (term.getConfidence() == null) {</span>
+<span class="fc" id="L60">                term.setConfidence(0.8);</span>
+            }
+<span class="fc" id="L62">            addTerm(projectId, term.getSourceWord(), term.getTargetWord(),</span>
+<span class="fc" id="L63">                    term.getContext(), term.getEntityType(), term.getChapterId());</span>
+<span class="fc" id="L64">        }</span>
+<span class="fc" id="L65">        log.info(&quot;批量添加 AI 术语: projectId={}, count={}&quot;, projectId, terms.size());</span>
+<span class="fc" id="L66">    }</span>
+
+    /**
+     * 更新术语状态（pending -&gt; confirmed / rejected）
+     */
+    public boolean updateTermStatus(Long termId, String status) {
+<span class="fc" id="L72">        return glossaryPort.findAiGlossaryById(termId).map(term -&gt; {</span>
+<span class="fc" id="L73">            term.setStatus(status);</span>
+<span class="fc" id="L74">            glossaryPort.updateAiGlossary(term);</span>
+<span class="fc" id="L75">            return true;</span>
+<span class="fc" id="L76">        }).orElseGet(() -&gt; {</span>
+<span class="fc" id="L77">            log.warn(&quot;术语不存在: termId={}&quot;, termId);</span>
+<span class="fc" id="L78">            return false;</span>
+        });
+    }
+
+    /**
+     * 删除术语
+     */
+    public boolean deleteTerm(Long termId) {
+<span class="fc" id="L86">        glossaryPort.deleteAiGlossary(termId);</span>
+<span class="fc" id="L87">        return true;</span>
+    }
+
+    /**
+     * 获取项目的待确认术语
+     */
+    public List&lt;AiGlossary&gt; getPendingTerms(Long projectId) {
+<span class="fc" id="L94">        return glossaryPort.findAiGlossaryByProjectIdAndStatus(projectId, &quot;pending&quot;);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

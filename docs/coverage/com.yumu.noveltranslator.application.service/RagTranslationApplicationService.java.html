@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RagTranslationApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">RagTranslationApplicationService.java</span></div><h1>RagTranslationApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+import com.yumu.noveltranslator.domain.service.TranslationMemoryService;
+
+import com.yumu.noveltranslator.domain.model.TranslationMemory;
+import com.yumu.noveltranslator.port.out.EmbeddingPort;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.port.out.VectorSearchResult;
+import com.yumu.noveltranslator.port.out.VectorStorePort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+/**
+ * RAG 翻译服务
+ * 核心查询链路：生成向量 → Redis KNN 查询（按 user_id 过滤） → 相似度决策
+ * Redis 失败时降级为 MySQL 余弦相似度计算
+ * 翻译完成后自动存储到翻译记忆
+ */
+@Service
+<span class="fc" id="L28">@Slf4j</span>
+<span class="fc" id="L29">@RequiredArgsConstructor</span>
+public class RagTranslationApplicationService implements com.yumu.noveltranslator.port.in.RagTranslationPort {
+
+    private static final String SOURCE_LANG_AUTO = &quot;auto&quot;;
+<span class="fc" id="L33">    private static final Pattern WHITESPACE = Pattern.compile(&quot;\\s+&quot;);</span>
+
+    private final EmbeddingPort embeddingPort;
+    private final TranslationMemoryService translationMemoryService;
+    private final VectorStorePort vectorStorePort;
+
+    @Value(&quot;${embedding.provider:openai}&quot;)
+    private String provider;
+
+    @Value(&quot;${embedding.rag.direct-hit-threshold:0.85}&quot;)
+    private double directHitThreshold;
+
+    @Value(&quot;${embedding.rag.reference-threshold:0.5}&quot;)
+    private double referenceThreshold;
+
+    @Value(&quot;${embedding.rag.knn-top-k:5}&quot;)
+    private int knnTopK;
+
+    @Value(&quot;${embedding.rag.fallback-mysql-limit:20}&quot;)
+    private int fallbackMysqlLimit;
+
+    /**
+     * 查询相似翻译记忆（指定 userId，带模式层级过滤）
+     */
+    public RagTranslationResponse searchSimilarWithModes(
+            Long userId, String sourceText, String targetLang, List&lt;String&gt; allowedModes) {
+<span class="fc bfc" id="L59" title="All 2 branches covered.">        if (userId == null) {</span>
+<span class="fc" id="L60">            return buildEmptyResponse();</span>
+        }
+<span class="fc" id="L62">        return doSearch(sourceText, targetLang, userId, allowedModes);</span>
+    }
+
+    // ==================== 存储入口 ====================
+
+    public void storeTranslationMemory(String sourceText, String targetText, String targetLang, String engine, Long userId, String translationMode) {
+<span class="fc" id="L68">        doStore(sourceText, targetText, targetLang, engine, userId, translationMode);</span>
+<span class="fc" id="L69">    }</span>
+
+    // ==================== 核心私有方法 ====================
+
+    private RagTranslationResponse doSearch(String sourceText, String targetLang, Long userId, List&lt;String&gt; allowedModes) {
+<span class="fc bfc" id="L74" title="All 4 branches covered.">        if (sourceText == null || sourceText.isBlank()) {</span>
+<span class="fc" id="L75">            return buildEmptyResponse();</span>
+        }
+
+        try {
+<span class="fc" id="L79">            float[] queryVector = embeddingPort.embed(sourceText);</span>
+<span class="fc bfc" id="L80" title="All 2 branches covered.">            if (queryVector.length == 0) {</span>
+<span class="fc" id="L81">                return buildEmptyResponse();</span>
+            }
+
+<span class="fc" id="L84">            List&lt;VectorSearchResult&gt; results = vectorStorePort.vectorSearch(queryVector, userId, targetLang, allowedModes, knnTopK);</span>
+
+<span class="fc bfc" id="L86" title="All 2 branches covered.">            if (results.isEmpty()) {</span>
+<span class="fc" id="L87">                results = searchFallback(queryVector, userId, targetLang, allowedModes);</span>
+            }
+
+<span class="fc bfc" id="L90" title="All 2 branches covered.">            if (results.isEmpty()) {</span>
+<span class="fc" id="L91">                return buildEmptyResponse();</span>
+            }
+
+<span class="fc" id="L94">            RagTranslationResponse response = new RagTranslationResponse();</span>
+<span class="fc" id="L95">            response.setMatches(toRagMatches(results));</span>
+
+<span class="fc" id="L97">            VectorSearchResult best = results.get(0);</span>
+<span class="fc bfc" id="L98" title="All 2 branches covered.">            if (best.similarity() &gt;= directHitThreshold) {</span>
+<span class="fc" id="L99">                response.setDirectHit(true);</span>
+<span class="fc" id="L100">                response.setTranslation(best.targetText());</span>
+<span class="fc" id="L101">                response.setSimilarity(best.similarity());</span>
+<span class="fc" id="L102">                translationMemoryService.incrementUsage(best.memoryId());</span>
+<span class="fc" id="L103">                log.info(&quot;RAG 直接命中: similarity={}, memoryId={}&quot;, best.similarity(), best.memoryId());</span>
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">            } else if (best.similarity() &gt;= referenceThreshold) {</span>
+<span class="fc" id="L105">                response.setDirectHit(false);</span>
+<span class="fc" id="L106">                response.setSimilarity(best.similarity());</span>
+<span class="fc" id="L107">                log.info(&quot;RAG 提供参考: similarity={}&quot;, best.similarity());</span>
+            }
+
+<span class="fc" id="L110">            return response;</span>
+<span class="fc" id="L111">        } catch (Exception e) {</span>
+<span class="fc" id="L112">            log.error(&quot;RAG 查询失败: {}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L113">            return buildEmptyResponse();</span>
+        }
+    }
+
+    private void doStore(String sourceText, String targetText, String targetLang, String engine, Long userId, String translationMode) {
+<span class="pc bpc" id="L118" title="1 of 6 branches missed.">        if (userId == null || sourceText == null || sourceText.isBlank()) {</span>
+<span class="fc" id="L119">            return;</span>
+        }
+
+<span class="fc" id="L122">        String rejectionReason = rejectQuality(sourceText, targetText);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">        if (rejectionReason != null) {</span>
+<span class="fc" id="L124">            log.debug(&quot;RAG 质量筛选拦截: reason={}, engine={}, sourceLen={}&quot;, rejectionReason, engine, sourceText.length());</span>
+<span class="fc" id="L125">            return;</span>
+        }
+
+        try {
+<span class="fc" id="L129">            Long memoryId = translationMemoryService.storeTranslation(</span>
+                    sourceText, targetText, SOURCE_LANG_AUTO, targetLang,
+                    userId, null, engine, translationMode);
+
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">            if (memoryId == null) {</span>
+<span class="nc" id="L134">                log.warn(&quot;RAG 存储失败: storeTranslation 返回 null memoryId&quot;);</span>
+<span class="nc" id="L135">                return;</span>
+            }
+
+<span class="fc" id="L138">            float[] embedding = embeddingPort.embed(sourceText);</span>
+<span class="pc bpc" id="L139" title="1 of 2 branches missed.">            if (embedding.length &gt; 0) {</span>
+<span class="fc" id="L140">                vectorStorePort.storeVector(</span>
+                        memoryId, sourceText, targetText, SOURCE_LANG_AUTO, targetLang,
+                        userId, translationMode, embedding);
+            }
+
+<span class="fc" id="L145">            log.debug(&quot;RAG 存储翻译记忆: memoryId={}, sourceLen={}, mode={}&quot;, memoryId, sourceText.length(), translationMode);</span>
+<span class="fc" id="L146">        } catch (Exception e) {</span>
+<span class="fc" id="L147">            log.error(&quot;RAG 存储翻译记忆失败: {}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L148">        }</span>
+<span class="fc" id="L149">    }</span>
+
+    // ==================== 内部辅助方法 ====================
+
+    private List&lt;RagTranslationResponse.RagMatch&gt; toRagMatches(List&lt;VectorSearchResult&gt; results) {
+<span class="fc" id="L154">        List&lt;RagTranslationResponse.RagMatch&gt; matches = new ArrayList&lt;&gt;(results.size());</span>
+<span class="fc bfc" id="L155" title="All 2 branches covered.">        for (VectorSearchResult r : results) {</span>
+<span class="fc" id="L156">            RagTranslationResponse.RagMatch match = new RagTranslationResponse.RagMatch();</span>
+<span class="fc" id="L157">            match.setMemoryId(r.memoryId());</span>
+<span class="fc" id="L158">            match.setSourceText(r.sourceText());</span>
+<span class="fc" id="L159">            match.setTargetText(r.targetText());</span>
+<span class="fc" id="L160">            match.setSimilarity(r.similarity());</span>
+<span class="fc" id="L161">            matches.add(match);</span>
+<span class="fc" id="L162">        }</span>
+<span class="fc" id="L163">        return matches;</span>
+    }
+
+    /**
+     * MySQL 降级方案：查询用户的翻译记忆，用余弦相似度计算匹配度（带模式过滤）
+     */
+    private List&lt;VectorSearchResult&gt; searchFallback(float[] queryVector, Long userId, String targetLang, List&lt;String&gt; allowedModes) {
+        try {
+<span class="fc" id="L171">            List&lt;TranslationMemory&gt; memories = translationMemoryService</span>
+<span class="fc" id="L172">                    .searchByUserAndLang(userId, SOURCE_LANG_AUTO, targetLang, fallbackMysqlLimit);</span>
+
+<span class="fc bfc" id="L174" title="All 2 branches covered.">            if (memories.isEmpty()) {</span>
+<span class="fc" id="L175">                return Collections.emptyList();</span>
+            }
+
+<span class="pc bpc" id="L178" title="1 of 2 branches missed.">            Set&lt;String&gt; modeSet = allowedModes != null ? Set.copyOf(allowedModes) : Collections.emptySet();</span>
+
+<span class="fc" id="L180">            List&lt;VectorSearchResult&gt; results = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L181" title="All 2 branches covered.">            for (TranslationMemory memory : memories) {</span>
+<span class="pc bpc" id="L182" title="2 of 4 branches missed.">                if (!modeSet.isEmpty() &amp;&amp; memory.getTranslationMode() != null</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">                        &amp;&amp; !modeSet.contains(memory.getTranslationMode())) {</span>
+<span class="nc" id="L184">                    continue;</span>
+                }
+
+<span class="fc" id="L187">                List&lt;Float&gt; storedEmbedding = memory.getEmbedding();</span>
+<span class="fc bfc" id="L188" title="All 4 branches covered.">                if (storedEmbedding == null || storedEmbedding.isEmpty()) {</span>
+<span class="fc" id="L189">                    continue;</span>
+                }
+
+<span class="fc" id="L192">                double similarity = cosineSimilarity(queryVector, storedEmbedding);</span>
+<span class="fc bfc" id="L193" title="All 2 branches covered.">                if (similarity &gt;= referenceThreshold) {</span>
+<span class="fc" id="L194">                    results.add(new VectorSearchResult(</span>
+<span class="fc" id="L195">                            memory.getId(), memory.getSourceText(), memory.getTargetText(), similarity));</span>
+                }
+<span class="fc" id="L197">            }</span>
+
+<span class="pc" id="L199">            results.sort((a, b) -&gt; Double.compare(b.similarity(), a.similarity()));</span>
+<span class="fc" id="L200">            return results;</span>
+<span class="fc" id="L201">        } catch (Exception e) {</span>
+<span class="fc" id="L202">            log.warn(&quot;MySQL 降级查询失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L203">            return Collections.emptyList();</span>
+        }
+    }
+
+    /**
+     * 计算余弦相似度
+     */
+    private double cosineSimilarity(float[] vectorA, List&lt;Float&gt; vectorB) {
+<span class="fc bfc" id="L211" title="All 2 branches covered.">        if (vectorA.length != vectorB.size()) {</span>
+<span class="fc" id="L212">            return 0.0;</span>
+        }
+
+<span class="fc" id="L215">        double dotProduct = 0.0;</span>
+<span class="fc" id="L216">        double normA = 0.0;</span>
+<span class="fc" id="L217">        double normB = 0.0;</span>
+
+<span class="fc bfc" id="L219" title="All 2 branches covered.">        for (int i = 0; i &lt; vectorA.length; i++) {</span>
+<span class="fc" id="L220">            float a = vectorA[i];</span>
+<span class="fc" id="L221">            float b = vectorB.get(i);</span>
+<span class="fc" id="L222">            dotProduct += a * b;</span>
+<span class="fc" id="L223">            normA += a * a;</span>
+<span class="fc" id="L224">            normB += b * b;</span>
+        }
+
+<span class="pc bpc" id="L227" title="1 of 4 branches missed.">        if (normA == 0.0 || normB == 0.0) {</span>
+<span class="fc" id="L228">            return 0.0;</span>
+        }
+
+<span class="fc" id="L231">        return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));</span>
+    }
+
+    /**
+     * 质量筛选：返回拒绝原因（如果通过则返回 null）
+     */
+    private String rejectQuality(String source, String target) {
+<span class="fc bfc" id="L238" title="All 4 branches covered.">        if (target == null || target.isBlank()) {</span>
+<span class="fc" id="L239">            return &quot;empty_target&quot;;</span>
+        }
+<span class="fc bfc" id="L241" title="All 2 branches covered.">        if (source.trim().equalsIgnoreCase(target.trim())) {</span>
+<span class="fc" id="L242">            return &quot;identical_to_source&quot;;</span>
+        }
+
+<span class="fc" id="L245">        int sourceLen = WHITESPACE.matcher(source).replaceAll(&quot;&quot;).length();</span>
+<span class="fc" id="L246">        int targetLen = WHITESPACE.matcher(target).replaceAll(&quot;&quot;).length();</span>
+<span class="pc bpc" id="L247" title="1 of 2 branches missed.">        if (sourceLen &gt; 0) {</span>
+<span class="fc" id="L248">            double ratio = (double) targetLen / sourceLen;</span>
+<span class="fc bfc" id="L249" title="All 2 branches covered.">            if (ratio &gt; 10.0) {</span>
+<span class="fc" id="L250">                return &quot;length_ratio_too_high:&quot; + String.format(&quot;%.1f&quot;, ratio);</span>
+            }
+<span class="fc bfc" id="L252" title="All 2 branches covered.">            if (ratio &lt; 0.1) {</span>
+<span class="fc" id="L253">                return &quot;length_ratio_too_low:&quot; + String.format(&quot;%.2f&quot;, ratio);</span>
+            }
+        }
+
+<span class="fc" id="L257">        String[] adKeywords = {&quot;人工智能助手&quot;, &quot;Gemini&quot;, &quot;GPT-4&quot;, &quot;Claude&quot;, &quot;ChatGPT&quot;,</span>
+                &quot;powered by&quot;, &quot;generated by&quot;, &quot;翻译引擎&quot;, &quot;未翻译&quot;, &quot;translation pending&quot;};
+<span class="fc" id="L259">        String targetLower = target.toLowerCase(Locale.ROOT);</span>
+<span class="fc bfc" id="L260" title="All 2 branches covered.">        for (String keyword : adKeywords) {</span>
+<span class="fc bfc" id="L261" title="All 2 branches covered.">            if (targetLower.contains(keyword.toLowerCase(Locale.ROOT))) {</span>
+<span class="fc" id="L262">                return &quot;ad_keyword:&quot; + keyword;</span>
+            }
+        }
+
+<span class="fc bfc" id="L266" title="All 2 branches covered.">        if (targetLen &gt; 10) {</span>
+<span class="fc" id="L267">            int nonAlphanumeric = 0;</span>
+<span class="fc bfc" id="L268" title="All 2 branches covered.">            for (char c : target.toCharArray()) {</span>
+<span class="pc bpc" id="L269" title="1 of 4 branches missed.">                if (!Character.isLetterOrDigit(c) &amp;&amp; !Character.isWhitespace(c)) {</span>
+<span class="fc" id="L270">                    nonAlphanumeric++;</span>
+                }
+            }
+<span class="pc bpc" id="L273" title="1 of 2 branches missed.">            if ((double) nonAlphanumeric / targetLen &gt; 0.6) {</span>
+<span class="fc" id="L274">                return &quot;too_many_special_chars&quot;;</span>
+            }
+        }
+
+<span class="fc" id="L278">        return null;</span>
+    }
+
+    public void clearAllTranslationMemory() {
+        try {
+<span class="nc" id="L283">            translationMemoryService.deleteAllTranslationMemory();</span>
+<span class="nc" id="L284">            log.info(&quot;MySQL translation_memory 表已清空&quot;);</span>
+<span class="nc" id="L285">        } catch (Exception e) {</span>
+<span class="nc" id="L286">            log.warn(&quot;MySQL translation_memory 清空失败：{}&quot;, e.getMessage());</span>
+<span class="nc" id="L287">        }</span>
+        try {
+<span class="nc" id="L289">            vectorStorePort.clearAllVectors();</span>
+<span class="nc" id="L290">            log.info(&quot;向量索引已清空&quot;);</span>
+<span class="nc" id="L291">        } catch (Exception e) {</span>
+<span class="nc" id="L292">            log.warn(&quot;向量索引清空失败：{}&quot;, e.getMessage());</span>
+<span class="nc" id="L293">        }</span>
+<span class="nc" id="L294">    }</span>
+
+    private RagTranslationResponse buildEmptyResponse() {
+<span class="fc" id="L297">        RagTranslationResponse response = new RagTranslationResponse();</span>
+<span class="fc" id="L298">        response.setDirectHit(false);</span>
+<span class="fc" id="L299">        response.setMatches(new ArrayList&lt;&gt;());</span>
+<span class="fc" id="L300">        return response;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

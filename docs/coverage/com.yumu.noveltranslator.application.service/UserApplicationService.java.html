@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">UserApplicationService.java</span></div><h1>UserApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yumu.noveltranslator.config.tenant.TenantContext;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserStatisticsResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserQuotaResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserPreferencesResponse;
+import com.yumu.noveltranslator.port.dto.entity.UserPreferencesRequest;
+import com.yumu.noveltranslator.port.dto.entity.PlatformStatsResponse;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryResponse;
+import com.yumu.noveltranslator.port.dto.translation.GlossaryItemRequest;
+import com.yumu.noveltranslator.port.dto.common.PageResponse;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.domain.model.User;
+import com.yumu.noveltranslator.domain.model.UserPreference;
+import com.yumu.noveltranslator.enums.ErrorCodeEnum;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+import com.yumu.noveltranslator.properties.TranslationLimitProperties;
+import com.yumu.noveltranslator.domain.service.QuotaService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * 用户信息服务：个人资料、术语库、偏好设置、统计数据
+ */
+@Service
+<span class="fc" id="L37">@RequiredArgsConstructor</span>
+public class UserApplicationService implements com.yumu.noveltranslator.port.in.UserPort {
+
+    private final UserRepositoryPort userPort;
+    private final TranslationRepositoryPort translationPort;
+    private final GlossaryRepositoryPort glossaryPort;
+    private final TranslationLimitProperties limitProperties;
+    private final QuotaService quotaService;
+    private final com.yumu.noveltranslator.port.in.TranslationTaskPort translationTaskPort;
+
+    /**
+     * 更新用户信息
+     */
+    public void updateUser(User user) {
+<span class="fc" id="L51">        userPort.update(user);</span>
+<span class="fc" id="L52">    }</span>
+
+    /**
+     * 获取用户统计数据
+     */
+    public UserStatisticsResponse getUserStatistics(Long userId) {
+<span class="fc" id="L58">        UserStatisticsResponse response = new UserStatisticsResponse();</span>
+
+<span class="fc" id="L60">        int totalCount = translationPort.countHistoryByUserId(userId);</span>
+<span class="fc" id="L61">        response.setTotalTranslations(totalCount);</span>
+
+<span class="fc" id="L63">        int textCount = translationPort.countHistoryByUserIdAndType(userId, &quot;text&quot;);</span>
+<span class="fc" id="L64">        int docCount = translationPort.countHistoryByUserIdAndType(userId, &quot;document&quot;);</span>
+<span class="fc" id="L65">        response.setTextTranslations(textCount);</span>
+<span class="fc" id="L66">        response.setDocumentTranslations(docCount);</span>
+
+<span class="fc" id="L68">        Long totalChars = translationPort.sumHistorySourceTextLengthByUserId(userId);</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">        response.setTotalCharacters(totalChars != null ? totalChars : 0L);</span>
+<span class="fc" id="L70">        response.setTotalDocuments(docCount);</span>
+
+<span class="fc" id="L72">        LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);</span>
+<span class="fc" id="L73">        LocalDateTime monthAgo = LocalDateTime.now().minusMonths(1);</span>
+<span class="fc" id="L74">        response.setWeekTranslations(translationPort.countHistoryByUserIdAfter(userId, weekAgo));</span>
+<span class="fc" id="L75">        response.setMonthTranslations(translationPort.countHistoryByUserIdAfter(userId, monthAgo));</span>
+
+<span class="fc" id="L77">        return response;</span>
+    }
+
+    /**
+     * 获取用户配额信息
+     */
+    public UserQuotaResponse getUserQuota(User user) {
+<span class="fc" id="L84">        UserQuotaResponse response = new UserQuotaResponse();</span>
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        String level = user.getUserLevel() != null ? user.getUserLevel() : &quot;free&quot;;</span>
+<span class="fc" id="L86">        response.setUserLevel(level.toUpperCase());</span>
+
+<span class="fc" id="L88">        long monthlyChars = quotaService.getMonthlyQuota(level);</span>
+<span class="fc" id="L89">        long usedThisMonth = quotaService.getUsedThisMonth(user.getId());</span>
+<span class="fc" id="L90">        long remaining = Math.max(0, monthlyChars - usedThisMonth);</span>
+
+<span class="fc" id="L92">        response.setMonthlyChars(monthlyChars);</span>
+<span class="fc" id="L93">        response.setUsedThisMonth(usedThisMonth);</span>
+<span class="fc" id="L94">        response.setRemainingChars(remaining);</span>
+
+        int concurrency;
+<span class="pc bpc" id="L97" title="1 of 2 branches missed.">        if (&quot;max&quot;.equalsIgnoreCase(level)) {</span>
+<span class="nc" id="L98">            concurrency = limitProperties.getMaxConcurrencyLimit();</span>
+<span class="fc bfc" id="L99" title="All 2 branches covered.">        } else if (&quot;pro&quot;.equalsIgnoreCase(level)) {</span>
+<span class="fc" id="L100">            concurrency = limitProperties.getProConcurrencyLimit();</span>
+        } else {
+<span class="fc" id="L102">            concurrency = limitProperties.getFreeConcurrencyLimit();</span>
+        }
+<span class="fc" id="L104">        response.setConcurrencyLimit(concurrency);</span>
+
+<span class="fc" id="L106">        double fastMult = limitProperties.getFastModeMultiplier();</span>
+<span class="fc" id="L107">        double expertMult = limitProperties.getExpertModeMultiplier();</span>
+<span class="fc" id="L108">        double teamMult = limitProperties.getTeamModeMultiplier();</span>
+<span class="fc" id="L109">        response.setFastModeEquivalent((long) (remaining / fastMult));</span>
+<span class="fc" id="L110">        response.setExpertModeEquivalent((long) (remaining / expertMult));</span>
+<span class="fc" id="L111">        response.setTeamModeEquivalent((long) (remaining / teamMult));</span>
+
+<span class="fc" id="L113">        return response;</span>
+    }
+
+    /**
+     * 获取术语库列表
+     */
+    public PageResponse&lt;GlossaryResponse&gt; getGlossaryList(Long userId, int page, int pageSize, String search) {
+<span class="fc" id="L120">        var glossaryPage = glossaryPort.findGlossaryPaged(userId, search, page, pageSize);</span>
+
+<span class="fc" id="L122">        List&lt;GlossaryResponse&gt; list = glossaryPage.getRecords().stream()</span>
+<span class="fc" id="L123">                .map(this::toGlossaryResponse)</span>
+<span class="fc" id="L124">                .collect(Collectors.toList());</span>
+
+<span class="fc" id="L126">        return PageResponse.of(page, pageSize, glossaryPage.getTotal(), list);</span>
+    }
+
+    /**
+     * 获取术语库详情
+     */
+    public GlossaryResponse getGlossaryDetail(Long userId, Long glossaryId) {
+<span class="fc" id="L133">        return glossaryPort.findGlossaryById(glossaryId)</span>
+<span class="pc bpc" id="L134" title="1 of 4 branches missed.">                .filter(g -&gt; g.getDeleted() == null || g.getDeleted() != 1)</span>
+<span class="fc" id="L135">                .filter(g -&gt; g.getUserId().equals(userId))</span>
+<span class="fc" id="L136">                .map(this::toGlossaryResponse)</span>
+<span class="fc" id="L137">                .orElse(null);</span>
+    }
+
+    /**
+     * 获取术语列表
+     */
+    public List&lt;GlossaryResponse&gt; getGlossaryTerms(Long userId) {
+<span class="nc" id="L144">        return fetchAllGlossaries(userId);</span>
+    }
+
+    private List&lt;GlossaryResponse&gt; fetchAllGlossaries(Long userId) {
+<span class="nc" id="L148">        return glossaryPort.findGlossaryByUserId(userId).stream()</span>
+<span class="nc" id="L149">                .map(this::toGlossaryResponse)</span>
+<span class="nc" id="L150">                .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * 创建术语项
+     */
+    public GlossaryResponse createGlossaryItem(Long userId, GlossaryItemRequest request) {
+<span class="fc" id="L157">        Glossary glossary = new Glossary();</span>
+<span class="fc" id="L158">        glossary.setUserId(userId);</span>
+<span class="fc" id="L159">        glossary.setSourceWord(request.getSourceWord());</span>
+<span class="fc" id="L160">        glossary.setTargetWord(request.getTargetWord());</span>
+<span class="fc" id="L161">        glossary.setRemark(request.getRemark());</span>
+
+<span class="fc" id="L163">        glossaryPort.saveGlossary(glossary);</span>
+<span class="fc" id="L164">        return toGlossaryResponse(glossary);</span>
+    }
+
+    /**
+     * 更新术语项
+     */
+    public GlossaryResponse updateGlossaryItem(Long userId, Long glossaryId, GlossaryItemRequest request) {
+<span class="fc" id="L171">        return glossaryPort.findGlossaryById(glossaryId)</span>
+<span class="pc bpc" id="L172" title="1 of 4 branches missed.">                .filter(g -&gt; g.getDeleted() == null || g.getDeleted() != 1)</span>
+<span class="fc" id="L173">                .filter(g -&gt; g.getUserId().equals(userId))</span>
+<span class="fc" id="L174">                .map(glossary -&gt; {</span>
+<span class="fc bfc" id="L175" title="All 2 branches covered.">                    if (request.getSourceWord() != null) {</span>
+<span class="fc" id="L176">                        glossary.setSourceWord(request.getSourceWord());</span>
+                    }
+<span class="pc bpc" id="L178" title="1 of 2 branches missed.">                    if (request.getTargetWord() != null) {</span>
+<span class="fc" id="L179">                        glossary.setTargetWord(request.getTargetWord());</span>
+                    }
+<span class="fc bfc" id="L181" title="All 2 branches covered.">                    if (request.getRemark() != null) {</span>
+<span class="fc" id="L182">                        glossary.setRemark(request.getRemark());</span>
+                    }
+<span class="fc" id="L184">                    glossaryPort.updateGlossary(glossary);</span>
+<span class="fc" id="L185">                    return toGlossaryResponse(glossary);</span>
+<span class="fc" id="L186">                }).orElse(null);</span>
+    }
+
+    /**
+     * 删除术语项
+     */
+    public boolean deleteGlossaryItem(Long userId, Long glossaryId) {
+<span class="fc" id="L193">        return glossaryPort.findGlossaryById(glossaryId)</span>
+<span class="pc bpc" id="L194" title="1 of 4 branches missed.">                .filter(g -&gt; g.getDeleted() == null || g.getDeleted() != 1)</span>
+<span class="fc" id="L195">                .filter(g -&gt; g.getUserId().equals(userId))</span>
+<span class="fc" id="L196">                .map(glossaryPort::deleteGlossary)</span>
+<span class="fc" id="L197">                .orElse(false);</span>
+    }
+
+    /**
+     * 批量导入术语
+     */
+    public int batchImportGlossaryItems(Long userId, List&lt;GlossaryItemRequest&gt; items) {
+<span class="fc" id="L204">        int count = 0;</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">        for (GlossaryItemRequest item : items) {</span>
+            try {
+<span class="fc" id="L207">                createGlossaryItem(userId, item);</span>
+<span class="fc" id="L208">                count++;</span>
+<span class="fc" id="L209">            } catch (Exception e) {</span>
+                // 跳过失败的项
+<span class="fc" id="L211">            }</span>
+<span class="fc" id="L212">        }</span>
+<span class="fc" id="L213">        return count;</span>
+    }
+
+    /**
+     * 获取用户偏好设置
+     */
+    public UserPreferencesResponse getUserPreferences(Long userId) {
+<span class="fc" id="L220">        return userPort.findPreferenceByUserId(userId)</span>
+<span class="fc" id="L221">                .map(this::toPreferencesResponse)</span>
+<span class="fc" id="L222">                .orElseGet(this::buildDefaultPreferences);</span>
+    }
+
+    /**
+     * 更新用户偏好设置
+     */
+    public UserPreferencesResponse updateUserPreferences(Long userId, UserPreferencesRequest request) {
+<span class="fc" id="L229">        return userPort.findPreferenceByUserId(userId).map(pref -&gt; {</span>
+<span class="pc bpc" id="L230" title="1 of 2 branches missed.">            if (request.getDefaultEngine() != null) pref.setDefaultEngine(request.getDefaultEngine());</span>
+<span class="pc bpc" id="L231" title="1 of 2 branches missed.">            if (request.getDefaultTargetLang() != null) pref.setDefaultTargetLang(request.getDefaultTargetLang());</span>
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">            if (request.getEnableGlossary() != null) pref.setEnableGlossary(request.getEnableGlossary());</span>
+<span class="pc bpc" id="L233" title="1 of 2 branches missed.">            if (request.getDefaultGlossaryId() != null) pref.setDefaultGlossaryId(request.getDefaultGlossaryId());</span>
+<span class="pc bpc" id="L234" title="1 of 2 branches missed.">            if (request.getEnableCache() != null) pref.setEnableCache(request.getEnableCache());</span>
+<span class="pc bpc" id="L235" title="1 of 2 branches missed.">            if (request.getAutoTranslateSelection() != null) pref.setAutoTranslateSelection(request.getAutoTranslateSelection());</span>
+<span class="pc bpc" id="L236" title="1 of 2 branches missed.">            if (request.getFontSize() != null) pref.setFontSize(request.getFontSize());</span>
+<span class="pc bpc" id="L237" title="1 of 2 branches missed.">            if (request.getThemeMode() != null) pref.setThemeMode(request.getThemeMode());</span>
+<span class="fc" id="L238">            userPort.updatePreference(pref);</span>
+<span class="fc" id="L239">            return toPreferencesResponse(pref);</span>
+<span class="fc" id="L240">        }).orElseGet(() -&gt; {</span>
+<span class="fc" id="L241">            UserPreference pref = new UserPreference();</span>
+<span class="fc" id="L242">            pref.setUserId(userId);</span>
+<span class="fc bfc" id="L243" title="All 2 branches covered.">            pref.setDefaultEngine(request.getDefaultEngine() != null ? request.getDefaultEngine() : &quot;google&quot;);</span>
+<span class="fc bfc" id="L244" title="All 2 branches covered.">            pref.setDefaultTargetLang(request.getDefaultTargetLang() != null ? request.getDefaultTargetLang() : &quot;zh&quot;);</span>
+<span class="fc bfc" id="L245" title="All 2 branches covered.">            pref.setEnableGlossary(request.getEnableGlossary() != null ? request.getEnableGlossary() : true);</span>
+<span class="fc" id="L246">            pref.setDefaultGlossaryId(request.getDefaultGlossaryId());</span>
+<span class="fc bfc" id="L247" title="All 2 branches covered.">            pref.setEnableCache(request.getEnableCache() != null ? request.getEnableCache() : true);</span>
+<span class="pc bpc" id="L248" title="1 of 2 branches missed.">            pref.setAutoTranslateSelection(request.getAutoTranslateSelection() != null ? request.getAutoTranslateSelection() : true);</span>
+<span class="fc bfc" id="L249" title="All 2 branches covered.">            pref.setFontSize(request.getFontSize() != null ? request.getFontSize() : 14);</span>
+<span class="fc bfc" id="L250" title="All 2 branches covered.">            pref.setThemeMode(request.getThemeMode() != null ? request.getThemeMode() : &quot;light&quot;);</span>
+<span class="fc" id="L251">            userPort.savePreference(pref);</span>
+<span class="fc" id="L252">            return toPreferencesResponse(pref);</span>
+        });
+    }
+
+    /**
+     * 获取平台统计信息（跨租户全局统计）
+     */
+    public PlatformStatsResponse getPlatformStats() {
+<span class="fc" id="L260">        PlatformStatsResponse response = new PlatformStatsResponse();</span>
+
+        try {
+<span class="fc" id="L263">            TenantContext.setBypassTenant(true);</span>
+
+<span class="fc" id="L265">            response.setTotalUsers(userPort.countActiveUsers());</span>
+
+<span class="fc" id="L267">            LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);</span>
+<span class="fc" id="L268">            LocalDateTime monthAgo = LocalDateTime.now().minusMonths(1);</span>
+<span class="fc" id="L269">            LocalDateTime todayStart = LocalDate.now().atStartOfDay();</span>
+<span class="fc" id="L270">            response.setActiveUsersWeek(translationPort.countActiveUsersAfter(weekAgo));</span>
+<span class="fc" id="L271">            response.setActiveUsersMonth(translationPort.countActiveUsersAfter(monthAgo));</span>
+<span class="fc" id="L272">            response.setActiveUsersToday(translationPort.countActiveUsersAfter(todayStart));</span>
+
+<span class="fc" id="L274">            response.setTotalTranslations(translationPort.countAllHistory());</span>
+<span class="fc" id="L275">            response.setTranslationsToday(translationPort.countHistoryAfter(todayStart));</span>
+<span class="fc" id="L276">            response.setTotalCharacters(translationPort.sumAllHistorySourceTextLength());</span>
+<span class="fc" id="L277">            response.setTotalDocumentTranslations(translationPort.countDocumentTranslations());</span>
+<span class="fc" id="L278">            response.setTotalGlossaries(glossaryPort.countAllGlossaries());</span>
+
+<span class="fc" id="L280">            response.setSystemStatus(&quot;normal&quot;);</span>
+        } finally {
+<span class="fc" id="L282">            TenantContext.setBypassTenant(false);</span>
+        }
+
+<span class="fc" id="L285">        return response;</span>
+    }
+
+    /**
+     * 获取用户翻译历史
+     */
+    public PageResponse&lt;TranslationHistoryResponse&gt; getTranslationHistory(Long userId, int page, int pageSize, String type) {
+<span class="nc" id="L292">        var histories = translationTaskPort.getTranslationHistory(userId, page, pageSize, type);</span>
+<span class="nc" id="L293">        int total = translationTaskPort.countTranslationHistory(userId, type);</span>
+
+<span class="nc" id="L295">        var responseList = histories.stream()</span>
+<span class="nc" id="L296">                .map(translationTaskPort::toHistoryResponse)</span>
+<span class="nc" id="L297">                .toList();</span>
+
+<span class="nc" id="L299">        return PageResponse.of(page, pageSize, (long) total, responseList);</span>
+    }
+
+    private UserPreferencesResponse buildDefaultPreferences() {
+<span class="fc" id="L303">        UserPreferencesResponse response = new UserPreferencesResponse();</span>
+<span class="fc" id="L304">        response.setDefaultEngine(&quot;google&quot;);</span>
+<span class="fc" id="L305">        response.setDefaultTargetLang(&quot;zh&quot;);</span>
+<span class="fc" id="L306">        response.setEnableGlossary(true);</span>
+<span class="fc" id="L307">        response.setDefaultGlossaryId(null);</span>
+<span class="fc" id="L308">        response.setEnableCache(true);</span>
+<span class="fc" id="L309">        response.setAutoTranslateSelection(true);</span>
+<span class="fc" id="L310">        response.setFontSize(14);</span>
+<span class="fc" id="L311">        response.setThemeMode(&quot;light&quot;);</span>
+<span class="fc" id="L312">        return response;</span>
+    }
+
+    private UserPreferencesResponse toPreferencesResponse(UserPreference pref) {
+<span class="fc" id="L316">        UserPreferencesResponse response = new UserPreferencesResponse();</span>
+<span class="fc" id="L317">        response.setDefaultEngine(pref.getDefaultEngine());</span>
+<span class="fc" id="L318">        response.setDefaultTargetLang(pref.getDefaultTargetLang());</span>
+<span class="fc" id="L319">        response.setEnableGlossary(pref.getEnableGlossary());</span>
+<span class="fc" id="L320">        response.setDefaultGlossaryId(pref.getDefaultGlossaryId());</span>
+<span class="fc" id="L321">        response.setEnableCache(pref.getEnableCache());</span>
+<span class="fc" id="L322">        response.setAutoTranslateSelection(pref.getAutoTranslateSelection());</span>
+<span class="fc" id="L323">        response.setFontSize(pref.getFontSize());</span>
+<span class="fc" id="L324">        response.setThemeMode(pref.getThemeMode());</span>
+<span class="fc" id="L325">        return response;</span>
+    }
+
+    private GlossaryResponse toGlossaryResponse(Glossary glossary) {
+<span class="fc" id="L329">        GlossaryResponse response = new GlossaryResponse();</span>
+<span class="fc" id="L330">        response.setId(glossary.getId());</span>
+<span class="fc" id="L331">        response.setSourceWord(glossary.getSourceWord());</span>
+<span class="fc" id="L332">        response.setTargetWord(glossary.getTargetWord());</span>
+<span class="fc" id="L333">        response.setRemark(glossary.getRemark());</span>
+<span class="fc" id="L334">        response.setCreateTime(glossary.getCreateTime());</span>
+<span class="fc" id="L335">        return response;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

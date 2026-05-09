@@ -1,0 +1,879 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslationTaskApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.application.service</a> &gt; <span class="el_source">TranslationTaskApplicationService.java</span></div><h1>TranslationTaskApplicationService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.application.service;
+
+import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
+import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
+import com.yumu.noveltranslator.port.dto.entity.TranslationHistoryResponse;
+import com.yumu.noveltranslator.domain.model.Document;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.domain.model.TranslationHistory;
+import com.yumu.noveltranslator.domain.model.TranslationTask;
+import com.yumu.noveltranslator.enums.TranslationMode;
+import com.yumu.noveltranslator.enums.TranslationStatus;
+import com.yumu.noveltranslator.port.out.TranslationRepositoryPort;
+import com.yumu.noveltranslator.port.out.DocumentRepositoryPort;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
+import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
+import com.yumu.noveltranslator.domain.service.TranslationPipeline;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
+import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yumu.noveltranslator.util.ExternalResponseUtil;
+import com.yumu.noveltranslator.util.SseEmitterUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.scheduling.annotation.Scheduled;
+import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * 翻译任务服务
+ */
+@Service
+<span class="fc" id="L51">@RequiredArgsConstructor</span>
+public class TranslationTaskApplicationService implements com.yumu.noveltranslator.port.in.TranslationTaskPort {
+<span class="fc" id="L53">    private static final Logger log = LoggerFactory.getLogger(TranslationTaskApplicationService.class);</span>
+
+    private final TranslationRepositoryPort translationPort;
+    private final DocumentRepositoryPort documentPort;
+    private final GlossaryRepositoryPort glossaryPort;
+    private final TranslationStateMachine stateMachine;
+    private final TranslationClientPort translationClientPort;
+    private final TranslationCachePort cachePort;
+    private final RagTranslationApplicationService ragTranslationService;
+    private final EntityConsistencyService entityConsistencyService;
+    private final TranslationPostProcessingService postProcessingService;
+
+    /**
+     * 创建文档翻译任务
+     */
+    public TranslationTask createDocumentTask(Long userId, Document doc) {
+<span class="fc" id="L69">        String taskId = generateTaskId();</span>
+
+<span class="fc" id="L71">        TranslationTask task = new TranslationTask();</span>
+<span class="fc" id="L72">        task.setTaskId(taskId);</span>
+<span class="fc" id="L73">        task.setUserId(userId);</span>
+<span class="fc" id="L74">        task.setType(&quot;document&quot;);</span>
+<span class="fc" id="L75">        task.setDocumentId(doc.getId());</span>
+<span class="fc" id="L76">        task.setSourceLang(doc.getSourceLang());</span>
+<span class="fc" id="L77">        task.setTargetLang(doc.getTargetLang());</span>
+<span class="fc" id="L78">        task.setMode(doc.getMode());</span>
+<span class="fc" id="L79">        task.setEngine(&quot;google&quot;);</span>
+<span class="fc" id="L80">        task.setStatus(TranslationStatus.PENDING.getValue());</span>
+<span class="fc" id="L81">        task.setProgress(0);</span>
+<span class="fc" id="L82">        task.setCreateTime(LocalDateTime.now());</span>
+
+<span class="fc" id="L84">        translationPort.saveTask(task);</span>
+
+        // 关联文档与任务
+<span class="fc" id="L87">        doc.setTaskId(taskId);</span>
+<span class="fc" id="L88">        documentPort.update(doc);</span>
+
+<span class="fc" id="L90">        return task;</span>
+    }
+
+    /**
+     * 启动文档翻译
+     */
+    public void startDocumentTranslation(TranslationTask task, Document doc) {
+<span class="fc bfc" id="L97" title="All 4 branches covered.">        if (task == null || doc == null) {</span>
+<span class="fc" id="L98">            return;</span>
+        }
+<span class="fc bfc" id="L100" title="All 4 branches covered.">        if (!TranslationStatus.PENDING.getValue().equals(task.getStatus()) &amp;&amp; !TranslationStatus.FAILED.getValue().equals(task.getStatus())) {</span>
+<span class="fc" id="L101">            return;</span>
+        }
+
+        // 更新文档状态为处理中
+<span class="fc" id="L105">        doc.setStatus(TranslationStatus.PROCESSING.getValue());</span>
+<span class="fc" id="L106">        doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L107">        documentPort.update(doc);</span>
+
+<span class="fc" id="L109">        updateTaskProgress(task, TranslationStatus.PROCESSING, 10, null);</span>
+
+<span class="fc" id="L111">        executeDocumentTranslation(task, doc);</span>
+<span class="fc" id="L112">    }</span>
+
+    /**
+     * 异步执行文档翻译（使用虚拟线程）
+     * 接入三级缓存 + RAG + 实体一致性
+     */
+    private void executeDocumentTranslation(TranslationTask task, Document doc) {
+<span class="fc" id="L119">        Thread.startVirtualThread(() -&gt; {</span>
+            try {
+                // 读取文件内容
+<span class="fc" id="L122">                String content = readDocumentContent(doc.getPath(), doc.getFileType());</span>
+<span class="pc bpc" id="L123" title="2 of 4 branches missed.">                if (content == null || content.trim().isEmpty()) {</span>
+<span class="nc" id="L124">                    updateTaskProgress(task, TranslationStatus.FAILED, 0, &quot;文件内容为空&quot;);</span>
+<span class="nc" id="L125">                    return;</span>
+                }
+
+                // 按段落分割翻译（每 3000 字符一批）
+<span class="fc" id="L129">                updateTaskProgress(task, TranslationStatus.PROCESSING, 20, null);</span>
+<span class="fc" id="L130">                StringBuilder translatedContent = new StringBuilder();</span>
+<span class="fc" id="L131">                String[] paragraphs = content.split(&quot;(?&lt;=\n)&quot;);</span>
+<span class="fc" id="L132">                int total = paragraphs.length;</span>
+<span class="fc" id="L133">                int batchStart = 0;</span>
+<span class="fc" id="L134">                String targetLang = task.getTargetLang();</span>
+<span class="fc" id="L135">                String engine = task.getEngine();</span>
+<span class="fc" id="L136">                Long userId = task.getUserId();</span>
+<span class="fc" id="L137">                String docId = &quot;doc_&quot; + doc.getId();</span>
+
+                // 加载用户术语表
+<span class="fc" id="L140">                List&lt;Glossary&gt; glossaryTerms = loadGlossaryTermsForUser(userId, content);</span>
+
+<span class="fc" id="L142">                TranslationPipeline pipeline = new TranslationPipeline(</span>
+                    cachePort, ragTranslationService, entityConsistencyService,
+                    translationClientPort, postProcessingService, null, userId, docId, glossaryTerms);
+
+<span class="fc bfc" id="L146" title="All 2 branches covered.">                while (batchStart &lt; total) {</span>
+<span class="fc" id="L147">                    StringBuilder batch = new StringBuilder();</span>
+<span class="fc" id="L148">                    int batchEnd = batchStart;</span>
+<span class="pc bpc" id="L149" title="1 of 4 branches missed.">                    while (batchEnd &lt; total &amp;&amp; batch.length() + paragraphs[batchEnd].length() &lt;= 1500) {</span>
+<span class="fc" id="L150">                        batch.append(paragraphs[batchEnd]);</span>
+<span class="fc" id="L151">                        batchEnd++;</span>
+                    }
+
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">                    if (batch.length() == 0) {</span>
+<span class="nc" id="L155">                        batch.append(paragraphs[batchStart]);</span>
+<span class="nc" id="L156">                        batchEnd = batchStart + 1;</span>
+                    }
+
+<span class="fc" id="L159">                    String batchText = batch.toString();</span>
+                    String translated;
+                    try {
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">                        if (&quot;fast&quot;.equals(doc.getMode())) {</span>
+<span class="nc" id="L163">                            translated = pipeline.executeFast(batchText, targetLang, TranslationMode.FAST);</span>
+                        } else {
+<span class="fc" id="L165">                            translated = pipeline.execute(batchText, targetLang, TranslationMode.EXPERT);</span>
+                        }
+<span class="nc" id="L167">                    } catch (Exception e) {</span>
+<span class="nc" id="L168">                        log.warn(&quot;翻译批次失败 [{}/{}]，保留原文: {}&quot;, batchStart, total, e.getMessage());</span>
+<span class="nc" id="L169">                        translated = batchText; // fallback to original text</span>
+<span class="fc" id="L170">                    }</span>
+<span class="pc bpc" id="L171" title="3 of 4 branches missed.">                    if (translated != null &amp;&amp; !translated.isEmpty()) {</span>
+                        // 补回原文批次中的换行符以保持格式对齐
+<span class="nc bnc" id="L173" title="All 4 branches missed.">                        if (!translated.endsWith(&quot;\n&quot;) &amp;&amp; !translated.endsWith(&quot;\r&quot;)) {</span>
+<span class="nc" id="L174">                            String trailingNewline = getTrailingNewline(batchText);</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">                            if (!trailingNewline.isEmpty()) {</span>
+<span class="nc" id="L176">                                translated += trailingNewline;</span>
+                            }
+                        }
+<span class="nc" id="L179">                        translatedContent.append(translated);</span>
+                    }
+<span class="fc" id="L181">                    batchStart = batchEnd;</span>
+
+<span class="fc" id="L183">                    int progress = 20 + (int) ((batchStart * 80.0) / total);</span>
+<span class="fc" id="L184">                    updateTaskProgress(task, TranslationStatus.PROCESSING, progress, null);</span>
+<span class="fc" id="L185">                }</span>
+
+                // 保存翻译结果到文件
+<span class="fc" id="L188">                String translatedPath = ExternalResponseUtil.buildTranslatedPath(doc.getPath());</span>
+<span class="fc" id="L189">                Files.write(Paths.get(translatedPath), translatedContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));</span>
+
+                // 更新文档状态为已完成
+<span class="fc" id="L192">                doc.setStatus(TranslationStatus.COMPLETED.getValue());</span>
+<span class="fc" id="L193">                doc.setCompletedTime(LocalDateTime.now());</span>
+<span class="fc" id="L194">                doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L195">                documentPort.update(doc);</span>
+
+<span class="fc" id="L197">                updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);</span>
+<span class="fc" id="L198">                saveTranslationHistory(task, content, translatedContent.toString());</span>
+
+<span class="fc" id="L200">            } catch (Exception e) {</span>
+<span class="fc" id="L201">                log.error(&quot;文档翻译失败: {}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L202">                updateTaskProgress(task, TranslationStatus.FAILED, 0, &quot;翻译失败：&quot; + e.getMessage());</span>
+<span class="fc" id="L203">            }</span>
+<span class="fc" id="L204">        });</span>
+<span class="fc" id="L205">    }</span>
+
+    /**
+     * 读取文档内容
+     */
+    private String readDocumentContent(String filePath, String fileType) throws IOException {
+<span class="fc" id="L211">        Path path = Paths.get(filePath);</span>
+<span class="fc bfc" id="L212" title="All 2 branches covered.">        if (!Files.exists(path)) {</span>
+<span class="fc" id="L213">            throw new IOException(&quot;文件不存在: &quot; + filePath);</span>
+        }
+
+<span class="fc bfc" id="L216" title="All 2 branches covered.">        if (&quot;txt&quot;.equals(fileType)) {</span>
+<span class="fc" id="L217">            return Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);</span>
+        } else {
+            // DOCX/EPUB/PDF 暂不支持，返回原始文本
+<span class="fc" id="L220">            throw new IOException(&quot;暂不支持 &quot; + fileType.toUpperCase() + &quot; 格式，仅支持 TXT 文件&quot;);</span>
+        }
+    }
+
+    @Transactional
+    protected void updateTaskProgress(TranslationTask task, TranslationStatus status, int progress, String errorMessage) {
+        // 如果任务已被取消，不再更新
+<span class="fc" id="L227">        TranslationTask current = translationPort.findTaskByTaskId(task.getTaskId()).orElse(null);</span>
+<span class="fc bfc" id="L228" title="All 6 branches covered.">        if (current != null &amp;&amp; TranslationStatus.FAILED.getValue().equals(current.getStatus()) &amp;&amp; &quot;用户取消任务&quot;.equals(current.getErrorMessage())) {</span>
+<span class="fc" id="L229">            return;</span>
+        }
+<span class="fc" id="L231">        task.setStatus(status.getValue());</span>
+<span class="fc" id="L232">        task.setProgress(progress);</span>
+<span class="fc bfc" id="L233" title="All 2 branches covered.">        if (status == TranslationStatus.COMPLETED) {</span>
+<span class="fc" id="L234">            task.setCompletedTime(LocalDateTime.now());</span>
+        }
+<span class="fc bfc" id="L236" title="All 2 branches covered.">        if (errorMessage != null) {</span>
+<span class="fc" id="L237">            task.setErrorMessage(errorMessage);</span>
+        }
+<span class="fc" id="L239">        translationPort.updateTask(task);</span>
+<span class="fc" id="L240">    }</span>
+
+    /**
+     * 保存翻译历史
+     */
+    private void saveTranslationHistory(TranslationTask task, String sourceText, String targetText) {
+<span class="fc" id="L246">        TranslationHistory history = new TranslationHistory();</span>
+<span class="fc" id="L247">        history.setUserId(task.getUserId());</span>
+<span class="fc" id="L248">        history.setTaskId(task.getTaskId());</span>
+<span class="fc" id="L249">        history.setType(task.getType());</span>
+<span class="fc" id="L250">        history.setDocumentId(task.getDocumentId());</span>
+<span class="fc" id="L251">        history.setSourceLang(task.getSourceLang());</span>
+<span class="fc" id="L252">        history.setTargetLang(task.getTargetLang());</span>
+<span class="pc bpc" id="L253" title="1 of 4 branches missed.">        history.setSourceText(sourceText != null &amp;&amp; sourceText.length() &gt; 500</span>
+<span class="fc" id="L254">                ? sourceText.substring(0, 500)</span>
+<span class="fc" id="L255">                : sourceText);</span>
+
+        // 解析翻译响应，提取实际翻译内容
+<span class="fc" id="L258">        String translatedContent = ExternalResponseUtil.extractDataField(targetText);</span>
+<span class="pc bpc" id="L259" title="1 of 4 branches missed.">        history.setTargetText(translatedContent != null &amp;&amp; translatedContent.length() &gt; 500</span>
+<span class="nc" id="L260">                ? translatedContent.substring(0, 500)</span>
+<span class="fc" id="L261">                : translatedContent);</span>
+<span class="fc" id="L262">        history.setEngine(task.getEngine());</span>
+<span class="fc" id="L263">        history.setCreateTime(LocalDateTime.now());</span>
+
+<span class="fc" id="L265">        translationPort.saveHistory(history);</span>
+<span class="fc" id="L266">    }</span>
+
+    /**
+     * 加载用户术语表中在原文中出现的词条
+     */
+    private List&lt;Glossary&gt; loadGlossaryTermsForUser(Long userId, String sourceText) {
+        try {
+<span class="fc" id="L273">            List&lt;Glossary&gt; allTerms = glossaryPort.findActiveGlossaryByUserId(userId);</span>
+
+            // 过滤只保留在原文中出现的术语
+<span class="fc" id="L276">            return allTerms.stream()</span>
+<span class="fc" id="L277">                    .filter(term -&gt; sourceText.contains(term.getSourceWord()))</span>
+<span class="fc" id="L278">                    .toList();</span>
+<span class="fc" id="L279">        } catch (Exception e) {</span>
+<span class="fc" id="L280">            log.warn(&quot;加载术语表失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L281">            return List.of();</span>
+        }
+    }
+
+    /**
+     * 根据任务 ID 获取任务
+     */
+    public TranslationTask getTaskByTaskId(String taskId) {
+<span class="fc" id="L289">        return translationPort.findTaskByTaskId(taskId).orElse(null);</span>
+    }
+
+    /**
+     * 根据文档 ID 获取任务
+     */
+    public TranslationTask getTaskByDocumentId(Long docId) {
+<span class="fc" id="L296">        return translationPort.findTaskByDocumentId(docId).orElse(null);</span>
+    }
+
+    /**
+     * 取消翻译任务
+     */
+    public boolean cancelTask(String taskId, Long userId) {
+<span class="fc" id="L303">        TranslationTask task = translationPort.findTaskByTaskId(taskId).orElse(null);</span>
+<span class="fc bfc" id="L304" title="All 4 branches covered.">        if (task != null &amp;&amp; task.getUserId().equals(userId)) {</span>
+<span class="fc bfc" id="L305" title="All 4 branches covered.">            if (TranslationStatus.PENDING.getValue().equals(task.getStatus()) || TranslationStatus.PROCESSING.getValue().equals(task.getStatus())) {</span>
+<span class="fc" id="L306">                task.setStatus(TranslationStatus.FAILED.getValue());</span>
+<span class="fc" id="L307">                task.setErrorMessage(&quot;用户取消任务&quot;);</span>
+<span class="fc" id="L308">                translationPort.updateTask(task);</span>
+                // 同步更新 Document 表状态
+<span class="fc bfc" id="L310" title="All 2 branches covered.">                if (task.getDocumentId() != null) {</span>
+<span class="fc" id="L311">                    Document doc = documentPort.findById(task.getDocumentId()).orElse(null);</span>
+<span class="fc bfc" id="L312" title="All 2 branches covered.">                    if (doc != null) {</span>
+<span class="fc" id="L313">                        doc.setStatus(TranslationStatus.FAILED.getValue());</span>
+<span class="fc" id="L314">                        doc.setErrorMessage(&quot;用户取消任务&quot;);</span>
+<span class="fc" id="L315">                        doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L316">                        documentPort.update(doc);</span>
+                    }
+                }
+<span class="fc" id="L319">                return true;</span>
+            }
+        }
+<span class="fc" id="L322">        return false;</span>
+    }
+
+    /**
+     * 删除翻译历史记录（逻辑删除）
+     */
+    public boolean deleteHistory(String taskId, Long userId) {
+<span class="fc" id="L329">        TranslationHistory history = translationPort.findHistoryByTaskId(taskId).orElse(null);</span>
+<span class="fc bfc" id="L330" title="All 4 branches covered.">        if (history != null &amp;&amp; history.getUserId().equals(userId)) {</span>
+<span class="fc" id="L331">            translationPort.deleteHistory(history.getId());</span>
+<span class="fc" id="L332">            return true;</span>
+        }
+<span class="fc" id="L334">        return false;</span>
+    }
+
+    /**
+     * 获取翻译结果
+     */
+    public TranslationResultResponse getTranslationResult(String taskId) {
+<span class="fc" id="L341">        TranslationTask task = translationPort.findTaskByTaskId(taskId).orElse(null);</span>
+<span class="fc bfc" id="L342" title="All 2 branches covered.">        if (task == null) {</span>
+<span class="fc" id="L343">            return null;</span>
+        }
+
+<span class="fc" id="L346">        TranslationResultResponse response = new TranslationResultResponse();</span>
+<span class="fc" id="L347">        response.setTaskId(taskId);</span>
+<span class="fc" id="L348">        response.setStatus(task.getStatus());</span>
+<span class="fc" id="L349">        response.setSourceLang(task.getSourceLang());</span>
+<span class="fc" id="L350">        response.setTargetLang(task.getTargetLang());</span>
+
+<span class="fc" id="L352">        String status = task.getStatus();</span>
+<span class="pc bpc" id="L353" title="1 of 8 branches missed.">        if (TranslationStatus.COMPLETED.getValue().equals(status) || TranslationStatus.PROCESSING.getValue().equals(status) || TranslationStatus.PENDING.getValue().equals(status) || TranslationStatus.FAILED.getValue().equals(status)) {</span>
+<span class="fc bfc" id="L354" title="All 2 branches covered.">            if (TranslationStatus.COMPLETED.getValue().equals(status)) {</span>
+<span class="fc bfc" id="L355" title="All 2 branches covered.">                response.setCompletedTime(task.getCompletedTime() != null</span>
+<span class="fc" id="L356">                        ? task.getCompletedTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)</span>
+<span class="fc" id="L357">                        : null);</span>
+            }
+
+            // 如果是文本翻译，从历史中获取结果
+<span class="fc bfc" id="L361" title="All 2 branches covered.">            if (&quot;text&quot;.equals(task.getType())) {</span>
+<span class="fc" id="L362">                TranslationHistory history = translationPort.findHistoryByTaskId(task.getTaskId()).orElse(null);</span>
+<span class="fc bfc" id="L363" title="All 2 branches covered.">                if (history != null) {</span>
+<span class="fc" id="L364">                    response.setTranslatedText(history.getTargetText());</span>
+<span class="fc" id="L365">                    response.setSourceContent(history.getSourceText());</span>
+                }
+<span class="pc bpc" id="L367" title="1 of 2 branches missed.">            } else if (&quot;document&quot;.equals(task.getType())) {</span>
+                // 文档翻译，读取文件内容
+<span class="fc bfc" id="L369" title="All 2 branches covered.">                if (task.getDocumentId() != null) {</span>
+<span class="fc" id="L370">                    Document doc = documentPort.findById(task.getDocumentId()).orElse(null);</span>
+<span class="fc bfc" id="L371" title="All 2 branches covered.">                    if (doc != null) {</span>
+<span class="fc" id="L372">                        response.setTranslatedFilePath(doc.getPath());</span>
+                        // 读取原文内容（任何状态都尝试读取）
+                        try {
+<span class="fc" id="L375">                            Path path = Paths.get(doc.getPath());</span>
+<span class="fc bfc" id="L376" title="All 2 branches covered.">                            if (Files.exists(path)) {</span>
+<span class="fc" id="L377">                                String content = Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);</span>
+<span class="fc" id="L378">                                response.setSourceContent(content);</span>
+                            }
+<span class="nc" id="L380">                        } catch (Exception e) {</span>
+<span class="nc" id="L381">                            log.warn(&quot;读取原文文件失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L382">                        }</span>
+                        // 已完成的文档翻译，读取翻译文件内容
+<span class="fc bfc" id="L384" title="All 2 branches covered.">                        if (TranslationStatus.COMPLETED.getValue().equals(status)) {</span>
+<span class="fc" id="L385">                            String translatedPath = ExternalResponseUtil.buildTranslatedPath(doc.getPath());</span>
+                            try {
+<span class="fc" id="L387">                                Path path = Paths.get(translatedPath);</span>
+<span class="fc bfc" id="L388" title="All 2 branches covered.">                                if (Files.exists(path)) {</span>
+                                    // 文件内容已经是纯文本翻译结果，不要再次调用 extractTranslatedContent
+<span class="fc" id="L390">                                    response.setTranslatedText(Files.readString(path, java.nio.charset.StandardCharsets.UTF_8));</span>
+                                }
+<span class="nc" id="L392">                            } catch (Exception e) {</span>
+<span class="nc" id="L393">                                log.warn(&quot;读取翻译文件失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L394">                            }</span>
+                        }
+                    }
+                }
+            }
+        }
+
+<span class="fc" id="L401">        return response;</span>
+    }
+
+    /**
+     * 下载翻译结果（返回文件路径）
+     */
+    public String getDownloadPath(String taskId, Long userId) {
+<span class="fc" id="L408">        TranslationTask task = translationPort.findTaskByTaskId(taskId).orElse(null);</span>
+<span class="fc bfc" id="L409" title="All 4 branches covered.">        if (task == null || !task.getUserId().equals(userId)) {</span>
+<span class="fc" id="L410">            return null;</span>
+        }
+
+<span class="fc bfc" id="L413" title="All 4 branches covered.">        if (TranslationStatus.COMPLETED.getValue().equals(task.getStatus()) &amp;&amp; &quot;document&quot;.equals(task.getType())) {</span>
+<span class="fc bfc" id="L414" title="All 2 branches covered.">            if (task.getDocumentId() != null) {</span>
+<span class="fc" id="L415">                Document doc = documentPort.findById(task.getDocumentId()).orElse(null);</span>
+<span class="fc bfc" id="L416" title="All 4 branches covered.">                if (doc != null &amp;&amp; Files.exists(Paths.get(doc.getPath()))) {</span>
+<span class="fc" id="L417">                    return doc.getPath();</span>
+                }
+            }
+        }
+
+<span class="fc" id="L422">        return null;</span>
+    }
+
+    /**
+     * 获取翻译历史列表（包含进行中的任务）
+     */
+    public List&lt;TranslationHistory&gt; getTranslationHistory(Long userId, int page, int pageSize, String type) {
+<span class="fc" id="L429">        int offset = (page - 1) * pageSize;</span>
+
+        // 查询进行中的任务（pending/processing），这些任务可能还没有历史记录
+<span class="fc" id="L432">        List&lt;TranslationHistory&gt; histories = new ArrayList&lt;&gt;();</span>
+
+        // 先查询进行中的任务
+<span class="fc" id="L435">        List&lt;TranslationTask&gt; inProgressTasks = translationPort.findTasksByUserIdAndStatus(userId, offset, pageSize);</span>
+<span class="fc bfc" id="L436" title="All 2 branches covered.">        for (TranslationTask task : inProgressTasks) {</span>
+<span class="fc" id="L437">            TranslationHistory history = new TranslationHistory();</span>
+<span class="fc" id="L438">            history.setUserId(task.getUserId());</span>
+<span class="fc" id="L439">            history.setTaskId(task.getTaskId());</span>
+<span class="fc" id="L440">            history.setType(task.getType());</span>
+<span class="fc" id="L441">            history.setDocumentId(task.getDocumentId());</span>
+<span class="fc" id="L442">            history.setSourceLang(task.getSourceLang());</span>
+<span class="fc" id="L443">            history.setTargetLang(task.getTargetLang());</span>
+<span class="fc" id="L444">            history.setSourceText(null);</span>
+<span class="fc" id="L445">            history.setTargetText(null);</span>
+<span class="fc" id="L446">            history.setEngine(task.getEngine());</span>
+<span class="fc" id="L447">            history.setCreateTime(task.getCreateTime());</span>
+<span class="fc" id="L448">            histories.add(history);</span>
+<span class="fc" id="L449">        }</span>
+
+        // 再查询已完成的历史记录
+<span class="fc" id="L452">        List&lt;TranslationHistory&gt; completedHistories = translationPort.findHistoryByUserId(userId, offset, pageSize);</span>
+<span class="fc" id="L453">        histories.addAll(completedHistories);</span>
+
+        // 去重（按taskId）
+<span class="fc" id="L456">        histories = histories.stream()</span>
+<span class="fc" id="L457">                .collect(java.util.stream.Collectors.toMap(</span>
+                        TranslationHistory::getTaskId,
+<span class="fc" id="L459">                        h -&gt; h,</span>
+<span class="fc" id="L460">                        (existing, replacement) -&gt; existing</span>
+                ))
+<span class="fc" id="L462">                .values()</span>
+<span class="fc" id="L463">                .stream()</span>
+<span class="fc" id="L464">                .sorted((a, b) -&gt; {</span>
+<span class="pc bpc" id="L465" title="1 of 2 branches missed.">                    if (a.getCreateTime() == null) return 1;</span>
+<span class="pc bpc" id="L466" title="1 of 2 branches missed.">                    if (b.getCreateTime() == null) return -1;</span>
+<span class="fc" id="L467">                    return b.getCreateTime().compareTo(a.getCreateTime());</span>
+                })
+<span class="fc" id="L469">                .limit(pageSize)</span>
+<span class="fc" id="L470">                .toList();</span>
+
+<span class="fc bfc" id="L472" title="All 4 branches covered.">        if (type != null &amp;&amp; !&quot;all&quot;.equals(type)) {</span>
+<span class="fc" id="L473">            return histories.stream()</span>
+<span class="fc" id="L474">                    .filter(h -&gt; type.equals(h.getType()))</span>
+<span class="fc" id="L475">                    .toList();</span>
+        }
+
+<span class="fc" id="L478">        return histories;</span>
+    }
+
+    /**
+     * 统计翻译历史总数（按类型过滤）
+     */
+    @Override
+    public int countTranslationHistory(Long userId, String type) {
+<span class="pc bpc" id="L486" title="1 of 2 branches missed.">        if (&quot;all&quot;.equals(type)) {</span>
+<span class="fc" id="L487">            return translationPort.countHistoryByUserId(userId);</span>
+        }
+<span class="nc" id="L489">        return translationPort.countHistoryByUserIdAndType(userId, type);</span>
+    }
+
+    /**
+     * 生成任务 ID
+     */
+    private String generateTaskId() {
+<span class="fc" id="L496">        return &quot;task_&quot; + UUID.randomUUID().toString().replace(&quot;-&quot;, &quot;&quot;).substring(0, 16);</span>
+    }
+
+    /**
+     * 转换为 TaskStatusResponse
+     */
+    public TaskStatusResponse toTaskStatusResponse(TranslationTask task) {
+<span class="fc bfc" id="L503" title="All 2 branches covered.">        if (task == null) {</span>
+<span class="fc" id="L504">            return null;</span>
+        }
+
+<span class="fc" id="L507">        TaskStatusResponse response = new TaskStatusResponse();</span>
+<span class="fc" id="L508">        response.setTaskId(task.getTaskId());</span>
+<span class="fc" id="L509">        response.setType(task.getType());</span>
+<span class="fc" id="L510">        response.setStatus(task.getStatus());</span>
+<span class="fc" id="L511">        response.setProgress(task.getProgress());</span>
+<span class="fc" id="L512">        response.setSourceLang(task.getSourceLang());</span>
+<span class="fc" id="L513">        response.setTargetLang(task.getTargetLang());</span>
+<span class="fc bfc" id="L514" title="All 2 branches covered.">        response.setCreateTime(task.getCreateTime() != null</span>
+<span class="fc" id="L515">                ? task.getCreateTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)</span>
+<span class="fc" id="L516">                : null);</span>
+<span class="fc bfc" id="L517" title="All 2 branches covered.">        response.setCompletedTime(task.getCompletedTime() != null</span>
+<span class="fc" id="L518">                ? task.getCompletedTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)</span>
+<span class="fc" id="L519">                : null);</span>
+<span class="fc" id="L520">        response.setErrorMessage(task.getErrorMessage());</span>
+
+<span class="fc" id="L522">        return response;</span>
+    }
+
+    /**
+     * 转换为 TranslationHistoryResponse
+     */
+    public TranslationHistoryResponse toHistoryResponse(TranslationHistory history) {
+<span class="fc bfc" id="L529" title="All 2 branches covered.">        if (history == null) {</span>
+<span class="fc" id="L530">            return null;</span>
+        }
+
+<span class="fc" id="L533">        TranslationHistoryResponse response = new TranslationHistoryResponse();</span>
+<span class="fc" id="L534">        response.setId(history.getId());</span>
+<span class="fc" id="L535">        response.setTaskId(history.getTaskId());</span>
+<span class="fc" id="L536">        response.setType(history.getType());</span>
+<span class="fc" id="L537">        response.setSourceLang(history.getSourceLang());</span>
+<span class="fc" id="L538">        response.setTargetLang(history.getTargetLang());</span>
+<span class="fc bfc" id="L539" title="All 2 branches covered.">        response.setSourceTextPreview(history.getSourceText() != null</span>
+<span class="fc" id="L540">                ? history.getSourceText().substring(0, Math.min(100, history.getSourceText().length()))</span>
+<span class="fc" id="L541">                : null);</span>
+<span class="fc bfc" id="L542" title="All 2 branches covered.">        response.setTargetTextPreview(history.getTargetText() != null</span>
+<span class="fc" id="L543">                ? history.getTargetText().substring(0, Math.min(100, history.getTargetText().length()))</span>
+<span class="fc" id="L544">                : null);</span>
+<span class="pc bpc" id="L545" title="1 of 2 branches missed.">        response.setCreateTime(history.getCreateTime() != null</span>
+<span class="fc" id="L546">                ? history.getCreateTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)</span>
+<span class="nc" id="L547">                : null);</span>
+
+        // 查询关联任务状态
+<span class="pc bpc" id="L550" title="1 of 2 branches missed.">        if (history.getTaskId() != null) {</span>
+<span class="fc" id="L551">            TranslationTask task = translationPort.findTaskByTaskId(history.getTaskId()).orElse(null);</span>
+<span class="fc bfc" id="L552" title="All 2 branches covered.">            response.setStatus(task != null ? task.getStatus() : TranslationStatus.COMPLETED.getValue());</span>
+<span class="fc" id="L553">        } else {</span>
+<span class="nc" id="L554">            response.setStatus(TranslationStatus.COMPLETED.getValue());</span>
+        }
+
+        // 查询关联文档名称
+<span class="fc bfc" id="L558" title="All 2 branches covered.">        if (history.getDocumentId() != null) {</span>
+<span class="fc" id="L559">            Document doc = documentPort.findById(history.getDocumentId()).orElse(null);</span>
+<span class="pc bpc" id="L560" title="1 of 2 branches missed.">            if (doc != null) {</span>
+<span class="fc" id="L561">                response.setDocumentName(doc.getName());</span>
+            }
+        }
+
+        // fallback：如果documentName为空，尝试从任务关联的文档获取
+<span class="pc bpc" id="L566" title="1 of 4 branches missed.">        if (response.getDocumentName() == null &amp;&amp; history.getTaskId() != null) {</span>
+<span class="fc" id="L567">            TranslationTask task = translationPort.findTaskByTaskId(history.getTaskId()).orElse(null);</span>
+<span class="fc bfc" id="L568" title="All 4 branches covered.">            if (task != null &amp;&amp; task.getDocumentId() != null) {</span>
+<span class="fc" id="L569">                Document doc = documentPort.findById(task.getDocumentId()).orElse(null);</span>
+<span class="pc bpc" id="L570" title="1 of 2 branches missed.">                if (doc != null) {</span>
+<span class="fc" id="L571">                    response.setDocumentName(doc.getName());</span>
+                }
+            }
+        }
+
+        // 最终fallback：使用任务类型作为名称
+<span class="fc bfc" id="L577" title="All 2 branches covered.">        if (response.getDocumentName() == null) {</span>
+<span class="fc bfc" id="L578" title="All 2 branches covered.">            response.setDocumentName(&quot;document&quot;.equals(history.getType()) ? &quot;文档翻译&quot; : &quot;文本翻译&quot;);</span>
+        }
+
+<span class="fc" id="L581">        return response;</span>
+    }
+
+    /**
+     * SSE 流式文档翻译（基于已上传文档）
+     * 读取磁盘文件 → 分段翻译 → 逐段推送 SSE → 更新文档状态
+     */
+    public SseEmitter streamTranslateDocumentById(Long docId, String targetLang, String mode) {
+<span class="fc" id="L589">        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);</span>
+<span class="fc" id="L590">        ObjectMapper mapper = new ObjectMapper();</span>
+
+<span class="fc" id="L592">        Thread.startVirtualThread(() -&gt; {</span>
+            try {
+<span class="fc" id="L594">                Document doc = documentPort.findById(docId).orElse(null);</span>
+<span class="fc bfc" id="L595" title="All 2 branches covered.">                if (doc == null) {</span>
+<span class="fc" id="L596">                    SseEmitterUtil.sendError(emitter, &quot;文档不存在&quot;);</span>
+<span class="fc" id="L597">                    SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L598">                    return;</span>
+                }
+
+                // 创建翻译任务
+<span class="fc" id="L602">                TranslationTask task = createDocumentTask(doc.getUserId(), doc);</span>
+<span class="fc" id="L603">                doc.setStatus(TranslationStatus.PROCESSING.getValue());</span>
+<span class="fc" id="L604">                doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L605">                documentPort.update(doc);</span>
+<span class="fc" id="L606">                updateTaskProgress(task, TranslationStatus.PROCESSING, 10, null);</span>
+
+                // 读取文件内容
+<span class="fc" id="L609">                String content = readDocumentContent(doc.getPath(), doc.getFileType());</span>
+<span class="pc bpc" id="L610" title="1 of 4 branches missed.">                if (content == null || content.trim().isEmpty()) {</span>
+<span class="fc" id="L611">                    updateTaskProgress(task, TranslationStatus.FAILED, 0, &quot;文件内容为空&quot;);</span>
+<span class="fc" id="L612">                    SseEmitterUtil.sendError(emitter, &quot;文件内容为空&quot;);</span>
+<span class="fc" id="L613">                    SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L614">                    return;</span>
+                }
+
+                // 按段落分割翻译
+<span class="fc" id="L618">                String[] paragraphs = content.split(&quot;(?&lt;=\n)&quot;);</span>
+<span class="fc" id="L619">                int total = paragraphs.length;</span>
+<span class="fc" id="L620">                StringBuilder translatedContent = new StringBuilder();</span>
+
+<span class="fc bfc" id="L622" title="All 2 branches covered.">                for (int i = 0; i &lt; total; i++) {</span>
+                    // 检查任务是否已被取消
+<span class="fc" id="L624">                    TranslationTask currentTask = translationPort.findTaskByTaskId(task.getTaskId()).orElse(null);</span>
+<span class="pc bpc" id="L625" title="2 of 4 branches missed.">                    if (currentTask != null &amp;&amp; TranslationStatus.FAILED.getValue().equals(currentTask.getStatus())) {</span>
+<span class="nc" id="L626">                        log.info(&quot;翻译任务已被取消，提前退出 [taskId={}]&quot;, task.getTaskId());</span>
+<span class="nc" id="L627">                        SseEmitterUtil.complete(emitter);</span>
+<span class="nc" id="L628">                        return;</span>
+                    }
+
+<span class="fc" id="L631">                    String paragraph = paragraphs[i];</span>
+<span class="fc bfc" id="L632" title="All 2 branches covered.">                    if (paragraph.trim().isEmpty()) {</span>
+<span class="fc" id="L633">                        translatedContent.append(paragraph);</span>
+<span class="fc" id="L634">                        continue;</span>
+                    }
+
+<span class="fc" id="L637">                    String textId = &quot;seg_&quot; + i;</span>
+                    try {
+                        String result;
+<span class="fc bfc" id="L640" title="All 2 branches covered.">                        if (&quot;expert&quot;.equals(mode)) {</span>
+<span class="fc" id="L641">                            TranslationPipeline pipeline = new TranslationPipeline(</span>
+                                    cachePort, ragTranslationService, entityConsistencyService,
+                                    translationClientPort, postProcessingService, null, null);
+<span class="fc" id="L644">                            result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);</span>
+<span class="fc" id="L645">                        } else {</span>
+<span class="fc" id="L646">                            result = translationClientPort.translate(</span>
+<span class="fc" id="L647">                                    paragraph, targetLang, &quot;google&quot;, false, true, List.of(), null, null);</span>
+                        }
+<span class="fc" id="L649">                        String translation = ExternalResponseUtil.extractDataField(result);</span>
+<span class="fc bfc" id="L650" title="All 4 branches covered.">                        if (translation == null || translation.isEmpty()) {</span>
+<span class="fc" id="L651">                            log.warn(&quot;翻译结果为空，保留原文&quot;);</span>
+<span class="fc" id="L652">                            translation = paragraph;</span>
+                        }
+                        // 补回原文中的换行符以保持格式对齐
+<span class="pc bpc" id="L655" title="1 of 4 branches missed.">                        if (!translation.endsWith(&quot;\n&quot;) &amp;&amp; !translation.endsWith(&quot;\r&quot;)) {</span>
+<span class="fc bfc" id="L656" title="All 2 branches covered.">                            if (paragraph.endsWith(&quot;\r\n&quot;)) {</span>
+<span class="fc" id="L657">                                translation += &quot;\r\n&quot;;</span>
+<span class="fc bfc" id="L658" title="All 2 branches covered.">                            } else if (paragraph.endsWith(&quot;\n&quot;)) {</span>
+<span class="fc" id="L659">                                translation += &quot;\n&quot;;</span>
+<span class="pc bpc" id="L660" title="1 of 2 branches missed.">                            } else if (paragraph.endsWith(&quot;\r&quot;)) {</span>
+<span class="nc" id="L661">                                translation += &quot;\r&quot;;</span>
+                            }
+                        }
+<span class="fc" id="L664">                        translatedContent.append(translation);</span>
+
+<span class="fc" id="L666">                        Map&lt;String, Object&gt; eventData = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L667">                        eventData.put(&quot;textId&quot;, textId);</span>
+<span class="fc" id="L668">                        eventData.put(&quot;original&quot;, paragraph);</span>
+<span class="fc" id="L669">                        eventData.put(&quot;translation&quot;, translation);</span>
+<span class="fc" id="L670">                        eventData.put(&quot;progress&quot;, (int) (((i + 1) * 100.0) / total));</span>
+
+<span class="fc" id="L672">                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(eventData));</span>
+<span class="nc" id="L673">                    } catch (Exception e) {</span>
+<span class="nc" id="L674">                        log.warn(&quot;段落翻译失败 [{}]: {}&quot;, i, e.getMessage());</span>
+<span class="nc" id="L675">                        translatedContent.append(paragraph);</span>
+<span class="nc" id="L676">                        Map&lt;String, Object&gt; errorData = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L677">                        errorData.put(&quot;textId&quot;, textId);</span>
+<span class="nc" id="L678">                        errorData.put(&quot;original&quot;, paragraph);</span>
+<span class="nc" id="L679">                        errorData.put(&quot;translation&quot;, paragraph);</span>
+<span class="nc" id="L680">                        errorData.put(&quot;error&quot;, true);</span>
+<span class="nc" id="L681">                        errorData.put(&quot;progress&quot;, (int) (((i + 1) * 100.0) / total));</span>
+<span class="nc" id="L682">                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(errorData));</span>
+<span class="fc" id="L683">                    }</span>
+
+<span class="fc" id="L685">                    int progress = 20 + (int) (((i + 1) * 80.0) / total);</span>
+<span class="fc" id="L686">                    updateTaskProgress(task, TranslationStatus.PROCESSING, progress, null);</span>
+                }
+
+                // 保存翻译结果到文件
+<span class="fc" id="L690">                String translatedPath = ExternalResponseUtil.buildTranslatedPath(doc.getPath());</span>
+<span class="fc" id="L691">                Files.write(Paths.get(translatedPath), translatedContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));</span>
+
+                // 更新文档和任务状态
+<span class="fc" id="L694">                doc.setStatus(TranslationStatus.COMPLETED.getValue());</span>
+<span class="fc" id="L695">                doc.setCompletedTime(LocalDateTime.now());</span>
+<span class="fc" id="L696">                doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L697">                documentPort.update(doc);</span>
+
+<span class="fc" id="L699">                updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);</span>
+<span class="fc" id="L700">                saveTranslationHistory(task, content, translatedContent.toString());</span>
+
+<span class="fc" id="L702">                SseEmitterUtil.sendDone(emitter);</span>
+<span class="fc" id="L703">                SseEmitterUtil.complete(emitter);</span>
+
+<span class="fc" id="L705">            } catch (Exception e) {</span>
+<span class="fc" id="L706">                log.error(&quot;流式文档翻译失败: {}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L707">                SseEmitterUtil.sendError(emitter, &quot;翻译失败：&quot; + e.getMessage());</span>
+<span class="fc" id="L708">                SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L709">            }</span>
+<span class="fc" id="L710">        });</span>
+
+<span class="fc" id="L712">        return emitter;</span>
+    }
+
+    /**
+     * SSE 流式文档翻译
+     * 读取文件 → 分段翻译 → 逐段推送 SSE
+     */
+    public SseEmitter streamTranslateDocument(MultipartFile file, String sourceLang, String targetLang, String mode) {
+<span class="fc" id="L720">        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);</span>
+<span class="fc" id="L721">        ObjectMapper mapper = new ObjectMapper();</span>
+
+<span class="fc" id="L723">        Thread.startVirtualThread(() -&gt; {</span>
+            try {
+<span class="fc" id="L725">                String fileName = file.getOriginalFilename();</span>
+<span class="pc bpc" id="L726" title="1 of 2 branches missed.">                String fileType = fileName != null ? fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase() : &quot;&quot;;</span>
+<span class="fc" id="L727">                String content = readMultipartFileContent(file, fileType);</span>
+<span class="pc bpc" id="L728" title="1 of 4 branches missed.">                if (content == null || content.trim().isEmpty()) {</span>
+<span class="fc" id="L729">                    SseEmitterUtil.sendError(emitter, &quot;文件内容为空&quot;);</span>
+<span class="fc" id="L730">                    SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L731">                    return;</span>
+                }
+
+<span class="fc" id="L734">                String[] paragraphs = content.split(&quot;(?&lt;=\n)&quot;);</span>
+<span class="fc" id="L735">                int total = paragraphs.length;</span>
+<span class="fc" id="L736">                int translated = 0;</span>
+
+<span class="fc bfc" id="L738" title="All 2 branches covered.">                for (int i = 0; i &lt; total; i++) {</span>
+<span class="fc" id="L739">                    String paragraph = paragraphs[i];</span>
+<span class="pc bpc" id="L740" title="1 of 2 branches missed.">                    if (paragraph.trim().isEmpty()) {</span>
+<span class="nc" id="L741">                        translated++;</span>
+<span class="nc" id="L742">                        continue;</span>
+                    }
+
+<span class="fc" id="L745">                    String textId = &quot;seg_&quot; + i;</span>
+                    try {
+                        String result;
+<span class="fc bfc" id="L748" title="All 2 branches covered.">                        if (&quot;expert&quot;.equals(mode)) {</span>
+<span class="fc" id="L749">                            TranslationPipeline pipeline = new TranslationPipeline(</span>
+                                    cachePort, ragTranslationService, entityConsistencyService,
+                                    translationClientPort, postProcessingService, null, null);
+<span class="fc" id="L752">                            result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);</span>
+<span class="fc" id="L753">                        } else {</span>
+<span class="fc" id="L754">                            result = translationClientPort.translate(</span>
+<span class="fc" id="L755">                                    paragraph, targetLang, &quot;google&quot;, false, true, List.of(), null, null);</span>
+                        }
+
+                        // 提取实际翻译内容
+<span class="fc" id="L759">                        String translation = ExternalResponseUtil.extractDataField(result);</span>
+<span class="fc bfc" id="L760" title="All 4 branches covered.">                        if (translation == null || translation.isEmpty()) {</span>
+<span class="fc" id="L761">                            log.warn(&quot;翻译结果为空，保留原文&quot;);</span>
+<span class="fc" id="L762">                            translation = paragraph;</span>
+                        }
+                        // 补回原文中的换行符以保持格式对齐
+<span class="pc bpc" id="L765" title="1 of 4 branches missed.">                        if (!translation.endsWith(&quot;\n&quot;) &amp;&amp; !translation.endsWith(&quot;\r&quot;)) {</span>
+<span class="pc bpc" id="L766" title="1 of 2 branches missed.">                            if (paragraph.endsWith(&quot;\r\n&quot;)) {</span>
+<span class="nc" id="L767">                                translation += &quot;\r\n&quot;;</span>
+<span class="fc bfc" id="L768" title="All 2 branches covered.">                            } else if (paragraph.endsWith(&quot;\n&quot;)) {</span>
+<span class="fc" id="L769">                                translation += &quot;\n&quot;;</span>
+<span class="fc bfc" id="L770" title="All 2 branches covered.">                            } else if (paragraph.endsWith(&quot;\r&quot;)) {</span>
+<span class="fc" id="L771">                                translation += &quot;\r&quot;;</span>
+                            }
+                        }
+
+<span class="fc" id="L775">                        Map&lt;String, Object&gt; eventData = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L776">                        eventData.put(&quot;textId&quot;, textId);</span>
+<span class="fc" id="L777">                        eventData.put(&quot;original&quot;, paragraph);</span>
+<span class="fc" id="L778">                        eventData.put(&quot;translation&quot;, translation);</span>
+<span class="fc" id="L779">                        eventData.put(&quot;progress&quot;, (int) (((i + 1) * 100.0) / total));</span>
+
+<span class="fc" id="L781">                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(eventData));</span>
+<span class="nc" id="L782">                    } catch (Exception e) {</span>
+<span class="nc" id="L783">                        log.warn(&quot;段落翻译失败 [{}]: {}&quot;, i, e.getMessage());</span>
+<span class="nc" id="L784">                        Map&lt;String, Object&gt; errorData = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L785">                        errorData.put(&quot;textId&quot;, textId);</span>
+<span class="nc" id="L786">                        errorData.put(&quot;original&quot;, paragraph);</span>
+<span class="nc" id="L787">                        errorData.put(&quot;translation&quot;, paragraph);</span>
+<span class="nc" id="L788">                        errorData.put(&quot;error&quot;, true);</span>
+<span class="nc" id="L789">                        errorData.put(&quot;progress&quot;, (int) (((i + 1) * 100.0) / total));</span>
+<span class="nc" id="L790">                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(errorData));</span>
+<span class="fc" id="L791">                    }</span>
+
+<span class="fc" id="L793">                    translated++;</span>
+                }
+
+<span class="fc" id="L796">                SseEmitterUtil.sendDone(emitter);</span>
+<span class="fc" id="L797">                SseEmitterUtil.complete(emitter);</span>
+
+<span class="fc" id="L799">            } catch (Exception e) {</span>
+<span class="fc" id="L800">                log.error(&quot;流式文档翻译失败: {}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L801">                SseEmitterUtil.sendError(emitter, &quot;翻译失败：&quot; + e.getMessage());</span>
+<span class="fc" id="L802">                SseEmitterUtil.complete(emitter);</span>
+<span class="fc" id="L803">            }</span>
+<span class="fc" id="L804">        });</span>
+
+<span class="fc" id="L806">        return emitter;</span>
+    }
+
+    /**
+     * 读取 MultipartFile 内容
+     */
+    private String readMultipartFileContent(MultipartFile file, String fileType) throws IOException {
+<span class="fc" id="L813">        byte[] bytes = file.getBytes();</span>
+<span class="fc" id="L814">        String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);</span>
+
+<span class="fc bfc" id="L816" title="All 2 branches covered.">        if (&quot;txt&quot;.equals(fileType)) {</span>
+<span class="fc" id="L817">            return content;</span>
+        } else {
+<span class="fc" id="L819">            throw new IOException(&quot;暂不支持 &quot; + fileType.toUpperCase() + &quot; 格式，仅支持 TXT 文件&quot;);</span>
+        }
+    }
+
+    /**
+     * 提取字符串末尾的所有换行符
+     * 用于在翻译后恢复原文的格式
+     */
+    private static String getTrailingNewline(String text) {
+<span class="nc bnc" id="L828" title="All 4 branches missed.">        if (text == null || text.isEmpty()) {</span>
+<span class="nc" id="L829">            return &quot;&quot;;</span>
+        }
+<span class="nc" id="L831">        int end = text.length();</span>
+<span class="nc bnc" id="L832" title="All 2 branches missed.">        while (end &gt; 0) {</span>
+<span class="nc" id="L833">            char c = text.charAt(end - 1);</span>
+<span class="nc bnc" id="L834" title="All 4 branches missed.">            if (c != '\n' &amp;&amp; c != '\r') {</span>
+<span class="nc" id="L835">                break;</span>
+            }
+<span class="nc" id="L837">            end--;</span>
+<span class="nc" id="L838">        }</span>
+<span class="nc" id="L839">        return text.substring(end);</span>
+    }
+
+    /**
+     * 定时清理卡死的任务（每 5 分钟执行一次）
+     * 将超过 30 分钟仍处于 PENDING/PROCESSING 状态的任务标记为 FAILED
+     */
+    @Scheduled(fixedRate = 300000)
+    public void cleanupStuckTasks() {
+<span class="fc" id="L848">        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);</span>
+<span class="fc" id="L849">        List&lt;TranslationTask&gt; stuckTasks = translationPort.findTasksByStatusAndCreateTimeBefore(</span>
+<span class="fc" id="L850">                TranslationStatus.PROCESSING.getValue(), cutoff);</span>
+<span class="fc bfc" id="L851" title="All 2 branches covered.">        for (TranslationTask task : stuckTasks) {</span>
+<span class="fc" id="L852">            log.warn(&quot;清理卡死任务: taskId={}, createTime={}&quot;, task.getTaskId(), task.getCreateTime());</span>
+<span class="fc" id="L853">            task.setStatus(TranslationStatus.FAILED.getValue());</span>
+<span class="fc" id="L854">            task.setErrorMessage(&quot;任务超时，自动标记为失败&quot;);</span>
+<span class="fc" id="L855">            translationPort.updateTask(task);</span>
+            // 同步更新文档状态
+<span class="fc bfc" id="L857" title="All 2 branches covered.">            if (task.getDocumentId() != null) {</span>
+<span class="fc" id="L858">                Document doc = documentPort.findById(task.getDocumentId()).orElse(null);</span>
+<span class="fc bfc" id="L859" title="All 4 branches covered.">                if (doc != null &amp;&amp; TranslationStatus.PROCESSING.getValue().equals(doc.getStatus())) {</span>
+<span class="fc" id="L860">                    doc.setStatus(TranslationStatus.FAILED.getValue());</span>
+<span class="fc" id="L861">                    doc.setErrorMessage(&quot;任务超时，自动标记为失败&quot;);</span>
+<span class="fc" id="L862">                    doc.setUpdateTime(LocalDateTime.now());</span>
+<span class="fc" id="L863">                    documentPort.update(doc);</span>
+                }
+            }
+<span class="fc" id="L866">        }</span>
+<span class="fc" id="L867">    }</span>
+
+    /**
+     * 应用关闭时优雅关闭异步翻译线程
+     */
+    @PreDestroy
+    public void shutdown() {
+<span class="fc" id="L874">        log.info(&quot;TranslationTaskApplicationService 关闭中，等待异步翻译任务完成...&quot;);</span>
+        // 虚拟线程由 JVM 自动管理，无需显式关闭
+<span class="fc" id="L876">        log.info(&quot;TranslationTaskApplicationService 已关闭&quot;);</span>
+<span class="fc" id="L877">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

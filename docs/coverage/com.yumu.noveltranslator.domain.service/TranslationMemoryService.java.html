@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslationMemoryService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">TranslationMemoryService.java</span></div><h1>TranslationMemoryService.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+
+import com.yumu.noveltranslator.port.out.EmbeddingPort;
+import com.yumu.noveltranslator.domain.model.TranslationMemory;
+import com.yumu.noveltranslator.port.out.GlossaryRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.*;
+
+/**
+ * 翻译记忆服务
+ * 管理翻译记忆的存储和 MySQL 层查询
+ */
+@Service
+<span class="fc" id="L17">@Slf4j</span>
+<span class="fc" id="L18">@RequiredArgsConstructor</span>
+public class TranslationMemoryService {
+
+    private final GlossaryRepositoryPort glossaryPort;
+    private final EmbeddingPort embeddingPort;
+
+    /**
+     * 存储翻译记忆（写入 MySQL），返回自增 ID
+     */
+    public Long storeTranslation(String sourceText, String targetText, String sourceLang, String targetLang,
+                                  Long userId, Long projectId, String engine, String translationMode) {
+<span class="fc bfc" id="L29" title="All 8 branches covered.">        if (sourceText == null || sourceText.isBlank() || targetText == null || targetText.isBlank()) {</span>
+<span class="fc" id="L30">            return null;</span>
+        }
+
+<span class="fc" id="L33">        TranslationMemory memory = new TranslationMemory();</span>
+<span class="fc" id="L34">        memory.setUserId(userId);</span>
+<span class="fc" id="L35">        memory.setProjectId(projectId);</span>
+<span class="fc" id="L36">        memory.setSourceLang(sourceLang);</span>
+<span class="fc" id="L37">        memory.setTargetLang(targetLang);</span>
+<span class="fc" id="L38">        memory.setSourceText(sourceText);</span>
+<span class="fc" id="L39">        memory.setTargetText(targetText);</span>
+<span class="fc" id="L40">        memory.setSourceEngine(engine);</span>
+<span class="fc" id="L41">        memory.setTranslationMode(translationMode);</span>
+<span class="fc" id="L42">        memory.setUsageCount(0);</span>
+
+        // 生成向量
+<span class="fc" id="L45">        float[] embedding = embeddingPort.embed(sourceText);</span>
+<span class="fc bfc" id="L46" title="All 2 branches covered.">        if (embedding.length &gt; 0) {</span>
+<span class="fc" id="L47">            memory.setEmbedding(toFloatList(embedding));</span>
+        }
+
+<span class="fc" id="L50">        glossaryPort.saveTranslationMemory(memory);</span>
+<span class="fc" id="L51">        log.debug(&quot;存储翻译记忆: id={}, sourceLen={}&quot;, memory.getId(), sourceText.length());</span>
+<span class="fc" id="L52">        return memory.getId();</span>
+    }
+
+    /**
+     * 增加使用计数
+     */
+    public void incrementUsage(Long memoryId) {
+<span class="fc" id="L59">        glossaryPort.incrementMemoryUsage(memoryId);</span>
+<span class="fc" id="L60">    }</span>
+
+    /**
+     * 按用户和语言对查询翻译记忆（MySQL 层，精确匹配）
+     */
+    public List&lt;TranslationMemory&gt; searchByUserAndLang(Long userId, String sourceLang, String targetLang, int limit) {
+<span class="fc" id="L66">        return glossaryPort.findTopMemoryByUserAndLang(userId, sourceLang, targetLang, limit);</span>
+    }
+
+    /**
+     * 按项目查询翻译记忆
+     */
+    public List&lt;TranslationMemory&gt; searchByProject(Long projectId) {
+<span class="fc" id="L73">        return glossaryPort.findMemoryByProjectId(projectId);</span>
+    }
+
+    public void deleteAllTranslationMemory() {
+<span class="nc" id="L77">        glossaryPort.deleteAllTranslationMemory();</span>
+<span class="nc" id="L78">    }</span>
+
+    private List&lt;Float&gt; toFloatList(float[] array) {
+<span class="fc" id="L81">        List&lt;Float&gt; list = new ArrayList&lt;&gt;(array.length);</span>
+<span class="fc bfc" id="L82" title="All 2 branches covered.">        for (float v : array) {</span>
+<span class="fc" id="L83">            list.add(v);</span>
+        }
+<span class="fc" id="L85">        return list;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

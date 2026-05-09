@@ -1,0 +1,520 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslationPipeline.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">NovelTrans 测试覆盖率报告</a> &gt; <a href="index.source.html" class="el_package">com.yumu.noveltranslator.domain.service</a> &gt; <span class="el_source">TranslationPipeline.java</span></div><h1>TranslationPipeline.java</h1><pre class="source lang-java linenums">package com.yumu.noveltranslator.domain.service;
+
+import com.yumu.noveltranslator.port.dto.translation.ConsistencyTranslationResult;
+import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
+import com.yumu.noveltranslator.domain.model.Glossary;
+import com.yumu.noveltranslator.enums.TranslationMode;
+import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
+import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.port.out.TranslationCachePort;
+import com.yumu.noveltranslator.port.out.TranslationClientPort;
+import com.yumu.noveltranslator.port.out.TeamTranslationPort;
+import com.yumu.noveltranslator.util.CacheKeyUtil;
+import com.yumu.noveltranslator.util.ExternalResponseUtil;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 统一翻译管线组件
+ *
+ * 四级翻译管线架构：
+ * L1: 三级缓存查询（Caffeine → Redis → 数据库）
+ * L2: RAG 语义匹配（向量相似度查询）
+ * L3: 实体一致性翻译（术语表 + 占位符保护）
+ * L4: 直译（Python/MTranServer 轮询）
+ *
+ * 所有翻译路径统一使用此组件，消除 TranslationService、
+ * MultiAgentTranslationService、TranslationTaskService 中的重复管线逻辑。
+ */
+<span class="fc" id="L32">@Slf4j</span>
+public class TranslationPipeline {
+
+    // 广告关键词检测列表
+<span class="fc" id="L36">    private static final String[] AD_KEYWORDS = {</span>
+            &quot;人工智能助手&quot;, &quot;生成式人工智能&quot;, &quot;体验生成式&quot;, &quot;获取写作&quot;, &quot;Gemini&quot;, &quot;Google AI&quot;
+    };
+
+    /** 文本超过此字符数时启用分段翻译 */
+    private static final int SEGMENT_TRANSLATION_THRESHOLD = 5000;
+    /** 分段翻译的目标段大小（字符数） */
+    private static final int TRANSLATION_SEGMENT_SIZE = 3000;
+
+    private final TranslationCachePort cacheService;
+    private final RagTranslationApplicationService ragTranslationService;
+    private final EntityConsistencyService entityConsistencyService;
+    private final TranslationClientPort translationClient;
+    private final TranslationPostProcessingService postProcessingService;
+    private final TeamTranslationPort teamTranslationService;
+    private final Long userId;
+    private final String userLevel;
+    private final String docId;
+    private final List&lt;Glossary&gt; glossaryTerms;
+
+    /**
+     * 创建翻译管线实例（标准模式，L4 走直译）
+     */
+    public TranslationPipeline(
+            TranslationCachePort cacheService,
+            RagTranslationApplicationService ragTranslationService,
+            EntityConsistencyService entityConsistencyService,
+            TranslationClientPort translationClient,
+            TranslationPostProcessingService postProcessingService,
+            Long userId,
+            String docId) {
+<span class="fc" id="L67">        this(cacheService, ragTranslationService, entityConsistencyService, translationClient,</span>
+<span class="fc" id="L68">             postProcessingService, null, userId, docId, List.of());</span>
+<span class="fc" id="L69">    }</span>
+
+    /**
+     * 创建翻译管线实例（支持团队模式，L4 可走 TeamTranslationPort）
+     *
+     * @param teamTranslationService 团队翻译服务（可为 null，null 时 executeTeam 降级为标准直译）
+     */
+    public TranslationPipeline(
+            TranslationCachePort cacheService,
+            RagTranslationApplicationService ragTranslationService,
+            EntityConsistencyService entityConsistencyService,
+            TranslationClientPort translationClient,
+            TranslationPostProcessingService postProcessingService,
+            TeamTranslationPort teamTranslationService,
+            Long userId,
+            String docId) {
+<span class="fc" id="L85">        this(cacheService, ragTranslationService, entityConsistencyService, translationClient,</span>
+<span class="fc" id="L86">             postProcessingService, teamTranslationService, userId, docId, List.of());</span>
+<span class="fc" id="L87">    }</span>
+
+    /**
+     * 创建翻译管线实例（完整构造，支持术语表）
+     */
+    public TranslationPipeline(
+            TranslationCachePort cacheService,
+            RagTranslationApplicationService ragTranslationService,
+            EntityConsistencyService entityConsistencyService,
+            TranslationClientPort translationClient,
+            TranslationPostProcessingService postProcessingService,
+            TeamTranslationPort teamTranslationService,
+            Long userId,
+            String docId,
+            List&lt;Glossary&gt; glossaryTerms) {
+<span class="fc" id="L102">        this(cacheService, ragTranslationService, entityConsistencyService, translationClient,</span>
+             postProcessingService, teamTranslationService, userId, null, docId, glossaryTerms);
+<span class="fc" id="L104">    }</span>
+
+    /**
+     * 创建翻译管线实例（完整构造，支持术语表和 userLevel）
+     */
+    public TranslationPipeline(
+            TranslationCachePort cacheService,
+            RagTranslationApplicationService ragTranslationService,
+            EntityConsistencyService entityConsistencyService,
+            TranslationClientPort translationClient,
+            TranslationPostProcessingService postProcessingService,
+            TeamTranslationPort teamTranslationService,
+            Long userId,
+            String userLevel,
+            String docId,
+<span class="fc" id="L119">            List&lt;Glossary&gt; glossaryTerms) {</span>
+<span class="fc" id="L120">        this.cacheService = cacheService;</span>
+<span class="fc" id="L121">        this.ragTranslationService = ragTranslationService;</span>
+<span class="fc" id="L122">        this.entityConsistencyService = entityConsistencyService;</span>
+<span class="fc" id="L123">        this.translationClient = translationClient;</span>
+<span class="fc" id="L124">        this.postProcessingService = postProcessingService;</span>
+<span class="fc" id="L125">        this.teamTranslationService = teamTranslationService;</span>
+<span class="fc" id="L126">        this.userId = userId;</span>
+<span class="fc" id="L127">        this.userLevel = userLevel;</span>
+<span class="fc" id="L128">        this.docId = docId;</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        this.glossaryTerms = glossaryTerms != null ? glossaryTerms : List.of();</span>
+<span class="fc" id="L130">    }</span>
+
+    /**
+     * 执行完整四级翻译管线
+     *
+     * @param text       待翻译文本
+     * @param targetLang 目标语言
+     * @param mode       翻译质量档位
+     * @return 翻译结果，失败返回 null
+     */
+    public String execute(String text, String targetLang, TranslationMode mode) {
+        // Check if segmentation is needed
+<span class="fc" id="L142">        List&lt;String&gt; segments = splitTextForTranslation(text);</span>
+
+<span class="fc bfc" id="L144" title="All 2 branches covered.">        if (segments.size() == 1) {</span>
+            // Short text: original single-pass flow
+<span class="fc" id="L146">            return executeSegment(text, targetLang, mode);</span>
+        }
+
+        // Long text: translate each segment and merge
+<span class="fc" id="L150">        log.info(&quot;分段翻译: 原文{}字, 分为{}段&quot;, text.length(), segments.size());</span>
+<span class="fc" id="L151">        StringBuilder result = new StringBuilder();</span>
+
+<span class="fc bfc" id="L153" title="All 2 branches covered.">        for (int i = 0; i &lt; segments.size(); i++) {</span>
+<span class="fc" id="L154">            String segment = segments.get(i);</span>
+<span class="fc" id="L155">            String translated = executeSegment(segment, targetLang, mode);</span>
+<span class="pc bpc" id="L156" title="1 of 4 branches missed.">            if (translated != null &amp;&amp; !translated.isBlank()) {</span>
+                // Strip trailing whitespace from translated segment — separator added explicitly below
+<span class="fc" id="L158">                String cleaned = translated.stripTrailing();</span>
+<span class="fc" id="L159">                result.append(cleaned);</span>
+<span class="fc" id="L160">            } else {</span>
+                // Translation failed, keep original segment
+<span class="fc" id="L162">                result.append(segment);</span>
+            }
+            // Add paragraph separator between segments (but not after the last one)
+<span class="fc bfc" id="L165" title="All 2 branches covered.">            if (i &lt; segments.size() - 1) {</span>
+<span class="fc" id="L166">                result.append(&quot;\n\n&quot;);</span>
+            }
+        }
+
+<span class="fc" id="L170">        return result.toString();</span>
+    }
+
+    /**
+     * 团队模式翻译管线（完整四级管线 + L4 走多 Agent 协作）
+     *
+     * L1: 缓存查询（分层：仅 team 模式）
+     * L2: RAG 语义匹配
+     * L3: 实体一致性（提取实体 + 占位符保护）
+     * L4: TeamTranslationService 多 Agent 协作翻译
+     *
+     * @param text           待翻译文本
+     * @param sourceLang     源语言
+     * @param targetLang     目标语言
+     * @param mode           翻译质量档位（固定为 TEAM）
+     * @param novelType      小说类型
+     * @param glossaryTerms  术语表
+     * @return 翻译结果，失败返回 null
+     */
+    public String executeTeam(
+            String text,
+            String sourceLang,
+            String targetLang,
+            TranslationMode mode,
+            String novelType,
+            List&lt;Glossary&gt; glossaryTerms) {
+
+<span class="fc" id="L197">        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);</span>
+
+        // L1: 分层缓存查询
+<span class="fc" id="L200">        String cached = cacheService.getCacheByMode(cacheKey, mode.getName()).orElse(null);</span>
+<span class="fc bfc" id="L201" title="All 2 branches covered.">        if (cached != null) {</span>
+<span class="fc" id="L202">            log.debug(&quot;Pipeline 团队模式缓存命中 [{}]&quot;, cacheKey.substring(0, Math.min(16, cacheKey.length())));</span>
+<span class="fc" id="L203">            return cached;</span>
+        }
+
+        // L2: RAG 语义匹配（带模式层级过滤）
+<span class="fc" id="L207">        RagTranslationResponse ragResult = ragTranslationService.searchSimilarWithModes(userId, text, targetLang, mode.getAllowedModes());</span>
+<span class="fc bfc" id="L208" title="All 4 branches covered.">        if (ragResult != null &amp;&amp; ragResult.isDirectHit()) {</span>
+<span class="fc" id="L209">            log.info(&quot;Pipeline 团队模式 RAG 直接命中，相似度: {}&quot;, ragResult.getSimilarity());</span>
+<span class="fc" id="L210">            String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, mode.getName());</span>
+<span class="fc" id="L211">            cacheService.putCache(cacheKey, text, result, &quot;auto&quot;, targetLang, mode.getName(), &quot;team&quot;);</span>
+<span class="fc" id="L212">            return result;</span>
+        }
+
+        // L3: 实体一致性 + 占位符保护
+<span class="fc" id="L216">        String textForTranslation = text;</span>
+<span class="fc" id="L217">        EntityConsistencyService.EntityMappingContext mappingContext = null;</span>
+
+<span class="fc bfc" id="L219" title="All 4 branches covered.">        if (userId != null &amp;&amp; entityConsistencyService.shouldUseConsistency(text)) {</span>
+<span class="fc" id="L220">            log.info(&quot;Pipeline 团队模式启用实体一致性&quot;);</span>
+            try {
+<span class="fc" id="L222">                List&lt;String&gt; extractedEntities = entityConsistencyService.extractEntitiesSegmented(text, targetLang);</span>
+<span class="fc bfc" id="L223" title="All 2 branches covered.">                if (!extractedEntities.isEmpty()) {</span>
+<span class="fc" id="L224">                    Map&lt;String, String&gt; entityTranslations = entityConsistencyService.translateEntities(</span>
+                            extractedEntities, targetLang);
+<span class="fc" id="L226">                    mappingContext = entityConsistencyService.buildMapping(entityTranslations);</span>
+<span class="fc" id="L227">                    textForTranslation = entityConsistencyService.replaceEntitiesWithPlaceholders(text, mappingContext);</span>
+                }
+<span class="fc" id="L229">            } catch (Exception e) {</span>
+<span class="fc" id="L230">                log.warn(&quot;团队模式实体一致性失败，降级为无占位符翻译: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L231">            }</span>
+        }
+
+        // L4: 多 Agent 协作翻译
+<span class="fc bfc" id="L235" title="All 2 branches covered.">        if (teamTranslationService == null) {</span>
+<span class="fc" id="L236">            log.warn(&quot;团队模式未初始化 TeamTranslationService，降级为标准直译&quot;);</span>
+<span class="fc bfc" id="L237" title="All 2 branches covered.">            if (translationClient == null) {</span>
+<span class="fc" id="L238">                log.error(&quot;标准直译降级失败: translationClient 未初始化&quot;);</span>
+<span class="fc" id="L239">                return null;</span>
+            }
+<span class="fc" id="L241">            return executeSegment(text, targetLang, mode);</span>
+        }
+
+        try {
+<span class="fc" id="L245">            String translated = teamTranslationService.translateChapter(</span>
+                    textForTranslation, novelType, sourceLang, targetLang, glossaryTerms);
+
+<span class="fc bfc" id="L248" title="All 4 branches covered.">            if (translated == null || translated.trim().isEmpty()) {</span>
+<span class="fc" id="L249">                log.warn(&quot;Pipeline 团队模式 L4 翻译结果为空&quot;);</span>
+<span class="fc" id="L250">                return null;</span>
+            }
+
+            // 还原占位符
+<span class="fc bfc" id="L254" title="All 2 branches covered.">            if (mappingContext != null) {</span>
+                try {
+<span class="fc" id="L256">                    translated = entityConsistencyService.restorePlaceholders(translated, mappingContext);</span>
+<span class="nc" id="L257">                } catch (Exception e) {</span>
+<span class="nc" id="L258">                    log.warn(&quot;团队模式占位符还原失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L259">                }</span>
+            }
+
+            // 后处理 + 缓存
+<span class="fc" id="L263">            translated = postProcessingService.fixUntranslatedChinese(text, translated, targetLang, mode.getName());</span>
+<span class="fc bfc" id="L264" title="All 2 branches covered.">            if (shouldCache(text, translated)) {</span>
+<span class="fc" id="L265">                cacheService.putCache(cacheKey, text, translated, sourceLang, targetLang, mode.getName(), &quot;team&quot;);</span>
+<span class="fc" id="L266">                ragTranslationService.storeTranslationMemory(text, translated, targetLang, mode.getName(), userId, mode.getName());</span>
+            }
+
+<span class="fc" id="L269">            return translated;</span>
+<span class="fc" id="L270">        } catch (Exception e) {</span>
+<span class="fc" id="L271">            log.warn(&quot;Pipeline 团队模式翻译失败: {}&quot;, e.getMessage());</span>
+<span class="fc" id="L272">            return null;</span>
+        }
+    }
+
+    /**
+     * 执行单段翻译流程
+     */
+    private String executeSegment(String text, String targetLang, TranslationMode mode) {
+<span class="fc" id="L280">        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang);</span>
+
+        // L1: 分层缓存查询
+<span class="fc" id="L283">        String cached = cacheService.getCacheByMode(cacheKey, mode.getName()).orElse(null);</span>
+<span class="fc bfc" id="L284" title="All 2 branches covered.">        if (cached != null) {</span>
+<span class="fc" id="L285">            log.debug(&quot;Pipeline 缓存命中 mode={}, key={}&quot;, mode.getName(), cacheKey);</span>
+<span class="fc" id="L286">            return cached;</span>
+        }
+
+        // L2: RAG 语义匹配（带模式层级过滤）
+<span class="fc" id="L290">        RagTranslationResponse ragResult = ragTranslationService.searchSimilarWithModes(userId, text, targetLang, mode.getAllowedModes());</span>
+<span class="fc bfc" id="L291" title="All 4 branches covered.">        if (ragResult != null &amp;&amp; ragResult.isDirectHit()) {</span>
+<span class="fc" id="L292">            log.info(&quot;Pipeline RAG 直接命中，相似度: {}&quot;, ragResult.getSimilarity());</span>
+<span class="fc" id="L293">            String result = postProcessingService.fixUntranslatedChinese(text, ragResult.getTranslation(), targetLang, mode.getName());</span>
+<span class="fc" id="L294">            cacheService.putCache(cacheKey, text, result, &quot;auto&quot;, targetLang, mode.getName(), mode.getName());</span>
+<span class="fc" id="L295">            return result;</span>
+        }
+
+        // L3: 实体一致性翻译（条件触发：userId 非 null 且文本长度超阈值）
+<span class="fc bfc" id="L299" title="All 4 branches covered.">        if (userId != null &amp;&amp; entityConsistencyService.shouldUseConsistency(text)) {</span>
+<span class="fc" id="L300">            log.info(&quot;Pipeline 启用实体一致性翻译&quot;);</span>
+<span class="fc" id="L301">            ConsistencyTranslationResult consistencyResult =</span>
+<span class="fc" id="L302">                    entityConsistencyService.translateWithConsistency(text, targetLang, mode.getName(), userId, docId);</span>
+<span class="fc bfc" id="L303" title="All 4 branches covered.">            if (consistencyResult.isConsistencyApplied() &amp;&amp; consistencyResult.getTranslatedText() != null) {</span>
+<span class="fc" id="L304">                String result = postProcessingService.fixUntranslatedChinese(text, consistencyResult.getTranslatedText(), targetLang, mode.getName());</span>
+<span class="pc bpc" id="L305" title="1 of 2 branches missed.">                if (shouldCache(text, result)) {</span>
+<span class="fc" id="L306">                    cacheService.putCache(cacheKey, text, result, &quot;auto&quot;, targetLang, mode.getName(), mode.getName());</span>
+                }
+<span class="fc" id="L308">                ragTranslationService.storeTranslationMemory(text, result, targetLang, mode.getName(), userId, mode.getName());</span>
+<span class="fc" id="L309">                return result;</span>
+            }
+        }
+
+        // L4: 直译（注入术语表）
+<span class="fc bfc" id="L314" title="All 2 branches covered.">        String rawJson = translationClient.translate(text, targetLang, mode.getName(), false, glossaryTerms.isEmpty(), glossaryTerms, userId != null ? userId.toString() : null, userLevel);</span>
+<span class="fc" id="L315">        String result = ExternalResponseUtil.extractDataField(rawJson);</span>
+
+<span class="fc bfc" id="L317" title="All 2 branches covered.">        if (result == null) {</span>
+<span class="fc" id="L318">            log.warn(&quot;Pipeline L4 翻译失败，原始响应: {}&quot;, rawJson);</span>
+<span class="fc" id="L319">            return null;</span>
+        }
+
+<span class="fc bfc" id="L322" title="All 2 branches covered.">        if (!isValidTranslation(text, result)) {</span>
+<span class="fc" id="L323">            log.warn(&quot;Pipeline L4 翻译结果无效（广告关键词或长度异常）&quot;);</span>
+<span class="fc" id="L324">            return null;</span>
+        }
+
+        // 后处理 + 缓存
+<span class="fc" id="L328">        result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, mode.getName());</span>
+<span class="fc bfc" id="L329" title="All 2 branches covered.">        if (shouldCache(text, result)) {</span>
+<span class="fc" id="L330">            cacheService.putCache(cacheKey, text, result, &quot;auto&quot;, targetLang, mode.getName(), mode.getName());</span>
+<span class="fc" id="L331">            ragTranslationService.storeTranslationMemory(text, result, targetLang, mode.getName(), userId, mode.getName());</span>
+        } else {
+<span class="fc" id="L333">            log.debug(&quot;Pipeline 译文与原文一致，跳过缓存&quot;);</span>
+        }
+
+<span class="fc" id="L336">        return result;</span>
+    }
+
+    /**
+     * 快速模式翻译管线（仅缓存 + 直译）
+     * 跳过 RAG 和实体一致性，适用于网页翻译等高性能场景
+     *
+     * @param text       待翻译文本
+     * @param targetLang 目标语言
+     * @param mode       翻译质量档位
+     * @return 翻译结果，失败时返回原文
+     */
+    public String executeFast(String text, String targetLang, TranslationMode mode) {
+<span class="fc" id="L349">        return executeFast(text, targetLang, mode, false);</span>
+    }
+
+    /**
+     * 快速模式翻译管线（仅缓存 + 直译）
+     *
+     * @param text       待翻译文本
+     * @param targetLang 目标语言
+     * @param mode       翻译质量档位
+     * @param html       是否启用 HTML 翻译模式（仅对 MTranServer 有效）
+     * @return 翻译结果，失败时返回原文
+     */
+    public String executeFast(String text, String targetLang, TranslationMode mode, boolean html) {
+<span class="fc" id="L362">        log.info(&quot;[PIPELINE-ENTRY] executeFast START: textLen={}, target={}, mode={}, html={}&quot;,</span>
+<span class="fc" id="L363">                text.length(), targetLang, mode.getName(), html);</span>
+<span class="fc bfc" id="L364" title="All 2 branches covered.">        String cacheKey = CacheKeyUtil.buildCacheKey(text, targetLang) + (html ? &quot;:html&quot; : &quot;:text&quot;);</span>
+<span class="fc" id="L365">        log.info(&quot;[PIPELINE-L1] Cache key: {}&quot;, cacheKey.substring(0, Math.min(32, cacheKey.length())));</span>
+
+        // L1: 分层缓存查询
+<span class="fc" id="L368">        String cached = cacheService.getCacheByMode(cacheKey, mode.getName()).orElse(null);</span>
+<span class="fc bfc" id="L369" title="All 2 branches covered.">        if (cached != null) {</span>
+<span class="fc" id="L370">            log.info(&quot;[PIPELINE-L1] 缓存命中 mode={}&quot;, mode.getName());</span>
+<span class="fc" id="L371">            return cached;</span>
+        }
+<span class="fc" id="L373">        log.info(&quot;[PIPELINE-L1] 缓存未命中，继续 L4&quot;);</span>
+
+        // L4: 直译（跳过 RAG 和一致性，快速模式直连 MTranServer，注入术语表）
+        // 有术语表时强制走 Python 服务（MTranServer 不支持术语表）
+        try {
+<span class="fc bfc" id="L378" title="All 2 branches covered.">            boolean hasGlossary = !glossaryTerms.isEmpty();</span>
+<span class="fc" id="L379">            log.info(&quot;[PIPELINE-L4] 调用翻译客户端: hasGlossary={}, textLen={}&quot;, hasGlossary, text.length());</span>
+<span class="fc bfc" id="L380" title="All 4 branches covered.">            String rawJson = translationClient.translate(text, targetLang, mode.getName(), html, !hasGlossary, glossaryTerms, userId != null ? userId.toString() : null, userLevel);</span>
+<span class="fc bfc" id="L381" title="All 2 branches covered.">            log.info(&quot;[PIPELINE-L4] 翻译客户端返回: rawJsonLen={}&quot;, rawJson != null ? rawJson.length() : 0);</span>
+<span class="fc" id="L382">            String result = ExternalResponseUtil.extractDataField(rawJson);</span>
+<span class="fc bfc" id="L383" title="All 2 branches covered.">            log.info(&quot;[PIPELINE-L4] 提取译文: result={}&quot;, result != null ? result.substring(0, Math.min(50, result.length())) : &quot;null&quot;);</span>
+
+<span class="fc bfc" id="L385" title="All 4 branches covered.">            if (result != null &amp;&amp; !result.isBlank()) {</span>
+<span class="fc bfc" id="L386" title="All 2 branches covered.">                if (!isValidTranslation(text, result)) {</span>
+<span class="fc" id="L387">                    log.warn(&quot;Pipeline 快速模式翻译结果无效，返回原文&quot;);</span>
+<span class="fc" id="L388">                    return text;</span>
+                }
+<span class="fc" id="L390">                result = postProcessingService.fixUntranslatedChinese(text, result, targetLang, mode.getName());</span>
+<span class="fc bfc" id="L391" title="All 2 branches covered.">                if (shouldCache(text, result)) {</span>
+<span class="fc" id="L392">                    cacheService.putCache(cacheKey, text, result, &quot;auto&quot;, targetLang, mode.getName(), mode.getName());</span>
+                }
+<span class="fc" id="L394">                log.info(&quot;[PIPELINE-EXIT] 翻译成功: {}&quot;, result.substring(0, Math.min(50, result.length())));</span>
+<span class="fc" id="L395">                return result;</span>
+            }
+<span class="fc" id="L397">        } catch (Exception e) {</span>
+<span class="fc" id="L398">            log.warn(&quot;Pipeline 快速模式翻译失败: {}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L399">        }</span>
+
+        // 失败时返回原文
+<span class="fc" id="L402">        log.warn(&quot;Pipeline 快速模式翻译结果为空，返回原文&quot;);</span>
+<span class="fc" id="L403">        return text;</span>
+    }
+
+    /**
+     * 将长文本按段落边界切分为多个片段，用于分段翻译
+     *
+     * 规则：
+     * - 文本 &lt;= 5000 字：不分段，返回单片段
+     * - 文本 &gt; 5000 字：按 3000 字分段
+     * - 切分点在段落边界（\n\n）或句子边界（。！？\n）
+     * - 不破坏原有文字完整性
+     */
+    private static List&lt;String&gt; splitTextForTranslation(String text) {
+<span class="fc bfc" id="L416" title="All 4 branches covered.">        if (text == null || text.length() &lt;= SEGMENT_TRANSLATION_THRESHOLD) {</span>
+<span class="fc bfc" id="L417" title="All 2 branches covered.">            return List.of(text != null ? text : &quot;&quot;);</span>
+        }
+
+<span class="fc" id="L420">        List&lt;String&gt; segments = new ArrayList&lt;&gt;();</span>
+        // Split at paragraph boundaries
+<span class="fc" id="L422">        String[] paragraphs = text.split(&quot;(?&lt;=\n\n)&quot;);</span>
+<span class="fc" id="L423">        StringBuilder current = new StringBuilder();</span>
+
+<span class="fc bfc" id="L425" title="All 2 branches covered.">        for (String para : paragraphs) {</span>
+<span class="pc bpc" id="L426" title="1 of 4 branches missed.">            if (current.length() + para.length() &gt; TRANSLATION_SEGMENT_SIZE &amp;&amp; current.length() &gt; 0) {</span>
+<span class="fc" id="L427">                String segment = current.toString();</span>
+<span class="pc bpc" id="L428" title="1 of 2 branches missed.">                if (segment.length() &gt; TRANSLATION_SEGMENT_SIZE * 1.5) {</span>
+<span class="fc" id="L429">                    segments.addAll(splitAtSentenceBoundaryForTranslation(segment));</span>
+                } else {
+<span class="nc" id="L431">                    segments.add(segment);</span>
+                }
+<span class="fc" id="L433">                current = new StringBuilder();</span>
+            }
+<span class="fc" id="L435">            current.append(para);</span>
+        }
+
+<span class="pc bpc" id="L438" title="1 of 2 branches missed.">        if (current.length() &gt; 0) {</span>
+<span class="fc" id="L439">            String remaining = current.toString();</span>
+<span class="fc bfc" id="L440" title="All 2 branches covered.">            if (remaining.length() &gt; TRANSLATION_SEGMENT_SIZE * 1.5) {</span>
+<span class="fc" id="L441">                segments.addAll(splitAtSentenceBoundaryForTranslation(remaining));</span>
+            } else {
+<span class="fc" id="L443">                segments.add(remaining);</span>
+            }
+        }
+
+<span class="pc bpc" id="L447" title="1 of 2 branches missed.">        if (segments.isEmpty()) {</span>
+<span class="nc" id="L448">            return List.of(text);</span>
+        }
+
+<span class="fc" id="L451">        return segments;</span>
+    }
+
+    /**
+     * 在句子边界切分超长片段
+     */
+    private static List&lt;String&gt; splitAtSentenceBoundaryForTranslation(String text) {
+<span class="fc" id="L458">        List&lt;String&gt; parts = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L459">        String[] sentences = text.split(&quot;(?&lt;=[。！？\n])&quot;);</span>
+<span class="fc" id="L460">        StringBuilder current = new StringBuilder();</span>
+
+<span class="fc bfc" id="L462" title="All 2 branches covered.">        for (String sentence : sentences) {</span>
+<span class="fc bfc" id="L463" title="All 4 branches covered.">            if (current.length() + sentence.length() &gt; TRANSLATION_SEGMENT_SIZE &amp;&amp; current.length() &gt; 0) {</span>
+<span class="fc" id="L464">                parts.add(current.toString());</span>
+<span class="fc" id="L465">                current = new StringBuilder();</span>
+            }
+<span class="fc" id="L467">            current.append(sentence);</span>
+        }
+
+<span class="pc bpc" id="L470" title="1 of 2 branches missed.">        if (current.length() &gt; 0) {</span>
+<span class="fc" id="L471">            parts.add(current.toString());</span>
+        }
+
+<span class="pc bpc" id="L474" title="1 of 2 branches missed.">        return parts.isEmpty() ? List.of(text) : parts;</span>
+    }
+
+    /**
+     * 判断是否应该缓存翻译结果
+     * 仅当译文与原文不一致时才缓存
+     */
+    public static boolean shouldCache(String original, String translated) {
+<span class="fc bfc" id="L482" title="All 4 branches covered.">        if (original == null || translated == null) {</span>
+<span class="fc" id="L483">            return false;</span>
+        }
+<span class="fc" id="L485">        String cleanOriginal = original.trim();</span>
+<span class="fc" id="L486">        String cleanTranslated = translated.trim();</span>
+
+<span class="fc bfc" id="L488" title="All 2 branches covered.">        if (cleanOriginal.equals(cleanTranslated)) {</span>
+<span class="fc" id="L489">            return false;</span>
+        }
+<span class="fc bfc" id="L491" title="All 2 branches covered.">        if (cleanOriginal.equalsIgnoreCase(cleanTranslated)) {</span>
+<span class="fc" id="L492">            return false;</span>
+        }
+<span class="fc" id="L494">        return true;</span>
+    }
+
+    /**
+     * 校验翻译结果是否有效
+     * 检测非翻译内容（如广告文案、系统提示等）和长度异常
+     */
+    public static boolean isValidTranslation(String text, String result) {
+<span class="fc bfc" id="L502" title="All 4 branches covered.">        if (text == null || result == null) {</span>
+<span class="fc" id="L503">            return false;</span>
+        }
+        // 检测明显的广告/系统提示关键词
+<span class="fc bfc" id="L506" title="All 2 branches covered.">        for (String keyword : AD_KEYWORDS) {</span>
+<span class="fc bfc" id="L507" title="All 2 branches covered.">            if (result.contains(keyword)) {</span>
+<span class="fc" id="L508">                log.warn(&quot;翻译结果包含广告关键词：{}&quot;, keyword);</span>
+<span class="fc" id="L509">                return false;</span>
+            }
+        }
+        // 检测译文长度异常（超过原文 10 倍）
+<span class="fc bfc" id="L513" title="All 2 branches covered.">        if (result.length() &gt; text.length() * 10) {</span>
+<span class="fc" id="L514">            log.warn(&quot;翻译结果长度异常：原文 {} 字符，译文 {} 字符&quot;, text.length(), result.length());</span>
+<span class="fc" id="L515">            return false;</span>
+        }
+<span class="fc" id="L517">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
