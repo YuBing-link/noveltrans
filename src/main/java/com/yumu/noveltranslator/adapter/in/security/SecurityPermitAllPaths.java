@@ -18,23 +18,36 @@ public final class SecurityPermitAllPaths {
         "/user/get-token",
         "/health",
         "/actuator",
-        "/swagger-ui",
+        "/v1/webhook/stripe",
+        // Swagger UI & OpenAPI
+        "/swagger-ui/**",
         "/swagger-ui.html",
-        "/v3/api-docs",
-        "/v1/webhook/stripe"
+        "/v3/api-docs/**",
+        "/v3/api-docs"
     );
 
     private SecurityPermitAllPaths() {
         // 工具类，禁止实例化
     }
 
-    /** 判断给定请求 URI 是否在白名单中 */
+    /** 判断给定请求 URI 是否在白名单中，支持 /** 通配符 */
     public static boolean isPermitted(String requestURI) {
         if (requestURI == null) {
             return false;
         }
-        return PERMIT_ALL_PATHS.stream().anyMatch(
-            path -> requestURI.equals(path) || requestURI.startsWith(path + "/")
-        );
+        for (String pattern : PERMIT_ALL_PATHS) {
+            if (pattern.endsWith("/**")) {
+                // 前缀匹配：/swagger-ui/** 匹配 /swagger-ui/ 及其所有子路径
+                String prefix = pattern.substring(0, pattern.length() - 3);
+                if (requestURI.equals(prefix) || requestURI.startsWith(prefix + "/")) {
+                    return true;
+                }
+            } else {
+                if (requestURI.equals(pattern) || requestURI.startsWith(pattern + "/")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

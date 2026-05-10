@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NovelTrans Load Test Report — 2026-05-09</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; }
+h1 { text-align: center; font-size: 2rem; margin-bottom: 0.25rem; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.subtitle { text-align: center; color: #94a3b8; margin-bottom: 2rem; font-size: 0.95rem; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 1200px; margin: 0 auto; }
+.card { background: #1e293b; border-radius: 12px; padding: 1.5rem; border: 1px solid #334155; }
+.card h2 { font-size: 1.1rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #334155; }
+.metric-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #1e293b33; }
+.metric-row:last-child { border-bottom: none; }
+.metric-label { color: #94a3b8; font-size: 0.9rem; }
+.metric-value { font-weight: 600; font-size: 0.95rem; }
+.metric-value.good { color: #4ade80; }
+.metric-value.warn { color: #fbbf24; }
+.summary { grid-column: 1 / -1; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.summary-card { background: #1e293b; border-radius: 10px; padding: 1.25rem; text-align: center; border: 1px solid #334155; }
+.summary-card .label { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+.summary-card .value { font-size: 1.8rem; font-weight: 700; }
+.summary-card .value.blue { color: #38bdf8; }
+.summary-card .value.green { color: #4ade80; }
+.summary-card .value.purple { color: #a78bfa; }
+.summary-card .value.amber { color: #fbbf24; }
+.comparison { grid-column: 1 / -1; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; padding: 0.5rem; border-bottom: 1px solid #334155; }
+td { padding: 0.6rem 0.5rem; border-bottom: 1px solid #1e293b33; font-size: 0.9rem; }
+.badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+.badge.pass { background: #064e3b; color: #6ee7b7; }
+.badge.fail { background: #7f1d1d; color: #fca5a5; }
+.verdict { grid-column: 1 / -1; background: linear-gradient(135deg, #064e3b22, #064e3b11); border: 1px solid #065f46; border-radius: 12px; padding: 1.5rem; }
+.verdict h2 { color: #6ee7b7; margin-bottom: 0.75rem; }
+.verdict p { color: #a7f3d0; line-height: 1.6; }
+.note { grid-column: 1 / -1; background: #1e293b; border: 1px solid #f59e0b33; border-radius: 12px; padding: 1.5rem; }
+.note h2 { color: #fbbf24; margin-bottom: 0.5rem; font-size: 1rem; }
+.note p { color: #fde68a; line-height: 1.6; font-size: 0.9rem; }
+.note code { background: #334155; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<h1>NovelTrans Load Test Report</h1>
+<p class="subtitle">2026-05-09 | Peak 200 VU | 100s ramp | 5-stage progressive load | No sleep delay</p>
+
+<div class="grid">
+  <div class="summary">
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">Total Requests (Mock)</div>
+        <div class="value blue">114,010</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Total Requests (Real)</div>
+        <div class="value purple">79,178</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Throughput (Mock)</div>
+        <div class="value green">1,140 req/s</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Pass Rate</div>
+        <div class="value green">100%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span style="color:#38bdf8;">&#9725;</span> Mock Mode</h2>
+    <div class="metric-row"><span class="metric-label">Total Requests</span><span class="metric-value">114,010</span></div>
+    <div class="metric-row"><span class="metric-label">Throughput</span><span class="metric-value">1,140 req/s</span></div>
+    <div class="metric-row"><span class="metric-label">Iterations</span><span class="metric-value">57,005</span></div>
+    <div class="metric-row"><span class="metric-label">Check Pass Rate</span><span class="metric-value good">100%</span></div>
+    <div class="metric-row"><span class="metric-label">P95 Latency</span><span class="metric-value">236 ms</span></div>
+    <div class="metric-row"><span class="metric-label">P90 Latency</span><span class="metric-value">204 ms</span></div>
+    <div class="metric-row"><span class="metric-label">Avg Latency</span><span class="metric-value">103 ms</span></div>
+    <div class="metric-row"><span class="metric-label">Median Latency</span><span class="metric-value">89 ms</span></div>
+    <div class="metric-row"><span class="metric-label">Max Latency</span><span class="metric-value warn">466 ms</span></div>
+    <div class="metric-row"><span class="metric-label">HTTP Errors</span><span class="metric-value good">0</span></div>
+  </div>
+
+  <div class="card">
+    <h2><span style="color:#a78bfa;">&#9725;</span> Real Mode (MTranServer)</h2>
+    <div class="metric-row"><span class="metric-label">Total Requests</span><span class="metric-value">79,178</span></div>
+    <div class="metric-row"><span class="metric-label">Throughput</span><span class="metric-value">792 req/s</span></div>
+    <div class="metric-row"><span class="metric-label">Iterations</span><span class="metric-value">39,589</span></div>
+    <div class="metric-row"><span class="metric-label">Check Pass Rate</span><span class="metric-value good">100%</span></div>
+    <div class="metric-row"><span class="metric-label">P95 Latency</span><span class="metric-value">292 ms</span></div>
+    <div class="metric-row"><span class="metric-label">P90 Latency</span><span class="metric-value">256 ms</span></div>
+    <div class="metric-row"><span class="metric-label">Avg Latency</span><span class="metric-value">148 ms</span></div>
+    <div class="metric-row"><span class="metric-label">Median Latency</span><span class="metric-value">140 ms</span></div>
+    <div class="metric-row"><span class="metric-label">Max Latency</span><span class="metric-value warn">897 ms</span></div>
+    <div class="metric-row"><span class="metric-label">HTTP Errors</span><span class="metric-value good">0</span></div>
+  </div>
+
+  <div class="comparison card">
+    <h2>Comparison</h2>
+    <table>
+      <thead><tr><th>Metric</th><th>&#9725; Mock</th><th>&#9725; Real</th><th>Delta</th></tr></thead>
+      <tbody>
+        <tr><td>Total Requests</td><td>114,010</td><td>79,178</td><td>-30.6%</td></tr>
+        <tr><td>Throughput (req/s)</td><td>1,140</td><td>792</td><td>-30.5%</td></tr>
+        <tr><td>P95 Latency (ms)</td><td>236</td><td>292</td><td>+23.7%</td></tr>
+        <tr><td>P90 Latency (ms)</td><td>204</td><td>256</td><td>+25.5%</td></tr>
+        <tr><td>Avg Latency (ms)</td><td>103</td><td>148</td><td>+43.7%</td></tr>
+        <tr><td>Median Latency (ms)</td><td>89</td><td>140</td><td>+57.3%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2><span style="color:#38bdf8;">&#9725;</span> Mock — Check Details</h2>
+    <table>
+      <thead><tr><th>Check</th><th>Pass</th><th>Fail</th><th>Rate</th></tr></thead>
+      <tbody>
+        <tr><td>translation 200</td><td>57,005</td><td>0</td><td><span class="badge pass">100%</span></td></tr>
+        <tr><td>translation has result</td><td>57,005</td><td>0</td><td><span class="badge pass">100%</span></td></tr>
+        <tr><td>reader 200</td><td>57,005</td><td>0</td><td><span class="badge pass">100%</span></td></tr>
+        <tr><td>reader has content</td><td>57,005</td><td>0</td><td><span class="badge pass">100%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2><span style="color:#a78bfa;">&#9725;</span> Real — Check Details</h2>
+    <table>
+      <thead><tr><th>Check</th><th>Pass</th><th>Fail</th><th>Rate</th></tr></thead>
+      <tbody>
+        <tr><td>translation 200</td><td>39,589</td><td>0</td><td><span class="badge pass">100%</span></td></tr>
+        <tr><td>translation has result</td><td>39,589</td><td>0</td><td><span class="badge pass">100%</span></td></tr>
+        <tr><td>reader 200</td><td>39,589</td><td>0</td><td><span class="badge pass">100%</span></td></tr>
+        <tr><td>reader has content</td><td>39,589</td><td>0</td><td><span class="badge pass">100%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <h2>Note: Initial ~2.4% soft failure root cause</h2>
+    <p>
+      Earlier test runs showed ~2.4% failures with response body:<br>
+      <code>{"success":false, "translation":"字符配额不足，请升级档位或等待下月重置"}</code><br>
+      Root cause: monthly character quota was correctly enforced — the 3 test users' combined quota (2.6M chars) was exhausted during the test. This is not a bug; the quota system works as designed.
+    </p>
+  </div>
+
+  <div class="verdict">
+    <h2>Verdict</h2>
+    <p>
+      At peak 200 VU, the system handled <strong>1,140 req/s</strong> (Mock) and <strong>792 req/s</strong> (Real MTranServer) with <strong>100% pass rate</strong> and <strong>0 HTTP errors</strong>.<br>
+      Real mode adds ~50-60ms median latency overhead from MTranServer network I/O, resulting in ~30% throughput reduction compared to pure mock.<br>
+      The system is stable under high concurrency with no crashes, no timeouts, and correct quota enforcement.
+    </p>
+  </div>
+</div>
+</body>
+</html>

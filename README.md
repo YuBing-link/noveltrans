@@ -154,6 +154,18 @@ noveltrans/
 
 > The hexagonal port/adapter design ensures these upgrades remain non-breaking.
 
+## Reports
+
+Live reports hosted on GitHub Pages:
+
+| Report | Description |
+|--------|-------------|
+| [API Documentation](https://YuBing-link.github.io/noveltrans/api.html) | Interactive OpenAPI spec (ReDoc) — 30+ endpoints |
+| [JaCoCo Coverage](https://YuBing-link.github.io/noveltrans/coverage/) | 80.5% instruction coverage, 115 test files |
+| [k6 Load Test](https://YuBing-link.github.io/noveltrans/load-test/report.html) | 200 VU stress test with latency/RPS metrics |
+
+> Also available locally: [`docs/openapi.json`](docs/openapi.json) for import into [Swagger Editor](https://editor.swagger.io/) or Postman.
+
 ## Documentation
 
 | Document | Purpose |
@@ -163,9 +175,7 @@ noveltrans/
 | [`SETUP.md`](docs/SETUP.md) | Deployment & local development guide |
 | [`ADR.md`](docs/ADR.md) | Architecture decision records |
 | [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Contribution guidelines |
-| [`Coverage Report`](docs/coverage/index.html) | Interactive JaCoCo HTML coverage report (80.5% instruction) |
 | [`Coverage Summary`](docs/coverage-report-summary.md) | Markdown coverage summary with top uncovered classes |
-| [`Load Test Report`](load-test/results/) | k6 load test results — 200 VU stress test with HTML report |
 
 ## License
 
