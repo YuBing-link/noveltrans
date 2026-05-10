@@ -167,6 +167,11 @@ public class ChapterTaskApplicationService implements com.yumu.noveltranslator.p
             return toChapterResponse(task);
         }
 
+        // 驳回后译者重新提交：先回退到 TRANSLATING，再提交为 SUBMITTED
+        if (current == ChapterTaskStatus.REJECTED) {
+            collabStateMachine.transitionChapter(task, ChapterTaskStatus.TRANSLATING);
+        }
+
         collabStateMachine.transitionChapter(task, ChapterTaskStatus.SUBMITTED);
 
         task.setTargetText(translatedText);

@@ -316,7 +316,8 @@ public class MultiAgentTranslationService {
             int retryCount = getRetryCount(chapter);
             if (retryCount >= MAX_RETRY_COUNT) {
                 log.error("章节 {} 已达到最大重试次数 {}，停止自动重试", chapterId, MAX_RETRY_COUNT);
-                // 经 REVIEWING 中间状态转入 REJECTED
+                // 经 SUBMITTED → REVIEWING 中间状态转入 REJECTED
+                collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.SUBMITTED);
                 collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REVIEWING);
                 collabStateMachine.transitionChapter(chapter, ChapterTaskStatus.REJECTED);
                 chapter.setReviewComment("翻译异常（已重试 " + retryCount + " 次）: " + e.getMessage());
