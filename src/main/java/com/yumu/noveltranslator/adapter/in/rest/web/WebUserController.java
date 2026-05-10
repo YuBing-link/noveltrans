@@ -215,10 +215,10 @@ public class WebUserController {
     public Result<PageResponse<TranslationHistoryResponse>> getTranslationHistory(
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer pageSize,
-            @RequestParam(required = false, defaultValue = "all") String type) {
+            @RequestParam(required = false) String status) {
 
         Long userId = SecurityUtil.getRequiredUserId();
-        var response = userPort.getTranslationHistory(userId, page, pageSize, type);
+        var response = userPort.getTranslationHistory(userId, page, pageSize, status);
         return Result.ok(response);
     }
 

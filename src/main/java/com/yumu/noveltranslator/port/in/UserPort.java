@@ -27,5 +27,5 @@ public interface UserPort {
     UserPreferencesResponse getUserPreferences(Long userId);
     UserPreferencesResponse updateUserPreferences(Long userId, UserPreferencesRequest request);
     PlatformStatsResponse getPlatformStats();
-    PageResponse<TranslationHistoryResponse> getTranslationHistory(Long userId, int page, int pageSize, String type);
+    PageResponse<TranslationHistoryResponse> getTranslationHistory(Long userId, int page, int pageSize, String status);
 }

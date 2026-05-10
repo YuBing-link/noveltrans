@@ -23,7 +23,7 @@ function HistoryPage() {
     setLoading(true);
     try {
       const { data } = await userApi.getTranslationHistory({
-        page, pageSize: 20, type: filter === 'all' ? undefined : filter,
+        page, pageSize: 20, status: filter === 'all' ? undefined : filter,
       });
       setItems(data.list || []);
       setTotalPages(data.totalPages || 1);

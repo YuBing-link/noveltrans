@@ -425,35 +425,43 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
     /**
      * 获取翻译历史列表（包含进行中的任务）
      */
-    public List<TranslationHistory> getTranslationHistory(Long userId, int page, int pageSize, String type) {
+    public List<TranslationHistory> getTranslationHistory(Long userId, int page, int pageSize, String status) {
         int offset = (page - 1) * pageSize;
 
-        // 查询进行中的任务（pending/processing），这些任务可能还没有历史记录
-        List<TranslationHistory> histories = new ArrayList<>();
-
-        // 先查询进行中的任务
-        List<TranslationTask> inProgressTasks = translationPort.findTasksByUserIdAndStatus(userId, offset, pageSize);
-        for (TranslationTask task : inProgressTasks) {
-            TranslationHistory history = new TranslationHistory();
-            history.setUserId(task.getUserId());
-            history.setTaskId(task.getTaskId());
-            history.setType(task.getType());
-            history.setDocumentId(task.getDocumentId());
-            history.setSourceLang(task.getSourceLang());
-            history.setTargetLang(task.getTargetLang());
-            history.setSourceText(null);
-            history.setTargetText(null);
-            history.setEngine(task.getEngine());
-            history.setCreateTime(task.getCreateTime());
-            histories.add(history);
+        if ("completed".equals(status)) {
+            // Completed records are in translation_history table
+            return translationPort.findHistoryByUserId(userId, offset, pageSize);
         }
 
-        // 再查询已完成的历史记录
+        if ("processing".equals(status)) {
+            // Processing records are in translation_task table with pending/processing status
+            return translationPort.findTasksByUserIdAndStatuses(userId, List.of("pending", "processing"), offset, pageSize)
+                    .stream()
+                    .map(this::taskToHistory)
+                    .toList();
+        }
+
+        if ("failed".equals(status)) {
+            // Failed records are in translation_task table with failed status
+            return translationPort.findTasksByUserIdAndStatuses(userId, List.of("failed"), offset, pageSize)
+                    .stream()
+                    .map(this::taskToHistory)
+                    .toList();
+        }
+
+        // No filter: merge in-progress tasks and completed histories
+        List<TranslationHistory> histories = new ArrayList<>();
+
+        List<TranslationTask> inProgressTasks = translationPort.findTasksByUserIdAndStatus(userId, offset, pageSize);
+        for (TranslationTask task : inProgressTasks) {
+            histories.add(taskToHistory(task));
+        }
+
         List<TranslationHistory> completedHistories = translationPort.findHistoryByUserId(userId, offset, pageSize);
         histories.addAll(completedHistories);
 
-        // 去重（按taskId）
-        histories = histories.stream()
+        // Deduplicate by taskId, sort by createTime desc
+        return histories.stream()
                 .collect(java.util.stream.Collectors.toMap(
                         TranslationHistory::getTaskId,
                         h -> h,
@@ -468,25 +476,26 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
                 })
                 .limit(pageSize)
                 .toList();
-
-        if (type != null && !"all".equals(type)) {
-            return histories.stream()
-                    .filter(h -> type.equals(h.getType()))
-                    .toList();
-        }
-
-        return histories;
     }
 
     /**
-     * 统计翻译历史总数（按类型过滤）
+     * 统计翻译历史总数（按状态过滤）
      */
     @Override
-    public int countTranslationHistory(Long userId, String type) {
-        if ("all".equals(type)) {
+    public int countTranslationHistory(Long userId, String status) {
+        if ("completed".equals(status)) {
             return translationPort.countHistoryByUserId(userId);
         }
-        return translationPort.countHistoryByUserIdAndType(userId, type);
+        if ("processing".equals(status)) {
+            return translationPort.countTasksByUserIdAndStatuses(userId, List.of("pending", "processing"));
+        }
+        if ("failed".equals(status)) {
+            return translationPort.countTasksByUserIdAndStatuses(userId, List.of("failed"));
+        }
+        // No filter: count both in-progress tasks and completed histories
+        int taskCount = translationPort.countTasksByUserIdAndStatuses(userId, List.of("pending", "processing"));
+        int historyCount = translationPort.countHistoryByUserId(userId);
+        return taskCount + historyCount;
     }
 
     /**
@@ -520,6 +529,24 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
         response.setErrorMessage(task.getErrorMessage());
 
         return response;
+    }
+
+    /**
+     * 将 TranslationTask 转为 TranslationHistory（用于进行中/失败任务的历史列表展示）
+     */
+    private TranslationHistory taskToHistory(TranslationTask task) {
+        TranslationHistory history = new TranslationHistory();
+        history.setUserId(task.getUserId());
+        history.setTaskId(task.getTaskId());
+        history.setType(task.getType());
+        history.setDocumentId(task.getDocumentId());
+        history.setSourceLang(task.getSourceLang());
+        history.setTargetLang(task.getTargetLang());
+        history.setSourceText(null);
+        history.setTargetText(null);
+        history.setEngine(task.getEngine());
+        history.setCreateTime(task.getCreateTime());
+        return history;
     }
 
     /**

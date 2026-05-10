@@ -317,9 +317,9 @@ public class UserApplicationService implements com.yumu.noveltranslator.port.in.
     /**
      * 获取用户翻译历史
      */
-    public PageResponse<TranslationHistoryResponse> getTranslationHistory(Long userId, int page, int pageSize, String type) {
-        var histories = translationTaskPort.getTranslationHistory(userId, page, pageSize, type);
-        int total = translationTaskPort.countTranslationHistory(userId, type);
+    public PageResponse<TranslationHistoryResponse> getTranslationHistory(Long userId, int page, int pageSize, String status) {
+        var histories = translationTaskPort.getTranslationHistory(userId, page, pageSize, status);
+        int total = translationTaskPort.countTranslationHistory(userId, status);
 
         var responseList = histories.stream()
                 .map(translationTaskPort::toHistoryResponse)

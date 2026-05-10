@@ -46,6 +46,18 @@ public class TranslationRepositoryAdapter implements TranslationRepositoryPort {
     }
 
     @Override
+    public List<com.yumu.noveltranslator.domain.model.TranslationTask> findTasksByUserIdAndStatuses(Long userId, List<String> statuses, int offset, int limit) {
+        return taskMapper.findByUserIdAndStatuses(userId, statuses, offset, limit).stream()
+                .map(TranslationConverter::toModelTask)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public int countTasksByUserIdAndStatuses(Long userId, List<String> statuses) {
+        return taskMapper.countByUserIdAndStatuses(userId, statuses);
+    }
+
+    @Override
     public List<com.yumu.noveltranslator.domain.model.TranslationTask> findTasksByStatusAndCreateTimeBefore(String status, LocalDateTime cutoff) {
         return taskMapper.findByStatusAndCreateTimeBefore(status, cutoff).stream()
                 .map(TranslationConverter::toModelTask)

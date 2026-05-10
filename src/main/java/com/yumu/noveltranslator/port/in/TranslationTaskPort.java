@@ -20,8 +20,8 @@ public interface TranslationTaskPort {
     boolean deleteHistory(String taskId, Long userId);
     TranslationResultResponse getTranslationResult(String taskId);
     String getDownloadPath(String taskId, Long userId);
-    List<TranslationHistory> getTranslationHistory(Long userId, int page, int pageSize, String type);
-    int countTranslationHistory(Long userId, String type);
+    List<TranslationHistory> getTranslationHistory(Long userId, int page, int pageSize, String status);
+    int countTranslationHistory(Long userId, String status);
     TaskStatusResponse toTaskStatusResponse(TranslationTask task);
     TranslationHistoryResponse toHistoryResponse(TranslationHistory history);
     SseEmitter streamTranslateDocumentById(Long docId, String targetLang, String mode);

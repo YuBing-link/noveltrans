@@ -14,6 +14,8 @@ public interface TranslationRepositoryPort {
     Optional<TranslationTask> findTaskByDocumentId(Long docId);
     List<TranslationTask> findTasksByDocumentId(Long docId);
     List<TranslationTask> findTasksByUserIdAndStatus(Long userId, int offset, int limit);
+    List<TranslationTask> findTasksByUserIdAndStatuses(Long userId, List<String> statuses, int offset, int limit);
+    int countTasksByUserIdAndStatuses(Long userId, List<String> statuses);
     List<TranslationTask> findTasksByStatusAndCreateTimeBefore(String status, LocalDateTime cutoff);
     void saveTask(TranslationTask task);
     void updateTask(TranslationTask task);
