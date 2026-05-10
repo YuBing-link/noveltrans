@@ -304,6 +304,10 @@ public class ChapterTaskApplicationService implements com.yumu.noveltranslator.p
             project.setProgress(progress);
             if (progress == 100) {
                 try {
+                    // DRAFT → COMPLETED 不合法，需要先经过 ACTIVE
+                    if (CollabProjectStatus.DRAFT.getValue().equals(project.getStatus())) {
+                        collabStateMachine.transitionProject(project, CollabProjectStatus.ACTIVE);
+                    }
                     collabStateMachine.transitionProject(project, CollabProjectStatus.COMPLETED);
                 } catch (IllegalStateException e) {
                     log.debug("项目无法转换为 COMPLETED 状态（当前状态不允许）: projectId={}", projectId);

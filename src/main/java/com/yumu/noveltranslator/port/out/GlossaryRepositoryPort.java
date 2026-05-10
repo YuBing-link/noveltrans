@@ -17,6 +17,7 @@ public interface GlossaryRepositoryPort {
     boolean deleteGlossary(Glossary glossary);
     Optional<Glossary> findGlossaryById(Long id);
     List<Glossary> findGlossaryByUserId(Long userId);
+    List<Glossary> findGlossaryByUserIdIncludeDeleted(Long userId);
     List<Glossary> findActiveGlossaryByUserId(Long userId);
     PageResult<Glossary> findGlossaryPaged(Long userId, String search, int page, int pageSize);
     int countAllGlossaries();

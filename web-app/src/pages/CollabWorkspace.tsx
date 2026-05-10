@@ -277,9 +277,10 @@ function CollabWorkspace() {
   // ==================== Derived values ====================
   const sourceChars = sourceText.length;
   const translatedChars = editorText.length;
-  const progressPercent = sourceChars > 0
+  const isCompleted = chapter?.status === 'COMPLETED' || chapter?.status === 'APPROVED';
+  const progressPercent = isCompleted ? 100 : (sourceChars > 0
     ? Math.min(100, Math.round((translatedChars / sourceChars) * 100))
-    : 0;
+    : 0);
   const sourceWords = sourceText.split(/\s+/).filter(Boolean).length;
   const translatedWords = editorText.split(/\s+/).filter(Boolean).length;
 

@@ -9,6 +9,7 @@ import com.yumu.noveltranslator.port.in.GlossaryPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/user/glossaries")
 @RequiredArgsConstructor
+@Slf4j
 public class WebGlossaryController {
 
     private final GlossaryPort glossaryPort;
@@ -200,7 +202,9 @@ public class WebGlossaryController {
                 return Result.error(ErrorCodeEnum.PARAMETER_ERROR, "CSV 文件中没有有效数据");
             }
 
+            log.info("开始导入术语表: userId={}, fileName={}, lines={}", userId, filename, items.size());
             int imported = glossaryPort.importGlossaryCsv(userId, items);
+            log.info("术语表导入完成: imported={}", imported);
             return Result.ok(imported > 0 ? imported : 0);
         } catch (IOException e) {
             return Result.error(ErrorCodeEnum.SYSTEM_ERROR, "文件解析失败: " + e.getMessage());

@@ -22,18 +22,21 @@ import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 import com.yumu.noveltranslator.properties.TranslationLimitProperties;
 import com.yumu.noveltranslator.domain.service.QuotaService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * 用户信息服务：个人资料、术语库、偏好设置、统计数据
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class UserApplicationService implements com.yumu.noveltranslator.port.in.UserPort {
 
@@ -198,18 +201,44 @@ public class UserApplicationService implements com.yumu.noveltranslator.port.in.
     }
 
     /**
-     * 批量导入术语
+     * 批量导入术语（存在则恢复/更新，不存在则插入）
      */
     public int batchImportGlossaryItems(Long userId, List<GlossaryItemRequest> items) {
         int count = 0;
+        int updateCount = 0;
+        // 加载用户所有术语（含软删除）以绕过 @TableLogic 过滤
+        List<Glossary> allGlossaries = glossaryPort.findGlossaryByUserIdIncludeDeleted(userId);
+        Map<String, Glossary> existingMap = allGlossaries.stream()
+                .collect(Collectors.toMap(Glossary::getSourceWord, g -> g, (a, b) -> a));
+
         for (GlossaryItemRequest item : items) {
             try {
-                createGlossaryItem(userId, item);
+                Glossary existing = existingMap.get(item.getSourceWord());
+                if (existing != null) {
+                    // 恢复软删除记录并更新
+                    if (existing.getDeleted() != null && existing.getDeleted() == 1) {
+                        existing.setDeleted(0);
+                    }
+                    existing.setTargetWord(item.getTargetWord());
+                    if (item.getRemark() != null) {
+                        existing.setRemark(item.getRemark());
+                    }
+                    glossaryPort.updateGlossary(existing);
+                    updateCount++;
+                } else {
+                    Glossary glossary = new Glossary();
+                    glossary.setUserId(userId);
+                    glossary.setSourceWord(item.getSourceWord());
+                    glossary.setTargetWord(item.getTargetWord());
+                    glossary.setRemark(item.getRemark());
+                    glossaryPort.saveGlossary(glossary);
+                }
                 count++;
             } catch (Exception e) {
-                // 跳过失败的项
+                log.warn("导入术语失败: sourceWord={}, error={}", item.getSourceWord(), e.getMessage());
             }
         }
+        log.info("术语导入完成: userId={}, total={}, success={}, updated={}, inserted={}", userId, items.size(), count, updateCount, count - updateCount);
         return count;
     }
 

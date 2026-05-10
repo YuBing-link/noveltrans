@@ -40,7 +40,13 @@ public class GlossaryRepositoryAdapter implements GlossaryRepositoryPort {
 
     @Override
     public void updateGlossary(com.yumu.noveltranslator.domain.model.Glossary glossary) {
-        glossaryMapper.updateById(GlossaryConverter.glossaryToEntity(glossary));
+        var entity = GlossaryConverter.glossaryToEntity(glossary);
+        // @TableLogic 拦截器会剥离 wrapper 中的 deleted set，需要先用原始 SQL 恢复
+        if (entity.getDeleted() != null && entity.getDeleted() == 0) {
+            glossaryMapper.restoreDeleted(glossary.getId());
+        }
+        // 更新其他字段
+        glossaryMapper.updateById(entity);
     }
 
     @Override
@@ -63,6 +69,13 @@ public class GlossaryRepositoryAdapter implements GlossaryRepositoryPort {
         return glossaryMapper.selectList(new LambdaQueryWrapper<Glossary>()
                 .eq(Glossary::getUserId, userId)
                 .orderByDesc(Glossary::getCreateTime)).stream()
+                .map(GlossaryConverter::glossaryToModel)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<com.yumu.noveltranslator.domain.model.Glossary> findGlossaryByUserIdIncludeDeleted(Long userId) {
+        return glossaryMapper.selectAllByUserId(userId).stream()
                 .map(GlossaryConverter::glossaryToModel)
                 .collect(Collectors.toList());
     }
