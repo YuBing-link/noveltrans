@@ -1,5 +1,6 @@
 package com.yumu.noveltranslator.config;
 
+import com.yumu.noveltranslator.port.out.EmbeddingPort;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,20 +21,14 @@ import org.springframework.stereotype.Component;
 public class RedisVectorConfig {
 
     private final RedisConnectionFactory redisConnectionFactory;
-
-    @Value("${embedding.provider:openai}")
-    private String provider;
-
-    @Value("${embedding.openai.model:text-embedding-3-small}")
-    private String openaiModel;
+    private final EmbeddingPort embeddingPort;
 
     @Value("${embedding.rag.hnsw-m:6}")
     private int hnswM;
 
     @PostConstruct
     public void initVectorIndex() {
-        // 创建索引：根据 provider 动态计算维度 (Ollama bge-m3=1024, OpenAI=1536)
-        final int dimension = "ollama".equals(provider) ? 1024 : 1536;
+        final int dimension = embeddingPort.getDimension();
         final int m = hnswM;
 
         try (var connection = redisConnectionFactory.getConnection()) {
@@ -47,6 +42,7 @@ public class RedisVectorConfig {
                     "source_text".getBytes(), "TEXT".getBytes(),
                     "target_text".getBytes(), "TEXT".getBytes(),
                     "user_id".getBytes(), "TAG".getBytes(),
+                    "translation_mode".getBytes(), "TAG".getBytes(),
                     "embedding".getBytes(), "VECTOR".getBytes(),
                     "HNSW".getBytes(), String.valueOf(m).getBytes(),
                     "TYPE".getBytes(), "FLOAT32".getBytes(),
@@ -57,6 +53,18 @@ public class RedisVectorConfig {
             log.info("Redis 向量索引创建成功: translation_memory_idx (DIM={})", dimension);
         } catch (Exception e) {
             if (isIndexAlreadyExists(e)) {
+                // 索引已存在，尝试添加缺失的 translation_mode 字段
+                try (var conn2 = redisConnectionFactory.getConnection()) {
+                    ((RedisCallback<Object>) con -> con.execute("FT.ALTER",
+                            "translation_memory_idx".getBytes(),
+                            "SCHEMA".getBytes(), "ADD".getBytes(),
+                            "translation_mode".getBytes(), "TAG".getBytes()
+                    )).doInRedis(conn2);
+                    log.info("Redis 向量索引已添加 translation_mode 字段");
+                } catch (Exception alterEx) {
+                    // Index might already have this field, ignore
+                    log.info("Redis translation_mode 字段已存在或添加失败: {}", alterEx.getMessage());
+                }
                 log.info("Redis 向量索引已存在: translation_memory_idx (DIM={}), 跳过创建", dimension);
             } else {
                 log.error("Redis 向量索引创建失败: {}", e.getMessage(), e);

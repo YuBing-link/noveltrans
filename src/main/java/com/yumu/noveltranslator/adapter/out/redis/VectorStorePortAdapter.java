@@ -4,9 +4,16 @@ import com.yumu.noveltranslator.port.out.VectorSearchResult;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -16,36 +23,164 @@ import java.util.*;
 public class VectorStorePortAdapter implements VectorStorePort {
 
     private static final String KEY_PREFIX = "tm:";
+    private static final String INDEX_NAME = "translation_memory_idx";
 
     private final StringRedisTemplate stringRedisTemplate;
+    private final RedisConnectionFactory connectionFactory;
+
+    @Value("${spring.data.redis.host:localhost}")
+    private String redisHost;
+
+    @Value("${spring.data.redis.port:6379}")
+    private int redisPort;
+
+    @Value("${spring.data.redis.password:}")
+    private String redisPassword;
 
     @Override
     public List<VectorSearchResult> vectorSearch(float[] queryVector, Long userId, String targetLang, List<String> allowedModes, int topK) {
         try {
-            String vectorStr = formatVectorForRedis(queryVector);
             String modeFilter = buildModeFilter(allowedModes);
-            String filterQuery = String.format("(@user_id:{%s} @target_lang:{%s} %s)", userId, targetLang, modeFilter);
+            String filterQuery = modeFilter.isEmpty()
+                    ? String.format("(@user_id:{%s} @target_lang:{%s})", userId, targetLang)
+                    : String.format("(@user_id:{%s} @target_lang:{%s} %s)", userId, targetLang, modeFilter);
             String knnQuery = String.format("%s=>[KNN %d @embedding $query_vector AS score]", filterQuery, topK);
+            byte[] queryVectorBytes = floatArrayToBytes(queryVector);
 
-            Object result = stringRedisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>) connection ->
-                    connection.execute("FT.SEARCH",
-                            "translation_memory_idx".getBytes(),
-                            knnQuery.getBytes(),
-                            "PARAMS".getBytes(), "2".getBytes(),
-                            "query_vector".getBytes(), vectorStr.getBytes(),
-                            "RETURN".getBytes(), "4".getBytes(),
-                            "source_text".getBytes(), "target_text".getBytes(), "score".getBytes(), "id".getBytes(),
-                            "SORTBY".getBytes(), "score".getBytes(), "ASC".getBytes(),
-                            "LIMIT".getBytes(), "0".getBytes(), String.valueOf(topK).getBytes(),
-                            "DIALECT".getBytes(), "2".getBytes()
-                    )
-            );
+            List<Object> args = new ArrayList<>();
+            args.add(INDEX_NAME);
+            args.add(knnQuery);
+            args.add("PARAMS");
+            args.add("2");
+            args.add("query_vector");
+            args.add(queryVectorBytes);
+            args.add("RETURN");
+            args.add("4");
+            args.add("source_text");
+            args.add("target_text");
+            args.add("score");
+            args.add("id");
+            args.add("SORTBY");
+            args.add("score");
+            args.add("ASC");
+            args.add("LIMIT");
+            args.add("0");
+            args.add(String.valueOf(topK));
+            args.add("DIALECT");
+            args.add("2");
 
-            return parseSearchResult(result);
+            List<Object> response = executeRawCommand("FT.SEARCH", args);
+            return parseSearchResult(response);
         } catch (Exception e) {
-            log.warn("Redis vector search failed: {}", e.getMessage());
+            log.warn("Redis vector search failed: {}", e.getMessage(), e);
             return List.of();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> executeRawCommand(String command, List<Object> args) throws Exception {
+        try (Socket socket = new Socket(redisHost, redisPort)) {
+            socket.setSoTimeout(5000);
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+            ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+
+            // AUTH if password set
+            if (redisPassword != null && !redisPassword.isEmpty()) {
+                writeRespCommand(outStream, "AUTH", List.of(redisPassword));
+                outStream.writeTo(socket.getOutputStream());
+                outStream.reset();
+                socket.getOutputStream().flush();
+                readRespResponse(in);
+            }
+
+            // Build and send RESP command
+            writeRespCommand(outStream, command, args);
+            outStream.writeTo(socket.getOutputStream());
+            socket.getOutputStream().flush();
+
+            // Read and parse response
+            return (List<Object>) readRespResponse(in);
+        }
+    }
+
+    private void writeRespCommand(ByteArrayOutputStream out, String command, List<Object> args) {
+        int argc = 1 + args.size();
+        writeLine(out, "*" + argc);
+        writeBulkBytes(out, command.getBytes(StandardCharsets.UTF_8));
+        for (Object arg : args) {
+            byte[] data = (arg instanceof byte[] b) ? b : arg.toString().getBytes(StandardCharsets.UTF_8);
+            writeBulkBytes(out, data);
+        }
+    }
+
+    private void writeLine(ByteArrayOutputStream out, String line) {
+        try {
+            out.write(line.getBytes(StandardCharsets.UTF_8));
+            out.write('\r');
+            out.write('\n');
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void writeBulkBytes(ByteArrayOutputStream out, byte[] data) {
+        try {
+            writeLine(out, "$" + data.length);
+            out.write(data);
+            out.write('\r');
+            out.write('\n');
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private Object readRespResponse(DataInputStream in) throws Exception {
+        int type = in.readByte();
+        switch (type) {
+            case '+': // Simple String
+                return readLine(in);
+            case '-': // Error
+                throw new RuntimeException("Redis error: " + readLine(in));
+            case ':': // Integer
+                return Long.parseLong(readLine(in));
+            case '$': // Bulk String
+                int len = Integer.parseInt(readLine(in));
+                if (len < 0) return null;
+                byte[] data = new byte[len];
+                in.readFully(data);
+                in.readByte(); // \r
+                in.readByte(); // \n
+                return data;
+            case '*': // Array
+                int count = Integer.parseInt(readLine(in));
+                if (count < 0) return null;
+                List<Object> list = new ArrayList<>(count);
+                for (int i = 0; i < count; i++) {
+                    list.add(readRespResponse(in));
+                }
+                return list;
+            case '%': // Map (Redis 6.2+)
+                int mapLen = Integer.parseInt(readLine(in));
+                Map<Object, Object> map = new LinkedHashMap<>();
+                for (int i = 0; i < mapLen; i++) {
+                    Object key = readRespResponse(in);
+                    Object val = readRespResponse(in);
+                    map.put(key, val);
+                }
+                return map;
+            default:
+                throw new RuntimeException("Unknown RESP type: " + (char) type);
+        }
+    }
+
+    private String readLine(DataInputStream in) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        int b;
+        while ((b = in.readByte()) != '\r') {
+            sb.append((char) b);
+        }
+        in.readByte(); // \n
+        return sb.toString();
     }
 
     @Override
@@ -59,12 +194,18 @@ public class VectorStorePortAdapter implements VectorStorePort {
             fields.put("source_lang", sourceLang);
             fields.put("target_lang", targetLang);
             fields.put("user_id", userId.toString());
-            fields.put("embedding", formatVectorForRedis(embedding));
             if (translationMode != null) {
                 fields.put("translation_mode", translationMode);
             }
             for (Map.Entry<String, String> entry : fields.entrySet()) {
                 stringRedisTemplate.opsForHash().put(key, entry.getKey(), entry.getValue());
+            }
+            // Embedding must be stored as binary FLOAT32 bytes for RediSearch HNSW
+            byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
+            byte[] fieldBytes = "embedding".getBytes(StandardCharsets.UTF_8);
+            byte[] valueBytes = floatArrayToBytes(embedding);
+            try (var conn = connectionFactory.getConnection()) {
+                conn.execute("HSET", keyBytes, fieldBytes, valueBytes);
             }
         } catch (Exception e) {
             log.warn("Redis vector store failed: {}", e.getMessage());
@@ -80,23 +221,21 @@ public class VectorStorePortAdapter implements VectorStorePort {
         }
     }
 
-    private String formatVectorForRedis(float[] vector) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(vector.length).append(",");
-        for (int i = 0; i < vector.length; i++) {
-            // 手动截断 6 位小数，避免 String.format 开销
-            long rounded = Math.round(vector[i] * 1_000_000L);
-            sb.append(rounded / 1_000_000L).append('.');
-            long frac = Math.abs(rounded % 1_000_000L);
-            sb.append(String.format("%06d", frac));
-            if (i < vector.length - 1) sb.append(",");
+    /**
+     * Encode float array to binary FLOAT32 bytes (little-endian) for RediSearch HNSW storage.
+     */
+    private byte[] floatArrayToBytes(float[] vector) {
+        ByteBuffer buffer = ByteBuffer.allocate(vector.length * 4);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        for (float f : vector) {
+            buffer.putFloat(f);
         }
-        return sb.toString();
+        return buffer.array();
     }
 
     private String buildModeFilter(List<String> allowedModes) {
         if (allowedModes == null || allowedModes.isEmpty()) {
-            return "(@translation_mode:{*})";
+            return "";
         }
         String modes = String.join("|", allowedModes);
         return String.format("(@translation_mode:{%s})", modes);

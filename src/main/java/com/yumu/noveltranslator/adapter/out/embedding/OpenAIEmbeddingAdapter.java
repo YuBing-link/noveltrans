@@ -27,7 +27,7 @@ public class OpenAIEmbeddingAdapter implements EmbeddingPort {
     @Value("${embedding.openai.api-key:}")
     private String openaiApiKey;
 
-    @Value("${embedding.openai.base-url:https://api.openai.com}")
+    @Value("${embedding.openai.base-url:https://api.openai.com/v1}")
     private String openaiBaseUrl;
 
     @Value("${embedding.openai.model:text-embedding-3-small}")
@@ -75,7 +75,7 @@ public class OpenAIEmbeddingAdapter implements EmbeddingPort {
         requestBody.put("input", text);
 
         Map<String, Object> response = webClient.post()
-                .uri(openaiBaseUrl + "/v1/embeddings")
+                .uri(openaiBaseUrl + "/embeddings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Authorization", "Bearer " + openaiApiKey)
                 .bodyValue(requestBody)
