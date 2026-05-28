@@ -6,7 +6,9 @@ import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateResponse;
 import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.port.dto.translation.WebpageTranslateRequest;
 import com.yumu.noveltranslator.port.in.TranslatePort;
+import com.yumu.noveltranslator.port.in.TextStreamEventConsumer;
 import com.yumu.noveltranslator.util.SecurityUtil;
+import com.yumu.noveltranslator.util.SseEmitterUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +56,10 @@ public class PluginTranslateController {
     @PostMapping(value = "/webpage", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter translateWebpage(@RequestBody @Valid WebpageTranslateRequest req) {
         Long userId = SecurityUtil.getCurrentUserId().orElse(null);
-        return translatePort.webpageTranslateStream(userId, req);
+        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L);
+        TextStreamEventConsumer consumer = wrapEmitter(emitter);
+        translatePort.webpageTranslateStream(userId, req, consumer);
+        return emitter;
     }
 
     /**
@@ -66,7 +71,23 @@ public class PluginTranslateController {
         Long userId = SecurityUtil.getCurrentUserId().orElse(null);
         log.info("[STREAM-TRACE] Controller entry: /v1/translate/text/stream, userId={}, engine={}, targetLang={}, mode={}, textLen={}",
                 userId, req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);
-        return translatePort.streamTextTranslate(userId, req);
+        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L);
+        TextStreamEventConsumer consumer = wrapEmitter(emitter);
+        translatePort.streamTextTranslate(userId, req, consumer);
+        return emitter;
+    }
+
+    private TextStreamEventConsumer wrapEmitter(SseEmitter emitter) {
+        return event -> {
+            if (event.isDone()) {
+                SseEmitterUtil.sendDone(emitter);
+                SseEmitterUtil.complete(emitter);
+            } else if (event.isError()) {
+                SseEmitterUtil.sendError(emitter, event.getText());
+            } else {
+                SseEmitterUtil.sendData(emitter, event.getText());
+            }
+        };
     }
 
     /**

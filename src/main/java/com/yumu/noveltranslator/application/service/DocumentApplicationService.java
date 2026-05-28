@@ -13,8 +13,8 @@ import com.yumu.noveltranslator.domain.service.TranslationStateMachine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,33 +44,28 @@ public class DocumentApplicationService implements com.yumu.noveltranslator.port
     /**
      * 上传文档
      */
-    public Document uploadDocument(Long userId, MultipartFile file, DocumentTranslationRequest request) throws IOException {
-        // 创建上传目录
+    public Document uploadDocument(Long userId, byte[] fileContent, String fileName, DocumentTranslationRequest request) throws IOException {
         Path uploadPath = Paths.get(uploadDir);
         if (!Files.exists(uploadPath)) {
             Files.createDirectories(uploadPath);
         }
 
-        // 生成唯一文件名
-        String originalFilename = file.getOriginalFilename();
-        String extension = originalFilename != null && originalFilename.contains(".")
-                ? originalFilename.substring(originalFilename.lastIndexOf("."))
+        String extension = fileName != null && fileName.contains(".")
+                ? fileName.substring(fileName.lastIndexOf("."))
                 : "";
         String filename = UUID.randomUUID().toString() + extension;
         Path filePath = uploadPath.resolve(filename);
 
-        // 保存文件
-        Files.copy(file.getInputStream(), filePath);
+        Files.write(filePath, fileContent);
 
-        // 创建文档记录
         Document doc = new Document();
         doc.setUserId(userId);
-        doc.setName(originalFilename);
+        doc.setName(fileName);
         doc.setPath(filePath.toString());
         doc.setSourceLang(request.getSourceLang());
         doc.setTargetLang(request.getTargetLang());
         doc.setFileType(extension.replace(".", "").toLowerCase());
-        doc.setFileSize(file.getSize());
+        doc.setFileSize((long) fileContent.length);
         doc.setStatus(TranslationStatus.PENDING.getValue());
         doc.setMode(request.getMode());
         doc.setCreateTime(LocalDateTime.now());
@@ -169,9 +164,9 @@ public class DocumentApplicationService implements com.yumu.noveltranslator.port
      * 团队模式：添加章节到协作项目或创建新项目；fast/expert 模式：创建翻译任务
      */
     public DocumentTranslationResponse uploadAndStartTranslation(
-            Long userId, MultipartFile file, DocumentTranslationRequest request) throws IOException {
+            Long userId, byte[] fileContent, String fileName, DocumentTranslationRequest request) throws IOException {
 
-        Document doc = uploadDocument(userId, file, request);
+        Document doc = uploadDocument(userId, fileContent, fileName, request);
 
         if ("team".equals(request.getMode())) {
             // 团队模式：文档已通过 documentId 关联（uploadDocument 创建了 doc，但没传 projectId）

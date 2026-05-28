@@ -5,12 +5,15 @@ import com.yumu.noveltranslator.port.dto.entity.TaskStatusResponse;
 import com.yumu.noveltranslator.port.dto.translation.TranslationResultResponse;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.port.dto.translation.RagTranslationRequest;
+import com.yumu.noveltranslator.port.dto.translation.StreamTranslateEvent;
 import com.yumu.noveltranslator.domain.model.Document;
 import com.yumu.noveltranslator.domain.model.TranslationTask;
 import com.yumu.noveltranslator.enums.ErrorCodeEnum;
 import com.yumu.noveltranslator.port.in.RagTranslationPort;
+import com.yumu.noveltranslator.port.in.StreamTranslateEventConsumer;
 import com.yumu.noveltranslator.port.in.TranslationTaskPort;
 import com.yumu.noveltranslator.util.SecurityUtil;
+import com.yumu.noveltranslator.util.SseEmitterUtil;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -137,7 +140,16 @@ public class SharedTranslateController {
             @RequestParam(value = "sourceLang", defaultValue = "auto") String sourceLang,
             @RequestParam(value = "targetLang", defaultValue = "zh") String targetLang,
             @RequestParam(value = "mode", defaultValue = "fast") String mode) {
-        return translationTaskPort.streamTranslateDocument(file, sourceLang, targetLang, mode);
+        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);
+        StreamTranslateEventConsumer consumer = wrapEmitter(emitter);
+        try {
+            byte[] content = file.getBytes();
+            translationTaskPort.streamTranslateDocument(content, file.getOriginalFilename(), sourceLang, targetLang, mode, consumer);
+        } catch (IOException e) {
+            SseEmitterUtil.sendError(emitter, "文件读取失败");
+            SseEmitterUtil.complete(emitter);
+        }
+        return emitter;
     }
 
     /**
@@ -149,7 +161,26 @@ public class SharedTranslateController {
             @PathVariable Long docId,
             @RequestParam(value = "targetLang", defaultValue = "zh") String targetLang,
             @RequestParam(value = "mode", defaultValue = "fast") String mode) {
-        return translationTaskPort.streamTranslateDocumentById(docId, targetLang, mode);
+        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);
+        StreamTranslateEventConsumer consumer = wrapEmitter(emitter);
+        translationTaskPort.streamTranslateDocumentById(docId, targetLang, mode, consumer);
+        return emitter;
+    }
+
+    /**
+     * 将 SseEmitter 包装为 port 层回调，SSE 管理权保留在 adapter 层
+     */
+    private StreamTranslateEventConsumer wrapEmitter(SseEmitter emitter) {
+        return event -> {
+            if (event.isDone()) {
+                SseEmitterUtil.sendDone(emitter);
+                SseEmitterUtil.complete(emitter);
+            } else if (event.isError()) {
+                SseEmitterUtil.sendError(emitter, event.getTranslation());
+            } else {
+                SseEmitterUtil.sendData(emitter, event.getTranslation());
+            }
+        };
     }
 
     /**

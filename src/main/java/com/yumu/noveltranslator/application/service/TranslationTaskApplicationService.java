@@ -19,12 +19,10 @@ import com.yumu.noveltranslator.domain.service.TranslationPipeline;
 import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yumu.noveltranslator.util.ExternalResponseUtil;
-import com.yumu.noveltranslator.util.SseEmitterUtil;
+import com.yumu.noveltranslator.port.in.StreamTranslateEventConsumer;
+import com.yumu.noveltranslator.port.dto.translation.StreamTranslateEvent;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.scheduling.annotation.Scheduled;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -609,49 +607,41 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
     }
 
     /**
-     * SSE 流式文档翻译（基于已上传文档）
-     * 读取磁盘文件 → 分段翻译 → 逐段推送 SSE → 更新文档状态
+     * 流式文档翻译（基于已上传文档）
+     * 读取磁盘文件 → 分段翻译 → 通过 eventConsumer 推送事件
      */
-    public SseEmitter streamTranslateDocumentById(Long docId, String targetLang, String mode) {
-        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);
-        ObjectMapper mapper = new ObjectMapper();
-
+    public void streamTranslateDocumentById(Long docId, String targetLang, String mode, StreamTranslateEventConsumer eventConsumer) {
         Thread.startVirtualThread(() -> {
             try {
                 Document doc = documentPort.findById(docId).orElse(null);
                 if (doc == null) {
-                    SseEmitterUtil.sendError(emitter, "文档不存在");
-                    SseEmitterUtil.complete(emitter);
+                    eventConsumer.accept(StreamTranslateEvent.error("文档不存在"));
                     return;
                 }
 
-                // 创建翻译任务
                 TranslationTask task = createDocumentTask(doc.getUserId(), doc);
                 doc.setStatus(TranslationStatus.PROCESSING.getValue());
                 doc.setUpdateTime(LocalDateTime.now());
                 documentPort.update(doc);
                 updateTaskProgress(task, TranslationStatus.PROCESSING, 10, null);
 
-                // 读取文件内容
                 String content = readDocumentContent(doc.getPath(), doc.getFileType());
                 if (content == null || content.trim().isEmpty()) {
                     updateTaskProgress(task, TranslationStatus.FAILED, 0, "文件内容为空");
-                    SseEmitterUtil.sendError(emitter, "文件内容为空");
-                    SseEmitterUtil.complete(emitter);
+                    eventConsumer.accept(StreamTranslateEvent.error("文件内容为空"));
+                    eventConsumer.accept(StreamTranslateEvent.done());
                     return;
                 }
 
-                // 按段落分割翻译
                 String[] paragraphs = content.split("(?<=\n)");
                 int total = paragraphs.length;
                 StringBuilder translatedContent = new StringBuilder();
 
                 for (int i = 0; i < total; i++) {
-                    // 检查任务是否已被取消
                     TranslationTask currentTask = translationPort.findTaskByTaskId(task.getTaskId()).orElse(null);
                     if (currentTask != null && TranslationStatus.FAILED.getValue().equals(currentTask.getStatus())) {
                         log.info("翻译任务已被取消，提前退出 [taskId={}]", task.getTaskId());
-                        SseEmitterUtil.complete(emitter);
+                        eventConsumer.accept(StreamTranslateEvent.done());
                         return;
                     }
 
@@ -663,61 +653,29 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
 
                     String textId = "seg_" + i;
                     try {
-                        String result;
-                        if ("expert".equals(mode)) {
-                            TranslationPipeline pipeline = new TranslationPipeline(
-                                    cachePort, ragTranslationService, entityConsistencyService,
-                                    translationClientPort, postProcessingService, null, null);
-                            result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
-                        } else {
-                            result = translationClientPort.translate(
-                                    paragraph, targetLang, "google", false, true, List.of(), null, null);
-                        }
-                        String translation = ExternalResponseUtil.extractDataField(result);
+                        String translation = translateParagraph(paragraph, targetLang, mode);
                         if (translation == null || translation.isEmpty()) {
                             log.warn("翻译结果为空，保留原文");
                             translation = paragraph;
                         }
-                        // 补回原文中的换行符以保持格式对齐
-                        if (!translation.endsWith("\n") && !translation.endsWith("\r")) {
-                            if (paragraph.endsWith("\r\n")) {
-                                translation += "\r\n";
-                            } else if (paragraph.endsWith("\n")) {
-                                translation += "\n";
-                            } else if (paragraph.endsWith("\r")) {
-                                translation += "\r";
-                            }
-                        }
+                        translation = restoreTrailingNewline(translation, paragraph);
                         translatedContent.append(translation);
 
-                        Map<String, Object> eventData = new HashMap<>();
-                        eventData.put("textId", textId);
-                        eventData.put("original", paragraph);
-                        eventData.put("translation", translation);
-                        eventData.put("progress", (int) (((i + 1) * 100.0) / total));
-
-                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(eventData));
+                        eventConsumer.accept(StreamTranslateEvent.chunk(textId, paragraph, translation, (int) (((i + 1) * 100.0) / total)));
                     } catch (Exception e) {
                         log.warn("段落翻译失败 [{}]: {}", i, e.getMessage());
                         translatedContent.append(paragraph);
-                        Map<String, Object> errorData = new HashMap<>();
-                        errorData.put("textId", textId);
-                        errorData.put("original", paragraph);
-                        errorData.put("translation", paragraph);
-                        errorData.put("error", true);
-                        errorData.put("progress", (int) (((i + 1) * 100.0) / total));
-                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(errorData));
+                        eventConsumer.accept(StreamTranslateEvent.chunk(textId, paragraph, paragraph, (int) (((i + 1) * 100.0) / total)));
+                        // error flag handled in event data, but here we just continue
                     }
 
                     int progress = 20 + (int) (((i + 1) * 80.0) / total);
                     updateTaskProgress(task, TranslationStatus.PROCESSING, progress, null);
                 }
 
-                // 保存翻译结果到文件
                 String translatedPath = ExternalResponseUtil.buildTranslatedPath(doc.getPath());
                 Files.write(Paths.get(translatedPath), translatedContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-                // 更新文档和任务状态
                 doc.setStatus(TranslationStatus.COMPLETED.getValue());
                 doc.setCompletedTime(LocalDateTime.now());
                 doc.setUpdateTime(LocalDateTime.now());
@@ -726,125 +684,108 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
                 updateTaskProgress(task, TranslationStatus.COMPLETED, 100, null);
                 saveTranslationHistory(task, content, translatedContent.toString());
 
-                SseEmitterUtil.sendDone(emitter);
-                SseEmitterUtil.complete(emitter);
+                eventConsumer.accept(StreamTranslateEvent.done());
 
             } catch (Exception e) {
                 log.error("流式文档翻译失败: {}", e.getMessage(), e);
-                SseEmitterUtil.sendError(emitter, "翻译失败：" + e.getMessage());
-                SseEmitterUtil.complete(emitter);
+                try {
+                    eventConsumer.accept(StreamTranslateEvent.error("翻译失败：" + e.getMessage()));
+                    eventConsumer.accept(StreamTranslateEvent.done());
+                } catch (IOException ex) {
+                    log.error("发送错误事件失败", ex);
+                }
             }
         });
-
-        return emitter;
     }
 
     /**
-     * SSE 流式文档翻译
-     * 读取文件 → 分段翻译 → 逐段推送 SSE
+     * 流式文档翻译（基于上传文件）
+     * 读取文件 → 分段翻译 → 通过 eventConsumer 推送事件
      */
-    public SseEmitter streamTranslateDocument(MultipartFile file, String sourceLang, String targetLang, String mode) {
-        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);
-        ObjectMapper mapper = new ObjectMapper();
-
+    public void streamTranslateDocument(byte[] fileContent, String fileName, String sourceLang, String targetLang, String mode, StreamTranslateEventConsumer eventConsumer) {
         Thread.startVirtualThread(() -> {
             try {
-                String fileName = file.getOriginalFilename();
                 String fileType = fileName != null ? fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase() : "";
-                String content = readMultipartFileContent(file, fileType);
+                String content = new String(fileContent, java.nio.charset.StandardCharsets.UTF_8);
+                if (!"txt".equals(fileType)) {
+                    eventConsumer.accept(StreamTranslateEvent.error("暂不支持 " + fileType.toUpperCase() + " 格式，仅支持 TXT 文件"));
+                    eventConsumer.accept(StreamTranslateEvent.done());
+                    return;
+                }
                 if (content == null || content.trim().isEmpty()) {
-                    SseEmitterUtil.sendError(emitter, "文件内容为空");
-                    SseEmitterUtil.complete(emitter);
+                    eventConsumer.accept(StreamTranslateEvent.error("文件内容为空"));
+                    eventConsumer.accept(StreamTranslateEvent.done());
                     return;
                 }
 
                 String[] paragraphs = content.split("(?<=\n)");
                 int total = paragraphs.length;
-                int translated = 0;
 
                 for (int i = 0; i < total; i++) {
                     String paragraph = paragraphs[i];
                     if (paragraph.trim().isEmpty()) {
-                        translated++;
                         continue;
                     }
 
                     String textId = "seg_" + i;
                     try {
-                        String result;
-                        if ("expert".equals(mode)) {
-                            TranslationPipeline pipeline = new TranslationPipeline(
-                                    cachePort, ragTranslationService, entityConsistencyService,
-                                    translationClientPort, postProcessingService, null, null);
-                            result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
-                        } else {
-                            result = translationClientPort.translate(
-                                    paragraph, targetLang, "google", false, true, List.of(), null, null);
-                        }
-
-                        // 提取实际翻译内容
-                        String translation = ExternalResponseUtil.extractDataField(result);
+                        String translation = translateParagraph(paragraph, targetLang, mode);
                         if (translation == null || translation.isEmpty()) {
                             log.warn("翻译结果为空，保留原文");
                             translation = paragraph;
                         }
-                        // 补回原文中的换行符以保持格式对齐
-                        if (!translation.endsWith("\n") && !translation.endsWith("\r")) {
-                            if (paragraph.endsWith("\r\n")) {
-                                translation += "\r\n";
-                            } else if (paragraph.endsWith("\n")) {
-                                translation += "\n";
-                            } else if (paragraph.endsWith("\r")) {
-                                translation += "\r";
-                            }
-                        }
+                        translation = restoreTrailingNewline(translation, paragraph);
 
-                        Map<String, Object> eventData = new HashMap<>();
-                        eventData.put("textId", textId);
-                        eventData.put("original", paragraph);
-                        eventData.put("translation", translation);
-                        eventData.put("progress", (int) (((i + 1) * 100.0) / total));
-
-                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(eventData));
+                        eventConsumer.accept(StreamTranslateEvent.chunk(textId, paragraph, translation, (int) (((i + 1) * 100.0) / total)));
                     } catch (Exception e) {
                         log.warn("段落翻译失败 [{}]: {}", i, e.getMessage());
-                        Map<String, Object> errorData = new HashMap<>();
-                        errorData.put("textId", textId);
-                        errorData.put("original", paragraph);
-                        errorData.put("translation", paragraph);
-                        errorData.put("error", true);
-                        errorData.put("progress", (int) (((i + 1) * 100.0) / total));
-                        SseEmitterUtil.sendData(emitter, mapper.writeValueAsString(errorData));
+                        eventConsumer.accept(StreamTranslateEvent.chunk(textId, paragraph, paragraph, (int) (((i + 1) * 100.0) / total)));
                     }
-
-                    translated++;
                 }
 
-                SseEmitterUtil.sendDone(emitter);
-                SseEmitterUtil.complete(emitter);
+                eventConsumer.accept(StreamTranslateEvent.done());
 
             } catch (Exception e) {
                 log.error("流式文档翻译失败: {}", e.getMessage(), e);
-                SseEmitterUtil.sendError(emitter, "翻译失败：" + e.getMessage());
-                SseEmitterUtil.complete(emitter);
+                try {
+                    eventConsumer.accept(StreamTranslateEvent.error("翻译失败：" + e.getMessage()));
+                    eventConsumer.accept(StreamTranslateEvent.done());
+                } catch (IOException ex) {
+                    log.error("发送错误事件失败", ex);
+                }
             }
         });
-
-        return emitter;
     }
 
     /**
-     * 读取 MultipartFile 内容
+     * 翻译单个段落（两个流式方法共用）
      */
-    private String readMultipartFileContent(MultipartFile file, String fileType) throws IOException {
-        byte[] bytes = file.getBytes();
-        String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-
-        if ("txt".equals(fileType)) {
-            return content;
+    private String translateParagraph(String paragraph, String targetLang, String mode) throws Exception {
+        String result;
+        if ("expert".equals(mode)) {
+            TranslationPipeline pipeline = new TranslationPipeline(
+                    cachePort, ragTranslationService, entityConsistencyService,
+                    translationClientPort, postProcessingService, null, null);
+            result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
         } else {
-            throw new IOException("暂不支持 " + fileType.toUpperCase() + " 格式，仅支持 TXT 文件");
+            result = translationClientPort.translate(
+                    paragraph, targetLang, "google", false, true, List.of(), null, null);
         }
+        String translation = ExternalResponseUtil.extractDataField(result);
+        return translation != null ? translation : paragraph;
+    }
+
+    /**
+     * 恢复原文中的末尾换行符到译文中
+     */
+    private static String restoreTrailingNewline(String translation, String original) {
+        if (!translation.endsWith("\n") && !translation.endsWith("\r")) {
+            String trailing = getTrailingNewline(original);
+            if (!trailing.isEmpty()) {
+                translation += trailing;
+            }
+        }
+        return translation;
     }
 
     /**

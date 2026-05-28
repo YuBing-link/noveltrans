@@ -148,7 +148,7 @@ public class WebDocumentController {
 
             // 团队模式：指定已有项目 or 自动创建新项目
             if ("team".equals(mode)) {
-                Document doc = documentPort.uploadDocument(userId, file, request);
+                Document doc = documentPort.uploadDocument(userId, file.getBytes(), file.getOriginalFilename(), request);
 
                 if (projectId != null) {
                     int chapterCount = collabPort.addChaptersToProject(userId, projectId, doc);
@@ -182,7 +182,7 @@ public class WebDocumentController {
             }
 
             // fast/expert 模式：上传文档并自动启动翻译
-            DocumentTranslationResponse response = documentPort.uploadAndStartTranslation(userId, file, request);
+            DocumentTranslationResponse response = documentPort.uploadAndStartTranslation(userId, file.getBytes(), file.getOriginalFilename(), request);
             return Result.ok(response);
 
         } catch (IOException e) {

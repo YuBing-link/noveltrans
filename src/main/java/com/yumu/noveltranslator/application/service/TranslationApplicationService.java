@@ -18,14 +18,15 @@ import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.port.out.TranslationClientPort;
 import com.yumu.noveltranslator.port.out.TeamTranslationPort;
 import com.yumu.noveltranslator.util.CacheKeyUtil;
-import com.yumu.noveltranslator.util.SseEmitterUtil;
 import com.yumu.noveltranslator.util.TextCleaningUtil;
 import com.yumu.noveltranslator.util.TextSegmentationUtil;
+import com.yumu.noveltranslator.port.in.TextStreamEventConsumer;
+import com.yumu.noveltranslator.port.dto.translation.TextStreamEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -313,25 +314,21 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
     /**
      * 网页翻译流式版本 - 并发翻译（虚拟线程 + 信号量限流）
      */
-    public SseEmitter webpageTranslateStream(Long userId, WebpageTranslateRequest req) {
-        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L); // 5 分钟超时
-
-        // 计算总字符数
+    public void webpageTranslateStream(Long userId, WebpageTranslateRequest req, TextStreamEventConsumer consumer) {
         var items = req.getTextRegistry();
         int totalChars = items.stream()
                 .mapToInt(item -> item.getOriginal() != null ? item.getOriginal().length() : 0)
                 .sum();
 
-        // 检查字符配额
         String quotaMode = (req.getFastMode() != null && !req.getFastMode()) ? "expert" : "fast";
 
         if (userId != null) {
             String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
                 if (!quotaService.tryConsumeChars(userId, userLevel, totalChars, quotaMode)) {
-                    SseEmitterUtil.sendError(emitter, "字符配额不足，请升级档位或等待下月重置");
-                    SseEmitterUtil.complete(emitter);
-                    return emitter;
+                    try { consumer.accept(TextStreamEvent.error("字符配额不足，请升级档位或等待下月重置")); } catch (IOException ignored) {}
+                    try { consumer.accept(TextStreamEvent.done()); } catch (IOException ignored) {}
+                    return;
                 }
             }
         }
@@ -348,15 +345,11 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
                         cachePort, ragTranslationService, entityConsistencyService,
                         translationClientPort, postProcessingService, userId, null);
 
-                log.info("[SSE流式翻译] Pipeline 初始化完成");
-
-                // 限制并发数，避免超过 DeepSeek 限流（10 req/s）和用户级别并发限制
                 int maxConcurrency = 5;
                 var semaphore = new java.util.concurrent.Semaphore(maxConcurrency);
                 var barrier = new java.util.concurrent.CountDownLatch(totalCount);
 
                 for (WebpageTranslateRequest.TextItem item : items) {
-                    // 用 final 局部变量捕获当前迭代的 item，防止 lambda 闭包在多线程环境下共享循环变量
                     final WebpageTranslateRequest.TextItem currentItem = item;
                     Thread.startVirtualThread(() -> {
                         try {
@@ -365,7 +358,6 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
                             String original = currentItem.getOriginal() == null ? "" : currentItem.getOriginal();
                             String cleanText = TextCleaningUtil.cleanText(original);
 
-                            // fastMode=true（默认）使用 MTranServer，fastMode=false（专家模式）使用 DeepSeek
                             boolean fastMode = req.getFastMode() == null || req.getFastMode();
                             String extracted = pipeline.executeFast(cleanText, target, mode, !fastMode);
 
@@ -374,21 +366,20 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
                                 extracted = original;
                             }
 
-                            Map<String, Object> eventData = new HashMap<>(3);
-                            // 净化翻译结果，防止恶意 HTML/脚本注入（XSS 防护）
                             String sanitized = TextCleaningUtil.sanitizeHtml(extracted);
+                            Map<String, Object> eventData = new HashMap<>(3);
                             eventData.put("textId", id);
                             eventData.put("original", original);
                             eventData.put("translation", sanitized);
-                            SseEmitterUtil.sendData(emitter, JSON.toJSONString(eventData));
+                            consumer.accept(TextStreamEvent.chunk(JSON.toJSONString(eventData)));
                         } catch (Exception e) {
                             log.error("翻译失败 - ID: {}, 错误: {}", currentItem.getId(), e.getMessage());
+                            String orig = currentItem.getOriginal() == null ? "" : currentItem.getOriginal();
                             Map<String, Object> errorData = new HashMap<>(3);
                             errorData.put("textId", currentItem.getId());
-                            String orig = currentItem.getOriginal() == null ? "" : currentItem.getOriginal();
                             errorData.put("original", orig);
                             errorData.put("translation", TextCleaningUtil.sanitizeHtml(orig));
-                            SseEmitterUtil.sendData(emitter, JSON.toJSONString(errorData));
+                            try { consumer.accept(TextStreamEvent.chunk(JSON.toJSONString(errorData))); } catch (IOException ioe) { log.error("发送事件失败", ioe); }
                         } finally {
                             semaphore.release();
                             barrier.countDown();
@@ -396,60 +387,47 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
                     });
                 }
 
-                // 心跳线程：每 30 秒发送一次心跳，使用注册表检测 emitter 是否仍然活跃
-                String emitterId = SseEmitterUtil.registerEmitter(emitter);
                 Thread.startVirtualThread(() -> {
-                    while (SseEmitterUtil.isEmitterActive(emitterId)) {
-                        try {
-                            Thread.sleep(30_000);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            break;
+                    try {
+                        while (!barrier.await(1, java.util.concurrent.TimeUnit.SECONDS)) {
+                            consumer.accept(TextStreamEvent.chunk("")); // heartbeat placeholder
                         }
-                        SseEmitterUtil.sendHeartbeat(emitter);
-                    }
+                    } catch (Exception ignored) {}
                 });
 
-                log.info("[SSE流式翻译] 所有翻译线程已启动，等待完成 ({} 个文本)", totalCount);
-
-                // 等待所有翻译完成
                 barrier.await();
 
-                log.info("[SSE流式翻译] 所有翻译已完成，发送 [DONE] 信号");
-
-                SseEmitterUtil.sendDone(emitter);
-                SseEmitterUtil.complete(emitter);
+                consumer.accept(TextStreamEvent.done());
 
             } catch (Exception e) {
-                // 翻译失败，触发心跳停止
                 log.error("网页翻译失败：{}", e.getMessage(), e);
                 if (userId != null) {
                     quotaService.refundChars(userId, totalChars, quotaMode);
                 }
-                SseEmitterUtil.sendError(emitter, "翻译失败：服务器内部错误");
-                SseEmitterUtil.complete(emitter);
+                try {
+                    consumer.accept(TextStreamEvent.error("翻译失败：服务器内部错误"));
+                    consumer.accept(TextStreamEvent.done());
+                } catch (IOException ex) {
+                    log.error("发送错误事件失败", ex);
+                }
             }
         });
-
-        return emitter;
     }
 
     /**
-     * 文本流式翻译（SSE）— 适用于长文本的单段流式输出
-     * 按段落分段，逐段 SSE 输出
+     * 文本流式翻译 — 适用于长文本的单段流式输出
+     * 按段落分段，逐段输出
      */
-    public SseEmitter streamTextTranslate(Long userId, SelectionTranslationRequest req) {
+    public void streamTextTranslate(Long userId, SelectionTranslationRequest req, TextStreamEventConsumer consumer) {
         log.info("[STREAM-TRACE] Service entry: userId={}, engine={}, target={}, mode={}, textLen={}",
                 userId, req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);
-
-        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L);
 
         String text = req.getText();
         if (text == null || text.trim().isEmpty()) {
             log.info("[STREAM-TRACE] Text empty, returning error");
-            SseEmitterUtil.sendError(emitter, "文本不能为空");
-            SseEmitterUtil.complete(emitter);
-            return emitter;
+            try { consumer.accept(TextStreamEvent.error("文本不能为空")); } catch (IOException ignored) {}
+            try { consumer.accept(TextStreamEvent.done()); } catch (IOException ignored) {}
+            return;
         }
 
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
@@ -457,50 +435,35 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         String modeString = req.getMode() != null ? req.getMode() : "fast";
         log.info("[STREAM-TRACE] Normalized: mode={}, target={}", mode.getName(), target);
 
-        // 检查字符配额（从 SecurityContext 获取 userLevel）
         if (userId != null) {
             String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
                 if (!quotaService.tryConsumeChars(userId, userLevel, text.length(), modeString)) {
-                    SseEmitterUtil.sendError(emitter, "字符配额不足，请升级档位或等待下月重置");
-                    SseEmitterUtil.complete(emitter);
-                    return emitter;
+                    try { consumer.accept(TextStreamEvent.error("字符配额不足，请升级档位或等待下月重置")); } catch (IOException ignored) {}
+                    try { consumer.accept(TextStreamEvent.done()); } catch (IOException ignored) {}
+                    return;
                 }
             }
         }
 
         Thread.startVirtualThread(() -> {
             try {
-                List<String> segments = TextSegmentationUtil.segmentByTextEngine(text, mode.getName());
-                if (segments.isEmpty()) {
-                    segments = List.of(text);
-                }
-
                 TranslationPipeline pipeline = new TranslationPipeline(
                         cachePort, ragTranslationService, entityConsistencyService,
                         translationClientPort, postProcessingService, userId, null);
 
-                // 先用 \n\n+ 将全文拆分为逻辑段落
                 String[] logicalParagraphs = text.split("\n\n+");
                 log.info("[STREAM-TRACE] 全文拆分为 {} 个逻辑段落, 总行数 ~{}", logicalParagraphs.length,
                         text.split("\n", -1).length);
 
-                StringBuilder fullResult = new StringBuilder();
-
                 for (int i = 0; i < logicalParagraphs.length; i++) {
-                    SseEmitterUtil.sendHeartbeat(emitter);
-
                     String para = logicalParagraphs[i];
                     if (para.isBlank()) {
-                        fullResult.append("\n\n");
                         continue;
                     }
 
-                    // 段落内按 \n 逐行翻译，保持原文单行换行结构
                     String[] lines = para.split("\n", -1);
                     StringBuilder paraResult = new StringBuilder();
-
-                    log.info("[流式翻译] 段落包含 {} 行", lines.length);
 
                     for (int j = 0; j < lines.length; j++) {
                         String line = lines[j];
@@ -529,23 +492,15 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
                         paraResult.append(translated);
                     }
 
-                    log.info("[流式翻译] 段落结果行数: {} (与原文一致)", paraResult.toString().split("\n", -1).length);
-
-                    if (i > 0) fullResult.append("\n\n");
-                    fullResult.append(paraResult);
-
-                    // 流式发送当前段落结果（含段间分隔符）
-                    // §NL§ = 单换行, §NL§§NL§ = 段落分隔
                     String chunk = TextCleaningUtil.sanitizeHtml(paraResult.toString()).replace("\n", "§NL§");
                     if (i > 0) {
                         chunk = "§NL§§NL§" + chunk;
                     }
-                    SseEmitterUtil.sendData(emitter, chunk);
+                    consumer.accept(TextStreamEvent.chunk(chunk));
                 }
 
-                log.info("[STREAM-TRACE] 流式翻译完成, 原文长度={}, 译文长度={}", text.length(), fullResult.length());
-                SseEmitterUtil.sendDone(emitter);
-                SseEmitterUtil.complete(emitter);
+                log.info("[STREAM-TRACE] 流式翻译完成");
+                consumer.accept(TextStreamEvent.done());
 
             } catch (Exception e) {
                 log.error("文本流式翻译失败：{}", e.getMessage(), e);
@@ -553,12 +508,14 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
                 if (currentUserId != null) {
                     quotaService.refundChars(currentUserId, text.length(), modeString);
                 }
-                SseEmitterUtil.sendError(emitter, "翻译失败：服务器内部错误");
-                SseEmitterUtil.complete(emitter);
+                try {
+                    consumer.accept(TextStreamEvent.error("翻译失败：服务器内部错误"));
+                    consumer.accept(TextStreamEvent.done());
+                } catch (IOException ex) {
+                    log.error("发送错误事件失败", ex);
+                }
             }
         });
-
-        return emitter;
     }
 
     /**
