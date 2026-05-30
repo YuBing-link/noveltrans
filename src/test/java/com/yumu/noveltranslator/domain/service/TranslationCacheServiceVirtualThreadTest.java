@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -42,6 +43,8 @@ class TranslationCacheServiceVirtualThreadTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
     @Mock
+    private SetOperations<String, String> setOperations;
+    @Mock
     private CacheVersionService cacheVersionService;
 
     private TranslationCacheService cacheService;
@@ -52,6 +55,7 @@ class TranslationCacheServiceVirtualThreadTest {
         when(cacheVersionService.getVersion(anyString(), anyString())).thenReturn("1");
         when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
+        when(stringRedisTemplate.opsForSet()).thenReturn(setOperations);
     }
 
     @Nested
