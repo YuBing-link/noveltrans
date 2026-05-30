@@ -33,6 +33,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -179,12 +180,10 @@ class SharedTranslateControllerTest {
         @Test
         void 上传文件流式翻译成功() throws Exception {
             setupSecurityContext();
-            SseEmitter emitter = new SseEmitter();
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".getBytes());
 
-            when(translationTaskPort.streamTranslateDocument(any(), eq("en"), eq("zh"), eq("fast")))
-                    .thenReturn(emitter);
+            doNothing().when(translationTaskPort).streamTranslateDocument(any(), eq("en"), eq("zh"), eq("fast"), any(), any());
 
             mockMvc.perform(multipart("/v1/translate/document/stream")
                             .file(file)
@@ -197,12 +196,10 @@ class SharedTranslateControllerTest {
         @Test
         void 使用默认参数流式翻译() throws Exception {
             setupSecurityContext();
-            SseEmitter emitter = new SseEmitter();
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "Hello".getBytes());
 
-            when(translationTaskPort.streamTranslateDocument(any(), eq("auto"), eq("zh"), eq("fast")))
-                    .thenReturn(emitter);
+            doNothing().when(translationTaskPort).streamTranslateDocument(any(), eq("auto"), eq("zh"), eq("fast"), any(), any());
 
             mockMvc.perform(multipart("/v1/translate/document/stream")
                             .file(file))
@@ -217,9 +214,7 @@ class SharedTranslateControllerTest {
         @Test
         void 基于已有文档流式翻译成功() throws Exception {
             setupSecurityContext();
-            SseEmitter emitter = new SseEmitter();
-            when(translationTaskPort.streamTranslateDocumentById(1L, "zh", "fast"))
-                    .thenReturn(emitter);
+            doNothing().when(translationTaskPort).streamTranslateDocumentById(eq(1L), eq("zh"), eq("fast"), any());
 
             mockMvc.perform(post("/v1/translate/document/stream/1")
                             .param("targetLang", "zh")
@@ -230,9 +225,7 @@ class SharedTranslateControllerTest {
         @Test
         void 使用默认参数流式翻译() throws Exception {
             setupSecurityContext();
-            SseEmitter emitter = new SseEmitter();
-            when(translationTaskPort.streamTranslateDocumentById(42L, "zh", "fast"))
-                    .thenReturn(emitter);
+            doNothing().when(translationTaskPort).streamTranslateDocumentById(eq(42L), eq("zh"), eq("fast"), any());
 
             mockMvc.perform(post("/v1/translate/document/stream/42"))
                     .andExpect(status().isOk());

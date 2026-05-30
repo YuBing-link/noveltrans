@@ -238,7 +238,7 @@ class WebDocumentControllerTest {
         void 上传文档成功_fast模式() throws Exception {
             setupSecurityContext();
             Document doc = createTestDocument();
-            when(documentPort.uploadAndStartTranslation(eq(1L), any(), any())).thenAnswer(inv -> {
+            when(documentPort.uploadAndStartTranslation(eq(1L), any(), any(), any())).thenAnswer(inv -> {
                 DocumentTranslationResponse resp = new DocumentTranslationResponse();
                 resp.setDocumentId(1L);
                 resp.setTaskId("task-001");
@@ -263,7 +263,7 @@ class WebDocumentControllerTest {
         void 上传文档_team模式() throws Exception {
             setupSecurityContext();
             Document doc = createTestDocument();
-            when(documentPort.uploadDocument(eq(1L), any(), any())).thenReturn(doc);
+            when(documentPort.uploadDocument(eq(1L), any(), any(), any())).thenReturn(doc);
 
             CollabPort.TeamProjectCreateResult projectResult =
                 new CollabPort.TeamProjectCreateResult(1L, "test.txt", 3);

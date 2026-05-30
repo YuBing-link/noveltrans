@@ -745,9 +745,8 @@ class TranslationServiceExtended2Test {
             req.setText("Paragraph 1\n\nParagraph 2\n\nParagraph 3");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = translationService.streamTextTranslate(null, req);
+            translationService.streamTextTranslate(null, req, (event) -> {});
 
-            assertNotNull(emitter);
             Thread.sleep(1000);
         }
 
@@ -762,9 +761,8 @@ class TranslationServiceExtended2Test {
             req.setText("line1\nline2");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = translationService.streamTextTranslate(null, req);
+            translationService.streamTextTranslate(null, req, (event) -> {});
 
-            assertNotNull(emitter);
             Thread.sleep(1000);
         }
 
@@ -777,9 +775,8 @@ class TranslationServiceExtended2Test {
             req.setText("\n\n");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = translationService.streamTextTranslate(null, req);
+            translationService.streamTextTranslate(null, req, (event) -> {});
 
-            assertNotNull(emitter);
             Thread.sleep(1000);
         }
 
@@ -793,9 +790,8 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SseEmitter emitter = translationService.streamTextTranslate(null, req);
+            translationService.streamTextTranslate(null, req, (event) -> {});
 
-            assertNotNull(emitter);
             Thread.sleep(1000);
         }
 
@@ -809,9 +805,8 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SseEmitter emitter = translationService.streamTextTranslate(null, req);
+            translationService.streamTextTranslate(null, req, (event) -> {});
 
-            assertNotNull(emitter);
             Thread.sleep(1000);
         }
 
@@ -825,9 +820,8 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SseEmitter emitter = translationService.streamTextTranslate(null, req);
+            translationService.streamTextTranslate(null, req, (event) -> {});
 
-            assertNotNull(emitter);
             Thread.sleep(1000);
         }
     }
@@ -851,9 +845,8 @@ class TranslationServiceExtended2Test {
             req.setText("Hello World");
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = translationService.streamTextTranslate(null, req);
+            translationService.streamTextTranslate(null, req, (event) -> {});
 
-            assertNotNull(emitter);
             Thread.sleep(1000);
         }
 
@@ -867,9 +860,8 @@ class TranslationServiceExtended2Test {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello");
             req.setTargetLang("zh");
-            SseEmitter emitter = translationService.streamTextTranslate(null, req);
+            translationService.streamTextTranslate(null, req, (event) -> {});
 
-            assertNotNull(emitter);
             verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
             verify(quotaService, never()).refundChars(anyLong(), anyLong(), anyString());
         }
@@ -899,8 +891,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            translationService.webpageTranslateStream(null, req, (event) -> {});
             Thread.sleep(1000);
         }
 
@@ -917,8 +908,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            translationService.webpageTranslateStream(null, req, (event) -> {});
             Thread.sleep(1000);
         }
 
@@ -938,8 +928,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            translationService.webpageTranslateStream(null, req, (event) -> {});
             Thread.sleep(1000);
         }
 
@@ -962,8 +951,7 @@ class TranslationServiceExtended2Test {
             req.setFastMode(false); // expert mode
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(1L, req);
-            assertNotNull(emitter);
+            translationService.webpageTranslateStream(1L, req, (event) -> {});
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
         }
@@ -987,8 +975,7 @@ class TranslationServiceExtended2Test {
             req.setTargetLang("zh");
             req.setEngine("google");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            translationService.webpageTranslateStream(null, req, (event) -> {});
             Thread.sleep(2000);
         }
     }
@@ -1018,8 +1005,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            translationService.webpageTranslateStream(null, req, (event) -> {});
             Thread.sleep(2000);
         }
 
@@ -1036,8 +1022,7 @@ class TranslationServiceExtended2Test {
             req.setTextRegistry(items);
             req.setTargetLang("zh");
 
-            SseEmitter emitter = translationService.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            translationService.webpageTranslateStream(null, req, (event) -> {});
             verify(quotaService, never()).tryConsumeChars(anyLong(), anyString(), anyLong(), anyString());
         }
     }

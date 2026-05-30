@@ -218,9 +218,8 @@ class TranslationServiceExtendedTest {
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of());
 
-            SseEmitter emitter = translationService.webpageTranslateStream(1L, req);
+            translationService.webpageTranslateStream(1L, req, (event) -> {});
 
-            assertNotNull(emitter);
             // SSE 异步发送，无法直接断言内容，但不应抛出异常
         }
 
@@ -231,9 +230,8 @@ class TranslationServiceExtendedTest {
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of());
 
-            SseEmitter emitter = translationService.webpageTranslateStream(1L, req);
+            translationService.webpageTranslateStream(1L, req, (event) -> {});
 
-            assertNotNull(emitter);
         }
 
         @Test
@@ -241,9 +239,8 @@ class TranslationServiceExtendedTest {
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(new ArrayList<>());
 
-            SseEmitter emitter = translationService.webpageTranslateStream(1L, req);
+            translationService.webpageTranslateStream(1L, req, (event) -> {});
 
-            assertNotNull(emitter);
         }
     }
 
@@ -258,9 +255,8 @@ class TranslationServiceExtendedTest {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("");
 
-            SseEmitter emitter = translationService.streamTextTranslate(1L, req);
+            translationService.streamTextTranslate(1L, req, (event) -> {});
 
-            assertNotNull(emitter);
         }
 
         @Test
@@ -268,9 +264,8 @@ class TranslationServiceExtendedTest {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText(null);
 
-            SseEmitter emitter = translationService.streamTextTranslate(1L, req);
+            translationService.streamTextTranslate(1L, req, (event) -> {});
 
-            assertNotNull(emitter);
         }
 
         @Test
@@ -281,9 +276,8 @@ class TranslationServiceExtendedTest {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("Hello World");
 
-            SseEmitter emitter = translationService.streamTextTranslate(1L, req);
+            translationService.streamTextTranslate(1L, req, (event) -> {});
 
-            assertNotNull(emitter);
         }
 
         @Test
@@ -295,9 +289,8 @@ class TranslationServiceExtendedTest {
             req.setText("Hello");
             req.setMode("expert");
 
-            SseEmitter emitter = translationService.streamTextTranslate(1L, req);
+            translationService.streamTextTranslate(1L, req, (event) -> {});
 
-            assertNotNull(emitter);
         }
     }
 }

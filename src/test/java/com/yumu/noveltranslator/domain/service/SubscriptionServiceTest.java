@@ -229,7 +229,7 @@ class SubscriptionServiceTest {
             when(stripeProperties.getSuccessUrl()).thenReturn("https://example.com/success");
             when(stripeProperties.getCancelUrl()).thenReturn("https://example.com/cancel");
 
-            when(paymentPort.createCheckoutSession(eq("cus_test123"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel")))
+            when(paymentPort.createCheckoutSession(eq("cus_test123"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel"), anyMap()))
                     .thenReturn("https://checkout.stripe.com/test");
 
             CheckoutSessionRequest request = new CheckoutSessionRequest();
@@ -258,7 +258,7 @@ class SubscriptionServiceTest {
             when(stripeProperties.getSuccessUrl()).thenReturn("https://example.com/success");
             when(stripeProperties.getCancelUrl()).thenReturn("https://example.com/cancel");
 
-            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_yearly"), eq("https://example.com/success"), eq("https://example.com/cancel")))
+            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_yearly"), eq("https://example.com/success"), eq("https://example.com/cancel"), anyMap()))
                     .thenReturn("https://checkout.stripe.com/test2");
 
             CheckoutSessionRequest request = new CheckoutSessionRequest();
@@ -804,7 +804,7 @@ class SubscriptionServiceTest {
             when(stripeProperties.getSuccessUrl()).thenReturn("https://example.com/success");
             when(stripeProperties.getCancelUrl()).thenReturn("https://example.com/cancel");
 
-            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel")))
+            when(paymentPort.createCheckoutSession(eq("cus_existing"), eq("price_pro_monthly"), eq("https://example.com/success"), eq("https://example.com/cancel"), anyMap()))
                     .thenReturn("https://checkout.stripe.com/test");
 
             CheckoutSessionRequest request = new CheckoutSessionRequest();

@@ -102,16 +102,14 @@ class TranslationServiceStreamTest {
         void 空文本立即返回错误() {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText("");
-            SseEmitter emitter = service.streamTextTranslate(null, req);
-            assertNotNull(emitter);
+            service.streamTextTranslate(null, req, (event) -> {});
         }
 
         @Test
         void null文本立即返回错误() {
             SelectionTranslationRequest req = new SelectionTranslationRequest();
             req.setText(null);
-            SseEmitter emitter = service.streamTextTranslate(null, req);
-            assertNotNull(emitter);
+            service.streamTextTranslate(null, req, (event) -> {});
         }
 
         @Test
@@ -123,8 +121,7 @@ class TranslationServiceStreamTest {
             req.setText("Hello World");
             req.setEngine("google");
             req.setTargetLang("zh");
-            SseEmitter emitter = service.streamTextTranslate(null, req);
-            assertNotNull(emitter);
+            service.streamTextTranslate(null, req, (event) -> {});
         }
 
         @Test
@@ -138,8 +135,7 @@ class TranslationServiceStreamTest {
             req.setText("Hello");
             req.setEngine("google");
             req.setTargetLang("zh");
-            SseEmitter emitter = service.streamTextTranslate(null, req);
-            assertNotNull(emitter);
+            service.streamTextTranslate(null, req, (event) -> {});
         }
     }
 
@@ -154,8 +150,7 @@ class TranslationServiceStreamTest {
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of());
             req.setTargetLang("zh");
-            SseEmitter emitter = service.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            service.webpageTranslateStream(null, req, (event) -> {});
         }
 
         @Test
@@ -164,8 +159,7 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of());
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = service.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            service.webpageTranslateStream(null, req, (event) -> {});
         }
 
         @Test
@@ -175,8 +169,7 @@ class TranslationServiceStreamTest {
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
-            SseEmitter emitter = service.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            service.webpageTranslateStream(null, req, (event) -> {});
         }
 
         @Test
@@ -191,8 +184,7 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of(createTextItem("1", "Hello World")));
             req.setTargetLang("zh");
             req.setEngine("google");
-            SseEmitter emitter = service.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            service.webpageTranslateStream(null, req, (event) -> {});
 
             // Allow virtual threads to complete
             Thread.sleep(2000);
@@ -212,8 +204,7 @@ class TranslationServiceStreamTest {
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn(null); // simulate failure
 
-            SseEmitter emitter = service.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            service.webpageTranslateStream(null, req, (event) -> {});
         }
 
         @Test
@@ -229,8 +220,7 @@ class TranslationServiceStreamTest {
             when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
                     .thenReturn("{\"code\":200,\"data\":\"Expert translation\"}");
 
-            SseEmitter emitter = service.webpageTranslateStream(null, req);
-            assertNotNull(emitter);
+            service.webpageTranslateStream(null, req, (event) -> {});
         }
 
         private WebpageTranslateRequest.TextItem createTextItem(String id, String original) {
@@ -258,8 +248,7 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
             req.setFastMode(true);
             req.setTargetLang("zh");
-            SseEmitter emitter = service.webpageTranslateStream(1L, req);
-            assertNotNull(emitter);
+            service.webpageTranslateStream(1L, req, (event) -> {});
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("fast"));
         }
@@ -274,8 +263,7 @@ class TranslationServiceStreamTest {
             req.setTextRegistry(List.of(createTextItem("1", "Hello")));
             req.setFastMode(false);
             req.setTargetLang("zh");
-            SseEmitter emitter = service.webpageTranslateStream(1L, req);
-            assertNotNull(emitter);
+            service.webpageTranslateStream(1L, req, (event) -> {});
 
             verify(quotaService).tryConsumeChars(eq(1L), eq("free"), anyLong(), eq("expert"));
         }
