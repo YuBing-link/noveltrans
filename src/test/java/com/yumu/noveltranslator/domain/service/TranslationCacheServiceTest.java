@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -43,6 +44,9 @@ class TranslationCacheServiceTest {
     private ValueOperations<String, String> valueOperations;
 
     @Mock
+    private SetOperations<String, String> setOperations;
+
+    @Mock
     private CacheVersionService cacheVersionService;
 
     private TranslationCacheService cacheService;
@@ -52,6 +56,7 @@ class TranslationCacheServiceTest {
         cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate, cacheVersionService);
         when(cacheVersionService.getVersion(anyString(), anyString())).thenReturn("1");
         lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(stringRedisTemplate.opsForSet()).thenReturn(setOperations);
         lenient().when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any())).thenReturn(true);
         lenient().when(stringRedisTemplate.delete(anyString())).thenReturn(true);
     }

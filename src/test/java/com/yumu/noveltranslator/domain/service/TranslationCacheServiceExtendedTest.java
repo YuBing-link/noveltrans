@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -43,6 +44,8 @@ class TranslationCacheServiceExtendedTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
     @Mock
+    private SetOperations<String, String> setOperations;
+    @Mock
     private CacheVersionService cacheVersionService;
 
     private TranslationCacheService cacheService;
@@ -52,8 +55,9 @@ class TranslationCacheServiceExtendedTest {
         cacheService = new TranslationCacheService(translationCacheMapper, stringRedisTemplate, cacheVersionService);
         when(cacheVersionService.getVersion(anyString(), anyString())).thenReturn("1");
         // Default: Redis returns null (L2 miss)
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(anyString())).thenReturn(null);
+        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(stringRedisTemplate.opsForSet()).thenReturn(setOperations);
+        lenient().when(valueOperations.get(anyString())).thenReturn(null);
     }
 
     // ============ getCacheByMode 多模式搜索 ============

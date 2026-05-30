@@ -324,65 +324,15 @@ class TranslationTaskServiceCoverageTest {
         }
     }
 
-    // ============ getTranslationHistory - type 过滤组合 ============
+    // ============ getTranslationHistory - status 过滤组合 ============
 
     @Nested
-    @DisplayName("getTranslationHistory - type 过滤组合")
+    @DisplayName("getTranslationHistory - status 过滤组合")
     class GetTranslationHistoryTypeFilterTests {
 
         @Test
-        void type为text仅返回文本翻译() {
+        void status为completed查询历史记录() {
             setAuthenticatedUser(1L);
-            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
-                    .thenReturn(new ArrayList<>());
-
-            TranslationHistory textH = new TranslationHistory();
-            textH.setTaskId("task-text");
-            textH.setType("text");
-            textH.setCreateTime(LocalDateTime.now());
-
-            TranslationHistory docH = new TranslationHistory();
-            docH.setTaskId("task-doc");
-            docH.setType("document");
-            docH.setCreateTime(LocalDateTime.now().minusMinutes(1));
-
-            when(translationPort.findHistoryByUserId(1L, 0, 10))
-                    .thenReturn(List.of(textH, docH));
-
-            List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "text");
-            assertEquals(1, result.size());
-            assertEquals("text", result.get(0).getType());
-        }
-
-        @Test
-        void type为document仅返回文档翻译() {
-            setAuthenticatedUser(1L);
-            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
-                    .thenReturn(new ArrayList<>());
-
-            TranslationHistory textH = new TranslationHistory();
-            textH.setTaskId("task-text");
-            textH.setType("text");
-            textH.setCreateTime(LocalDateTime.now());
-
-            TranslationHistory docH = new TranslationHistory();
-            docH.setTaskId("task-doc");
-            docH.setType("document");
-            docH.setCreateTime(LocalDateTime.now().minusMinutes(1));
-
-            when(translationPort.findHistoryByUserId(1L, 0, 10))
-                    .thenReturn(List.of(textH, docH));
-
-            List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "document");
-            assertEquals(1, result.size());
-            assertEquals("document", result.get(0).getType());
-        }
-
-        @Test
-        void type为all不过滤() {
-            setAuthenticatedUser(1L);
-            when(translationPort.findTasksByUserIdAndStatus(anyLong(), anyInt(), anyInt()))
-                    .thenReturn(new ArrayList<>());
 
             TranslationHistory h1 = new TranslationHistory();
             h1.setTaskId("task-1");
@@ -397,8 +347,39 @@ class TranslationTaskServiceCoverageTest {
             when(translationPort.findHistoryByUserId(1L, 0, 10))
                     .thenReturn(List.of(h1, h2));
 
-            List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "all");
+            List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "completed");
             assertEquals(2, result.size());
+            verify(translationPort).findHistoryByUserId(1L, 0, 10);
+        }
+
+        @Test
+        void status为processing查询进行中任务() {
+            setAuthenticatedUser(1L);
+
+            TranslationTask task = new TranslationTask();
+            task.setTaskId("task-proc");
+            task.setStatus("processing");
+            when(translationPort.findTasksByUserIdAndStatuses(eq(1L), anyList(), anyInt(), anyInt()))
+                    .thenReturn(List.of(task));
+
+            List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "processing");
+            assertEquals(1, result.size());
+            verify(translationPort).findTasksByUserIdAndStatuses(eq(1L), eq(List.of("pending", "processing")), anyInt(), anyInt());
+        }
+
+        @Test
+        void status为failed查询失败任务() {
+            setAuthenticatedUser(1L);
+
+            TranslationTask task = new TranslationTask();
+            task.setTaskId("task-fail");
+            task.setStatus("failed");
+            when(translationPort.findTasksByUserIdAndStatuses(eq(1L), anyList(), anyInt(), anyInt()))
+                    .thenReturn(List.of(task));
+
+            List<TranslationHistory> result = taskService.getTranslationHistory(1L, 1, 10, "failed");
+            assertEquals(1, result.size());
+            verify(translationPort).findTasksByUserIdAndStatuses(eq(1L), eq(List.of("failed")), anyInt(), anyInt());
         }
 
         @Test
