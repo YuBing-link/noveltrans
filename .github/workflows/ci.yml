@@ -45,7 +45,7 @@ jobs:
 
       - name: Initialize database schema
         run: |
-          mysql -h 127.0.0.1 -P 3307 -u root -p123456 novel_translator < src/main/resources/schema.sql
+          mysql -h 127.0.0.1 -P 3307 -u root -p123456 novel_translator < src/main/resources/sql/schema.sql
         env:
           MYSQL_PWD: 123456
 
