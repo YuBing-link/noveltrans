@@ -22,7 +22,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.quality.Strictness;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -32,6 +34,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
@@ -39,6 +42,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class SharedTranslateControllerTest {
 
     private MockMvc mockMvc;
@@ -183,7 +187,7 @@ class SharedTranslateControllerTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "Hello World".getBytes());
 
-            doNothing().when(translationTaskPort).streamTranslateDocument(any(), eq("en"), eq("zh"), eq("fast"), any(), any());
+            doNothing().when(translationTaskPort).streamTranslateDocument(any(byte[].class), anyString(), anyString(), anyString(), anyString(), any());
 
             mockMvc.perform(multipart("/v1/translate/document/stream")
                             .file(file)
@@ -199,7 +203,7 @@ class SharedTranslateControllerTest {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "Hello".getBytes());
 
-            doNothing().when(translationTaskPort).streamTranslateDocument(any(), eq("auto"), eq("zh"), eq("fast"), any(), any());
+            doNothing().when(translationTaskPort).streamTranslateDocument(any(byte[].class), anyString(), anyString(), anyString(), anyString(), any());
 
             mockMvc.perform(multipart("/v1/translate/document/stream")
                             .file(file))

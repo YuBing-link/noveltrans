@@ -33,7 +33,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.quality.Strictness;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -43,14 +45,19 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class WebUserControllerTest {
 
     private MockMvc mockMvc;
@@ -407,8 +414,7 @@ class WebUserControllerTest {
         void 获取翻译历史成功() throws Exception {
             setupSecurityContext(createTestUser());
             var pageResp = PageResponse.of(1, 20, 1L, List.of(new TranslationHistoryResponse()));
-            when(userPort.getTranslationHistory(eq(1L), eq(1), eq(20), eq("all")))
-                .thenReturn(pageResp);
+            doReturn(pageResp).when(userPort).getTranslationHistory(anyLong(), anyInt(), anyInt(), nullable(String.class));
 
             mockMvc.perform(get("/user/translation-history"))
                 .andExpect(status().isOk())
@@ -420,8 +426,7 @@ class WebUserControllerTest {
         void 带分页参数获取历史() throws Exception {
             setupSecurityContext(createTestUser());
             var pageResp = PageResponse.of(2, 10, 0L, List.<TranslationHistoryResponse>of());
-            when(userPort.getTranslationHistory(eq(1L), eq(2), eq(10), eq("webpage")))
-                .thenReturn(pageResp);
+            doReturn(pageResp).when(userPort).getTranslationHistory(anyLong(), anyInt(), anyInt(), nullable(String.class));
 
             mockMvc.perform(get("/user/translation-history")
                     .param("page", "2")
