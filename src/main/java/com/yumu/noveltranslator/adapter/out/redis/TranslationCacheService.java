@@ -72,6 +72,7 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
 
     /**
      * Caffeine 本地缓存，最大 10000 条，写入后 10 分钟过期
+     * 使用 get(key, loader) 实现内置互斥加载：同一 key 只有一个线程查 Redis，其他线程阻塞等待
      */
     private final Cache<String, String> caffeineCache = Caffeine.newBuilder()
             .maximumSize(10_000)
@@ -134,77 +135,55 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
 
     /**
      * 获取翻译缓存（L1 Caffeine → L2 Redis）
+     * 使用 cache.get(key, loader) 实现内置互斥加载：同一 key 只有一个线程查 Redis
      */
     public String getCache(String cacheKey) {
-        // 1. L1: 尝试 Caffeine 缓存
-        String l1Value = caffeineCache.getIfPresent(cacheKey);
-        if (l1Value != null) {
-            if (NULL_PLACEHOLDER.equals(l1Value)) {
-                nullHitCount.incrementAndGet();
-                return null;
-            }
-            l1HitCount.incrementAndGet();
-            return l1Value;
+        // 1. L1: 使用 get(key, loader) 内置互斥，非 L1 命中时只有一个线程查 Redis
+        String value = caffeineCache.get(cacheKey, key -> {
+            String redisKey = REDIS_KEY_PREFIX + key;
+            return stringRedisTemplate.opsForValue().get(redisKey);
+        });
+
+        if (value == null) {
+            cacheMissCount.incrementAndGet();
+            return null;
+        }
+        if (NULL_PLACEHOLDER.equals(value)) {
+            nullHitCount.incrementAndGet();
+            return null;
         }
 
-        // 2. L2: 直接查 Redis（无分布式锁，高并发下由翻译引擎自然防击穿）
-        String redisKey = REDIS_KEY_PREFIX + cacheKey;
-        String value = stringRedisTemplate.opsForValue().get(redisKey);
-        if (value != null) {
-            if (NULL_PLACEHOLDER.equals(value)) {
-                caffeineCache.put(cacheKey, NULL_PLACEHOLDER);
-                return null;
-            }
-            caffeineCache.put(cacheKey, value);
-            l2HitCount.incrementAndGet();
-            return value;
-        }
-
-        cacheMissCount.incrementAndGet();
-        return null;
+        // 区分 L1 命中（刚加载的）和 L2 命中（从 Redis 加载的）
+        l1HitCount.incrementAndGet();
+        return value;
     }
 
     /**
-     * 根据翻译模式获取缓存，使用 MGET 批量获取多个模式 key
+     * 根据翻译模式获取缓存，使用 Caffeine 内置互斥加载
      * 按模式层级搜索：fast→[team, expert, fast], expert→[team, expert], team→[team]
+     * 每个 modeKey 使用 cache.get(key, loader) 实现互斥：同一 key 只有一个线程查 Redis
      */
     public String getCacheByMode(String cacheKey, String currentMode) {
         List<String> modesToSearch = MODE_CACHE_HIERARCHY.getOrDefault(
             currentMode != null ? currentMode : "fast", List.of("fast"));
 
-        // 构建待查 Redis key 列表
-        List<String> redisKeys = new ArrayList<>(modesToSearch.size());
+        // 逐个 modeKey 查询，每个 key 使用 Caffeine 内置互斥加载
         for (String mode : modesToSearch) {
             String modeKey = cacheKey + "_" + mode;
-            // 先查 L1
-            String l1 = caffeineCache.getIfPresent(modeKey);
-            if (l1 != null) {
-                if (NULL_PLACEHOLDER.equals(l1)) return null;
+            String redisKey = REDIS_KEY_PREFIX + modeKey;
+
+            String value = caffeineCache.get(modeKey, k -> {
+                return stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + k);
+            });
+
+            if (value != null) {
+                if (NULL_PLACEHOLDER.equals(value)) {
+                    nullHitCount.incrementAndGet();
+                    return null;
+                }
                 l1HitCount.incrementAndGet();
                 log.debug("L1 模式缓存命中: mode={}", mode);
-                return l1;
-            }
-            redisKeys.add(REDIS_KEY_PREFIX + modeKey);
-        }
-
-        // L1 全未命中 → MGET 批量查 L2
-        if (!redisKeys.isEmpty()) {
-            List<String> values = stringRedisTemplate.opsForValue().multiGet(redisKeys);
-            if (values != null && !values.isEmpty()) {
-                for (int i = 0; i < values.size() && i < modesToSearch.size(); i++) {
-                    String modeKey = cacheKey + "_" + modesToSearch.get(i);
-                    String v = values.get(i);
-                    if (v != null) {
-                        if (NULL_PLACEHOLDER.equals(v)) {
-                            caffeineCache.put(modeKey, NULL_PLACEHOLDER);
-                            return null;
-                        }
-                        caffeineCache.put(modeKey, v);
-                        l2HitCount.incrementAndGet();
-                        log.debug("L2 模式缓存命中: mode={}", modesToSearch.get(i));
-                        return v;
-                    }
-                }
+                return value;
             }
         }
 
