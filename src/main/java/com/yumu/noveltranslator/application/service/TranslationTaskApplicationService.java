@@ -761,15 +761,14 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
      * 翻译单个段落（两个流式方法共用）
      */
     private String translateParagraph(String paragraph, String targetLang, String mode) throws Exception {
+        TranslationPipeline pipeline = new TranslationPipeline(
+                cachePort, ragTranslationService, entityConsistencyService,
+                translationClientPort, postProcessingService, null, null);
         String result;
         if ("expert".equals(mode)) {
-            TranslationPipeline pipeline = new TranslationPipeline(
-                    cachePort, ragTranslationService, entityConsistencyService,
-                    translationClientPort, postProcessingService, null, null);
             result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);
         } else {
-            result = translationClientPort.translate(
-                    paragraph, targetLang, "google", false, true, List.of(), null, null);
+            result = pipeline.executeFast(paragraph, targetLang, TranslationMode.FAST);
         }
         String translation = ExternalResponseUtil.extractDataField(result);
         return translation != null ? translation : paragraph;
