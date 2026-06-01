@@ -61,6 +61,9 @@ import static org.mockito.Mockito.*;
  * 5. saveTranslationHistory truncation branches (>500 chars)
  * 6. loadGlossaryTermsForUser exception catch branch
  * 7. readDocumentContent non-TXT exception branch (via streaming methods)
+ *
+ * <p>注意：fast 模式现在走 Pipeline.executeFast()，需要 stub cachePort 返回 Optional.empty()
+ * 以模拟缓存未命中，否则 mock 返回 null 会导致 NPE。</p>
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -98,6 +101,13 @@ class TranslationTaskServiceExtended2Test {
                 stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
+        // Stub cachePort to return empty (cache miss) so Pipeline.executeFast proceeds to L4
+        // Without this, mock returns null → NPE on .orElse(null)
+        when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
+        // Stub postProcessingService to pass through the translation result
+        // Without this, mock returns null → Pipeline reassigns result to null → NPE in log
+        when(postProcessingService.fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
     }
 
     @AfterEach
@@ -172,8 +182,8 @@ class TranslationTaskServiceExtended2Test {
             doc.setTargetLang("zh");
             when(documentPort.findById(1L)).thenReturn(Optional.of(doc));
 
-            // Mock translation client responses
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            // Mock translation client responses (Pipeline.executeFast now calls this)
+            when(userLevelThrottledTranslationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}")
                     .thenReturn("{\"code\":200,\"data\":\"世界\"}");
 
@@ -190,7 +200,7 @@ class TranslationTaskServiceExtended2Test {
 
             verify(documentPort, atLeastOnce()).findById(1L);
             verify(translationPort).saveTask(any(TranslationTask.class));
-            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any());
+            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any());
         }
 
         @Test
@@ -289,7 +299,7 @@ class TranslationTaskServiceExtended2Test {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", "text/plain", "Line one\nLine two\n".getBytes());
 
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"第一行\"}")
                     .thenReturn("{\"code\":200,\"data\":\"第二行\"}");
 
@@ -297,7 +307,7 @@ class TranslationTaskServiceExtended2Test {
 
             Thread.sleep(1500);
 
-            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any());
+            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any());
         }
 
         @Test
@@ -361,7 +371,7 @@ class TranslationTaskServiceExtended2Test {
             taskService.streamTranslateDocument(file.getBytes(), file.getOriginalFilename(), "en", "zh", "fast", (event) -> {});
 
             Thread.sleep(1000);
-            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any());
+            verify(userLevelThrottledTranslationClient, atLeastOnce()).translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any());
         }
 
         @Test
@@ -546,7 +556,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setTargetLang("zh");
             when(documentPort.findById(50L)).thenReturn(Optional.of(doc));
 
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"译\"}");
 
             TranslationTask runningTask = new TranslationTask();
@@ -585,7 +595,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setTargetLang("zh");
             when(documentPort.findById(51L)).thenReturn(Optional.of(doc));
 
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             TranslationTask runningTask = new TranslationTask();
@@ -620,7 +630,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setTargetLang("zh");
             when(documentPort.findById(52L)).thenReturn(Optional.of(doc));
 
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"你好世界\"}");
 
             TranslationTask runningTask = new TranslationTask();
@@ -884,7 +894,7 @@ class TranslationTaskServiceExtended2Test {
             when(documentPort.findById(20L)).thenReturn(Optional.of(doc));
 
             // Return a response that extracts to null or empty
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
             TranslationTask runningTask = new TranslationTask();
@@ -902,7 +912,7 @@ class TranslationTaskServiceExtended2Test {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", "text/plain", "Hello\n".getBytes());
 
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"\"}");
 
             taskService.streamTranslateDocument(file.getBytes(), file.getOriginalFilename(), "en", "zh", "fast", (event) -> {});
@@ -924,7 +934,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setTargetLang("zh");
             when(documentPort.findById(21L)).thenReturn(Optional.of(doc));
 
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             TranslationTask runningTask = new TranslationTask();
@@ -942,7 +952,7 @@ class TranslationTaskServiceExtended2Test {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "test.txt", "text/plain", "Hello\r".getBytes());
 
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             taskService.streamTranslateDocument(file.getBytes(), file.getOriginalFilename(), "en", "zh", "fast", (event) -> {});
@@ -964,7 +974,7 @@ class TranslationTaskServiceExtended2Test {
             doc.setTargetLang("zh");
             when(documentPort.findById(22L)).thenReturn(Optional.of(doc));
 
-            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), eq("google"), eq(false), eq(true), anyList(), any(), any()))
+            when(userLevelThrottledTranslationClient.translate(anyString(), eq("zh"), anyString(), eq(false), eq(true), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}")
                     .thenReturn("{\"code\":200,\"data\":\"世界\"}");
 
