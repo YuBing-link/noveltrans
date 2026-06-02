@@ -282,21 +282,4 @@ class TranslationCacheServiceExtendedTest {
             verify(translationCacheMapper, times(1)).selectOne(any());
         }
     }
-
-    // ============ 空值占位完整路径 ============
-
-    @Nested
-    @DisplayName("空值占位 - 完整路径")
-    class NullPlaceholderFullTests {
-
-        @Test
-        void L1空值占位后再次查询返回null() {
-            doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
-
-            cacheService.putNullCache("null-full");
-
-            // 再次查询应返回 null（L1 命中空值占位）
-            assertNull(cacheService.getCache("null-full"));
-        }
-    }
 }

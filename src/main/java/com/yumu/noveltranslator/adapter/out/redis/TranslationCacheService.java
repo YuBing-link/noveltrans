@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -84,7 +83,6 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
 
     private static final String REDIS_KEY_PREFIX = "translator:cache:";
     private static final long REDIS_CACHE_SECONDS = 30 * 60;          // Redis 缓存 30 分钟
-    private static final long REDIS_NULL_SECONDS = 5 * 60;            // 空值占位 5 分钟
 
     // ==================== 术语反向索引 ====================
 
@@ -119,17 +117,11 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
 
     // ==================== 核心查询方法 ====================
 
-    /**
-     * 空值占位标记
-     */
-    private static final String NULL_PLACEHOLDER = "__NULL__";
-
     // ==================== 缓存统计 ====================
 
     private final AtomicLong l1HitCount = new AtomicLong(0);
     private final AtomicLong l2HitCount = new AtomicLong(0);
     private final AtomicLong cacheMissCount = new AtomicLong(0);
-    private final AtomicLong nullHitCount = new AtomicLong(0);       // 空值命中（穿透防护）
 
     // ==================== 核心查询方法 ====================
 
@@ -146,10 +138,6 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
 
         if (value == null) {
             cacheMissCount.incrementAndGet();
-            return null;
-        }
-        if (NULL_PLACEHOLDER.equals(value)) {
-            nullHitCount.incrementAndGet();
             return null;
         }
 
@@ -170,17 +158,11 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
         // 逐个 modeKey 查询，每个 key 使用 Caffeine 内置互斥加载
         for (String mode : modesToSearch) {
             String modeKey = cacheKey + "_" + mode;
-            String redisKey = REDIS_KEY_PREFIX + modeKey;
 
-            String value = caffeineCache.get(modeKey, k -> {
-                return stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + k);
-            });
+            String value = caffeineCache.get(modeKey,
+                k -> stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + k));
 
             if (value != null) {
-                if (NULL_PLACEHOLDER.equals(value)) {
-                    nullHitCount.incrementAndGet();
-                    return null;
-                }
                 l1HitCount.incrementAndGet();
                 log.debug("L1 模式缓存命中: mode={}", mode);
                 return value;
@@ -266,23 +248,6 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
         saveToDatabaseAsync(finalKey, sourceText, targetText, sourceLang, targetLang, engine, version);
 
         log.debug("L1+L2+L3 写入成功: key={}, version={}, mode={}", finalKey, version, mode);
-    }
-
-    /**
-     * 保存空值占位（防缓存穿透）
-     *
-     * @param cacheKey 缓存键
-     */
-    public void putNullCache(String cacheKey) {
-        String redisKey = REDIS_KEY_PREFIX + cacheKey;
-
-        // L1 写入空值占位
-        caffeineCache.put(cacheKey, NULL_PLACEHOLDER);
-
-        // L2 Redis 写入空值占位（短过期）
-        stringRedisTemplate.opsForValue().set(redisKey, NULL_PLACEHOLDER, Duration.ofSeconds(REDIS_NULL_SECONDS));
-
-        log.debug("空值占位写入：{}", cacheKey);
     }
 
     /**
@@ -530,7 +495,6 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
         return Map.of(
                 "l1Hits", l1HitCount.get(),
                 "l2Hits", l2HitCount.get(),
-                "nullHits", nullHitCount.get(),
                 "misses", cacheMissCount.get(),
                 "hitRate", String.format("%.2f%%", hitRate),
                 "totalRequests", total,

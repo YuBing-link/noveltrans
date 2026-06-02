@@ -155,19 +155,6 @@ class TranslationCacheServiceTest {
             // Verify L2 Redis write with versioned key
             verify(valueOperations).set(eq("translator:cache:v1:cache-key"), eq("target"), any(Duration.class));
         }
-
-        @Test
-        void putNullCache写入空值占位() {
-            when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-            doNothing().when(valueOperations).set(anyString(), anyString(), any(Duration.class));
-
-            cacheService.putNullCache("null-key");
-
-            // L1 should have null placeholder
-            assertNull(cacheService.getCache("null-key"));
-            // Verify Redis was called with __NULL__
-            verify(valueOperations).set(eq("translator:cache:null-key"), eq("__NULL__"), any());
-        }
     }
 
     @Nested

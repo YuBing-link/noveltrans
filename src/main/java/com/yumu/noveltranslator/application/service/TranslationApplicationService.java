@@ -6,13 +6,9 @@ import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateResponse;
 import com.yumu.noveltranslator.port.dto.translation.SelectionTranslationRequest;
 import com.yumu.noveltranslator.port.dto.translation.ReaderTranslateRequest;
 import com.yumu.noveltranslator.port.dto.translation.WebpageTranslateRequest;
-import com.yumu.noveltranslator.domain.model.User;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.TranslationPipeline;
-import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
 import com.yumu.noveltranslator.domain.service.TranslationPostProcessingService;
-import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
-import com.yumu.noveltranslator.domain.service.QuotaService;
 import com.yumu.noveltranslator.domain.util.EngineAliasRegistry;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.port.out.TranslationClientPort;
@@ -31,6 +27,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel;
 
 /**
  * 翻译服务类
@@ -109,7 +107,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
 
         // 检查字符配额
         if (userId != null) {
-            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
+            String userLevel = getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
                 if (!quotaService.tryConsumeChars(userId, userLevel, combined.length(), modeName)) {
                     return new SelectionTranslateResponse(false, mode.getName(), "字符配额不足，请升级档位或等待下月重置");
@@ -159,7 +157,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
 
         // 检查字符配额
         if (userId != null) {
-            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
+            String userLevel = getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
                 String modeName = req.getMode() != null ? req.getMode() : "fast";
                 if (!quotaService.tryConsumeChars(userId, userLevel, content.length(), modeName)) {
@@ -326,7 +324,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         String quotaMode = (req.getFastMode() != null && !req.getFastMode()) ? "expert" : "fast";
 
         if (userId != null) {
-            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
+            String userLevel = getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
                 if (!quotaService.tryConsumeChars(userId, userLevel, totalChars, quotaMode)) {
                     try { consumer.accept(TextStreamEvent.error("字符配额不足，请升级档位或等待下月重置")); } catch (IOException ignored) {}
@@ -441,7 +439,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         log.info("[STREAM-TRACE] Normalized: mode={}, target={}", mode.getName(), target);
 
         if (userId != null) {
-            String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
+            String userLevel = getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
                 if (!quotaService.tryConsumeChars(userId, userLevel, text.length(), modeString)) {
                     try { consumer.accept(TextStreamEvent.error("字符配额不足，请升级档位或等待下月重置")); } catch (IOException ignored) {}

@@ -34,11 +34,6 @@ public class TranslationCachePortAdapter implements TranslationCachePort {
     }
 
     @Override
-    public void putNullCache(String key) {
-        cacheService.putNullCache(key);
-    }
-
-    @Override
     public Map<String, Object> getCacheStats() {
         return cacheService.getCacheStats();
     }
