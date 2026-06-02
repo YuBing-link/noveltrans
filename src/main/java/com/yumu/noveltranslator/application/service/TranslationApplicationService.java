@@ -105,12 +105,12 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
 
         TranslationMode mode = EngineAliasRegistry.normalizeToMode(req.getEngine());
         String target = req.getTargetLang() == null ? DEFAULT_TARGET_LANG : req.getTargetLang();
+        String modeName = req.getMode() != null ? req.getMode() : "fast";
 
         // 检查字符配额
         if (userId != null) {
             String userLevel = com.yumu.noveltranslator.util.SecurityUtil.getCurrentUserLevel().orElse(null);
             if (userLevel != null) {
-                String modeName = req.getMode() != null ? req.getMode() : "fast";
                 if (!quotaService.tryConsumeChars(userId, userLevel, combined.length(), modeName)) {
                     return new SelectionTranslateResponse(false, mode.getName(), "字符配额不足，请升级档位或等待下月重置");
                 }
@@ -121,10 +121,11 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
             TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
                     translationClientPort, postProcessingService, userId, null);
-            String result = pipeline.executeFast(combined, target, mode);
+            String result = "fast".equals(modeName)
+                    ? pipeline.executeFast(combined, target, mode)
+                    : pipeline.execute(combined, target, mode);
             if (result == null || result.trim().isEmpty()) {
                 if (userId != null) {
-                    String modeName = req.getMode() != null ? req.getMode() : "fast";
                     quotaService.refundChars(userId, combined.length(), modeName);
                 }
                 return new SelectionTranslateResponse(false, mode.getName(), "翻译失败：返回结果为空");
@@ -135,7 +136,6 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         } catch (Exception e) {
             log.error("选中文本翻译失败：{}", e.getMessage(), e);
             if (userId != null) {
-                String modeName = req.getMode() != null ? req.getMode() : "fast";
                 quotaService.refundChars(userId, combined.length(), modeName);
             }
             return new SelectionTranslateResponse(false, mode.getName(), "翻译失败：服务器内部错误");
@@ -191,7 +191,8 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         // 并行翻译所有段落（复用全局线程池）
         // 阅读器模式默认使用 MTranServer，html=true
         try {
-            List<String> translatedSegments = translateSegmentsInParallel(segments, target, mode, true, userId);
+            String modeString = req.getMode() != null ? req.getMode() : "fast";
+            List<String> translatedSegments = translateSegmentsInParallel(segments, target, mode, true, userId, modeString);
             String rawResult = String.join("", translatedSegments);
             String combinedResult = TextCleaningUtil.sanitizeHtml(rawResult);
             log.info("阅读器翻译完成，原文长度：{}，译文长度：{}", content.length(), combinedResult.length());
@@ -220,7 +221,7 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
      * @param html 是否启用 HTML 翻译模式（仅对 MTranServer 有效）
      */
     private List<String> translateSegmentsInParallel(List<String> segments, String target, TranslationMode mode,
-                                                      boolean html, Long userId) {
+                                                      boolean html, Long userId, String modeString) {
         List<String> results = new ArrayList<>(segments.size());
         List<int[]> indexesToTranslate = new ArrayList<>();
 
@@ -260,7 +261,9 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
 
                 tasks.add(() -> {
                     try {
-                        String translation = pipeline.executeFast(segment, target, mode, html);
+                        String translation = "fast".equals(modeString)
+                                ? pipeline.executeFast(segment, target, mode, html)
+                                : pipeline.execute(segment, target, mode);
                         if (translation != null && !translation.trim().isEmpty()) {
                             tempResults.set(taskIndex, translation);
                         } else {
@@ -359,7 +362,9 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
                             String cleanText = TextCleaningUtil.cleanText(original);
 
                             boolean fastMode = req.getFastMode() == null || req.getFastMode();
-                            String extracted = pipeline.executeFast(cleanText, target, mode, !fastMode);
+                            String extracted = fastMode
+                                    ? pipeline.executeFast(cleanText, target, mode, !fastMode)
+                                    : pipeline.execute(cleanText, target, mode);
 
                             if (extracted == null || extracted.trim().isEmpty()) {
                                 log.warn("翻译失败，使用原文兜底：ID={}", id);
