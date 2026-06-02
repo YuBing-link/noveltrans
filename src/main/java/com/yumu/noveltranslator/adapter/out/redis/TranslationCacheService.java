@@ -84,6 +84,17 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
     private static final String REDIS_KEY_PREFIX = "translator:cache:";
     private static final long REDIS_CACHE_SECONDS = 30 * 60;          // Redis 缓存 30 分钟
 
+    // ==================== 分布式锁配置（防 LLM 击穿） ====================
+
+    /** 分布式锁 key 前缀，L1/L2 未命中时抢锁调 LLM */
+    private static final String LOCK_KEY_PREFIX = "translator:lock:";
+    /** 锁过期时间（秒），防止锁持有者崩溃后死锁 */
+    private static final long LOCK_EXPIRE_SECONDS = 60;
+    /** 未抢到锁时的等待间隔（毫秒） */
+    private static final long LOCK_RETRY_INTERVAL_MS = 100;
+    /** 未抢到锁时的最大等待时间（秒），超时后自行调 LLM */
+    private static final long LOCK_MAX_WAIT_SECONDS = 30;
+
     // ==================== 术语反向索引 ====================
 
     /** Redis Set key 前缀: glossary:cache_keys:{word} */
@@ -128,6 +139,7 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
     /**
      * 获取翻译缓存（L1 Caffeine → L2 Redis）
      * 使用 cache.get(key, loader) 实现内置互斥加载：同一 key 只有一个线程查 Redis
+     * L1/L2 都未命中时，尝试获取分布式锁，避免多实例同时调 LLM。
      */
     public String getCache(String cacheKey) {
         // 1. L1: 使用 get(key, loader) 内置互斥，非 L1 命中时只有一个线程查 Redis
@@ -137,8 +149,7 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
         });
 
         if (value == null) {
-            cacheMissCount.incrementAndGet();
-            return null;
+            return tryAcquireSimpleLock(cacheKey);
         }
 
         // 区分 L1 命中（刚加载的）和 L2 命中（从 Redis 加载的）
@@ -147,9 +158,56 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
     }
 
     /**
+     * 简单分布式锁（非 mode 版本的 getCache 使用）。
+     */
+    private String tryAcquireSimpleLock(String cacheKey) {
+        String lockKey = LOCK_KEY_PREFIX + cacheKey;
+        Boolean acquired = stringRedisTemplate.opsForValue()
+                .setIfAbsent(lockKey, "1", Duration.ofSeconds(LOCK_EXPIRE_SECONDS));
+
+        if (Boolean.TRUE.equals(acquired)) {
+            cacheMissCount.incrementAndGet();
+            return null;
+        }
+
+        // 未抢到锁，轮询等待
+        cacheMissCount.incrementAndGet();
+        long startTime = System.currentTimeMillis();
+        long maxWaitMs = LOCK_MAX_WAIT_SECONDS * 1000;
+
+        while (System.currentTimeMillis() - startTime < maxWaitMs) {
+            try {
+                Thread.sleep(LOCK_RETRY_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+
+            String cached = caffeineCache.getIfPresent(cacheKey);
+            if (cached == null) {
+                cached = stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + cacheKey);
+                if (cached != null) {
+                    caffeineCache.put(cacheKey, cached);
+                    l1HitCount.incrementAndGet();
+                    return cached;
+                }
+            } else {
+                l1HitCount.incrementAndGet();
+                return cached;
+            }
+        }
+
+        log.warn("分布式锁等待超时，自行调 LLM: cacheKey={}", cacheKey);
+        return null;
+    }
+
+    /**
      * 根据翻译模式获取缓存，使用 Caffeine 内置互斥加载
      * 按模式层级搜索：fast→[team, expert, fast], expert→[team, expert], team→[team]
      * 每个 modeKey 使用 cache.get(key, loader) 实现互斥：同一 key 只有一个线程查 Redis
+     *
+     * L1/L2 都未命中时，尝试获取分布式锁。抢到锁的调用方负责调 LLM 写缓存，
+     * 未抢到锁的调用方轮询缓存直到缓存出现或超时，避免多个实例同时调 LLM。
      */
     public String getCacheByMode(String cacheKey, String currentMode) {
         List<String> modesToSearch = MODE_CACHE_HIERARCHY.getOrDefault(
@@ -169,7 +227,68 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
             }
         }
 
+        // L1/L2 都未命中，尝试获取分布式锁，避免多实例同时调 LLM
+        return tryAcquireTranslateLock(cacheKey, currentMode);
+    }
+
+    /**
+     * 尝试获取分布式锁来避免多实例同时调 LLM。
+     * 抢到锁：返回 null，由调用方调 LLM 并写缓存。
+     * 未抢到锁：轮询缓存，直到缓存出现或超时。
+     */
+    private String tryAcquireTranslateLock(String cacheKey, String currentMode) {
+        // 列出所有可能写入的 modeKey（与 MODE_CACHE_HIERARCHY 一致）
+        List<String> modesToSearch = MODE_CACHE_HIERARCHY.getOrDefault(
+            currentMode != null ? currentMode : "fast", List.of("fast"));
+
+        // 尝试为所有 modeKey 获取锁（只要有一个拿到锁即可）
+        for (String mode : modesToSearch) {
+            String modeKey = cacheKey + "_" + mode;
+            String lockKey = LOCK_KEY_PREFIX + modeKey;
+            Boolean acquired = stringRedisTemplate.opsForValue()
+                    .setIfAbsent(lockKey, "1", Duration.ofSeconds(LOCK_EXPIRE_SECONDS));
+
+            if (Boolean.TRUE.equals(acquired)) {
+                // 抢到锁，返回 null，由调用方调 LLM 写缓存
+                cacheMissCount.incrementAndGet();
+                return null;
+            }
+        }
+
+        // 未抢到任何锁，轮询等待缓存写入
         cacheMissCount.incrementAndGet();
+        long startTime = System.currentTimeMillis();
+        long maxWaitMs = LOCK_MAX_WAIT_SECONDS * 1000;
+
+        while (System.currentTimeMillis() - startTime < maxWaitMs) {
+            try {
+                Thread.sleep(LOCK_RETRY_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+
+            // 检查缓存是否已被锁持有者写入
+            for (String mode : modesToSearch) {
+                String modeKey = cacheKey + "_" + mode;
+                String cached = caffeineCache.getIfPresent(modeKey);
+                if (cached == null) {
+                    cached = stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + modeKey);
+                    if (cached != null) {
+                        // 缓存已被写入，回写到 L1
+                        caffeineCache.put(modeKey, cached);
+                        l1HitCount.incrementAndGet();
+                        return cached;
+                    }
+                } else {
+                    l1HitCount.incrementAndGet();
+                    return cached;
+                }
+            }
+        }
+
+        // 超时仍未拿到缓存，返回 null 自行调 LLM
+        log.warn("分布式锁等待超时，自行调 LLM: cacheKey={}", cacheKey);
         return null;
     }
 
