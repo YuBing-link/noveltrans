@@ -68,6 +68,13 @@ public enum TranslationMode {
     }
 
     /**
+     * 是否为快速模式
+     */
+    public boolean isFastMode() {
+        return this == FAST;
+    }
+
+    /**
      * 根据模式名称字符串查找枚举
      * @param name 模式名称（大小写不敏感）
      * @return 匹配的 TranslationMode，无匹配时返回 FAST

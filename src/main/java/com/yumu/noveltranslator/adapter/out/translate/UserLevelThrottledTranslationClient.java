@@ -329,7 +329,7 @@ public class UserLevelThrottledTranslationClient implements com.yumu.noveltransl
                             }
                         }
                     }
-                    // 基于优秀率概率轮询（fast=30% 大模型，expert=70% 大模型）
+                    // 基于优秀率概率轮询（fast=30% 大模型，expert=100% 大模型）
                     return translateWithRoundRobin(text, targetLang, engine, fastMode, glossaryTerms);
                 } catch (Exception e) {
                     tokenAwareRateLimiter.refund(userId, estimatedTokens);
@@ -383,7 +383,7 @@ public class UserLevelThrottledTranslationClient implements com.yumu.noveltransl
             try {
                 return doTranslateRequest(text, targetLang, engine, glossaryTerms);
             } catch (Exception e) {
-                // Python 服务（所有引擎）失败，降级到 MTranServer（本地引擎）
+                // Python 服务失败，降级到 MTranServer
                 log.warn("Python 服务翻译失败，降级到 MTranServer: {}", e.getMessage());
                 try {
                     return doExternalTranslationRequest(text, targetLang);
@@ -446,7 +446,7 @@ public class UserLevelThrottledTranslationClient implements com.yumu.noveltransl
 
     /**
      * 判断是否应该使用 Python 服务
-     * @param fastMode true=大模型 30% 概率，false=大模型 70% 概率
+     * @param fastMode true=大模型 30% 概率，false=大模型 100% 概率
      * @return true 使用 Python 服务，false 使用 MTran 服务
      */
     private boolean shouldUsePythonService(boolean fastMode) {

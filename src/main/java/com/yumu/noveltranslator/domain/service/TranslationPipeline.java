@@ -311,7 +311,7 @@ public class TranslationPipeline {
         }
 
         // L4: 直译（注入术语表）
-        String rawJson = translationClient.translate(text, targetLang, mode.getName(), false, glossaryTerms.isEmpty(), glossaryTerms, userId != null ? userId.toString() : null, userLevel);
+        String rawJson = translationClient.translate(text, targetLang, mode.getName(), false, mode.isFastMode(), glossaryTerms, userId != null ? userId.toString() : null, userLevel);
         String result = ExternalResponseUtil.extractDataField(rawJson);
 
         if (result == null) {
@@ -377,7 +377,7 @@ public class TranslationPipeline {
         try {
             boolean hasGlossary = !glossaryTerms.isEmpty();
             log.info("[PIPELINE-L4] 调用翻译客户端: hasGlossary={}, textLen={}", hasGlossary, text.length());
-            String rawJson = translationClient.translate(text, targetLang, mode.getName(), html, !hasGlossary, glossaryTerms, userId != null ? userId.toString() : null, userLevel);
+            String rawJson = translationClient.translate(text, targetLang, mode.getName(), html, mode.isFastMode(), glossaryTerms, userId != null ? userId.toString() : null, userLevel);
             log.info("[PIPELINE-L4] 翻译客户端返回: rawJsonLen={}", rawJson != null ? rawJson.length() : 0);
             String result = ExternalResponseUtil.extractDataField(rawJson);
             log.info("[PIPELINE-L4] 提取译文: result={}", result != null ? result.substring(0, Math.min(50, result.length())) : "null");
