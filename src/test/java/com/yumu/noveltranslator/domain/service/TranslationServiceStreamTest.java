@@ -128,7 +128,7 @@ class TranslationServiceStreamTest {
         void 无认证用户正常翻译() {
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"翻译结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -177,7 +177,7 @@ class TranslationServiceStreamTest {
             setAuthenticatedUser(1L);
             when(quotaService.tryConsumeChars(anyLong(), anyString(), anyLong(), anyString())).thenReturn(true);
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"你好\"}");
 
             WebpageTranslateRequest req = new WebpageTranslateRequest();
@@ -201,7 +201,7 @@ class TranslationServiceStreamTest {
             // No auth user, no quota check
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn(null); // simulate failure
 
             service.webpageTranslateStream(null, req, (event) -> {});
@@ -217,7 +217,7 @@ class TranslationServiceStreamTest {
 
             SecurityContextHolder.clearContext();
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"Expert translation\"}");
 
             service.webpageTranslateStream(null, req, (event) -> {});
@@ -290,7 +290,7 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -312,7 +312,7 @@ class TranslationServiceStreamTest {
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
             // mode=expert uses pipeline.execute() which calls 8-param translate
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("{\"code\":200,\"data\":\"结果\"}");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -331,7 +331,7 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenReturn("");
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -350,7 +350,7 @@ class TranslationServiceStreamTest {
             when(ragTranslationService.searchSimilarWithModes(anyLong(), anyString(), anyString(), anyList()))
                     .thenReturn(new RagTranslationResponse());
             when(entityConsistencyService.shouldUseConsistency(anyString())).thenReturn(false);
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenThrow(new RuntimeException("connection timeout"));
 
             SelectionTranslationRequest req = new SelectionTranslationRequest();
@@ -382,13 +382,13 @@ class TranslationServiceStreamTest {
 
             assertTrue(resp.getSuccess());
             assertEquals("cached translation", resp.getTranslatedContent());
-            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString());
+            verify(translationClient, never()).translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any());
         }
 
         @Test
         void 翻译失败时使用原文兜底() {
             when(cachePort.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
-            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), anyString(), anyString()))
+            when(translationClient.translate(anyString(), anyString(), anyString(), anyBoolean(), anyBoolean(), anyList(), any(), any()))
                     .thenThrow(new RuntimeException("engine failed"));
 
             ReaderTranslateRequest req = new ReaderTranslateRequest();

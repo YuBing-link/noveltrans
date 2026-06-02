@@ -212,11 +212,12 @@ public class TranslationPipeline {
             return result;
         }
 
-        // L3: 实体一致性 + 占位符保护
+        // L3: 实体一致性 + 占位符保护（仅文档翻译场景启用）
+        // 插件端和 API 端翻译短文本，不需要跨段术语一致性，跳过 L3
         String textForTranslation = text;
         EntityConsistencyService.EntityMappingContext mappingContext = null;
 
-        if (userId != null && entityConsistencyService.shouldUseConsistency(text)) {
+        if (userId != null && docId != null && entityConsistencyService.shouldUseConsistency(text)) {
             log.info("Pipeline 团队模式启用实体一致性");
             try {
                 List<String> extractedEntities = entityConsistencyService.extractEntitiesSegmented(text, targetLang);
@@ -295,8 +296,9 @@ public class TranslationPipeline {
             return result;
         }
 
-        // L3: 实体一致性翻译（条件触发：userId 非 null 且文本长度超阈值）
-        if (userId != null && entityConsistencyService.shouldUseConsistency(text)) {
+        // L3: 实体一致性翻译（仅文档翻译场景启用）
+        // 插件端和 API 端翻译短文本，不需要跨段术语一致性，跳过 L3
+        if (userId != null && docId != null && entityConsistencyService.shouldUseConsistency(text)) {
             log.info("Pipeline 启用实体一致性翻译");
             ConsistencyTranslationResult consistencyResult =
                     entityConsistencyService.translateWithConsistency(text, targetLang, mode.getName(), userId, docId);
