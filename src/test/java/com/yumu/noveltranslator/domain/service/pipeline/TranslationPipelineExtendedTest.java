@@ -732,12 +732,12 @@ class TranslationPipelineExtendedTest {
         @DisplayName("有术语表 — glossaryTerms 传入")
         void withGlossary() {
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
-                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(false), anyList(), any(), any());
+                    .translate(anyString(), anyString(), eq("fast"), eq(false), eq(true), anyList(), any(), any());
 
             String result = pipelineWithGlossary.execute(SOURCE_TEXT, TARGET_LANG, TranslationMode.FAST);
 
             assertEquals(TRANSLATED_TEXT, result);
-            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("fast"), eq(false), eq(false), argThat(terms -> terms != null && terms.size() == 1), any(), any());
+            verify(translationClient).translate(eq(SOURCE_TEXT), eq(TARGET_LANG), eq("fast"), eq(false), eq(true), argThat(terms -> terms != null && terms.size() == 1), any(), any());
         }
 
         @Test
