@@ -62,20 +62,6 @@ public class PluginTranslateController {
         return emitter;
     }
 
-    /**
-     * 文本流式翻译（SSE）— 适用于长文本的单段流式输出
-     * POST /v1/translate/text/stream
-     */
-    @PostMapping(value = "/text/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamTextTranslate(@RequestBody @Valid SelectionTranslationRequest req) {
-        Long userId = SecurityUtil.getCurrentUserId().orElse(null);
-        log.info("[STREAM-TRACE] Controller entry: /v1/translate/text/stream, userId={}, engine={}, targetLang={}, mode={}, textLen={}",
-                userId, req.getEngine(), req.getTargetLang(), req.getMode(), req.getText() != null ? req.getText().length() : 0);
-        SseEmitter emitter = SseEmitterUtil.createSseEmitter(300000L);
-        TextStreamEventConsumer consumer = wrapEmitter(emitter);
-        translatePort.streamTextTranslate(userId, req, consumer);
-        return emitter;
-    }
 
     private TextStreamEventConsumer wrapEmitter(SseEmitter emitter) {
         return event -> {

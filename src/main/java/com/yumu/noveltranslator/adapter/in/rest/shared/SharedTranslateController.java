@@ -139,7 +139,7 @@ public class SharedTranslateController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "sourceLang", defaultValue = "auto") String sourceLang,
             @RequestParam(value = "targetLang", defaultValue = "zh") String targetLang,
-            @RequestParam(value = "mode", defaultValue = "fast") String mode) {
+            @RequestParam(value = "mode", defaultValue = "expert") String mode) {
         SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);
         StreamTranslateEventConsumer consumer = wrapEmitter(emitter);
         try {
@@ -160,7 +160,7 @@ public class SharedTranslateController {
     public SseEmitter streamDocumentTranslateById(
             @PathVariable Long docId,
             @RequestParam(value = "targetLang", defaultValue = "zh") String targetLang,
-            @RequestParam(value = "mode", defaultValue = "fast") String mode) {
+            @RequestParam(value = "mode", defaultValue = "expert") String mode) {
         SseEmitter emitter = SseEmitterUtil.createSseEmitter(300_000L);
         StreamTranslateEventConsumer consumer = wrapEmitter(emitter);
         translationTaskPort.streamTranslateDocumentById(docId, targetLang, mode, consumer);
