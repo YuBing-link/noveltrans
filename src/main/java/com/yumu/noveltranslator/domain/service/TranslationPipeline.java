@@ -5,7 +5,7 @@ import com.yumu.noveltranslator.port.dto.translation.RagTranslationResponse;
 import com.yumu.noveltranslator.domain.model.Glossary;
 import com.yumu.noveltranslator.enums.TranslationMode;
 import com.yumu.noveltranslator.domain.service.EntityConsistencyService;
-import com.yumu.noveltranslator.application.service.RagTranslationApplicationService;
+import com.yumu.noveltranslator.port.in.RagTranslationPort;
 import com.yumu.noveltranslator.port.out.TranslationCachePort;
 import com.yumu.noveltranslator.port.out.TranslationClientPort;
 import com.yumu.noveltranslator.port.out.TeamTranslationPort;
@@ -43,7 +43,7 @@ public class TranslationPipeline {
     private static final int TRANSLATION_SEGMENT_SIZE = 3000;
 
     private final TranslationCachePort cacheService;
-    private final RagTranslationApplicationService ragTranslationService;
+    private final RagTranslationPort ragTranslationService;
     private final EntityConsistencyService entityConsistencyService;
     private final TranslationClientPort translationClient;
     private final TranslationPostProcessingService postProcessingService;
@@ -58,7 +58,7 @@ public class TranslationPipeline {
      */
     public TranslationPipeline(
             TranslationCachePort cacheService,
-            RagTranslationApplicationService ragTranslationService,
+            RagTranslationPort ragTranslationService,
             EntityConsistencyService entityConsistencyService,
             TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
@@ -75,7 +75,7 @@ public class TranslationPipeline {
      */
     public TranslationPipeline(
             TranslationCachePort cacheService,
-            RagTranslationApplicationService ragTranslationService,
+            RagTranslationPort ragTranslationService,
             EntityConsistencyService entityConsistencyService,
             TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
@@ -91,7 +91,7 @@ public class TranslationPipeline {
      */
     public TranslationPipeline(
             TranslationCachePort cacheService,
-            RagTranslationApplicationService ragTranslationService,
+            RagTranslationPort ragTranslationService,
             EntityConsistencyService entityConsistencyService,
             TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
@@ -108,7 +108,7 @@ public class TranslationPipeline {
      */
     public TranslationPipeline(
             TranslationCachePort cacheService,
-            RagTranslationApplicationService ragTranslationService,
+            RagTranslationPort ragTranslationService,
             EntityConsistencyService entityConsistencyService,
             TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
