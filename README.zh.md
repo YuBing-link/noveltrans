@@ -54,8 +54,9 @@ NovelTrans 是一个全栈翻译平台，为网文作者和译者设计。它取
 
 ## 关键技术决策
 
-**严格六边形架构 + 应用层。**
-领域层是纯 Java — 零框架注解、零 ORM 引用、零 HTTP 类型。所有基础设施访问通过端口接口。Stripe SDK 隔离在 `PaymentPort` 后，Redis 在 `CachePort` 和 `QuotaPort` 后，MySQL 在 `BillingRepositoryPort` 后。安全过滤器在 `SecurityConfig.filterChain()` 中用 `new` 实例化而非 `@Component`，避免 Spring Security CGLIB 代理排序冲突。
+**务实的六边形架构。**
+领域模型是纯 POJO；领域服务使用 Spring `@Service` 进行实际的依赖注入。所有基础设施访问通过端口接口。
+
 
 **两层用户级限流。**
 并发控制：每个用户独立 `Semaphore`（FREE=1, PRO=3, MAX=5）。吞吐控制：滑动窗口 TPM 限流器，每请求估算 token 消耗，失败自动退款。空闲信号量每 30 分钟清理。月度字数配额使用 Lua 脚本原子校验 + INCR，MySQL 兜底。

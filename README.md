@@ -54,8 +54,9 @@ Three client channels share the same backend:
 
 ## Key Technical Decisions
 
-**Strict hexagonal architecture with application layer.**
-Domain layer is pure Java — zero framework annotations, zero ORM references, zero HTTP types. All infrastructure access goes through port interfaces. Stripe SDK is isolated behind `PaymentPort`; Redis behind `CachePort` and `QuotaPort`; MySQL behind `BillingRepositoryPort`. Security filters are instantiated with `new` in `SecurityConfig.filterChain()` rather than `@Component` to avoid Spring Security's CGLIB proxy ordering conflicts.
+**Pragmatic hexagonal architecture.**
+Domain Models are pure POJOs; Domain Services use Spring `@Service` for practical DI. All infrastructure access goes through port interfaces.
+
 
 **Two-level per-user rate limiting.**
 Concurrency: each user gets an independent `Semaphore` (FREE=1, PRO=3, MAX=5). Throughput: sliding-window TPM limiter with estimated token cost per request and automatic refund on failure. Idle semaphores are cleaned every 30 minutes. Monthly character quota uses Lua script atomic check + INCR in Redis with MySQL fallback.
