@@ -73,7 +73,7 @@ class MultiAgentTranslationServiceExtendedTest {
                 collabPort, documentPort, translationPort,
                 teamTranslationPort, cachePort, entityConsistencyService,
                 glossaryPort, ragTranslationService, aiGlossaryService, postProcessingService,
-                collabStateMachine);
+                collabStateMachine, null);
         clearRetryCounterMap();
         // postProcessingService fixUntranslatedChinese 默认返回译文本身
         lenient().doAnswer(inv -> inv.getArgument(1)).when(postProcessingService).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());

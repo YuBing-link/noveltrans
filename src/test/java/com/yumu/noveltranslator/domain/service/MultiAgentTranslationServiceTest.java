@@ -89,7 +89,7 @@ class MultiAgentTranslationServiceTest {
                 collabPort, documentPort, translationPort,
                 teamTranslationService, cachePort, entityConsistencyService,
                 glossaryPort, ragTranslationService, aiGlossaryService, postProcessingService,
-                collabStateMachine);
+                collabStateMachine, null);
     }
 
     @Nested

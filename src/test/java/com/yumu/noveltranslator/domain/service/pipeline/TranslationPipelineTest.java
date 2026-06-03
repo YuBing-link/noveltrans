@@ -39,7 +39,7 @@ class TranslationPipelineTest {
         entityConsistencyService = mock(EntityConsistencyService.class);
         translationClient = mock(UserLevelThrottledTranslationClient.class);
         postProcessingService = mock(TranslationPostProcessingService.class);
-        pipeline = new TranslationPipeline(cacheService, ragTranslationService, entityConsistencyService, translationClient, postProcessingService, 1L, "doc-001");
+        pipeline = new TranslationPipeline(cacheService, ragTranslationService, entityConsistencyService, translationClient, postProcessingService, 1L, null, "doc-001");
     }
 
     @Nested
@@ -296,7 +296,7 @@ class TranslationPipelineTest {
         @Test
         void userId为null时跳过L3一致性() {
             TranslationPipeline nullUserPipeline = new TranslationPipeline(
-                    cacheService, ragTranslationService, entityConsistencyService, translationClient, postProcessingService, null, null);
+                    cacheService, ragTranslationService, entityConsistencyService, translationClient, postProcessingService, null, null, null);
 
             when(cacheService.getCacheByMode(anyString(), anyString())).thenReturn(Optional.empty());
             RagTranslationResponse ragResp = new RagTranslationResponse();

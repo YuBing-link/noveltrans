@@ -42,11 +42,22 @@ public class TranslationPipeline {
     /** 分段翻译的目标段大小（字符数） */
     private static final int TRANSLATION_SEGMENT_SIZE = 3000;
 
+    /** 缓存服务端口：负责 L1 级缓存查询（Caffeine → Redis） 数据库异步写入 */
     private final TranslationCachePort cacheService;
+
+    /** RAG 翻译服务端口：负责 L2 级语义匹配与向量相似度查询 */
     private final RagTranslationPort ragTranslationService;
+
+    /** 实体一致性服务：负责 L3 级术语表管理、实体提取及占位符保护 */
     private final EntityConsistencyService entityConsistencyService;
+
+    /** 翻译客户端端口：负责 L4 级直译（Python/MTranServer 轮询） */
     private final TranslationClientPort translationClient;
+
+    /** 翻译后处理服务：负责修复未翻译中文、格式化等后处理逻辑 */
     private final TranslationPostProcessingService postProcessingService;
+
+    /** 团队翻译服务端口：负责团队模式下的多 Agent 协作翻译（可为 null） */
     private final TeamTranslationPort teamTranslationService;
     private final Long userId;
     private final String userLevel;
@@ -63,9 +74,10 @@ public class TranslationPipeline {
             TranslationClientPort translationClient,
             TranslationPostProcessingService postProcessingService,
             Long userId,
+            String userLevel,
             String docId) {
         this(cacheService, ragTranslationService, entityConsistencyService, translationClient,
-             postProcessingService, null, userId, docId, List.of());
+             postProcessingService, null, userId, userLevel, docId, List.of());
     }
 
     /**
@@ -81,30 +93,14 @@ public class TranslationPipeline {
             TranslationPostProcessingService postProcessingService,
             TeamTranslationPort teamTranslationService,
             Long userId,
+            String userLevel,
             String docId) {
         this(cacheService, ragTranslationService, entityConsistencyService, translationClient,
-             postProcessingService, teamTranslationService, userId, docId, List.of());
+             postProcessingService, teamTranslationService, userId, userLevel, docId, List.of());
     }
 
     /**
      * 创建翻译管线实例（完整构造，支持术语表）
-     */
-    public TranslationPipeline(
-            TranslationCachePort cacheService,
-            RagTranslationPort ragTranslationService,
-            EntityConsistencyService entityConsistencyService,
-            TranslationClientPort translationClient,
-            TranslationPostProcessingService postProcessingService,
-            TeamTranslationPort teamTranslationService,
-            Long userId,
-            String docId,
-            List<Glossary> glossaryTerms) {
-        this(cacheService, ragTranslationService, entityConsistencyService, translationClient,
-             postProcessingService, teamTranslationService, userId, null, docId, glossaryTerms);
-    }
-
-    /**
-     * 创建翻译管线实例（完整构造，支持术语表和 userLevel）
      */
     public TranslationPipeline(
             TranslationCachePort cacheService,

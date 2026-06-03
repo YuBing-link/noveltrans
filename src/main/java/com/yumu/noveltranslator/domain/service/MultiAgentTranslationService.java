@@ -46,6 +46,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
 
 /**
  * 多 Agent 协作翻译服务
@@ -86,6 +87,7 @@ public class MultiAgentTranslationService {
     private final AiGlossaryService aiGlossaryService;
     private final TranslationPostProcessingService postProcessingService;
     private final CollabStateMachine collabStateMachine;
+    private final UserRepositoryPort userRepositoryPort;
 
     /**
      * 启动时从数据库恢复重试计数
@@ -270,10 +272,15 @@ public class MultiAgentTranslationService {
             // 推导小说类型
             String novelType = deriveNovelType(project);
 
+            // 查询用户等级用于限流和配额
+            String userLevel = userRepositoryPort.findById(userId)
+                    .map(com.yumu.noveltranslator.domain.model.User::getUserLevel)
+                    .orElse(null);
+
             // 构建 Pipeline 并执行完整管线（L1→L2→L3→L4=Team）
             TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
-                    null, postProcessingService, teamTranslationPort, userId, chapter.getProjectId().toString(), glossaryTerms);
+                    null, postProcessingService, teamTranslationPort, userId, userLevel, chapter.getProjectId().toString(), glossaryTerms);
 
             String translated = pipeline.executeTeam(
                     sourceText, sourceLang, targetLang, TranslationMode.TEAM, novelType, glossaryTerms);

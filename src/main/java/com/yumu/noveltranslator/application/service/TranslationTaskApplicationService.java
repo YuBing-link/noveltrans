@@ -42,6 +42,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.yumu.noveltranslator.port.out.UserRepositoryPort;
+
 /**
  * 翻译任务服务
  */
@@ -53,6 +55,7 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
     private final TranslationRepositoryPort translationPort;
     private final DocumentRepositoryPort documentPort;
     private final GlossaryRepositoryPort glossaryPort;
+    private final UserRepositoryPort userRepositoryPort;
     private final TranslationStateMachine stateMachine;
     private final TranslationClientPort translationClientPort;
     private final TranslationCachePort cachePort;
@@ -137,9 +140,14 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
                 // 加载用户术语表
                 List<Glossary> glossaryTerms = loadGlossaryTermsForUser(userId, content);
 
+                // 查询用户等级用于限流和配额
+                String userLevel = userRepositoryPort.findById(userId)
+                        .map(com.yumu.noveltranslator.domain.model.User::getUserLevel)
+                        .orElse(null);
+
                 TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
-                    translationClientPort, postProcessingService, null, userId, docId, glossaryTerms);
+                    translationClientPort, postProcessingService, null, userId, userLevel, docId, glossaryTerms);
 
                 while (batchStart < total) {
                     StringBuilder batch = new StringBuilder();
@@ -761,9 +769,12 @@ public class TranslationTaskApplicationService implements com.yumu.noveltranslat
      * 翻译单个段落（两个流式方法共用）
      */
     private String translateParagraph(String paragraph, String targetLang, String mode, Long userId, String docId) throws Exception {
+        String userLevel = userRepositoryPort.findById(userId)
+                .map(com.yumu.noveltranslator.domain.model.User::getUserLevel)
+                .orElse(null);
         TranslationPipeline pipeline = new TranslationPipeline(
                 cachePort, ragTranslationService, entityConsistencyService,
-                translationClientPort, postProcessingService, userId, docId);
+                translationClientPort, postProcessingService, userId, userLevel, docId);
         String result;
         if ("expert".equals(mode)) {
             result = pipeline.execute(paragraph, targetLang, TranslationMode.EXPERT);

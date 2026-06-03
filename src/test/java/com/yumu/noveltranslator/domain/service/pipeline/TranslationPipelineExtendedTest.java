@@ -69,13 +69,13 @@ class TranslationPipelineExtendedTest {
         pipeline = new TranslationPipeline(
                 cacheService, ragTranslationService, entityConsistencyService,
                 translationClient, postProcessingService,
-                USER_ID, DOC_ID);
+                USER_ID, null, DOC_ID);
 
         // Team pipeline
         teamPipeline = new TranslationPipeline(
                 cacheService, ragTranslationService, entityConsistencyService,
                 translationClient, postProcessingService,
-                teamTranslationService, USER_ID, DOC_ID);
+                teamTranslationService, USER_ID, null, DOC_ID);
 
         // Pipeline with glossary
         Glossary glossary = new Glossary();
@@ -84,7 +84,7 @@ class TranslationPipelineExtendedTest {
         pipelineWithGlossary = new TranslationPipeline(
                 cacheService, ragTranslationService, entityConsistencyService,
                 translationClient, postProcessingService,
-                teamTranslationService, USER_ID, DOC_ID, List.of(glossary));
+                teamTranslationService, USER_ID, null, DOC_ID, List.of(glossary));
 
         // Common stubs — lenient so they don't interfere with test-specific stubs
         lenient().doReturn(Optional.empty()).when(cacheService).getCacheByMode(anyString(), anyString());
@@ -821,7 +821,7 @@ class TranslationPipelineExtendedTest {
             TranslationPipeline barePipeline = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
                     null, postProcessingService,
-                    null, USER_ID, DOC_ID);
+                    null, USER_ID, null, DOC_ID);
 
             String result = barePipeline.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "daily", List.of());
 
@@ -854,7 +854,7 @@ class TranslationPipelineExtendedTest {
                     .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
             lenient().doAnswer(inv -> inv.getArgument(1)).when(pps).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
 
-            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
+            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, null, DOC_ID);
 
             // null → splitTextForTranslation returns List.of("") → executeSegment("")
             // isValidTranslation("", "翻译") fails because 2 > 0*10
@@ -881,7 +881,7 @@ class TranslationPipelineExtendedTest {
                     .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
             lenient().doAnswer(inv -> inv.getArgument(1)).when(pps).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
 
-            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
+            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, null, DOC_ID);
 
             // isValidTranslation("", "空翻译") fails because 5 > 0*10
             String result = p.execute("", TARGET_LANG, TranslationMode.FAST);
@@ -907,7 +907,7 @@ class TranslationPipelineExtendedTest {
                     .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
             lenient().doAnswer(inv -> inv.getArgument(1)).when(pps).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());
 
-            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
+            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, null, DOC_ID);
 
             String result = p.execute("   ", TARGET_LANG, TranslationMode.FAST);
 
@@ -926,7 +926,7 @@ class TranslationPipelineExtendedTest {
 
             lenient().doReturn(Optional.empty()).when(cs).getCacheByMode(anyString(), anyString());
 
-            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
+            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, null, DOC_ID);
 
             assertThrows(NullPointerException.class, () -> p.executeFast(null, TARGET_LANG, TranslationMode.FAST));
         }
@@ -944,7 +944,7 @@ class TranslationPipelineExtendedTest {
             lenient().doReturn(null).when(tc)
                     .translate(any(), anyString(), anyString(), anyBoolean(), anyBoolean(), any(), any(), any());
 
-            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, DOC_ID);
+            TranslationPipeline p = new TranslationPipeline(cs, rag, ecs, tc, pps, USER_ID, null, DOC_ID);
 
             String result = p.executeFast("", TARGET_LANG, TranslationMode.FAST);
 
@@ -1110,7 +1110,7 @@ class TranslationPipelineExtendedTest {
             TranslationPipeline p = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
                     translationClient, postProcessingService,
-                    USER_ID, DOC_ID);
+                    USER_ID, null, DOC_ID);
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
                     .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
@@ -1125,7 +1125,7 @@ class TranslationPipelineExtendedTest {
             TranslationPipeline p = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
                     translationClient, postProcessingService,
-                    teamTranslationService, USER_ID, DOC_ID);
+                    teamTranslationService, USER_ID, null, DOC_ID);
 
             String result = p.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "daily", List.of());
             assertEquals("Team translated result", result);
@@ -1140,7 +1140,7 @@ class TranslationPipelineExtendedTest {
             TranslationPipeline p = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
                     translationClient, postProcessingService,
-                    teamTranslationService, USER_ID, DOC_ID, List.of(g));
+                    teamTranslationService, USER_ID, null, DOC_ID, List.of(g));
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
                     .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
@@ -1155,7 +1155,7 @@ class TranslationPipelineExtendedTest {
             TranslationPipeline p = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
                     translationClient, postProcessingService,
-                    null, USER_ID, DOC_ID, null);
+                    null, USER_ID, null, DOC_ID, null);
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
                     .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
@@ -1252,7 +1252,7 @@ class TranslationPipelineExtendedTest {
             TranslationPipeline p = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
                     translationClient, postProcessingService,
-                    null, DOC_ID);
+                    null, null, DOC_ID);
 
             lenient().doReturn(SUCCESS_JSON).when(translationClient)
                     .translate(anyString(), anyString(), eq("fast"), anyBoolean(), anyBoolean(), anyList(), any(), any());
@@ -1269,7 +1269,7 @@ class TranslationPipelineExtendedTest {
             TranslationPipeline p = new TranslationPipeline(
                     cacheService, ragTranslationService, entityConsistencyService,
                     translationClient, postProcessingService,
-                    teamTranslationService, null, DOC_ID);
+                    teamTranslationService, null, null, DOC_ID);
 
             String result = p.executeTeam(SOURCE_TEXT, "en", TARGET_LANG, TranslationMode.TEAM, "daily", List.of());
 

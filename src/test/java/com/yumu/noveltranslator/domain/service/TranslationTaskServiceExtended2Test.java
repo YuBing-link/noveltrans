@@ -98,7 +98,7 @@ class TranslationTaskServiceExtended2Test {
     void setUp() {
         taskService = new TranslationTaskApplicationService(
                 translationPort, documentPort, glossaryPort,
-                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
+                null, stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
         // Stub cachePort to return empty (cache miss) so Pipeline.executeFast proceeds to L4

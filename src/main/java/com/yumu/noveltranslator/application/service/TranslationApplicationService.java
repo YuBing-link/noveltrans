@@ -116,9 +116,10 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
         }
 
         try {
+            String userLevel = getCurrentUserLevel().orElse(null);
             TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
-                    translationClientPort, postProcessingService, userId, null);
+                    translationClientPort, postProcessingService, userId, userLevel, null);
             String result = "fast".equals(modeName)
                     ? pipeline.executeFast(combined, target, mode)
                     : pipeline.execute(combined, target, mode);
@@ -240,9 +241,10 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
 
         // 2. 使用 Pipeline 快速模式并发翻译缓存未命中的段落
         if (!indexesToTranslate.isEmpty()) {
+            String userLevel = getCurrentUserLevel().orElse(null);
             TranslationPipeline pipeline = new TranslationPipeline(
                     cachePort, ragTranslationService, entityConsistencyService,
-                    translationClientPort, postProcessingService, userId, null);
+                    translationClientPort, postProcessingService, userId, userLevel, null);
 
             List<Runnable> tasks = new ArrayList<>();
             List<String> tempResults = new ArrayList<>(indexesToTranslate.size());
@@ -342,9 +344,10 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
 
                 log.info("[SSE流式翻译] 开始处理，文本数量: {}, 引擎: {}, fastMode: {}", totalCount, req.getEngine(), req.getFastMode());
 
+                String userLevel = getCurrentUserLevel().orElse(null);
                 TranslationPipeline pipeline = new TranslationPipeline(
                         cachePort, ragTranslationService, entityConsistencyService,
-                        translationClientPort, postProcessingService, userId, null);
+                        translationClientPort, postProcessingService, userId, userLevel, null);
 
                 int maxConcurrency = 5;
                 var semaphore = new java.util.concurrent.Semaphore(maxConcurrency);
@@ -451,9 +454,10 @@ public class TranslationApplicationService implements com.yumu.noveltranslator.p
 
         Thread.startVirtualThread(() -> {
             try {
+                String userLevel = getCurrentUserLevel().orElse(null);
                 TranslationPipeline pipeline = new TranslationPipeline(
                         cachePort, ragTranslationService, entityConsistencyService,
-                        translationClientPort, postProcessingService, userId, null);
+                        translationClientPort, postProcessingService, userId, userLevel, null);
 
                 String[] logicalParagraphs = text.split("\n\n+");
                 log.info("[STREAM-TRACE] 全文拆分为 {} 个逻辑段落, 总行数 ~{}", logicalParagraphs.length,

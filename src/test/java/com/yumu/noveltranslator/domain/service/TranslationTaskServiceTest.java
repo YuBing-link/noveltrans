@@ -76,7 +76,7 @@ class TranslationTaskServiceTest {
     void setUp() {
         taskService = new TranslationTaskApplicationService(
                 translationPort, documentPort, glossaryPort,
-                stateMachine, translationClientPort, cachePort, ragTranslationService,
+                null, stateMachine, translationClientPort, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
     }
 

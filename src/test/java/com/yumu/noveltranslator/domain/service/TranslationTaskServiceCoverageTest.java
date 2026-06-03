@@ -89,7 +89,7 @@ class TranslationTaskServiceCoverageTest {
     void setUp() {
         taskService = new TranslationTaskApplicationService(
                 translationPort, documentPort, glossaryPort,
-                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
+                null, stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
     }
