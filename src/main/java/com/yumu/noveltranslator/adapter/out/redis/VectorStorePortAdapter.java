@@ -4,19 +4,19 @@ import com.yumu.noveltranslator.port.out.VectorSearchResult;
 import com.yumu.noveltranslator.port.out.VectorStorePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+/**
+ * Redis + RediSearch HNSW 向量存储与检索
+ * 索引创建见 {@link com.yumu.noveltranslator.config.RedisVectorConfig}
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -28,15 +28,6 @@ public class VectorStorePortAdapter implements VectorStorePort {
     private final StringRedisTemplate stringRedisTemplate;
     private final RedisConnectionFactory connectionFactory;
 
-    @Value("${spring.data.redis.host:localhost}")
-    private String redisHost;
-
-    @Value("${spring.data.redis.port:6379}")
-    private int redisPort;
-
-    @Value("${spring.data.redis.password:}")
-    private String redisPassword;
-
     @Override
     public List<VectorSearchResult> vectorSearch(float[] queryVector, Long userId, String targetLang, List<String> allowedModes, int topK) {
         try {
@@ -47,140 +38,34 @@ public class VectorStorePortAdapter implements VectorStorePort {
             String knnQuery = String.format("%s=>[KNN %d @embedding $query_vector AS score]", filterQuery, topK);
             byte[] queryVectorBytes = floatArrayToBytes(queryVector);
 
-            List<Object> args = new ArrayList<>();
-            args.add(INDEX_NAME);
-            args.add(knnQuery);
-            args.add("PARAMS");
-            args.add("2");
-            args.add("query_vector");
-            args.add(queryVectorBytes);
-            args.add("RETURN");
-            args.add("4");
-            args.add("source_text");
-            args.add("target_text");
-            args.add("score");
-            args.add("id");
-            args.add("SORTBY");
-            args.add("score");
-            args.add("ASC");
-            args.add("LIMIT");
-            args.add("0");
-            args.add(String.valueOf(topK));
-            args.add("DIALECT");
-            args.add("2");
-
-            List<Object> response = executeRawCommand("FT.SEARCH", args);
-            return parseSearchResult(response);
+            Object result = connectionFactory.getConnection().execute(
+                    "FT.SEARCH",
+                    INDEX_NAME.getBytes(StandardCharsets.UTF_8),
+                    knnQuery.getBytes(StandardCharsets.UTF_8),
+                    "PARAMS".getBytes(StandardCharsets.UTF_8),
+                    "2".getBytes(StandardCharsets.UTF_8),
+                    "query_vector".getBytes(StandardCharsets.UTF_8),
+                    queryVectorBytes,
+                    "RETURN".getBytes(StandardCharsets.UTF_8),
+                    "4".getBytes(StandardCharsets.UTF_8),
+                    "source_text".getBytes(StandardCharsets.UTF_8),
+                    "target_text".getBytes(StandardCharsets.UTF_8),
+                    "score".getBytes(StandardCharsets.UTF_8),
+                    "id".getBytes(StandardCharsets.UTF_8),
+                    "SORTBY".getBytes(StandardCharsets.UTF_8),
+                    "score".getBytes(StandardCharsets.UTF_8),
+                    "ASC".getBytes(StandardCharsets.UTF_8),
+                    "LIMIT".getBytes(StandardCharsets.UTF_8),
+                    "0".getBytes(StandardCharsets.UTF_8),
+                    String.valueOf(topK).getBytes(StandardCharsets.UTF_8),
+                    "DIALECT".getBytes(StandardCharsets.UTF_8),
+                    "2".getBytes(StandardCharsets.UTF_8)
+            );
+            return parseSearchResult(result);
         } catch (Exception e) {
             log.warn("Redis vector search failed: {}", e.getMessage(), e);
             return List.of();
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Object> executeRawCommand(String command, List<Object> args) throws Exception {
-        try (Socket socket = new Socket(redisHost, redisPort)) {
-            socket.setSoTimeout(5000);
-            DataInputStream in = new DataInputStream(socket.getInputStream());
-            ByteArrayOutputStream outStream = new ByteArrayOutputStream();
-
-            // AUTH if password set
-            if (redisPassword != null && !redisPassword.isEmpty()) {
-                writeRespCommand(outStream, "AUTH", List.of(redisPassword));
-                outStream.writeTo(socket.getOutputStream());
-                outStream.reset();
-                socket.getOutputStream().flush();
-                readRespResponse(in);
-            }
-
-            // Build and send RESP command
-            writeRespCommand(outStream, command, args);
-            outStream.writeTo(socket.getOutputStream());
-            socket.getOutputStream().flush();
-
-            // Read and parse response
-            return (List<Object>) readRespResponse(in);
-        }
-    }
-
-    private void writeRespCommand(ByteArrayOutputStream out, String command, List<Object> args) {
-        int argc = 1 + args.size();
-        writeLine(out, "*" + argc);
-        writeBulkBytes(out, command.getBytes(StandardCharsets.UTF_8));
-        for (Object arg : args) {
-            byte[] data = (arg instanceof byte[] b) ? b : arg.toString().getBytes(StandardCharsets.UTF_8);
-            writeBulkBytes(out, data);
-        }
-    }
-
-    private void writeLine(ByteArrayOutputStream out, String line) {
-        try {
-            out.write(line.getBytes(StandardCharsets.UTF_8));
-            out.write('\r');
-            out.write('\n');
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void writeBulkBytes(ByteArrayOutputStream out, byte[] data) {
-        try {
-            writeLine(out, "$" + data.length);
-            out.write(data);
-            out.write('\r');
-            out.write('\n');
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private Object readRespResponse(DataInputStream in) throws Exception {
-        int type = in.readByte();
-        switch (type) {
-            case '+': // Simple String
-                return readLine(in);
-            case '-': // Error
-                throw new RuntimeException("Redis error: " + readLine(in));
-            case ':': // Integer
-                return Long.parseLong(readLine(in));
-            case '$': // Bulk String
-                int len = Integer.parseInt(readLine(in));
-                if (len < 0) return null;
-                byte[] data = new byte[len];
-                in.readFully(data);
-                in.readByte(); // \r
-                in.readByte(); // \n
-                return data;
-            case '*': // Array
-                int count = Integer.parseInt(readLine(in));
-                if (count < 0) return null;
-                List<Object> list = new ArrayList<>(count);
-                for (int i = 0; i < count; i++) {
-                    list.add(readRespResponse(in));
-                }
-                return list;
-            case '%': // Map (Redis 6.2+)
-                int mapLen = Integer.parseInt(readLine(in));
-                Map<Object, Object> map = new LinkedHashMap<>();
-                for (int i = 0; i < mapLen; i++) {
-                    Object key = readRespResponse(in);
-                    Object val = readRespResponse(in);
-                    map.put(key, val);
-                }
-                return map;
-            default:
-                throw new RuntimeException("Unknown RESP type: " + (char) type);
-        }
-    }
-
-    private String readLine(DataInputStream in) throws Exception {
-        StringBuilder sb = new StringBuilder();
-        int b;
-        while ((b = in.readByte()) != '\r') {
-            sb.append((char) b);
-        }
-        in.readByte(); // \n
-        return sb.toString();
     }
 
     @Override
@@ -292,11 +177,7 @@ public class VectorStorePortAdapter implements VectorStorePort {
     @SuppressWarnings("unchecked")
     private Map<String, byte[]> parseFieldArray(Object fieldsObj) {
         Map<String, byte[]> map = new LinkedHashMap<>();
-        if (fieldsObj instanceof byte[][] arr && arr.length >= 2) {
-            for (int i = 0; i < arr.length - 1; i += 2) {
-                map.put(new String(arr[i], StandardCharsets.UTF_8), arr[i + 1]);
-            }
-        } else if (fieldsObj instanceof List<?> list) {
+        if (fieldsObj instanceof List<?> list) {
             for (int i = 0; i < list.size() - 1; i += 2) {
                 if (list.get(i) instanceof byte[] k && list.get(i + 1) instanceof byte[] v) {
                     map.put(new String(k, StandardCharsets.UTF_8), v);
