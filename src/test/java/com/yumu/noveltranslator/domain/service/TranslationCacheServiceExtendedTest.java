@@ -68,8 +68,8 @@ class TranslationCacheServiceExtendedTest {
 
         @Test
         void fast模式搜索team_expert_fast层级() {
-            // 先写入 team 模式缓存
-            cacheService.putToMemoryCache("key_team", "team-value");
+            // 先写入 versioned team 模式缓存
+            cacheService.putToMemoryCache("v1:key_team", "team-value");
 
             String result = cacheService.getCacheByMode("key", "fast");
 
@@ -78,7 +78,7 @@ class TranslationCacheServiceExtendedTest {
 
         @Test
         void expert模式搜索team_expert层级() {
-            cacheService.putToMemoryCache("key_expert", "expert-value");
+            cacheService.putToMemoryCache("v1:key_expert", "expert-value");
 
             String result = cacheService.getCacheByMode("key", "expert");
 
@@ -87,7 +87,7 @@ class TranslationCacheServiceExtendedTest {
 
         @Test
         void team模式仅搜索team层级() {
-            cacheService.putToMemoryCache("key_team", "team-only");
+            cacheService.putToMemoryCache("v1:key_team", "team-only");
 
             String result = cacheService.getCacheByMode("key", "team");
 
@@ -96,7 +96,7 @@ class TranslationCacheServiceExtendedTest {
 
         @Test
         void null模式默认按fast搜索() {
-            cacheService.putToMemoryCache("key_fast", "fast-default");
+            cacheService.putToMemoryCache("v1:key_fast", "fast-default");
 
             String result = cacheService.getCacheByMode("key", null);
 
@@ -176,8 +176,8 @@ class TranslationCacheServiceExtendedTest {
 
         @Test
         void 缓存命中后统计正确() {
-            // 写入 L1 并读取
-            cacheService.putToMemoryCache("stats-key", "stats-value");
+            // 写入 L1 并读取（使用 versioned key）
+            cacheService.putToMemoryCache("v1:stats-key", "stats-value");
             cacheService.getCache("stats-key");
 
             Map<String, Object> stats = cacheService.getCacheStats();
@@ -226,10 +226,10 @@ class TranslationCacheServiceExtendedTest {
         @Test
         void 数据库中不存在的key跳过() {
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-            when(translationCacheMapper.selectById("warm-miss")).thenReturn(null);
+            when(translationCacheMapper.selectById("v1:warm-miss")).thenReturn(null);
             when(translationCacheMapper.selectOne(any())).thenReturn(null);
 
-            cacheService.warmupCache(java.util.List.of("warm-miss"));
+            cacheService.warmupCache(java.util.List.of("v1:warm-miss"));
 
             // 未写入 L1
             assertNull(cacheService.getCache("warm-miss"));
@@ -242,16 +242,16 @@ class TranslationCacheServiceExtendedTest {
 
             // warm-hit 在数据库中有记录
             TranslationCache dbCache = new TranslationCache();
-            dbCache.setCacheKey("warm-hit");
+            dbCache.setCacheKey("v1:warm-hit");
             dbCache.setTargetText("warm-value");
             dbCache.setExpireTime(LocalDateTime.now().plusHours(24));
-            when(translationCacheMapper.selectById("warm-hit")).thenReturn(dbCache);
+            when(translationCacheMapper.selectById("v1:warm-hit")).thenReturn(dbCache);
 
             // warm-miss 在数据库中无记录
-            when(translationCacheMapper.selectById("warm-miss")).thenReturn(null);
+            when(translationCacheMapper.selectById("v1:warm-miss")).thenReturn(null);
             when(translationCacheMapper.selectOne(any())).thenReturn(null);
 
-            cacheService.warmupCache(java.util.List.of("warm-hit", "warm-miss"));
+            cacheService.warmupCache(java.util.List.of("v1:warm-hit", "v1:warm-miss"));
 
             assertEquals("warm-value", cacheService.getCache("warm-hit"));
             assertNull(cacheService.getCache("warm-miss"));

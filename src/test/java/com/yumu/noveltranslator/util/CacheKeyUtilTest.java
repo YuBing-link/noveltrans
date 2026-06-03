@@ -39,14 +39,14 @@ class CacheKeyUtilTest {
     @Test
     void keyIsMd5Format() {
         String key = CacheKeyUtil.buildCacheKey("test", "zh", "google");
-        // 格式: v{version}:{32 位十六进制 MD5}
-        assertTrue(key.matches("v\\d+:[a-f0-9]{32}"));
+        // 仅返回 32 位十六进制 MD5，无版本号前缀
+        assertTrue(key.matches("[a-f0-9]{32}"));
     }
 
     @Test
-    void versionedKeyMatchesExpectedFormat() {
+    void versionedKeyIsDeprecatedReturnsBareMd5() {
         String key = CacheKeyUtil.buildCacheKey("test", "en", "zh", "2");
-        assertTrue(key.startsWith("v2:"));
-        assertTrue(key.matches("v2:[a-f0-9]{32}"));
+        // 已废弃，现在返回裸 MD5
+        assertTrue(key.matches("[a-f0-9]{32}"));
     }
 }

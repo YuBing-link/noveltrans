@@ -67,17 +67,17 @@ class TranslationCacheServiceTest {
 
         @Test
         void getCacheHitsL1Caffeine() {
-            // 先写入 L1
-            cacheService.putToMemoryCache("test-key", "translated text");
+            // putToMemoryCache 使用裸 key，getCache 内部加 v1: 前缀查 versionedKey
+            // 所以这里需要写入 versioned key
+            cacheService.putToMemoryCache("v1:test-key", "translated text");
 
-            // L1 应命中
             String result = cacheService.getCache("test-key");
             assertEquals("translated text", result);
         }
 
         @Test
         void putToMemoryCacheStoresInL1() {
-            cacheService.putToMemoryCache("key1", "value1");
+            cacheService.putToMemoryCache("v1:key1", "value1");
             assertEquals("value1", cacheService.getCache("key1"));
         }
 
@@ -106,9 +106,9 @@ class TranslationCacheServiceTest {
             String result = cacheService.getCache("test-key");
 
             assertEquals("redis-value", result);
-            // Verify L2 was queried
-            verify(valueOperations).get("translator:cache:test-key");
-            // Verify value was written back to L1
+            // Verify L2 was queried with versioned key
+            verify(valueOperations).get("translator:cache:v1:test-key");
+            // Verify value was written back to L1 (versioned key)
             assertEquals("redis-value", cacheService.getCache("test-key"));
         }
 
@@ -154,7 +154,7 @@ class TranslationCacheServiceTest {
 
         @Test
         void hasCacheReturnsTrueWhenCached() {
-            cacheService.putToMemoryCache("has-key", "value");
+            cacheService.putToMemoryCache("v1:has-key", "value");
             assertTrue(cacheService.hasCache("has-key"));
         }
 
@@ -183,12 +183,12 @@ class TranslationCacheServiceTest {
             when(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
 
             TranslationCache dbCache = new TranslationCache();
-            dbCache.setCacheKey("warm-key");
+            dbCache.setCacheKey("v1:warm-key");
             dbCache.setTargetText("warm-value");
             dbCache.setExpireTime(LocalDateTime.now().plusHours(24));
-            when(translationCacheMapper.selectById("warm-key")).thenReturn(dbCache);
+            when(translationCacheMapper.selectById("v1:warm-key")).thenReturn(dbCache);
 
-            cacheService.warmupCache(java.util.List.of("warm-key"));
+            cacheService.warmupCache(java.util.List.of("v1:warm-key"));
 
             assertEquals("warm-value", cacheService.getCache("warm-key"));
         }
@@ -205,7 +205,7 @@ class TranslationCacheServiceTest {
 
         @Test
         void 缓存命中L1不查询分布式锁() {
-            cacheService.putToMemoryCache("lock-key", "l1-value");
+            cacheService.putToMemoryCache("v1:lock-key", "l1-value");
 
             cacheService.getCache("lock-key");
 
@@ -221,7 +221,7 @@ class TranslationCacheServiceTest {
             String result = cacheService.getCache("test-key");
 
             assertEquals("redis-value", result);
-            verify(valueOperations).get("translator:cache:test-key");
+            verify(valueOperations).get("translator:cache:v1:test-key");
         }
 
         @Test
@@ -238,12 +238,12 @@ class TranslationCacheServiceTest {
 
         @Test
         void 获取锁后重新检查L1缓存() {
-            // First, put something in L1
-            cacheService.putToMemoryCache("recheck-key", "l1-while-waiting");
+            // First, put something in L1 with versioned key
+            cacheService.putToMemoryCache("v1:recheck-key", "l1-while-waiting");
 
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
             when(valueOperations.get(anyString())).thenReturn(null);
-            when(valueOperations.setIfAbsent(eq("cache:lock:recheck-key"), eq("1"), eq(30L), any())).thenReturn(true);
+            when(valueOperations.setIfAbsent(eq("translator:lock:v1:recheck-key"), eq("1"), eq(60L), any())).thenReturn(true);
             when(stringRedisTemplate.delete(anyString())).thenReturn(true);
 
             // Should return L1 value without calling loader (because another instance already loaded it)
@@ -259,8 +259,8 @@ class TranslationCacheServiceTest {
 
         @Test
         void getCacheByMode_L1命中返回() {
-            // Write to L1 with mode suffix
-            cacheService.putToMemoryCache("mode-key_team", "team-translated");
+            // Write to L1 with versioned mode suffix
+            cacheService.putToMemoryCache("v1:mode-key_team", "team-translated");
 
             String result = cacheService.getCacheByMode("mode-key", "fast");
 
@@ -313,7 +313,7 @@ class TranslationCacheServiceTest {
 
             cacheService.invalidateKeysForTerm("Apple");
 
-            // L1 should be invalidated
+            // L1 should be invalidated (key is bare, so invalidate works on whatever was stored)
             assertNull(cacheService.getCache("key1"));
         }
 
@@ -367,7 +367,7 @@ class TranslationCacheServiceTest {
 
         @Test
         void getCacheStats_记录命中() {
-            cacheService.putToMemoryCache("stat-key", "stat-value");
+            cacheService.putToMemoryCache("v1:stat-key", "stat-value");
             cacheService.getCache("stat-key"); // L1 hit
             cacheService.getCache("miss-key"); // miss
 
@@ -384,8 +384,8 @@ class TranslationCacheServiceTest {
 
         @Test
         void clearLocalCache清空Caffeine() {
-            cacheService.putToMemoryCache("a", "1");
-            cacheService.putToMemoryCache("b", "2");
+            cacheService.putToMemoryCache("v1:a", "1");
+            cacheService.putToMemoryCache("v1:b", "2");
 
             cacheService.clearLocalCache();
 
@@ -395,7 +395,7 @@ class TranslationCacheServiceTest {
 
         @Test
         void clearAllCache_清空所有层() {
-            cacheService.putToMemoryCache("clear-key", "clear-value");
+            cacheService.putToMemoryCache("v1:clear-key", "clear-value");
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
             lenient().when(stringRedisTemplate.keys(REDIS_KEY_PREFIX + "*")).thenReturn(Set.of());
             lenient().when(stringRedisTemplate.delete(anyCollection())).thenReturn(0L);
@@ -420,7 +420,7 @@ class TranslationCacheServiceTest {
 
             cacheService.putCache("mode-key", "source", "target", "en", "zh", "google", "fast");
 
-            // Verify key has mode suffix
+            // Verify key has mode suffix and version prefix
             verify(valueOperations).set(eq("translator:cache:v1:mode-key_fast"), eq("target"), any());
         }
 

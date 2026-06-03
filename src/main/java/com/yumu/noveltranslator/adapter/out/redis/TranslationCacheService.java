@@ -134,25 +134,37 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
     private final AtomicLong l2HitCount = new AtomicLong(0);
     private final AtomicLong cacheMissCount = new AtomicLong(0);
 
+    /**
+     * 为缓存 key 添加当前版本号前缀，保证读路径与写路径使用相同的版本 key。
+     * 如果 key 已包含版本前缀则先剥离，避免重复拼接。
+     */
+    private String addVersionPrefix(String cacheKey) {
+        String version = cacheVersionService.getVersion("auto", "auto");
+        String stripped = cacheKey.replaceFirst("^v\\d+:", "");
+        return "v" + version + ":" + stripped;
+    }
+
     // ==================== 核心查询方法 ====================
 
     /**
      * 获取翻译缓存（L1 Caffeine → L2 Redis）
-     * 使用 cache.get(key, loader) 实现内置互斥加载：同一 key 只有一个线程查 Redis
      * L1/L2 都未命中时，尝试获取分布式锁，避免多实例同时调 LLM。
      */
     public String getCache(String cacheKey) {
-        // 1. L1: 使用 get(key, loader) 内置互斥，非 L1 命中时只有一个线程查 Redis
-        String value = caffeineCache.get(cacheKey, key -> {
-            String redisKey = REDIS_KEY_PREFIX + key;
-            return stringRedisTemplate.opsForValue().get(redisKey);
-        });
+        String versionedKey = addVersionPrefix(cacheKey);
 
+        String value = caffeineCache.getIfPresent(versionedKey);
         if (value == null) {
-            return tryAcquireSimpleLock(cacheKey);
+            String redisKey = REDIS_KEY_PREFIX + versionedKey;
+            value = stringRedisTemplate.opsForValue().get(redisKey);
+            if (value != null) {
+                caffeineCache.put(versionedKey, value);
+                l1HitCount.incrementAndGet();
+                return value;
+            }
+            return tryAcquireSimpleLock(versionedKey);
         }
 
-        // 区分 L1 命中（刚加载的）和 L2 命中（从 Redis 加载的）
         l1HitCount.incrementAndGet();
         return value;
     }
@@ -160,8 +172,8 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
     /**
      * 简单分布式锁（非 mode 版本的 getCache 使用）。
      */
-    private String tryAcquireSimpleLock(String cacheKey) {
-        String lockKey = LOCK_KEY_PREFIX + cacheKey;
+    private String tryAcquireSimpleLock(String versionedKey) {
+        String lockKey = LOCK_KEY_PREFIX + versionedKey;
         Boolean acquired = stringRedisTemplate.opsForValue()
                 .setIfAbsent(lockKey, "1", Duration.ofSeconds(LOCK_EXPIRE_SECONDS));
 
@@ -183,11 +195,11 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
                 return null;
             }
 
-            String cached = caffeineCache.getIfPresent(cacheKey);
+            String cached = caffeineCache.getIfPresent(versionedKey);
             if (cached == null) {
-                cached = stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + cacheKey);
+                cached = stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + versionedKey);
                 if (cached != null) {
-                    caffeineCache.put(cacheKey, cached);
+                    caffeineCache.put(versionedKey, cached);
                     l1HitCount.incrementAndGet();
                     return cached;
                 }
@@ -197,7 +209,7 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
             }
         }
 
-        log.warn("分布式锁等待超时，自行调 LLM: cacheKey={}", cacheKey);
+        log.warn("分布式锁等待超时，自行调 LLM: cacheKey={}", versionedKey);
         return null;
     }
 
@@ -211,18 +223,24 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
      */
     public String getCacheByMode(String cacheKey, String currentMode) {
         List<String> modesToSearch = MODE_CACHE_HIERARCHY.getOrDefault(
-            currentMode != null ? currentMode : "fast", List.of("fast"));
+            currentMode != null ? currentMode : "fast", List.of("team", "expert", "fast"));
 
-        // 逐个 modeKey 查询，每个 key 使用 Caffeine 内置互斥加载
+        // 逐个 modeKey 查询 L1，未命中则直接查 L2 Redis
         for (String mode : modesToSearch) {
             String modeKey = cacheKey + "_" + mode;
+            String versionedModeKey = addVersionPrefix(modeKey);
 
-            String value = caffeineCache.get(modeKey,
-                k -> stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + k));
+            String value = caffeineCache.getIfPresent(versionedModeKey);
+            if (value == null) {
+                value = stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + versionedModeKey);
+                if (value != null) {
+                    caffeineCache.put(versionedModeKey, value);
+                }
+            }
 
             if (value != null) {
                 l1HitCount.incrementAndGet();
-                log.debug("L1 模式缓存命中: mode={}", mode);
+                log.debug("模式缓存命中: mode={}", mode);
                 return value;
             }
         }
@@ -237,25 +255,20 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
      * 未抢到锁：轮询缓存，直到缓存出现或超时。
      */
     private String tryAcquireTranslateLock(String cacheKey, String currentMode) {
-        // 列出所有可能写入的 modeKey（与 MODE_CACHE_HIERARCHY 一致）
-        List<String> modesToSearch = MODE_CACHE_HIERARCHY.getOrDefault(
-            currentMode != null ? currentMode : "fast", List.of("fast"));
+        // 只抢当前模式的锁，避免误阻塞其他模式
+        String effectiveMode = currentMode != null ? currentMode : "fast";
+        String modeKey = cacheKey + "_" + effectiveMode;
+        String versionedModeKey = addVersionPrefix(modeKey);
+        String lockKey = LOCK_KEY_PREFIX + versionedModeKey;
+        Boolean acquired = stringRedisTemplate.opsForValue()
+                .setIfAbsent(lockKey, "1", Duration.ofSeconds(LOCK_EXPIRE_SECONDS));
 
-        // 尝试为所有 modeKey 获取锁（只要有一个拿到锁即可）
-        for (String mode : modesToSearch) {
-            String modeKey = cacheKey + "_" + mode;
-            String lockKey = LOCK_KEY_PREFIX + modeKey;
-            Boolean acquired = stringRedisTemplate.opsForValue()
-                    .setIfAbsent(lockKey, "1", Duration.ofSeconds(LOCK_EXPIRE_SECONDS));
-
-            if (Boolean.TRUE.equals(acquired)) {
-                // 抢到锁，返回 null，由调用方调 LLM 写缓存
-                cacheMissCount.incrementAndGet();
-                return null;
-            }
+        if (Boolean.TRUE.equals(acquired)) {
+            cacheMissCount.incrementAndGet();
+            return null;
         }
 
-        // 未抢到任何锁，轮询等待缓存写入
+        // 未抢到锁，轮询等待缓存写入
         cacheMissCount.incrementAndGet();
         long startTime = System.currentTimeMillis();
         long maxWaitMs = LOCK_MAX_WAIT_SECONDS * 1000;
@@ -268,22 +281,18 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
                 return null;
             }
 
-            // 检查缓存是否已被锁持有者写入
-            for (String mode : modesToSearch) {
-                String modeKey = cacheKey + "_" + mode;
-                String cached = caffeineCache.getIfPresent(modeKey);
-                if (cached == null) {
-                    cached = stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + modeKey);
-                    if (cached != null) {
-                        // 缓存已被写入，回写到 L1
-                        caffeineCache.put(modeKey, cached);
-                        l1HitCount.incrementAndGet();
-                        return cached;
-                    }
-                } else {
+            // 只检查当前模式的缓存
+            String cached = caffeineCache.getIfPresent(versionedModeKey);
+            if (cached == null) {
+                cached = stringRedisTemplate.opsForValue().get(REDIS_KEY_PREFIX + versionedModeKey);
+                if (cached != null) {
+                    caffeineCache.put(versionedModeKey, cached);
                     l1HitCount.incrementAndGet();
                     return cached;
                 }
+            } else {
+                l1HitCount.incrementAndGet();
+                return cached;
             }
         }
 
@@ -344,11 +353,8 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
      */
     public void putCache(String cacheKey, String sourceText, String targetText,
                          String sourceLang, String targetLang, String engine, String mode) {
-        // 获取当前版本号
         String version = cacheVersionService.getVersion(sourceLang, targetLang);
-        // cacheKey 可能已经包含 v{N}: 前缀（来自 CacheKeyUtil），先剥离再重新拼接
-        String strippedKey = cacheKey.replaceFirst("^v\\d+:", "");
-        String baseKey = "v" + version + ":" + strippedKey;
+        String baseKey = "v" + version + ":" + cacheKey;
         String finalKey = (mode != null && !mode.isBlank()) ? baseKey + "_" + mode : baseKey;
 
         String redisKey = REDIS_KEY_PREFIX + finalKey;
