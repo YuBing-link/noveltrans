@@ -88,6 +88,8 @@ class TranslationTaskServiceExtended2Test {
     private TranslationPostProcessingService postProcessingService;
     @Mock
     private TranslationStateMachine stateMachine;
+    @Mock
+    private com.yumu.noveltranslator.port.out.UserRepositoryPort userRepositoryPort;
 
     private TranslationTaskApplicationService taskService;
 
@@ -97,9 +99,13 @@ class TranslationTaskServiceExtended2Test {
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskApplicationService(
-                translationPort, documentPort, glossaryPort,
-                null, stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
+                translationPort, documentPort, glossaryPort, userRepositoryPort,
+                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
+        // Default user mock for userLevel lookup
+        com.yumu.noveltranslator.domain.model.User mockUser = new com.yumu.noveltranslator.domain.model.User();
+        mockUser.setUserLevel("free");
+        when(userRepositoryPort.findById(anyLong())).thenReturn(java.util.Optional.of(mockUser));
         SecurityContextHolder.clearContext();
         // Stub cachePort to return empty (cache miss) so Pipeline.executeFast proceeds to L4
         // Without this, mock returns null → NPE on .orElse(null)

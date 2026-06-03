@@ -70,14 +70,16 @@ class TranslationTaskServiceExtendedTest {
     private TranslationPostProcessingService postProcessingService;
     @Mock
     private TranslationStateMachine stateMachine;
+    @Mock
+    private com.yumu.noveltranslator.port.out.UserRepositoryPort userRepositoryPort;
 
     private TranslationTaskApplicationService taskService;
 
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskApplicationService(
-                translationPort, documentPort, glossaryPort,
-                null, stateMachine, translationClientPort, cachePort, ragTranslationService,
+                translationPort, documentPort, glossaryPort, userRepositoryPort,
+                stateMachine, translationClientPort, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
     }

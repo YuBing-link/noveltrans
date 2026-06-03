@@ -82,14 +82,16 @@ class TranslationTaskServiceCoverageTest {
     private TranslationPostProcessingService postProcessingService;
     @Mock
     private TranslationStateMachine stateMachine;
+    @Mock
+    private com.yumu.noveltranslator.port.out.UserRepositoryPort userRepositoryPort;
 
     private TranslationTaskApplicationService taskService;
 
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskApplicationService(
-                translationPort, documentPort, glossaryPort,
-                null, stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
+                translationPort, documentPort, glossaryPort, userRepositoryPort,
+                stateMachine, userLevelThrottledTranslationClient, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
         SecurityContextHolder.clearContext();
     }

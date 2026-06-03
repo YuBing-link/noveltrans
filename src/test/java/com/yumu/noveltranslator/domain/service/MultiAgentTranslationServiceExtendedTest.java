@@ -64,6 +64,8 @@ class MultiAgentTranslationServiceExtendedTest {
     private TranslationPostProcessingService postProcessingService;
     @Spy
     private CollabStateMachine collabStateMachine;
+    @Mock
+    private com.yumu.noveltranslator.port.out.UserRepositoryPort userRepositoryPort;
 
     private MultiAgentTranslationService service;
 
@@ -73,7 +75,7 @@ class MultiAgentTranslationServiceExtendedTest {
                 collabPort, documentPort, translationPort,
                 teamTranslationPort, cachePort, entityConsistencyService,
                 glossaryPort, ragTranslationService, aiGlossaryService, postProcessingService,
-                collabStateMachine, null);
+                collabStateMachine, userRepositoryPort);
         clearRetryCounterMap();
         // postProcessingService fixUntranslatedChinese 默认返回译文本身
         lenient().doAnswer(inv -> inv.getArgument(1)).when(postProcessingService).fixUntranslatedChinese(anyString(), anyString(), anyString(), anyString());

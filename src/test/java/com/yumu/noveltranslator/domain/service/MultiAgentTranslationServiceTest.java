@@ -80,6 +80,8 @@ class MultiAgentTranslationServiceTest {
 
     @Mock
     private CollabStateMachine collabStateMachine;
+    @Mock
+    private com.yumu.noveltranslator.port.out.UserRepositoryPort userRepositoryPort;
 
     private MultiAgentTranslationService service;
 
@@ -89,7 +91,7 @@ class MultiAgentTranslationServiceTest {
                 collabPort, documentPort, translationPort,
                 teamTranslationService, cachePort, entityConsistencyService,
                 glossaryPort, ragTranslationService, aiGlossaryService, postProcessingService,
-                collabStateMachine, null);
+                collabStateMachine, userRepositoryPort);
     }
 
     @Nested

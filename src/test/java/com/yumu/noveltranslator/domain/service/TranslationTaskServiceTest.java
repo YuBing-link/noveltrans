@@ -53,6 +53,9 @@ class TranslationTaskServiceTest {
     private GlossaryRepositoryPort glossaryPort;
 
     @Mock
+    private com.yumu.noveltranslator.port.out.UserRepositoryPort userRepositoryPort;
+
+    @Mock
     private TranslationStateMachine stateMachine;
 
     @Mock
@@ -75,8 +78,8 @@ class TranslationTaskServiceTest {
     @BeforeEach
     void setUp() {
         taskService = new TranslationTaskApplicationService(
-                translationPort, documentPort, glossaryPort,
-                null, stateMachine, translationClientPort, cachePort, ragTranslationService,
+                translationPort, documentPort, glossaryPort, userRepositoryPort,
+                stateMachine, translationClientPort, cachePort, ragTranslationService,
                 entityConsistencyService, postProcessingService);
     }
 
