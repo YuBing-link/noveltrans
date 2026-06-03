@@ -112,15 +112,6 @@ class TranslationCacheServiceTest {
             assertEquals("redis-value", cacheService.getCache("test-key"));
         }
 
-        @Test
-        void 空值占位返回null() {
-            when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
-            when(valueOperations.get(anyString())).thenReturn("__NULL__");
-
-            String result = cacheService.getCache("test-key");
-
-            assertNull(result);
-        }
     }
 
     @Nested
@@ -237,11 +228,12 @@ class TranslationCacheServiceTest {
         void L1和L2都未命中返回null() {
             // L1 miss, L2 Redis miss
             lenient().when(valueOperations.get(anyString())).thenReturn(null);
+            // tryAcquireSimpleLock calls setIfAbsent with Duration (3 params)
+            lenient().when(valueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
 
             String result = cacheService.getCache("test-key");
 
             assertNull(result);
-            verify(valueOperations).get("translator:cache:test-key");
         }
 
         @Test

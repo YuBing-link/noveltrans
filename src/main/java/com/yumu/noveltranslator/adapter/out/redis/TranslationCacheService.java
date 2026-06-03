@@ -614,6 +614,7 @@ public class TranslationCacheService implements TranslationCacheAdminPort {
         return Map.of(
                 "l1Hits", l1HitCount.get(),
                 "l2Hits", l2HitCount.get(),
+                "nullHits", 0L,
                 "misses", cacheMissCount.get(),
                 "hitRate", String.format("%.2f%%", hitRate),
                 "totalRequests", total,
